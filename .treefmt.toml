@@ -1,14 +1,12 @@
 [formatter.nix]
-command = "sh"
-options = [
-  "-eucx",
-    """
-# First deadnix
-deadnix --edit "$@"
-statix fix "$@"
-# Then alejandra
-"alejandra" "$@"
-    """,
-    "--",
-]
+command = "alejandra"
 includes = ["*.nix"]
+
+[formatter.rust]
+command = "rustfmt"
+includes = ["*.rs"]
+
+[formatter.toml]
+command = "taplo"
+options = ["fmt"]
+includes = ["*.toml"]
