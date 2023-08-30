@@ -66,6 +66,7 @@
         rustFmtToolchainTOML
         # pkgs.just
         # pkgs.lychee
+        pkgs.taplo
         pkgs.cargo-watch
         pkgs.cargo-tarpaulin
         #
@@ -123,9 +124,10 @@
         # pkgs.actionlint
       ];
       fmtInputs = [
-        # pkgs.alejandra
-        # pkgs.treefmt
-        # pkgs.typos
+        pkgs.alejandra
+        pkgs.treefmt
+        pkgs.taplo
+        pkgs.typos
       ];
       editorConfigInputs = [
         # pkgs.editorconfig-checker
