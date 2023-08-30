@@ -17,11 +17,7 @@ resolver = "2"
 
 [features]
 default = ["application"]
-application = [
-	"clap",
-	"clap_complete",
-	"clap_mangen"
-]
+application = ["clap", "clap_complete", "clap_mangen"]
 
 [dependencies]
 anyhow = "1.0.75"
