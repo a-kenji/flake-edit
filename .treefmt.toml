@@ -1,0 +1,14 @@
+[formatter.nix]
+command = "sh"
+options = [
+  "-eucx",
+    """
+# First deadnix
+deadnix --edit "$@"
+statix fix "$@"
+# Then alejandra
+"alejandra" "$@"
+    """,
+    "--",
+]
+includes = ["*.nix"]

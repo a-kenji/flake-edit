@@ -1,0 +1,60 @@
+[package]
+name = "flake-add"
+version = "0.1.0"
+edition = "2021"
+keywords = ["nix", "flake", "terminal", "cli"]
+categories = ["command-line-utilities", "libraries"]
+
+authors = ["Alexander Kenji Berthold"]
+
+readme = "README.md"
+repository = "https://github.com/a-kenji/flk"
+documentation = "https://github.com/a-kenji/flk"
+homepage = "https://github.com/a-kenji/flk"
+
+resolver = "2"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["application"]
+application = [
+	"clap",
+	"clap_complete",
+	"clap_mangen"
+]
+
+[dependencies]
+anyhow = "1.0.75"
+clap = { version = "4.4.1", optional = true }
+rnix = "0.11.0"
+ropey = "1.6.0"
+rowan = "0.15.11"
+thiserror = "1.0.47"
+
+[build-dependencies]
+clap = { version = "4.4.1", features = ["derive"], optional = true }
+clap_complete = { version = "4.3.0", features = ["derive"], optional = true }
+clap_mangen = { version = "0.2.13", features = ["derive"], optional = true }
+
+
+[profile.release]
+lto = true
+codegen-units = 1
+# opt-level = 3
+opt-level = 'z'
+strip = true
+# panic = "abort"
+# for profiling
+# debug = true
+
+[profile.dev]
+incremental = true
+lto = "thin"
+# Set this to 1 or 2 to get more useful backtraces in debugger.
+debug = false
+
+[profile.dev.package.insta]
+opt-level = 3
+
+[profile.dev.package.similar]
+opt-level = 3
