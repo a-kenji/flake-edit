@@ -33,8 +33,8 @@ thiserror = "1.0.47"
 
 [build-dependencies]
 clap = { version = "4.4.1", features = ["derive"], optional = true }
-clap_complete = { version = "4.3.0", features = ["derive"], optional = true }
-clap_mangen = { version = "0.2.13", features = ["derive"], optional = true }
+clap_complete = { version = "4.3.0", features = [], optional = true }
+clap_mangen = { version = "0.2.13", features = [], optional = true }
 
 
 [profile.release]
