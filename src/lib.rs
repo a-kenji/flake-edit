@@ -1,4 +1,9 @@
-use std::{env, error::Error, fs};
+use std::{
+    collections::{HashMap, HashSet},
+    env,
+    error::Error,
+    fs,
+};
 
 use rnix::{
     ast::{
@@ -10,7 +15,7 @@ use rnix::{
     tokenizer::Tokenizer,
     SyntaxKind, SyntaxNode,
 };
-use rowan::GreenNode;
+use rowan::{GreenNode, GreenToken, NodeOrToken};
 
 // TODO:
 // - parse out inputs
@@ -21,6 +26,7 @@ use rowan::GreenNode;
 // NODE_IDENT 58,
 // TOKEN_IDENT 44,
 // TOKEN_DOT 21,
+// NODE_ROOT 75,
 // NODE_ATTR_SET 76,
 // NODE_ATTRPATH 55,
 // TOKEN_URI 49,
@@ -49,21 +55,29 @@ impl State {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub struct Input {
-    name: String,
-    attr_path: String,
-    value: String,
-    url: String,
+    pub name: String,
+    pub flake: bool,
+    pub url: String,
     follows: Vec<String>,
 }
 
+impl Default for Input {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            flake: true,
+            url: String::new(),
+            follows: vec![],
+        }
+    }
+}
+
 impl Input {
-    fn new(name: String, attr_path: String, value: String) -> Self {
+    fn new(name: String) -> Self {
         Self {
             name,
-            attr_path,
-            value,
             ..Self::default()
         }
     }
@@ -75,7 +89,7 @@ impl From<Entry> for Input {
         if let AttrpathValue(attrpath_value) = entry {
             let value = attrpath_value.value().unwrap().to_string();
             let attr_path = attrpath_value.attrpath().unwrap().to_string();
-            Self::new(attr_path.clone(), attr_path, value)
+            Self::new(attr_path)
         } else {
             Self::default()
         }
@@ -93,26 +107,112 @@ pub fn write_node(node: &SyntaxNode) -> SyntaxNode {
 
 /// parse the input AST
 pub fn parse_inputs(input: &GreenNode) -> Result<Vec<Input>, ParseError> {
-    for node_or_token in input.children() {
-        // If the SyntaxKind - 58 is inputs, then look ahead which attribute
-        // match the attribute either with TOKEN_DOT or NODE_ATTR_SET
-        // The SyntaxKind - 55 - ATTRPATH either needs to be parsed again, or is the final
-        // assignment.
-        if let Some(node) = node_or_token.as_node() {
-            for node in node.children() {
-                println!("{}", node);
-                println!("Kind: {:?}\n", node.kind());
-                if node.kind() == rowan::SyntaxKind(55) {
-                    for child in node.as_node().unwrap().children() {
-                        println!("Child Node of Attrset: \n");
-                        println!("{}", child);
-                        println!("Kind: {:?}\n", child.kind());
+    let mut res: Vec<Input> = vec![];
+    let other = input.clone();
+    println!("Original: {}", input);
+    // SyntaxKind 75 - NODE_ROOT
+    println!("Original Kind: {:?}\n", input.kind());
+    let rinput = SyntaxNode::new_root(input.clone());
+    for walk_node_or_token in rinput.preorder_with_tokens() {
+        match walk_node_or_token {
+            rowan::WalkEvent::Enter(node) => {
+                match node.kind() {
+                    SyntaxKind::TOKEN_URI => todo!(),
+                    // TODO: PushDown Automata with recutsive attrpaths
+                    SyntaxKind::NODE_IDENT => {}
+                    SyntaxKind::NODE_STRING => {}
+                    SyntaxKind::TOKEN_IDENT => {
+                        println!("Token Ident: {}", node);
                     }
+                    SyntaxKind::TOKEN_STRING_CONTENT => {
+                        if let Some(token) = node.as_token() {
+                            let replacement_token = GreenToken::new(rowan::SyntaxKind(50), "test");
+                            let tree = token.replace_with(replacement_token);
+                            println!("Tree: {}", tree);
+                        }
+                    }
+                    // Skip unneccessary Token
+                    SyntaxKind::TOKEN_WHITESPACE
+                    | SyntaxKind::TOKEN_R_BRACE
+                    | SyntaxKind::TOKEN_L_BRACE
+                    | SyntaxKind::TOKEN_SEMICOLON => {
+                        continue;
+                    }
+                    // Print Select Token
+                    SyntaxKind::NODE_ATTR_SET
+                    | SyntaxKind::NODE_ATTRPATH
+                    | SyntaxKind::NODE_ATTRPATH_VALUE => {
+                        print_node_enter_info(&node);
+                    }
+                    _ => {}
                 }
             }
+            rowan::WalkEvent::Leave(node) => match node.kind() {
+                SyntaxKind::TOKEN_COMMENT
+                | SyntaxKind::TOKEN_ERROR
+                | SyntaxKind::TOKEN_WHITESPACE
+                | SyntaxKind::TOKEN_L_BRACE
+                | SyntaxKind::TOKEN_R_BRACE
+                | SyntaxKind::TOKEN_L_BRACK
+                | SyntaxKind::TOKEN_R_BRACK
+                | SyntaxKind::TOKEN_COLON
+                | SyntaxKind::TOKEN_COMMA
+                | SyntaxKind::TOKEN_SEMICOLON
+                | SyntaxKind::TOKEN_DOT
+                | SyntaxKind::TOKEN_L_PAREN
+                | SyntaxKind::TOKEN_R_PAREN => {
+                    continue;
+                }
+                _ => {}
+            },
         }
     }
+    println!("Original: {}", input);
+    println!("Changed: {}", input);
     Ok(vec![])
+}
+
+pub fn print_node_enter_info(node: &NodeOrToken<rnix::SyntaxNode, rnix::SyntaxToken>) {
+    println!("Enter: {node}");
+    println!("Enter Kind: {:?}", node.kind());
+    println!("Enter Parent: {:?}", node.parent());
+    if let Some(parent) = node.parent() {
+        println!("Enter Parent Node: {:?}", parent);
+        println!("Enter Parent Node Kind: {:?}", parent.kind());
+    }
+    if let Some(node) = node.as_node() {
+        println!("Enter Green Kind: {:?}", node.green().kind());
+        for child in node.children() {
+            println!("Enter Children: {:?}", child);
+            println!("Enter Children Kind: {:?}", child.green().kind());
+        }
+        println!("Node Next Sibling: {:?}", node.next_sibling());
+        println!("Node Prev Sibling: {:?}", node.prev_sibling());
+    }
+    if let Some(token) = node.as_token() {
+        println!("Token: {}", token);
+    }
+    // if let Some(kind) = node.as_node() {
+    //     println!("Enter Node Kind: {:?}", kind);
+    // }
+    // if let Some(kind) = node.as_token() {
+    //     println!("Enter Token Kind: {:?}", kind);
+    // }
+    println!("Node Index: {}", node.index());
+    println!();
+}
+
+pub fn print_node_leave_info(node: &NodeOrToken<rnix::SyntaxNode, rnix::SyntaxToken>) {
+    println!("Leave: {node}");
+    println!("Leave Index: {:?}", node.index());
+    println!("Leave Kind: {:?}", node.kind());
+    if let Some(node) = node.as_node() {
+        println!("Leave Green Kind: {:?}", node.green().kind());
+        println!("Leave Kind Next Sibling: {:?}", node.next_sibling());
+        println!("Leave Kind Prev Sibling: {:?}", node.prev_sibling());
+    }
+    println!("Leave Kind Parent: {:?}", node.parent());
+    println!();
 }
 
 /// Parse the toplevel AST
@@ -403,32 +503,84 @@ mod tests {
     // }
     #[test]
     fn parse_simple_inputs() {
-        let inputs = "inputs.nixpkgs.url = github:nixos/nixpkgs;";
+        let inputs = r#"{ inputs.nixpkgs.url = "github:nixos/nixpkgs";}"#;
         let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
         let expected = vec![Input::default()];
         assert_eq!(parse_inputs(&node).unwrap(), expected);
     }
     #[test]
-    fn parse_simple_inputs_set() {
-        let inputs = "inputs = { nixpkgs.url = github:nixos/nixpkgs }; ;";
+    fn parse_simple_inputs_description() {
+        let inputs =
+            r#"{ description = "This is a text."; inputs.nixpkgs.url = "github:nixos/nixpkgs";}"#;
         let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
         let expected = vec![Input::default()];
         assert_eq!(parse_inputs(&node).unwrap(), expected);
     }
+    // #[test]
+    // fn parse_simple_inputs_set() {
+    //     let inputs = r#"{inputs = { nixpkgs.url = "github:nixos/nixpkgs"; };}"#;
+    //     let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
+    //     let expected = vec![Input::default()];
+    //     assert_eq!(parse_inputs(&node).unwrap(), expected);
+    // }
     #[test]
-    fn parse_simple_inputs_multiple() {
-        let inputs = "inputs.nixpkgs.url = github:nixos/nixpkgs; inputs.crane.url = github:nix-community/crane;";
+    fn parse_simple_inputs_set_description() {
+        let inputs = r#"{description = "This is a text."; inputs = { nixpkgs.url = "github:nixos/nixpkgs"; };}"#;
         let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
         let expected = vec![Input::default()];
         assert_eq!(parse_inputs(&node).unwrap(), expected);
     }
+    // #[test]
+    // fn parse_simple_inputs_set_multiple() {
+    //     let inputs = r#"{inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; };}"#;
+    //     let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
+    //     let expected = vec![Input::default()];
+    //     assert_eq!(parse_inputs(&node).unwrap(), expected);
+    // }
+    // #[test]
+    // fn parse_simple_inputs_set_multiple_no_flake() {
+    //     let inputs = r#"{inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; crane.flake = false; };}"#;
+    //     let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
+    //     let expected = vec![Input::default()];
+    //     assert_eq!(parse_inputs(&node).unwrap(), expected);
+    // }
+    // #[test]
+    // fn parse_simple_inputs_set_multiple_no_flake_description() {
+    //     let inputs = r#"{description = "This is a text."; inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; crane.flake = false; };}"#;
+    //     let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
+    //     let expected = vec![Input::default()];
+    //     assert_eq!(parse_inputs(&node).unwrap(), expected);
+    // }
+    // #[test]
+    // fn parse_simple_inputs_set_multiple_no_flake_together() {
+    //     let inputs = r#"{inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane = { url = "github:nix-community/crane"; flake = false; };};}"#;
+    //     let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
+    //     let expected = vec![Input::default()];
+    //     assert_eq!(parse_inputs(&node).unwrap(), expected);
+    // }
+    // #[test]
+    // fn parse_simple_inputs_multiple() {
+    //     let inputs = "{inputs.nixpkgs.url = github:nixos/nixpkgs; inputs.crane.url = github:nix-community/crane;}";
+    //     let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
+    //     println!("{:?}", _errors);
+    //     let expected = vec![Input::default()];
+    //     assert_eq!(parse_inputs(&node).unwrap(), expected);
+    // }
     #[test]
-    fn parse_simple_inputs_single_flake_false() {
-        let inputs = "inputs.nixpkgs.url = github:nixos/nixpkgs; inputs.nixpkgs.flake = false;";
+    fn parse_simple_inputs_multiple_description() {
+        let inputs = r#"{description = "This is a Text"; inputs.nixpkgs.url = "github:nixos/nixpkgs"; inputs.crane.url = "github:nix-community/crane";}"#;
         let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
+        println!("{:?}", _errors);
         let expected = vec![Input::default()];
         assert_eq!(parse_inputs(&node).unwrap(), expected);
     }
+    // #[test]
+    // fn parse_simple_inputs_single_flake_false() {
+    //     let inputs = "inputs.nixpkgs.url = github:nixos/nixpkgs; inputs.nixpkgs.flake = false;";
+    //     let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
+    //     let expected = vec![Input::default()];
+    //     assert_eq!(parse_inputs(&node).unwrap(), expected);
+    // }
     // #[test]
     // fn only_inputs_parsed_ok() {
     //     parse_content(only_inputs_flake()).unwrap();
