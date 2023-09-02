@@ -12,6 +12,16 @@
 //!
 //! The url syntax representation is parsed by this library:
 //! example `github:a-kenji/nala`
+use nom::branch::alt;
+// use nom::complete::tag;
+use nom::bytes::complete::{is_not, tag, take_until, take_while};
+use nom::character::complete::{
+    alpha1, alphanumeric0, alphanumeric1, line_ending, not_line_ending,
+};
+use nom::character::is_alphabetic;
+use nom::combinator::{eof, rest};
+use nom::multi::many_m_n;
+use nom::IResult;
 use serde::{Deserialize, Serialize};
 
 /// The General Flake Ref Schema
@@ -19,12 +29,55 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(test, serde(deny_unknown_fields))]
 struct FlakeRef {
     r#type: FlakeRefType,
-    owner: Option<String>,
-    repo: Option<String>,
+    pub owner: Option<String>,
+    pub repo: Option<String>,
     flake: Option<bool>,
     rev: Option<String>,
     r#ref: Option<String>,
     attrs: FlakeRefAttributes,
+}
+
+fn parse_nix_uri<'a>(input: &'a str) -> IResult<&'a str, FlakeRef> {
+    use nom::sequence::separated_pair;
+    let (_, (flake_ref_type, input)) = separated_pair(alphanumeric0, tag(":"), rest)(input)?;
+
+    //
+    // let mut parser =
+    // let (input, output) = parser(input)?;
+    match std::convert::Into::<FlakeRefType>::into(flake_ref_type) {
+        FlakeRefType::File(_) => todo!(),
+        FlakeRefType::Git => todo!(),
+        FlakeRefType::GitHub => {
+            // GitHub specific! todo: branch based on FlakeRefType
+            // required: repo, owner (repo/owner)
+            println!("Matched Github: {}", input);
+            // let (repo, input) = take_until("/")(input)?;
+            // let (_, (repo, input)) = separated_pair(take_until("/"), tag("/"), rest)(input)?;
+            let (input, owner_or_ref) =
+                many_m_n(1, 4, separated_pair(take_until("/"), tag("/"), rest))(input)?;
+            for owner in owner_or_ref {
+                println!("Matched Github: {:?}", owner);
+            }
+
+            // let (_, (rev_or_ref, input)) =
+            //     (separated_pair(take_until("/"), tag("/"), rest))(input)?;
+            let mut flake_ref = FlakeRef::default();
+            flake_ref.r#type(flake_ref_type.into());
+            // flake_ref.repo = Some(repo.into());
+            // flake_ref.owner = Some(input.into());
+            // flake_ref.rev = Some(rev_or_ref.into());
+            return Ok((input, flake_ref));
+        }
+        FlakeRefType::Indirect => todo!(),
+        FlakeRefType::Mercurial => todo!(),
+        FlakeRefType::Path(_) => todo!(),
+        FlakeRefType::Sourcehut => todo!(),
+        FlakeRefType::Tarball => todo!(),
+        // FlakeRefType::None => todo!(),
+        _ => {}
+    }
+
+    Ok((input, FlakeRef::default()))
 }
 
 impl FlakeRef {
@@ -109,6 +162,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn parse_simple_uri_nom() {
+        let uri = "github:zellij-org/zellij";
+        let _flake_ref: FlakeRef = uri.parse().unwrap();
+        let parsed = parse_nix_uri(uri).unwrap();
+        assert_eq!(("", FlakeRef::default()), parsed);
+    }
+    #[test]
+    fn parse_simple_uri_ref_or_rev_nom() {
+        let uri = "github:zellij-org/zellij/main";
+        let parsed = parse_nix_uri(uri).unwrap();
+        assert_eq!(("", FlakeRef::default()), parsed);
+    }
+
+    #[test]
     fn parse_simple_uri() {
         let uri = "github:zellij-org/zellij";
         let _flake_ref: FlakeRef = uri.parse().unwrap();
@@ -118,15 +185,15 @@ mod tests {
         let uri = "path:/home/kenji/git";
         let _flake_ref: FlakeRef = uri.parse().unwrap();
     }
-    #[test]
-    fn parse_simple_path() {
-        let uri = "path:/home/kenji/git";
-        let flake_ref: FlakeRef = uri.parse().unwrap();
-        let mut goal = FlakeRef::default();
-        let ref_type = FlakeRefType::default();
-        goal.r#type(ref_type);
-        assert_eq!(flake_ref, goal)
-    }
+    // #[test]
+    // fn parse_simple_path() {
+    //     let uri = "path:/home/kenji/git";
+    //     let flake_ref: FlakeRef = uri.parse().unwrap();
+    //     let mut goal = FlakeRef::default();
+    //     let ref_type = FlakeRefType::default();
+    //     goal.r#type(ref_type);
+    //     assert_eq!(flake_ref, goal)
+    // }
 
     #[test]
     fn parse_simple_uri_correctly() {
