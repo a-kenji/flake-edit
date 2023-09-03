@@ -90,6 +90,7 @@ fn parse_nix_uri(input: &str) -> IResult<&str, FlakeRef> {
     let mut flake_ref = FlakeRef::default();
     let (input, flake_ref_type) = FlakeRefType::parse_type(input)?;
     flake_ref.r#type(flake_ref_type);
+    // TODO: parse params before type information
     let (input, attrs) = parse_params(input)?;
     if let Some(attrs) = attrs {
         flake_ref.attrs(attrs);
@@ -212,6 +213,11 @@ impl FlakeRefType {
                 };
                 Ok((input, flake_ref_type))
             }
+            "path" => {
+                let flake_ref_type = FlakeRefType::Path { path: input.into() };
+                Ok((input, flake_ref_type))
+            }
+
             _ => todo!("Error"),
         }
     }
@@ -252,81 +258,92 @@ mod tests {
         let uri = "github:zellij-org/zellij/main?dir=assets";
         let mut attrs = FlakeRefAttributes::default();
         attrs.dir(Some("assets".into()));
-        let mut flake_ref = FlakeRef::default();
-        flake_ref
+        let flake_ref = FlakeRef::default()
             .r#type(FlakeRefType::GitHub {
                 owner: "zellij-org".into(),
                 repo: "zellij".into(),
                 ref_or_rev: Some("main".into()),
             })
-            .attrs(attrs);
-        let flake_ref = flake_ref.clone();
+            .attrs(attrs)
+            .clone();
 
         let parsed = parse_nix_uri(uri).unwrap();
         assert_eq!(("", flake_ref), parsed);
     }
-    // #[test]
-    // fn parse_simple_uri_attr_nom() {
-    //     let uri = "github:zellij-org/zellij?dir=assets";
-    //     let mut attrs = FlakeRefAttributes::default();
-    //     attrs.dir(Some("assets".into()));
-    //     let mut flake_ref = FlakeRef::default();
-    //     flake_ref
-    //         .r#type(FlakeRefType::GitHub)
-    //         .owner(Some("zellij-org".into()))
-    //         .repo(Some("zellij".into()));
-    //     flake_ref.attrs(attrs);
-    //     let flake_ref = flake_ref.clone();
-    //     let parsed = parse_nix_uri(uri).unwrap();
-    //     assert_eq!(("", flake_ref), parsed);
-    // }
-    // #[test]
-    // fn parse_simple_uri_attr_nom_alt() {
-    //     let uri = "github:zellij-org/zellij/?dir=assets";
-    //     let mut attrs = FlakeRefAttributes::default();
-    //     attrs.dir(Some("assets".into()));
-    //     let mut flake_ref = FlakeRef::default();
-    //     flake_ref
-    //         .r#type(FlakeRefType::GitHub)
-    //         .owner(Some("zellij-org".into()))
-    //         .repo(Some("zellij".into()));
-    //     flake_ref.attrs(attrs);
-    //     let flake_ref = flake_ref.clone();
-    //     let parsed = parse_nix_uri(uri).unwrap();
-    //     assert_eq!(("", flake_ref), parsed);
-    // }
-    // #[test]
-    // fn parse_simple_uri_attrs_nom_alt() {
-    //     let uri = "github:zellij-org/zellij/?dir=assets&nar_hash=fakeHash256";
-    //     let mut attrs = FlakeRefAttributes::default();
-    //     attrs.dir(Some("assets".into()));
-    //     attrs.nar_hash(Some("fakeHash256".into()));
-    //     let mut flake_ref = FlakeRef::default();
-    //     flake_ref
-    //         .r#type(FlakeRefType::GitHub)
-    //         .owner(Some("zellij-org".into()))
-    //         .repo(Some("zellij".into()));
-    //     flake_ref.attrs(attrs);
-    //     let flake_ref = flake_ref.clone();
-    //     let parsed = parse_nix_uri(uri).unwrap();
-    //     assert_eq!(("", flake_ref), parsed);
-    // }
-    //
-    // #[test]
-    // fn parse_simple_path_nom() {
-    //     let uri = "path:/home/kenji/.config/dotfiles/";
-    //     let mut attrs = FlakeRefAttributes::default();
-    //     attrs.dir(Some("assets".into()));
-    //     attrs.nar_hash(Some("fakeHash256".into()));
-    //     let mut flake_ref = FlakeRef::default();
-    //     flake_ref.r#type(FlakeRefType::Path {
-    //         path: "/home/kenji/.config/dotfiles".into(),
-    //     });
-    //     flake_ref.attrs(attrs);
-    //     let flake_ref = flake_ref.clone();
-    //     let parsed = parse_nix_uri(uri).unwrap();
-    //     assert_eq!(("", flake_ref), parsed);
-    // }
+    #[test]
+    fn parse_simple_uri_attr_nom() {
+        let uri = "github:zellij-org/zellij?dir=assets";
+        let mut attrs = FlakeRefAttributes::default();
+        attrs.dir(Some("assets".into()));
+        let flake_ref = FlakeRef::default()
+            .r#type(FlakeRefType::GitHub {
+                owner: "zellij-org".into(),
+                repo: "zellij".into(),
+                ref_or_rev: None,
+            })
+            .attrs(attrs)
+            .clone();
+        let parsed = parse_nix_uri(uri).unwrap();
+        assert_eq!(("", flake_ref), parsed);
+    }
+    #[test]
+    fn parse_simple_uri_attr_nom_alt() {
+        let uri = "github:zellij-org/zellij/?dir=assets";
+        let mut attrs = FlakeRefAttributes::default();
+        attrs.dir(Some("assets".into()));
+        let flake_ref = FlakeRef::default()
+            .r#type(FlakeRefType::GitHub {
+                owner: "zellij-org".into(),
+                repo: "zellij".into(),
+                ref_or_rev: None,
+            })
+            .attrs(attrs)
+            .clone();
+        let parsed = parse_nix_uri(uri).unwrap();
+        assert_eq!(("", flake_ref), parsed);
+    }
+    #[test]
+    fn parse_simple_uri_attrs_nom_alt() {
+        let uri = "github:zellij-org/zellij/?dir=assets&nar_hash=fakeHash256";
+        let mut attrs = FlakeRefAttributes::default();
+        attrs.dir(Some("assets".into()));
+        attrs.nar_hash(Some("fakeHash256".into()));
+        let flake_ref = FlakeRef::default()
+            .r#type(FlakeRefType::GitHub {
+                owner: "zellij-org".into(),
+                repo: "zellij".into(),
+                ref_or_rev: None,
+            })
+            .attrs(attrs)
+            .clone();
+        let parsed = parse_nix_uri(uri).unwrap();
+        assert_eq!(("", flake_ref), parsed);
+    }
+    #[test]
+    fn parse_simple_path_nom() {
+        let uri = "path:/home/kenji/.config/dotfiles/";
+        let flake_ref = FlakeRef::default()
+            .r#type(FlakeRefType::Path {
+                path: "/home/kenji/.config/dotfiles/".into(),
+            })
+            .clone();
+        let parsed = parse_nix_uri(uri).unwrap();
+        assert_eq!(("", flake_ref), parsed);
+    }
+    #[test]
+    fn parse_simple_path_attrs_nom() {
+        let uri = "path:/home/kenji/.config/dotfiles/?dir=assets";
+        let mut attrs = FlakeRefAttributes::default();
+        attrs.dir(Some("assets".into()));
+        let flake_ref = FlakeRef::default()
+            .r#type(FlakeRefType::Path {
+                path: "/home/kenji/.config/dotfiles/".into(),
+            })
+            .attrs(attrs)
+            .clone();
+        let parsed = parse_nix_uri(uri).unwrap();
+        assert_eq!(("", flake_ref), parsed);
+    }
 
     // #[test]
     // fn parse_simple_uri() {
