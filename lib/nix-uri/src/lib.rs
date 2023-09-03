@@ -14,12 +14,9 @@
 //! example `github:a-kenji/nala`
 use nom::branch::alt;
 // use nom::complete::tag;
-use nom::bytes::complete::{is_not, tag, take_until, take_while};
-use nom::character::complete::{
-    alpha1, alphanumeric0, alphanumeric1, line_ending, not_line_ending,
-};
-use nom::character::is_alphabetic;
-use nom::combinator::{eof, rest};
+use nom::bytes::complete::{tag, take_until};
+use nom::character::complete::alphanumeric0;
+use nom::combinator::rest;
 use nom::multi::many_m_n;
 use nom::IResult;
 use serde::{Deserialize, Serialize};
@@ -37,13 +34,10 @@ struct FlakeRef {
     attrs: FlakeRefAttributes,
 }
 
-fn parse_nix_uri<'a>(input: &'a str) -> IResult<&'a str, FlakeRef> {
+fn parse_nix_uri(input: &str) -> IResult<&str, FlakeRef> {
     use nom::sequence::separated_pair;
     let (_, (flake_ref_type, input)) = separated_pair(alphanumeric0, tag(":"), rest)(input)?;
 
-    //
-    // let mut parser =
-    // let (input, output) = parser(input)?;
     match std::convert::Into::<FlakeRefType>::into(flake_ref_type) {
         FlakeRefType::File(_) => todo!(),
         FlakeRefType::Git => todo!(),
@@ -121,7 +115,7 @@ fn parse_nix_uri<'a>(input: &'a str) -> IResult<&'a str, FlakeRef> {
         }
         FlakeRefType::Indirect => todo!(),
         FlakeRefType::Mercurial => todo!(),
-        FlakeRefType::Path(_) => todo!(),
+        FlakeRefType::Path => todo!(),
         FlakeRefType::Sourcehut => todo!(),
         FlakeRefType::Tarball => todo!(),
         // FlakeRefType::None => todo!(),
@@ -231,7 +225,7 @@ enum FlakeRefType {
     Mercurial,
     /// Path must be a directory in the filesystem containing a `flake.nix`.
     /// Path must be an absolute path.
-    Path(String),
+    Path,
     Sourcehut,
     Tarball,
     #[default]
@@ -243,7 +237,7 @@ impl std::str::FromStr for FlakeRefType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "github" => Ok(Self::GitHub),
-            "path" => Ok(Self::Path(s.into())),
+            "path" => Ok(Self::Path),
             "git" => Ok(Self::Git),
             _ => Err(()),
         }
@@ -253,7 +247,7 @@ impl From<&str> for FlakeRefType {
     fn from(s: &str) -> Self {
         match s {
             "github" => Self::GitHub,
-            "path" => Self::Path(s.into()),
+            "path" => Self::Path,
             "git" => Self::Git,
             _ => panic!(),
         }
@@ -343,6 +337,22 @@ mod tests {
         let mut flake_ref = FlakeRef::default();
         flake_ref
             .r#type(FlakeRefType::GitHub)
+            .owner(Some("zellij-org".into()))
+            .repo(Some("zellij".into()));
+        flake_ref.attrs(attrs);
+        let flake_ref = flake_ref.clone();
+        let parsed = parse_nix_uri(uri).unwrap();
+        assert_eq!(("", flake_ref), parsed);
+    }
+    #[test]
+    fn parse_simple_path_nom() {
+        let uri = "path:/home/kenji/.config/dotfiles/";
+        let mut attrs = FlakeRefAttributes::default();
+        attrs.dir(Some("assets".into()));
+        attrs.nar_hash(Some("fakeHash256".into()));
+        let mut flake_ref = FlakeRef::default();
+        flake_ref
+            .r#type(FlakeRefType::Path)
             .owner(Some("zellij-org".into()))
             .repo(Some("zellij".into()));
         flake_ref.attrs(attrs);
