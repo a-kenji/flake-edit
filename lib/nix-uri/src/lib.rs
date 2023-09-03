@@ -101,14 +101,14 @@ fn parse_nix_uri<'a>(input: &'a str) -> IResult<&'a str, FlakeRef> {
                     // Can start with "&"
                     match param.parse().unwrap() {
                         FlakeRefParam::Dir => {
-                            attrs.set_dir(Some(value.into()));
+                            attrs.dir(Some(value.into()));
                         }
                         FlakeRefParam::NarHash => {
-                            attrs.set_nar_hash(Some(value.into()));
+                            attrs.nar_hash(Some(value.into()));
                         }
                     }
                 }
-                flake_ref.set_attrs(attrs);
+                flake_ref.attrs(attrs);
                 return Ok((input, flake_ref));
             } else {
                 return Ok((input, flake_ref));
@@ -150,8 +150,9 @@ impl FlakeRef {
         self
     }
 
-    fn set_attrs(&mut self, attrs: FlakeRefAttributes) {
+    fn attrs(&mut self, attrs: FlakeRefAttributes) -> &mut Self {
         self.attrs = attrs;
+        self
     }
 }
 
@@ -172,12 +173,14 @@ struct FlakeRefAttributes {
 }
 
 impl FlakeRefAttributes {
-    fn set_dir(&mut self, dir: Option<String>) {
+    fn dir(&mut self, dir: Option<String>) -> &mut Self {
         self.dir = dir;
+        self
     }
 
-    fn set_nar_hash(&mut self, nar_hash: Option<String>) {
+    fn nar_hash(&mut self, nar_hash: Option<String>) -> &mut Self {
         self.nar_hash = nar_hash;
+        self
     }
 }
 
@@ -288,14 +291,14 @@ mod tests {
     fn parse_simple_uri_ref_or_rev_attr_nom() {
         let uri = "github:zellij-org/zellij/main?dir=assets";
         let mut attrs = FlakeRefAttributes::default();
-        attrs.set_dir(Some("assets".into()));
+        attrs.dir(Some("assets".into()));
         let mut flake_ref = FlakeRef::default();
         flake_ref
             .r#type(FlakeRefType::GitHub)
             .owner(Some("zellij-org".into()))
             .repo(Some("zellij".into()))
             .rev_or_ref(Some("main".into()));
-        flake_ref.set_attrs(attrs);
+        flake_ref.attrs(attrs);
         let flake_ref = flake_ref.clone();
 
         let parsed = parse_nix_uri(uri).unwrap();
@@ -305,13 +308,13 @@ mod tests {
     fn parse_simple_uri_attr_nom() {
         let uri = "github:zellij-org/zellij?dir=assets";
         let mut attrs = FlakeRefAttributes::default();
-        attrs.set_dir(Some("assets".into()));
+        attrs.dir(Some("assets".into()));
         let mut flake_ref = FlakeRef::default();
         flake_ref
             .r#type(FlakeRefType::GitHub)
             .owner(Some("zellij-org".into()))
             .repo(Some("zellij".into()));
-        flake_ref.set_attrs(attrs);
+        flake_ref.attrs(attrs);
         let flake_ref = flake_ref.clone();
         let parsed = parse_nix_uri(uri).unwrap();
         assert_eq!(("", flake_ref), parsed);
@@ -320,13 +323,13 @@ mod tests {
     fn parse_simple_uri_attr_nom_alt() {
         let uri = "github:zellij-org/zellij/?dir=assets";
         let mut attrs = FlakeRefAttributes::default();
-        attrs.set_dir(Some("assets".into()));
+        attrs.dir(Some("assets".into()));
         let mut flake_ref = FlakeRef::default();
         flake_ref
             .r#type(FlakeRefType::GitHub)
             .owner(Some("zellij-org".into()))
             .repo(Some("zellij".into()));
-        flake_ref.set_attrs(attrs);
+        flake_ref.attrs(attrs);
         let flake_ref = flake_ref.clone();
         let parsed = parse_nix_uri(uri).unwrap();
         assert_eq!(("", flake_ref), parsed);
@@ -334,8 +337,18 @@ mod tests {
     #[test]
     fn parse_simple_uri_attrs_nom_alt() {
         let uri = "github:zellij-org/zellij/?dir=assets&nar_hash=fakeHash256";
+        let mut attrs = FlakeRefAttributes::default();
+        attrs.dir(Some("assets".into()));
+        attrs.nar_hash(Some("fakeHash256".into()));
+        let mut flake_ref = FlakeRef::default();
+        flake_ref
+            .r#type(FlakeRefType::GitHub)
+            .owner(Some("zellij-org".into()))
+            .repo(Some("zellij".into()));
+        flake_ref.attrs(attrs);
+        let flake_ref = flake_ref.clone();
         let parsed = parse_nix_uri(uri).unwrap();
-        assert_eq!(("", FlakeRef::default()), parsed);
+        assert_eq!(("", flake_ref), parsed);
     }
 
     // #[test]
