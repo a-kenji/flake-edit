@@ -38,6 +38,7 @@ fn parse_nix_uri(input: &str) -> IResult<&str, FlakeRef> {
     use nom::sequence::separated_pair;
     let (_, (flake_ref_type, input)) = separated_pair(alphanumeric0, tag(":"), rest)(input)?;
 
+    // TODO: convert from string to flake_ref_type with input left over
     match std::convert::Into::<FlakeRefType>::into(flake_ref_type) {
         FlakeRefType::File(_) => todo!(),
         FlakeRefType::Git => todo!(),
@@ -115,7 +116,9 @@ fn parse_nix_uri(input: &str) -> IResult<&str, FlakeRef> {
         }
         FlakeRefType::Indirect => todo!(),
         FlakeRefType::Mercurial => todo!(),
-        FlakeRefType::Path => todo!(),
+        FlakeRefType::Path { path } => {
+            // Parse till params, then take the input as an option
+        }
         FlakeRefType::Sourcehut => todo!(),
         FlakeRefType::Tarball => todo!(),
         // FlakeRefType::None => todo!(),
@@ -225,19 +228,35 @@ enum FlakeRefType {
     Mercurial,
     /// Path must be a directory in the filesystem containing a `flake.nix`.
     /// Path must be an absolute path.
-    Path,
+    Path {
+        path: String,
+    },
     Sourcehut,
     Tarball,
     #[default]
     None,
 }
+
+impl FlakeRefType {
+    /// Parse type specific information, returns the [`FlakeRefType`]
+    /// and the unparsed input
+    pub fn parse_type(s: &str) -> IResult<&str, FlakeRefType> {
+        todo!();
+        use nom::sequence::separated_pair;
+        let (_, (flake_ref_type, input)) = separated_pair(alphanumeric0, tag(":"), rest)(input)?;
+    }
+}
+
 impl std::str::FromStr for FlakeRefType {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "github" => Ok(Self::GitHub),
-            "path" => Ok(Self::Path),
+            // TODO: start parser here
+            "path" => Ok(Self::Path {
+                path: "parse here".into(),
+            }),
             "git" => Ok(Self::Git),
             _ => Err(()),
         }
