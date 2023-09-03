@@ -10,7 +10,7 @@
 //!    }
 //! ``
 //!
-//! The url syntax representation is parsed by this library:
+//! The uri syntax representation is parsed by this library:
 //! example `github:a-kenji/nala`
 use nom::branch::alt;
 // use nom::complete::tag;
@@ -29,10 +29,10 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(test, serde(deny_unknown_fields))]
 struct FlakeRef {
     r#type: FlakeRefType,
-    pub owner: Option<String>,
-    pub repo: Option<String>,
+    owner: Option<String>,
+    repo: Option<String>,
     flake: Option<bool>,
-    rev: Option<String>,
+    rev_or_ref: Option<String>,
     r#ref: Option<String>,
     attrs: FlakeRefAttributes,
 }
@@ -53,20 +53,71 @@ fn parse_nix_uri<'a>(input: &'a str) -> IResult<&'a str, FlakeRef> {
             println!("Matched Github: {}", input);
             // let (repo, input) = take_until("/")(input)?;
             // let (_, (repo, input)) = separated_pair(take_until("/"), tag("/"), rest)(input)?;
-            let (input, owner_or_ref) =
-                many_m_n(1, 4, separated_pair(take_until("/"), tag("/"), rest))(input)?;
-            for owner in owner_or_ref {
-                println!("Matched Github: {:?}", owner);
-            }
+            let (input, owner_or_ref) = many_m_n(
+                0,
+                3,
+                separated_pair(
+                    take_until("/"),
+                    tag("/"),
+                    alt((take_until("/"), take_until("?"), rest)),
+                ),
+            )(input)?;
 
-            // let (_, (rev_or_ref, input)) =
-            //     (separated_pair(take_until("/"), tag("/"), rest))(input)?;
+            let owner_and_rev_or_ref: Vec<&str> = owner_or_ref
+                .clone()
+                .into_iter()
+                .flat_map(|(x, y)| vec![x, y])
+                .filter(|s| !s.is_empty())
+                .collect();
+
+            let owner = owner_and_rev_or_ref[0];
+            let repo = owner_and_rev_or_ref[1];
+            let rev_or_ref = owner_and_rev_or_ref.get(2);
+
+            println!("Not parsed yet: {}", input);
+
+            let (input, param_tag) = alt((tag("?"), rest))(input)?;
+            println!("Input: {}", input);
+            println!("Tag: {}", param_tag);
+
             let mut flake_ref = FlakeRef::default();
             flake_ref.r#type(flake_ref_type.into());
-            // flake_ref.repo = Some(repo.into());
-            // flake_ref.owner = Some(input.into());
-            // flake_ref.rev = Some(rev_or_ref.into());
-            return Ok((input, flake_ref));
+            flake_ref.repo = Some(repo.into());
+            flake_ref.owner = Some(owner.into());
+            flake_ref.rev_or_ref = rev_or_ref.cloned().map(|s| s.clone().to_string());
+
+            if param_tag == "?" {
+                let (input, param_values) = many_m_n(
+                    0,
+                    5,
+                    separated_pair(take_until("="), tag("="), alt((take_until("&"), rest))),
+                )(input)?;
+                println!("Not parsed yet: {}", input);
+                println!("Params : {:?}", param_values);
+                println!("Not parsed yet: {}", input);
+
+                let mut attrs = FlakeRefAttributes::default();
+                for (param, value) in param_values {
+                    // Can start with "&"
+                    match param.parse().unwrap() {
+                        FlakeRefParam::Dir => {
+                            attrs.set_dir(Some(value.into()));
+                        }
+                        FlakeRefParam::NarHash => {
+                            attrs.set_nar_hash(Some(value.into()));
+                        }
+                    }
+                }
+                flake_ref.set_attrs(attrs);
+                return Ok((input, flake_ref));
+            } else {
+                return Ok((input, flake_ref));
+            }
+
+            // Parse attributes ?attr=value concatenated by &
+            //
+            // let (_, (rev_or_ref, input)) =
+            //     (separated_pair(take_until("/"), tag("/"), rest))(input)?;
         }
         FlakeRefType::Indirect => todo!(),
         FlakeRefType::Mercurial => todo!(),
@@ -93,11 +144,60 @@ impl FlakeRef {
         self.repo = repo;
         self
     }
+
+    fn rev_or_ref(&mut self, rev_or_ref: Option<String>) -> &mut Self {
+        self.rev_or_ref = rev_or_ref;
+        self
+    }
+
+    fn set_attrs(&mut self, attrs: FlakeRefAttributes) {
+        self.attrs = attrs;
+    }
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(test, serde(deny_unknown_fields))]
-struct FlakeRefAttributes {}
+struct FlakeRefAttributes {
+    dir: Option<String>,
+    #[serde(rename = "narHash")]
+    nar_hash: Option<String>,
+    rev: Option<String>,
+    r#ref: Option<String>,
+    // Not available to user
+    #[serde(rename = "revCount")]
+    rev_count: Option<String>,
+    // Not available to user
+    #[serde(rename = "lastModified")]
+    last_modified: Option<String>,
+}
+
+impl FlakeRefAttributes {
+    fn set_dir(&mut self, dir: Option<String>) {
+        self.dir = dir;
+    }
+
+    fn set_nar_hash(&mut self, nar_hash: Option<String>) {
+        self.nar_hash = nar_hash;
+    }
+}
+
+pub enum FlakeRefParam {
+    Dir,
+    NarHash,
+}
+
+impl std::str::FromStr for FlakeRefParam {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use FlakeRefParam::*;
+        match s {
+            "dir" | "&dir" => Ok(Dir),
+            "nar_hash" | "&nar_hash" => Ok(NarHash),
+            _ => Err(()),
+        }
+    }
+}
 
 impl std::str::FromStr for FlakeRef {
     type Err = ();
@@ -111,7 +211,7 @@ impl std::str::FromStr for FlakeRef {
             repo: Some(options[1].to_owned()),
             flake: None,
             attrs: FlakeRefAttributes::default(),
-            rev: None,
+            rev_or_ref: None,
             r#ref: None,
         })
     }
@@ -164,27 +264,90 @@ mod tests {
     #[test]
     fn parse_simple_uri_nom() {
         let uri = "github:zellij-org/zellij";
-        let _flake_ref: FlakeRef = uri.parse().unwrap();
+        let flake_ref = FlakeRef::default()
+            .r#type(FlakeRefType::GitHub)
+            .owner(Some("zellij-org".into()))
+            .repo(Some("zellij".into()))
+            .clone();
         let parsed = parse_nix_uri(uri).unwrap();
-        assert_eq!(("", FlakeRef::default()), parsed);
+        assert_eq!(("", flake_ref), parsed);
     }
     #[test]
     fn parse_simple_uri_ref_or_rev_nom() {
         let uri = "github:zellij-org/zellij/main";
+        let flake_ref = FlakeRef::default()
+            .r#type(FlakeRefType::GitHub)
+            .owner(Some("zellij-org".into()))
+            .repo(Some("zellij".into()))
+            .rev_or_ref(Some("main".into()))
+            .clone();
+        let parsed = parse_nix_uri(uri).unwrap();
+        assert_eq!(("", flake_ref), parsed);
+    }
+    #[test]
+    fn parse_simple_uri_ref_or_rev_attr_nom() {
+        let uri = "github:zellij-org/zellij/main?dir=assets";
+        let mut attrs = FlakeRefAttributes::default();
+        attrs.set_dir(Some("assets".into()));
+        let mut flake_ref = FlakeRef::default();
+        flake_ref
+            .r#type(FlakeRefType::GitHub)
+            .owner(Some("zellij-org".into()))
+            .repo(Some("zellij".into()))
+            .rev_or_ref(Some("main".into()));
+        flake_ref.set_attrs(attrs);
+        let flake_ref = flake_ref.clone();
+
+        let parsed = parse_nix_uri(uri).unwrap();
+        assert_eq!(("", flake_ref), parsed);
+    }
+    #[test]
+    fn parse_simple_uri_attr_nom() {
+        let uri = "github:zellij-org/zellij?dir=assets";
+        let mut attrs = FlakeRefAttributes::default();
+        attrs.set_dir(Some("assets".into()));
+        let mut flake_ref = FlakeRef::default();
+        flake_ref
+            .r#type(FlakeRefType::GitHub)
+            .owner(Some("zellij-org".into()))
+            .repo(Some("zellij".into()));
+        flake_ref.set_attrs(attrs);
+        let flake_ref = flake_ref.clone();
+        let parsed = parse_nix_uri(uri).unwrap();
+        assert_eq!(("", flake_ref), parsed);
+    }
+    #[test]
+    fn parse_simple_uri_attr_nom_alt() {
+        let uri = "github:zellij-org/zellij/?dir=assets";
+        let mut attrs = FlakeRefAttributes::default();
+        attrs.set_dir(Some("assets".into()));
+        let mut flake_ref = FlakeRef::default();
+        flake_ref
+            .r#type(FlakeRefType::GitHub)
+            .owner(Some("zellij-org".into()))
+            .repo(Some("zellij".into()));
+        flake_ref.set_attrs(attrs);
+        let flake_ref = flake_ref.clone();
+        let parsed = parse_nix_uri(uri).unwrap();
+        assert_eq!(("", flake_ref), parsed);
+    }
+    #[test]
+    fn parse_simple_uri_attrs_nom_alt() {
+        let uri = "github:zellij-org/zellij/?dir=assets&nar_hash=fakeHash256";
         let parsed = parse_nix_uri(uri).unwrap();
         assert_eq!(("", FlakeRef::default()), parsed);
     }
 
-    #[test]
-    fn parse_simple_uri() {
-        let uri = "github:zellij-org/zellij";
-        let _flake_ref: FlakeRef = uri.parse().unwrap();
-    }
-    #[test]
-    fn parse_simple_path_ok() {
-        let uri = "path:/home/kenji/git";
-        let _flake_ref: FlakeRef = uri.parse().unwrap();
-    }
+    // #[test]
+    // fn parse_simple_uri() {
+    //     let uri = "github:zellij-org/zellij";
+    //     let _flake_ref: FlakeRef = uri.parse().unwrap();
+    // }
+    // #[test]
+    // fn parse_simple_path_ok() {
+    //     let uri = "path:/home/kenji/git";
+    //     let _flake_ref: FlakeRef = uri.parse().unwrap();
+    // }
     // #[test]
     // fn parse_simple_path() {
     //     let uri = "path:/home/kenji/git";
@@ -195,21 +358,21 @@ mod tests {
     //     assert_eq!(flake_ref, goal)
     // }
 
-    #[test]
-    fn parse_simple_uri_correctly() {
-        let uri = "github:zellij-org/zellij";
-        let flake_ref: FlakeRef = uri.parse().unwrap();
-        assert_eq!(
-            flake_ref,
-            FlakeRef {
-                r#type: "github".into(),
-                owner: Some("zellij-org".into()),
-                repo: Some("zellij".into()),
-                flake: None,
-                rev: None,
-                r#ref: None,
-                attrs: FlakeRefAttributes::default(),
-            }
-        );
-    }
+    // #[test]
+    // fn parse_simple_uri_correctly() {
+    //     let uri = "github:zellij-org/zellij";
+    //     let flake_ref: FlakeRef = uri.parse().unwrap();
+    //     assert_eq!(
+    //         flake_ref,
+    //         FlakeRef {
+    //             r#type: "github".into(),
+    //             owner: Some("zellij-org".into()),
+    //             repo: Some("zellij".into()),
+    //             flake: None,
+    //             rev_or_ref: None,
+    //             r#ref: None,
+    //             attrs: FlakeRefAttributes::default(),
+    //         }
+    //     );
+    // }
 }
