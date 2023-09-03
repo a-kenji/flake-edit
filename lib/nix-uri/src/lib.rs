@@ -80,23 +80,22 @@ fn parse_params(input: &str) -> IResult<&str, Option<FlakeRefAttributes>> {
                 }
             }
         }
-        return Ok((input, Some(attrs)));
+        Ok((input, Some(attrs)))
     } else {
-        return Ok((input, None));
+        Ok((input, None))
     }
 }
 
 fn parse_nix_uri(input: &str) -> IResult<&str, FlakeRef> {
-    use nom::sequence::separated_pair;
-    let (_, (flake_ref_type, input)) = separated_pair(alphanumeric0, tag(":"), rest)(input)?;
-
     let mut flake_ref = FlakeRef::default();
     let (input, flake_ref_type) = FlakeRefType::parse_type(input)?;
     flake_ref.r#type(flake_ref_type);
     let (input, attrs) = parse_params(input)?;
-    flake_ref.attrs(attrs);
+    if let Some(attrs) = attrs {
+        flake_ref.attrs(attrs);
+    }
 
-    O k((input, flake_ref))
+    Ok((input, flake_ref))
 }
 
 impl FlakeRef {
@@ -170,24 +169,6 @@ impl std::str::FromStr for FlakeRefParam {
     }
 }
 
-impl std::str::FromStr for FlakeRef {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (r#type, options) = s.split_once(':').unwrap();
-        let options: Vec<&str> = options.split('/').collect();
-        Ok(Self {
-            r#type: r#type.into(),
-            owner: Some(options[0].to_owned()),
-            repo: Some(options[1].to_owned()),
-            flake: None,
-            attrs: FlakeRefAttributes::default(),
-            rev_or_ref: None,
-            r#ref: None,
-        })
-    }
-}
-
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 enum FlakeRefType {
     // In URL form, the schema must be file+http://, file+https:// or file+file://. If the extension doesn’t correspond to a known archive format (as defined by the tarball fetcher), then the file+ prefix can be dropped.
@@ -215,8 +196,7 @@ enum FlakeRefType {
 impl FlakeRefType {
     /// Parse type specific information, returns the [`FlakeRefType`]
     /// and the unparsed input
-    pub fn parse_type(s: &str) -> IResult<&str, FlakeRefType> {
-        todo!();
+    pub fn parse_type(input: &str) -> IResult<&str, FlakeRefType> {
         use nom::sequence::separated_pair;
         let (_, (flake_ref_type, input)) = separated_pair(alphanumeric0, tag(":"), rest)(input)?;
         match flake_ref_type {
@@ -230,25 +210,9 @@ impl FlakeRefType {
                         .cloned()
                         .map(|s| s.clone().to_string()),
                 };
-                return Ok((input, flake_ref_type));
+                Ok((input, flake_ref_type))
             }
             _ => todo!("Error"),
-        }
-    }
-}
-
-impl std::str::FromStr for FlakeRefType {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "github" => Ok(Self::GitHub),
-            // TODO: start parser here
-            "path" => Ok(Self::Path {
-                path: "parse here".into(),
-            }),
-            "git" => Ok(Self::Git),
-            _ => Err(()),
         }
     }
 }
@@ -261,22 +225,28 @@ mod tests {
     fn parse_simple_uri_nom() {
         let uri = "github:zellij-org/zellij";
         let flake_ref = FlakeRef::default()
-            .r#type(FlakeRefType::GitHub { owner:"zellij-org".into() , repo: "zellij".into(), ref_or_rev: None}).clone();
+            .r#type(FlakeRefType::GitHub {
+                owner: "zellij-org".into(),
+                repo: "zellij".into(),
+                ref_or_rev: None,
+            })
+            .clone();
         let parsed = parse_nix_uri(uri).unwrap();
         assert_eq!(("", flake_ref), parsed);
     }
-    // #[test]
-    // fn parse_simple_uri_ref_or_rev_nom() {
-    //     let uri = "github:zellij-org/zellij/main";
-    //     let flake_ref = FlakeRef::default()
-    //         .r#type(FlakeRefType::GitHub)
-    //         .owner(Some("zellij-org".into()))
-    //         .repo(Some("zellij".into()))
-    //         .rev_or_ref(Some("main".into()))
-    //         .clone();
-    //     let parsed = parse_nix_uri(uri).unwrap();
-    //     assert_eq!(("", flake_ref), parsed);
-    // }
+    #[test]
+    fn parse_simple_uri_ref_or_rev_nom() {
+        let uri = "github:zellij-org/zellij/main";
+        let flake_ref = FlakeRef::default()
+            .r#type(FlakeRefType::GitHub {
+                owner: "zellij-org".into(),
+                repo: "zellij".into(),
+                ref_or_rev: Some("main".into()),
+            })
+            .clone();
+        let parsed = parse_nix_uri(uri).unwrap();
+        assert_eq!(("", flake_ref), parsed);
+    }
     // #[test]
     // fn parse_simple_uri_ref_or_rev_attr_nom() {
     //     let uri = "github:zellij-org/zellij/main?dir=assets";
@@ -340,21 +310,22 @@ mod tests {
     //     let parsed = parse_nix_uri(uri).unwrap();
     //     assert_eq!(("", flake_ref), parsed);
     // }
-    #[test]
-    fn parse_simple_path_nom() {
-        let uri = "path:/home/kenji/.config/dotfiles/";
-        let mut attrs = FlakeRefAttributes::default();
-        attrs.dir(Some("assets".into()));
-        attrs.nar_hash(Some("fakeHash256".into()));
-        let mut flake_ref = FlakeRef::default();
-        flake_ref.r#type(FlakeRefType::Path {
-            path: "/home/kenji/.config/dotfiles".into(),
-        });
-        flake_ref.attrs(attrs);
-        let flake_ref = flake_ref.clone();
-        let parsed = parse_nix_uri(uri).unwrap();
-        assert_eq!(("", flake_ref), parsed);
-    }
+    //
+    // #[test]
+    // fn parse_simple_path_nom() {
+    //     let uri = "path:/home/kenji/.config/dotfiles/";
+    //     let mut attrs = FlakeRefAttributes::default();
+    //     attrs.dir(Some("assets".into()));
+    //     attrs.nar_hash(Some("fakeHash256".into()));
+    //     let mut flake_ref = FlakeRef::default();
+    //     flake_ref.r#type(FlakeRefType::Path {
+    //         path: "/home/kenji/.config/dotfiles".into(),
+    //     });
+    //     flake_ref.attrs(attrs);
+    //     let flake_ref = flake_ref.clone();
+    //     let parsed = parse_nix_uri(uri).unwrap();
+    //     assert_eq!(("", flake_ref), parsed);
+    // }
 
     // #[test]
     // fn parse_simple_uri() {
