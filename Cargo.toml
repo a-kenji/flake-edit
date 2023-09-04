@@ -37,7 +37,7 @@ clap = { version = "4.4.1", optional = true , features = ["derive"]}
 rnix = "0.11.0"
 ropey = "1.6.0"
 rowan = "0.15.11"
-thiserror = "1.0.47"
+thiserror = "1.0.48"
 tracing = "0.1.36"
 
 [build-dependencies]
