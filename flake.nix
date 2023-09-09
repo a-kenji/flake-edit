@@ -1,5 +1,5 @@
 {
-  description = "A friendly lint and lsp helper";
+  description = "Manage your flake inputs comfortably.";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";

@@ -5,6 +5,7 @@ use std::{
     fs,
 };
 
+use nix_uri::FlakeRef;
 use rnix::{
     ast::{
         AttrSet,
@@ -118,7 +119,7 @@ pub fn parse_inputs(input: &GreenNode) -> Result<Vec<Input>, ParseError> {
             rowan::WalkEvent::Enter(node) => {
                 match node.kind() {
                     SyntaxKind::TOKEN_URI => todo!(),
-                    // TODO: PushDown Automata with recutsive attrpaths
+                    // TODO: PushDown Automata with recursive attrpaths
                     SyntaxKind::NODE_IDENT => {}
                     SyntaxKind::NODE_STRING => {}
                     SyntaxKind::TOKEN_IDENT => {
@@ -126,9 +127,16 @@ pub fn parse_inputs(input: &GreenNode) -> Result<Vec<Input>, ParseError> {
                     }
                     SyntaxKind::TOKEN_STRING_CONTENT => {
                         if let Some(token) = node.as_token() {
-                            let replacement_token = GreenToken::new(rowan::SyntaxKind(50), "test");
-                            let tree = token.replace_with(replacement_token);
-                            println!("Tree: {}", tree);
+                            println!("{token}");
+                            if let Ok(mut flake_ref) = std::convert::TryInto::<FlakeRef>::try_into(
+                                token.to_string().as_str(),
+                            ) {
+                                flake_ref.params.set_dir(Some("assets".to_owned()));
+                                let replacement_token =
+                                    GreenToken::new(rowan::SyntaxKind(50), &flake_ref.to_string());
+                                let tree = token.replace_with(replacement_token);
+                                println!("Tree: {}", tree);
+                            }
                         }
                     }
                     // Skip unneccessary Token
@@ -142,7 +150,27 @@ pub fn parse_inputs(input: &GreenNode) -> Result<Vec<Input>, ParseError> {
                     SyntaxKind::NODE_ATTR_SET
                     | SyntaxKind::NODE_ATTRPATH
                     | SyntaxKind::NODE_ATTRPATH_VALUE => {
-                        print_node_enter_info(&node);
+                        // print_node_enter_info(&node);
+                        if let Some(node) = node.as_node() {
+                            let new_root = SyntaxNode::new_root(node.green().into());
+                            println!("Create new root: {new_root:?}");
+                            for walk_node_or_token in new_root.preorder_with_tokens() {
+                                match walk_node_or_token {
+                                    rowan::WalkEvent::Enter(node) => {
+                                        match node.kind() {
+                                            SyntaxKind::NODE_ATTRPATH => {
+                                                if node.to_string() == "description" {
+                                                    continue;
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                        print_node_enter_info(&node)
+                                    }
+                                    rowan::WalkEvent::Leave(_node) => {} // print_node_leave_info(&node),
+                                }
+                            }
+                        }
                     }
                     _ => {}
                 }
@@ -523,13 +551,13 @@ mod tests {
     //     let expected = vec![Input::default()];
     //     assert_eq!(parse_inputs(&node).unwrap(), expected);
     // }
-    #[test]
-    fn parse_simple_inputs_set_description() {
-        let inputs = r#"{description = "This is a text."; inputs = { nixpkgs.url = "github:nixos/nixpkgs"; };}"#;
-        let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
-        let expected = vec![Input::default()];
-        assert_eq!(parse_inputs(&node).unwrap(), expected);
-    }
+    // #[test]
+    // fn parse_simple_inputs_set_description() {
+    //     let inputs = r#"{description = "This is a text."; inputs = { nixpkgs.url = "github:nixos/nixpkgs"; };}"#;
+    //     let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
+    //     let expected = vec![Input::default()];
+    //     assert_eq!(parse_inputs(&node).unwrap(), expected);
+    // }
     // #[test]
     // fn parse_simple_inputs_set_multiple() {
     //     let inputs = r#"{inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; };}"#;

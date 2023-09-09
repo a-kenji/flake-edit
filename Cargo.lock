@@ -257,8 +257,6 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 [[package]]
 name = "nix-uri"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42df48d1da6b3f54d6e672413f1272a79480f372340053fc4c5f630106a2bae1"
 dependencies = [
  "nom",
  "serde",

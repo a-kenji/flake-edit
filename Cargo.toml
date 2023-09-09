@@ -34,7 +34,7 @@ application = ["clap", "clap_complete", "clap_mangen"]
 [dependencies]
 anyhow = "1.0.75"
 clap = { version = "4.4.1", optional = true, features = ["derive"] }
-nix-uri = "0.1.1"
+nix-uri = { version = "0.1.1", path = "/home/kenji/git/dev/nix-uri" }
 rnix = "0.11.0"
 ropey = "1.6.0"
 rowan = "0.15.11"
