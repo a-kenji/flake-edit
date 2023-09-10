@@ -10,7 +10,9 @@ mod cli;
 
 fn main() -> Result<(), ()> {
     let _args = CliArgs::parse();
-    let inputs = r#"{ inputs = { nixpkgs.url = "github:nixos/nixpkgs";};}"#;
+    // let inputs = r#"{ inputs = { nixpkgs.url = "github:nixos/nixpkgs";};}"#;
+    let inputs = r#"{inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; };}"#;
+    // let inputs = r#"{ inputs = { nixpkgs.url = github:nixos/nixpkgs;};}"#;
     let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
 
     let mut state = flake_add::State::default();

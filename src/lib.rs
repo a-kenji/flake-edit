@@ -118,98 +118,116 @@ pub fn parse_inputs(input: &GreenNode) -> Result<Vec<Input>, ParseError> {
     let rinput = SyntaxNode::new_root(input.clone());
     for walk_node_or_token in rinput.preorder_with_tokens() {
         match walk_node_or_token {
-            rowan::WalkEvent::Enter(node) => {
-                match node.kind() {
-                    SyntaxKind::TOKEN_URI => {}
-                    // TODO: PushDown Automata with recursive attrpaths
-                    SyntaxKind::NODE_IDENT => {}
-                    SyntaxKind::NODE_STRING => {}
-                    SyntaxKind::TOKEN_IDENT => {
-                        println!("Token Ident: {}", node);
-                    }
-                    SyntaxKind::TOKEN_STRING_CONTENT => {
-                        if let Some(token) = node.as_token() {
-                            println!("{token}");
-                            if let Ok(mut flake_ref) = FlakeRef::from(token.to_string()) {
-                                flake_ref.params.set_dir(Some("assets".to_owned()));
-                                let replacement_token =
-                                    GreenToken::new(rowan::SyntaxKind(50), &flake_ref.to_string());
-                                let tree = token.replace_with(replacement_token);
-                                println!("Tree: {}", tree);
+            rowan::WalkEvent::Enter(node_or_token) => {
+                match &node_or_token {
+                    NodeOrToken::Node(node) => {
+                        match node.kind() {
+                            SyntaxKind::TOKEN_URI => {}
+                            // TODO: PushDown Automata with recursive attrpaths
+                            SyntaxKind::NODE_IDENT => {}
+                            SyntaxKind::NODE_STRING => {}
+                            SyntaxKind::TOKEN_IDENT => {
+                                println!("Token Ident: {}", node);
                             }
-                        }
-                    }
-                    // Skip unneccessary Token
-                    SyntaxKind::TOKEN_WHITESPACE
-                    | SyntaxKind::TOKEN_R_BRACE
-                    | SyntaxKind::TOKEN_L_BRACE
-                    | SyntaxKind::TOKEN_SEMICOLON => {
-                        continue;
-                    }
-                    // Print Select Token
-                    SyntaxKind::NODE_ATTR_SET
-                    | SyntaxKind::NODE_ATTRPATH
-                    | SyntaxKind::NODE_ATTRPATH_VALUE => {
-                        if let Some(node) = node.as_node() {
-                            let new_root = SyntaxNode::new_root(node.green().into());
-                            println!("Create new root: {new_root:?}");
-                            for walk_node_or_token in new_root.preorder_with_tokens() {
-                                match walk_node_or_token {
-                                    rowan::WalkEvent::Enter(node_or_token) => {
-                                        match &node_or_token {
-                                            NodeOrToken::Node(node) => {
-                                                match node.kind() {
-                                                    SyntaxKind::NODE_ATTRPATH => {
-                                                        if node.to_string() == "description" {
-                                                            println!("Description Node: {node}");
-                                                            print_node_enter_info(&node_or_token);
-                                                            continue;
-                                                        }
-                                                        if node.to_string() == "inputs" {
-                                                            println!("Input Node: {node}");
-                                                            print_node_enter_info(&node_or_token);
-                                                            for node in node.children() {
+                            SyntaxKind::TOKEN_STRING_CONTENT => {
+                                if let Some(token) = node_or_token.as_token() {
+                                    println!("{token}");
+                                    if let Ok(mut flake_ref) = FlakeRef::from(token.to_string()) {
+                                        flake_ref.params.set_dir(Some("assets".to_owned()));
+                                        let replacement_token = GreenToken::new(
+                                            rowan::SyntaxKind(50),
+                                            &flake_ref.to_string(),
+                                        );
+                                        let tree = token.replace_with(replacement_token);
+                                        println!("Tree: {}", tree);
+                                    }
+                                }
+                            }
+                            // Skip unneccessary Token
+                            SyntaxKind::TOKEN_WHITESPACE
+                            | SyntaxKind::TOKEN_R_BRACE
+                            | SyntaxKind::TOKEN_L_BRACE
+                            | SyntaxKind::TOKEN_SEMICOLON => {
+                                continue;
+                            }
+                            // Print Select Token
+                            SyntaxKind::NODE_ATTR_SET
+                            | SyntaxKind::NODE_ATTRPATH
+                            // | SyntaxKind::NODE_ATTRPATH_VALUE
+                                => {
+                                let new_root = SyntaxNode::new_root(node.green().into());
+                                println!("Create new root: {new_root:?}");
+                                for walk_node_or_token in new_root.preorder_with_tokens() {
+                                    match walk_node_or_token {
+                                        rowan::WalkEvent::Enter(node_or_token) => {
+                                            match &node_or_token {
+                                                NodeOrToken::Node(node) => {
+                                                    match node.kind() {
+                                                        SyntaxKind::NODE_ATTRPATH => {
+                                                            if node.to_string() == "description" {
                                                                 println!(
+                                                                    "Description Node: {node}"
+                                                                );
+                                                                print_node_enter_info(
+                                                                    &node_or_token,
+                                                                );
+                                                                continue;
+                                                            }
+                                                            if node.to_string() == "inputs" {
+                                                                println!("Input Node: {node}");
+                                                                print_node_enter_info(
+                                                                    &node_or_token,
+                                                                );
+                                                                for node in node.children() {
+                                                                    println!(
                                                             "Input NODE_ATTRPATH NODE Children: {node}"
                                                         );
-                                                            }
-                                                            for node in node
-                                                                .siblings(rowan::Direction::Next)
-                                                            {
-                                                                println!(
+                                                                }
+                                                                for node in node.siblings(
+                                                                    rowan::Direction::Next,
+                                                                ) {
+                                                                    println!(
                                                             "Input NODE_ATTRPATH NODE Siblings: {node}"
                                                         );
-                                                                println!(
+                                                                    println!(
                                                             "Input NODE_ATTRPATH NODE Sibling Kind: {:?}", node.kind()
                                                         );
-                                                                if node.kind()
-                                                                    == SyntaxKind::NODE_ATTR_SET
-                                                                {
-                                                                    let inputs =
+                                                                    if node.kind()
+                                                                        == SyntaxKind::NODE_ATTR_SET
+                                                                    {
+                                                                        println!(
+                                                                            "Matched node: {node}"
+                                                                        );
+                                                                        let inputs =
                                                                         inputs_from_node_attr_set(
                                                                             node.green().into(),
                                                                         );
-                                                                    res.extend(inputs);
+                                                                        println!(
+                                                                            "Extending with: {:?}",
+                                                                            inputs
+                                                                        );
+                                                                        res.extend(inputs);
+                                                                    }
                                                                 }
                                                             }
-                                                            // continue;
+                                                            // print_node_enter_info(&node);
                                                         }
-                                                        // print_node_enter_info(&node);
-                                                    }
-                                                    _ => {
-                                                        // print_node_enter_info(&node);
+                                                        _ => {
+                                                            // print_node_enter_info(&node);
+                                                        }
                                                     }
                                                 }
+                                                NodeOrToken::Token(_) => {}
                                             }
-                                            NodeOrToken::Token(_) => {}
                                         }
+                                        rowan::WalkEvent::Leave(_node) => {} // print_node_leave_info(&node),
                                     }
-                                    rowan::WalkEvent::Leave(_node) => {} // print_node_leave_info(&node),
                                 }
                             }
+                            _ => {}
                         }
                     }
-                    _ => {}
+                    NodeOrToken::Token(_) => {}
                 }
             }
             rowan::WalkEvent::Leave(node) => match node.kind() {
@@ -273,7 +291,7 @@ fn input_from_node_attrpath_value(node: &SyntaxNode) -> Option<Input> {
     let mut res: Option<Input> = None;
     for walker in node.preorder_with_tokens() {
         match walker {
-            rowan::WalkEvent::Enter(node_or_token) => match node_or_token {
+            rowan::WalkEvent::Enter(node_or_token) => match &node_or_token {
                 NodeOrToken::Node(node) => {
                     match node.kind() {
                         SyntaxKind::NODE_ATTRPATH => {}
@@ -282,18 +300,22 @@ fn input_from_node_attrpath_value(node: &SyntaxNode) -> Option<Input> {
                                 res = Some(Input::new(node.to_string()));
                             }
                         }
-                        SyntaxKind::NODE_STRING => {
+                        // TODO: preserve string vs literal
+                        SyntaxKind::NODE_STRING | SyntaxKind::NODE_LITERAL => {
                             if let Some(ref mut input) = res {
                                 input.url = node.to_string();
+                                return res;
                             }
-                            return res;
                         }
                         _ => {}
                     }
-                    println!("{node}");
+                    println!("Node: {node}");
                     println!("Kind: {:?}", node.kind());
                 }
-                NodeOrToken::Token(_) => {}
+                NodeOrToken::Token(token) => {
+                    println!("Token: {token}");
+                    println!("Token Kind: {:?}", token.kind());
+                }
             },
             rowan::WalkEvent::Leave(_) => {}
         }
