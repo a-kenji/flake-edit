@@ -7,9 +7,11 @@ use clap::Parser;
 use rnix::tokenizer::Tokenizer;
 
 mod cli;
+mod error;
 
 fn main() -> Result<(), ()> {
-    let _args = CliArgs::parse();
+    let args = CliArgs::parse();
+    println!("{:?}", args);
     // let inputs = r#"{ inputs = { nixpkgs.url = "github:nixos/nixpkgs";};}"#;
     let inputs = r#"{inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; };}"#;
     // let inputs = r#"{ inputs = { nixpkgs.url = github:nixos/nixpkgs;};}"#;

@@ -36,6 +36,7 @@ use rowan::{GreenNode, GreenToken, NodeOrToken};
 pub struct State {
     // All the parsed inputs that are present in the attr set
     inputs: Vec<Input>,
+    changes: Vec<Input>,
 }
 
 impl State {

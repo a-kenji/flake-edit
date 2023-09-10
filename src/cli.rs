@@ -1,15 +1,18 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[command(author, version = CliArgs::unstable_version(), about, long_about = None)]
 #[command(next_line_help = true)]
 pub(crate) struct CliArgs {
-    // The flake ref that should be passed through to the nix command
+    // The flake ref, or id that should be passed through to the nix command
     // By default will choose the local flake.
     flake_ref: Option<String>,
     /// Checks for potential errors in the setup
     #[arg(long)]
     health: bool,
+
+    #[command(subcommand)]
+    command: Option<Command>,
 }
 
 impl CliArgs {
@@ -25,4 +28,15 @@ impl CliArgs {
     pub(crate) fn get_flake_ref(&self) -> Option<String> {
         self.flake_ref.clone()
     }
+}
+
+#[derive(Subcommand, Debug)]
+pub(crate) enum Command {
+    /// Add a new flake reference
+    #[clap(alias = "a")]
+    Add { add: Option<String> },
+    /// Pin a specific flake reference based on its id.
+    Pin { pin: Option<String> },
+    /// Remove a specific flake reference, based on its id.
+    Remove { remove: Option<String> },
 }
