@@ -32,7 +32,7 @@ impl CliArgs {
 
 #[derive(Subcommand, Debug)]
 pub(crate) enum Command {
-    /// Add a new flake reference
+    /// Add a new flake reference.
     #[clap(alias = "a")]
     Add { add: Option<String> },
     /// Pin a specific flake reference based on its id.

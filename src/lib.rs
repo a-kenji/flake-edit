@@ -36,13 +36,29 @@ use rowan::{GreenNode, GreenToken, NodeOrToken};
 pub struct State {
     // All the parsed inputs that are present in the attr set
     inputs: Vec<Input>,
-    changes: Vec<Input>,
+    changes: Vec<Change>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub enum Change {
+    #[default]
+    None,
+    Add {
+        input: Input,
+    },
+    Remove {
+        input: Input,
+    },
+    Change {
+        input: Input,
+    },
 }
 
 impl State {
-    fn change_input(&mut self) {
-        todo!();
+    fn add_change(&mut self, change: Change) {
+        self.changes.push(change);
     }
+
     fn get_node(&self, input: &str) -> Option<Input> {
         self.inputs
             .clone()
@@ -285,12 +301,13 @@ fn inputs_from_node_attr_set(node: GreenNode) -> Vec<Input> {
 // Example: crane.url = "github:nix-community/crane";
 // TODO: handle nested attribute sets:
 // Example: crane = { url = "github:nix-community/crane";};
-fn input_from_node_attrpath_value(node: &SyntaxNode) -> Option<Input> {
+fn input_from_node_attrpath_value(input_node: &SyntaxNode) -> Option<Input> {
     println!();
     println!("ATTRPATHVALUE:");
-    println!("{node}");
+    println!("{input_node}");
+    println!();
     let mut res: Option<Input> = None;
-    for walker in node.preorder_with_tokens() {
+    for walker in input_node.preorder_with_tokens() {
         match walker {
             rowan::WalkEvent::Enter(node_or_token) => match &node_or_token {
                 NodeOrToken::Node(node) => {
@@ -304,6 +321,26 @@ fn input_from_node_attrpath_value(node: &SyntaxNode) -> Option<Input> {
                         // TODO: preserve string vs literal
                         SyntaxKind::NODE_STRING | SyntaxKind::NODE_LITERAL => {
                             if let Some(ref mut input) = res {
+                                // if let Some(token) = node_or_token.as_token() {
+                                // let replacement_token =
+                                //     GreenToken::new(rowan::SyntaxKind(50), "hui");
+                                // let replacement_node = GreenNode::new(rowan::SyntaxKind(50), "hui");
+                                let replacement_node = GreenNode::new(
+                                    rowan::SyntaxKind(63),
+                                    std::iter::once(NodeOrToken::Token(GreenToken::new(
+                                        rowan::SyntaxKind(63),
+                                        "hui",
+                                    ))),
+                                );
+                                // let (replacement_node, _errors) =
+                                //     rnix::parser::parse(Tokenizer::new("hui"));
+                                // println!("Replacement Node: {:#?}", replacement_node);
+
+                                let tree = node.replace_with(replacement_node);
+                                println!("Tree: {}", tree);
+                                // } else {
+                                //     println!("No tree for you");
+                                // }
                                 input.url = node.to_string();
                                 return res;
                             }
