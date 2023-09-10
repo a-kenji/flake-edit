@@ -341,7 +341,9 @@ fn input_from_node_attrpath_value(input_node: &SyntaxNode) -> Option<Input> {
                                 // } else {
                                 //     println!("No tree for you");
                                 // }
-                                input.url = node.to_string();
+                                let url = node.to_string().strip_prefix('\"').unwrap().to_string();
+                                let url = url.to_string().strip_suffix('\"').unwrap().to_string();
+                                input.url = url;
                                 return res;
                             }
                         }
