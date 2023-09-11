@@ -10,7 +10,12 @@ pub(crate) struct CliArgs {
     /// Checks for potential errors in the setup
     #[arg(long)]
     health: bool,
-
+    /// Pin to a specific ref_or_rev
+    #[arg(long)]
+    ref_or_rev: Option<String>,
+    // /// Set a flake parameter for a flake_ref
+    // #[arg(long)]
+    // param: Option<Parameter>,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -28,6 +33,10 @@ impl CliArgs {
     pub(crate) fn get_flake_ref(&self) -> Option<String> {
         self.flake_ref.clone()
     }
+
+    pub(crate) fn command(&self) -> Option<&Command> {
+        self.command.as_ref()
+    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -40,3 +49,6 @@ pub(crate) enum Command {
     /// Remove a specific flake reference, based on its id.
     Remove { remove: Option<String> },
 }
+
+#[derive(Debug, Clone)]
+pub(crate) enum Parameter {}

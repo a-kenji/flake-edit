@@ -44,18 +44,18 @@ pub enum Change {
     #[default]
     None,
     Add {
-        input: Input,
+        input: Option<String>,
     },
     Remove {
-        input: Input,
+        input: Option<String>,
     },
     Change {
-        input: Input,
+        input: Option<String>,
     },
 }
 
 impl State {
-    fn add_change(&mut self, change: Change) {
+    pub fn add_change(&mut self, change: Change) {
         self.changes.push(change);
     }
 

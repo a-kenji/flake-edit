@@ -148,8 +148,8 @@
       # all of that work (e.g. via cachix) when running in CI
       cargoArtifacts = craneLib.buildDepsOnly commonArgs;
       meta = with pkgs.lib; {
-        homepage = "https://github.com/a-kenji/fixme";
-        description = "A friendly lint and lsp helper";
+        homepage = "https://github.com/a-kenji/flake-add";
+        description = "Manage your flake inputs comfortably.";
         license = [licenses.mit];
       };
     in rec {
