@@ -27,16 +27,15 @@ fn main() -> anyhow::Result<()> {
 
     let mut state = flake_add::State::default();
 
-    match args.command() {
-        Some(command) => match command {
+    if let Some(command) = args.command() {
+        match command {
             cli::Command::Add { add } => {
                 let change = flake_add::Change::Add { input: add.clone() };
                 state.add_change(change);
             }
             cli::Command::Pin { pin } => todo!(),
             cli::Command::Remove { remove } => todo!(),
-        },
-        None => {}
+        }
     }
 
     state.walk_attr_set(&node);
