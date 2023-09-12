@@ -10,7 +10,7 @@ use rnix::{
     ast::{
         AttrSet,
         Entry::{self, AttrpathValue},
-        HasEntry,
+        Expr, HasEntry,
     },
     parser::ParseError,
     tokenizer::Tokenizer,
@@ -59,18 +59,114 @@ impl State {
         self.changes.push(change);
     }
 
-    fn get_node(&self, input: &str) -> Option<Input> {
-        self.inputs
-            .clone()
-            .into_iter()
-            .filter(|n| n.name.as_str() == input)
-            .next()
-    }
     // Traverses the whole flake.nix toplevel attr set.
     pub fn walk_attr_set(&mut self, node: &GreenNode) {
         let inputs = parse_inputs(node);
         if let Ok(inputs) = inputs {
             self.inputs = inputs;
+        }
+    }
+    // Traverses the whole flake.nix toplevel attr set.
+    pub fn walk_expr_set(&mut self, stream: &str) {
+        let root = rnix::Root::parse(stream).ok().unwrap();
+
+        let expr = root.expr().unwrap();
+
+        let attr_set = match expr {
+            Expr::AttrSet(attr_set) => Some(attr_set),
+            _ => None,
+        }
+        .unwrap();
+
+        for attr in attr_set.attrpath_values() {
+            if let Some(path) = attr.attrpath() {
+                match path.to_string().as_str() {
+                    "inputs" => self.walk_inputs(attr.value()),
+                    "description" | "outputs" => {}
+                    _ => todo!("Root attribute incorrect."),
+                }
+            }
+        }
+    }
+
+    fn walk_inputs(&mut self, attr: Option<Expr>) {
+        let entry = match attr {
+            Some(entry) => match entry {
+                Expr::AttrSet(attr_set) => Some(attr_set),
+                _ => {
+                    println!("Not matched: {:?}", entry);
+                    None
+                }
+            },
+            None => todo!(),
+        }
+        .unwrap();
+
+        for attrs in entry.attrpath_values() {
+            let path = attrs.attrpath().unwrap();
+            let value = attrs.value().unwrap();
+            println!("Path: {}", path);
+            for attr in path.attrs() {
+                println!("Attr: {}", attr);
+            }
+            match &value {
+                Expr::Str(uri) => {
+                    println!("Uri: {uri}");
+                }
+                Expr::AttrSet(attr_set) => {
+                    println!("AttrSet: {attr_set}");
+                    // self.walk_inputs(Some(value.clone()));
+                    self.walk_input_attrpath_values(Some(AttrpathValue(attrs)));
+                }
+                _ => todo!(),
+            }
+            // println!("Value: {}", value);
+        }
+    }
+    fn walk_input_attrpath_values(&mut self, attrpath_values: Option<Entry>) {
+        let attrpath_values = match attrpath_values {
+            Some(attr) => match attr {
+                Entry::Inherit(_) => None,
+                AttrpathValue(attrpath_values) => Some(attrpath_values),
+            },
+            None => None,
+        }
+        .unwrap();
+
+        let path = attrpath_values.attrpath().unwrap();
+        let attrs = attrpath_values.value();
+
+        let attrs = match attrs {
+            Some(entry) => match entry {
+                Expr::AttrSet(attr_set) => Some(attr_set),
+                _ => {
+                    println!("Not matched: {:?}", entry);
+                    None
+                }
+            },
+            None => todo!(),
+        }
+        .unwrap();
+
+        println!("Path: {}", path);
+        for attrs in attrs.attrpath_values() {
+            let path = attrs.attrpath().unwrap();
+            let value = attrs.value().unwrap();
+            println!("Path: {}", path);
+            for attr in path.attrs() {
+                println!("Attr: {}", attr);
+            }
+            match &value {
+                Expr::Str(uri) => {
+                    println!("Uri: {uri}");
+                }
+                Expr::AttrSet(attr_set) => {
+                    println!("AttrSet: {attr_set}");
+                    // self.walk_inputs(Some(value.clone()));
+                    self.walk_inputs(Some(value.clone()));
+                }
+                _ => todo!(),
+            }
         }
     }
 }
@@ -167,6 +263,9 @@ pub fn parse_inputs(input: &GreenNode) -> Result<Vec<Input>, ParseError> {
                             | SyntaxKind::TOKEN_SEMICOLON => {
                                 continue;
                             }
+                             SyntaxKind::NODE_ATTRPATH_VALUE => {
+
+                            }
                             // Print Select Token
                             SyntaxKind::NODE_ATTR_SET
                             | SyntaxKind::NODE_ATTRPATH
@@ -199,12 +298,18 @@ pub fn parse_inputs(input: &GreenNode) -> Result<Vec<Input>, ParseError> {
                                                                     println!(
                                                             "Input NODE_ATTRPATH NODE Children: {node}"
                                                         );
+                                                                    println!(
+                                                            "Input NODE_ATTRPATH NODE Children index: {}", node.index()
+                                                        );
                                                                 }
                                                                 for node in node.siblings(
                                                                     rowan::Direction::Next,
                                                                 ) {
                                                                     println!(
                                                             "Input NODE_ATTRPATH NODE Siblings: {node}"
+                                                        );
+                                                                    println!(
+                                                            "Input NODE_ATTRPATH NODE Sibling Kind: {:?}", node.kind()
                                                         );
                                                                     println!(
                                                             "Input NODE_ATTRPATH NODE Sibling Kind: {:?}", node.kind()
@@ -314,7 +419,12 @@ fn input_from_node_attrpath_value(input_node: &SyntaxNode) -> Option<Input> {
                     match node.kind() {
                         SyntaxKind::NODE_ATTRPATH => {}
                         SyntaxKind::NODE_IDENT => {
-                            if res.is_none() {
+                            println!("IDENT KIND: {:?}", node.kind());
+                            println!("IDENT: {}", node);
+                            if res.is_none()
+                                && node.to_string() != "url"
+                                && node.to_string() != "inputs"
+                            {
                                 res = Some(Input::new(node.to_string()));
                             }
                         }
@@ -357,7 +467,12 @@ fn input_from_node_attrpath_value(input_node: &SyntaxNode) -> Option<Input> {
                     println!("Token Kind: {:?}", token.kind());
                 }
             },
-            rowan::WalkEvent::Leave(_) => {}
+            rowan::WalkEvent::Leave(node_or_token) => match &node_or_token {
+                NodeOrToken::Node(_node) => {
+                    print_node_leave_info(&node_or_token);
+                }
+                NodeOrToken::Token(_) => {}
+            },
         }
     }
     None

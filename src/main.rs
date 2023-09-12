@@ -20,10 +20,30 @@ fn main() -> anyhow::Result<()> {
     let inputs = r#"{inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; };}"#;
     // let inputs = r#"{ inputs = { nixpkgs.url = github:nixos/nixpkgs;};}"#;
 
+    let inputs = r#"{
+  description = "Manage your flake inputs comfortably.";
+
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      # inputs.nixpkgs.follows = "nixpkgs";
+      # inputs.flake-utils.follows = "flake-utils";
+    };
+    crane = {
+      url = "github:ipetkov/crane";
+      # inputs.nixpkgs.follows = "nixpkgs";
+      # inputs.rust-overlay.follows = "rust-overlay";
+      # inputs.flake-utils.follows = "flake-utils";
+    };
+  };
+  }
+"#;
+
     let app = FlakeAdd::init()?;
 
-    // let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
-    let (node, _errors) = rnix::parser::parse(Tokenizer::new(&app.root.text.to_string()));
+    let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
+    // let (node, _errors) = rnix::parser::parse(Tokenizer::new(&app.root.text.to_string()));
 
     let mut state = flake_add::State::default();
 
@@ -39,6 +59,8 @@ fn main() -> anyhow::Result<()> {
     }
 
     state.walk_attr_set(&node);
+    // let stream = &app.root.text.to_string();
+    // state.walk_expr_set(stream);
 
     println!("State: {:#?}", state);
 
