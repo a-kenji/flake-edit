@@ -1,10 +1,3 @@
-use std::{
-    collections::{HashMap, HashSet},
-    env,
-    error::Error,
-    fs,
-};
-
 use nix_uri::FlakeRef;
 use rnix::{
     ast::{
@@ -44,13 +37,14 @@ pub enum Change {
     #[default]
     None,
     Add {
-        input: Option<String>,
+        id: Option<String>,
     },
     Remove {
-        input: Option<String>,
+        id: Option<String>,
     },
     Change {
-        input: Option<String>,
+        id: Option<String>,
+        ref_or_rev: Option<String>,
     },
 }
 
@@ -58,13 +52,28 @@ impl State {
     pub fn add_change(&mut self, change: Change) {
         self.changes.push(change);
     }
+    fn find_change(&self, target_id: String) -> Option<Change> {
+        for change in &self.changes {
+            match change {
+                Change::None => {}
+                Change::Add { id } | Change::Remove { id } | Change::Change { id, .. } => {
+                    if let Some(id) = id {
+                        if *id == target_id {
+                            return Some(change.clone());
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+    pub fn add_input(&mut self, input: Input) {
+        self.inputs.push(input);
+    }
 
     // Traverses the whole flake.nix toplevel attr set.
     pub fn walk_attr_set(&mut self, node: &GreenNode) {
-        let inputs = parse_inputs(node);
-        if let Ok(inputs) = inputs {
-            self.inputs = inputs;
-        }
+        let _ = self.parse_inputs(node);
     }
     // Traverses the whole flake.nix toplevel attr set.
     pub fn walk_expr_set(&mut self, stream: &str) {
@@ -169,11 +178,248 @@ impl State {
             }
         }
     }
+    /// parse the input AST
+    pub fn parse_inputs(&mut self, input: &GreenNode) -> Result<(), ParseError> {
+        let _other = input.clone();
+        tracing::debug!("Original: {}", input);
+        // SyntaxKind 75 - NODE_ROOT
+        tracing::debug!("Original Kind: {:?}\n", input.kind());
+        // TODO: test if node is root;
+        let rinput = SyntaxNode::new_root(input.clone());
+        for walk_node_or_token in rinput.preorder_with_tokens() {
+            match walk_node_or_token {
+                rowan::WalkEvent::Enter(node_or_token) => {
+                    match &node_or_token {
+                        NodeOrToken::Node(node) => {
+                            match node.kind() {
+                            SyntaxKind::NODE_ATTR_SET
+                            | SyntaxKind::NODE_ATTRPATH
+                            // | SyntaxKind::NODE_ATTRPATH_VALUE
+                                => {
+                                let new_root = SyntaxNode::new_root(node.green().into());
+                                tracing::debug!("Create new root: {new_root:?}");
+                                for walk_node_or_token in new_root.preorder_with_tokens() {
+                                    match walk_node_or_token {
+                                        rowan::WalkEvent::Enter(node_or_token) => {
+                                            match &node_or_token {
+                                                NodeOrToken::Node(node) => {
+                                                    match node.kind() {
+                                                        SyntaxKind::NODE_ATTRPATH => {
+                                                            if node.to_string() == "description" {
+                                                                tracing::debug!(
+                                                                    "Description Node: {node}"
+                                                                );
+                                                                print_node_enter_info(
+                                                                    &node_or_token,
+                                                                );
+                                                                continue;
+                                                            }
+                                                            if node.to_string() == "inputs" {
+                                                                tracing::debug!("Input Node: {node}");
+                                                                print_node_enter_info(
+                                                                    &node_or_token,
+                                                                );
+                                                                for node in node.children() {
+                                                                    tracing::debug!(
+                                                            "Input NODE_ATTRPATH NODE Children: {node}"
+                                                        );
+                                                                    tracing::debug!(
+                                                            "Input NODE_ATTRPATH NODE Children index: {}", node.index()
+                                                        );
+                                                                }
+                                                                for node in node.siblings(
+                                                                    rowan::Direction::Next,
+                                                                ) {
+                                                                    tracing::debug!(
+                                                            "Input NODE_ATTRPATH NODE Siblings: {node}"
+                                                        );
+                                                                    tracing::debug!(
+                                                            "Input NODE_ATTRPATH NODE Sibling Kind: {:?}", node.kind()
+                                                        );
+                                                                    tracing::debug!(
+                                                            "Input NODE_ATTRPATH NODE Sibling Index: {:?}", node.index()
+                                                        );
+                                                                    if node.kind()
+                                                                        == SyntaxKind::NODE_ATTR_SET
+                                                                    {
+                                                                                    // Node that is
+                                                                                    // constructed
+                                                                                    // here needs
+                                                                                    // to be a
+                                                                                    // NODE_ATTR_SET
+
+                                                                        tracing::info!(
+                                                                            "Matched node: {node}"
+                                                                        );
+                                                                        self.inputs_from_node_attr_set(
+                                                                            node.green().into(),
+                                                                        );
+                                                                    }
+                                                                }
+                                                            }
+                                                            // print_node_enter_info(&node);
+                                                        }
+                                                        _ => {
+                                                            // print_node_enter_info(&node);
+                                                        }
+                                                    }
+                                                }
+                                                NodeOrToken::Token(_) => {}
+                                            }
+                                        }
+                                        rowan::WalkEvent::Leave(_node) => {} // print_node_leave_info(&node),
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                        }
+                        NodeOrToken::Token(_) => {}
+                    }
+                }
+                rowan::WalkEvent::Leave(node) => match node.kind() {
+                    SyntaxKind::TOKEN_COMMENT
+                    | SyntaxKind::TOKEN_ERROR
+                    | SyntaxKind::TOKEN_WHITESPACE
+                    | SyntaxKind::TOKEN_L_BRACE
+                    | SyntaxKind::TOKEN_R_BRACE
+                    | SyntaxKind::TOKEN_L_BRACK
+                    | SyntaxKind::TOKEN_R_BRACK
+                    | SyntaxKind::TOKEN_COLON
+                    | SyntaxKind::TOKEN_COMMA
+                    | SyntaxKind::TOKEN_SEMICOLON
+                    | SyntaxKind::TOKEN_DOT
+                    | SyntaxKind::TOKEN_L_PAREN
+                    | SyntaxKind::TOKEN_R_PAREN => {
+                        continue;
+                    }
+                    _ => {}
+                },
+            }
+        }
+        // println!("Original: {}", input);
+        // println!("Changed: {}", input);
+        Ok(())
+    }
+    // Handles attrsets of the following form they are assumed to be nested inside the inputs attribute:
+    // { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; }
+    // { nixpkgs.url = "github:nixos/nixpkgs";}
+    // TODO: create a GreenNode from all changed inputs
+    fn inputs_from_node_attr_set(&mut self, node: GreenNode) {
+        tracing::debug!("Inputs from node attrs node: {node}");
+        let node = SyntaxNode::new_root(node);
+        // let mut res = vec![];
+        for node_walker in node.preorder_with_tokens() {
+            match node_walker {
+                rowan::WalkEvent::Enter(node_or_token) => {
+                    tracing::debug!("Inputs from node attrs set");
+                    print_node_enter_info(&node_or_token);
+                    if let Some(node) = node_or_token.as_node() {
+                        if SyntaxKind::NODE_ATTRPATH_VALUE == node.kind() {
+                            if let Some(_input) = self.input_from_node_attrpath_value(node) {
+                                // res.push(input);
+                                // self.add_input(input);
+                            }
+                        }
+                    }
+                }
+                rowan::WalkEvent::Leave(_) => {}
+            }
+        }
+    }
+    // Handles NODE_ATTRPATH_VALUES for a single input
+    // Example: crane.url = "github:nix-community/crane";
+    // TODO: handle nested attribute sets:
+    // Example: crane = { url = "github:nix-community/crane";};
+    fn input_from_node_attrpath_value(&mut self, input_node: &SyntaxNode) -> Option<SyntaxNode> {
+        tracing::debug!("ATTRPATHVALUE:");
+        tracing::debug!("Input node: {input_node}");
+        let mut res: Option<Input> = None;
+        for walker in input_node.preorder_with_tokens() {
+            match walker {
+                rowan::WalkEvent::Enter(node_or_token) => match &node_or_token {
+                    NodeOrToken::Node(node) => {
+                        match node.kind() {
+                            SyntaxKind::NODE_ATTRPATH => {}
+                            SyntaxKind::NODE_IDENT => {
+                                tracing::debug!("IDENT KIND: {:?}", node.kind());
+                                tracing::debug!("IDENT: {}", node);
+                                if res.is_none()
+                                    && node.to_string() != "url"
+                                    && node.to_string() != "inputs"
+                                {
+                                    res = Some(Input::new(node.to_string()));
+                                }
+                            }
+                            // TODO: preserve string vs literal
+                            SyntaxKind::NODE_STRING | SyntaxKind::NODE_LITERAL => {
+                                if let Some(ref mut input) = res {
+                                    let url =
+                                        node.to_string().strip_prefix('\"').unwrap().to_string();
+                                    let url =
+                                        url.to_string().strip_suffix('\"').unwrap().to_string();
+                                    input.url = url.clone();
+
+                                    let maybe_change = self.find_change(input.id.clone());
+                                    if let Some(change) = maybe_change {
+                                        tracing::debug!("Change: {change:?}");
+                                        if let Ok(mut flake_ref) = FlakeRef::from(&url) {
+                                            match change {
+                                                Change::None => todo!(),
+                                                Change::Add { .. } => todo!(),
+                                                Change::Remove { .. } => todo!(),
+                                                Change::Change { ref_or_rev, .. } => {
+                                                    flake_ref
+                                                        .r#type
+                                                        .ref_or_rev(ref_or_rev)
+                                                        .unwrap();
+                                                    flake_ref
+                                                        .params
+                                                        .set_dir(Some("assets".to_owned()));
+                                                }
+                                            }
+                                            let replacement_node = GreenNode::new(
+                                                rowan::SyntaxKind(63),
+                                                std::iter::once(NodeOrToken::Token(
+                                                    GreenToken::new(
+                                                        rowan::SyntaxKind(63),
+                                                        &flake_ref.to_string(),
+                                                    ),
+                                                )),
+                                            );
+                                            let tree = node.replace_with(replacement_node);
+                                            println!("Tree: {}", tree);
+                                        }
+                                    }
+                                    tracing::debug!("Adding input: {input:?}");
+                                    self.add_input(input.clone());
+                                }
+                            }
+                            _ => {}
+                        }
+                        tracing::debug!("Node: {node}");
+                        tracing::debug!("Kind: {:?}", node.kind());
+                    }
+                    NodeOrToken::Token(token) => {
+                        tracing::debug!("Token: {token}");
+                        tracing::debug!("Token Kind: {:?}", token.kind());
+                    }
+                },
+                rowan::WalkEvent::Leave(node_or_token) => match &node_or_token {
+                    NodeOrToken::Node(_node) => {
+                        print_node_leave_info(&node_or_token);
+                    }
+                    NodeOrToken::Token(_) => {}
+                },
+            }
+        }
+        None
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub struct Input {
-    pub name: String,
+    pub id: String,
     pub flake: bool,
     pub url: String,
     follows: Vec<String>,
@@ -182,7 +428,7 @@ pub struct Input {
 impl Default for Input {
     fn default() -> Self {
         Self {
-            name: String::new(),
+            id: String::new(),
             flake: true,
             url: String::new(),
             follows: vec![],
@@ -193,7 +439,7 @@ impl Default for Input {
 impl Input {
     fn new(name: String) -> Self {
         Self {
-            name,
+            id: name,
             ..Self::default()
         }
     }
@@ -221,282 +467,25 @@ pub fn write_node(node: &SyntaxNode) -> SyntaxNode {
     todo!();
 }
 
-/// parse the input AST
-pub fn parse_inputs(input: &GreenNode) -> Result<Vec<Input>, ParseError> {
-    let mut res: Vec<Input> = vec![];
-    let other = input.clone();
-    println!("Original: {}", input);
-    // SyntaxKind 75 - NODE_ROOT
-    println!("Original Kind: {:?}\n", input.kind());
-    let rinput = SyntaxNode::new_root(input.clone());
-    for walk_node_or_token in rinput.preorder_with_tokens() {
-        match walk_node_or_token {
-            rowan::WalkEvent::Enter(node_or_token) => {
-                match &node_or_token {
-                    NodeOrToken::Node(node) => {
-                        match node.kind() {
-                            SyntaxKind::TOKEN_URI => {}
-                            // TODO: PushDown Automata with recursive attrpaths
-                            SyntaxKind::NODE_IDENT => {}
-                            SyntaxKind::NODE_STRING => {}
-                            SyntaxKind::TOKEN_IDENT => {
-                                println!("Token Ident: {}", node);
-                            }
-                            SyntaxKind::TOKEN_STRING_CONTENT => {
-                                if let Some(token) = node_or_token.as_token() {
-                                    println!("{token}");
-                                    if let Ok(mut flake_ref) = FlakeRef::from(token.to_string()) {
-                                        flake_ref.params.set_dir(Some("assets".to_owned()));
-                                        let replacement_token = GreenToken::new(
-                                            rowan::SyntaxKind(50),
-                                            &flake_ref.to_string(),
-                                        );
-                                        let tree = token.replace_with(replacement_token);
-                                        println!("Tree: {}", tree);
-                                    }
-                                }
-                            }
-                            // Skip unneccessary Token
-                            SyntaxKind::TOKEN_WHITESPACE
-                            | SyntaxKind::TOKEN_R_BRACE
-                            | SyntaxKind::TOKEN_L_BRACE
-                            | SyntaxKind::TOKEN_SEMICOLON => {
-                                continue;
-                            }
-                             SyntaxKind::NODE_ATTRPATH_VALUE => {
-
-                            }
-                            // Print Select Token
-                            SyntaxKind::NODE_ATTR_SET
-                            | SyntaxKind::NODE_ATTRPATH
-                            // | SyntaxKind::NODE_ATTRPATH_VALUE
-                                => {
-                                let new_root = SyntaxNode::new_root(node.green().into());
-                                println!("Create new root: {new_root:?}");
-                                for walk_node_or_token in new_root.preorder_with_tokens() {
-                                    match walk_node_or_token {
-                                        rowan::WalkEvent::Enter(node_or_token) => {
-                                            match &node_or_token {
-                                                NodeOrToken::Node(node) => {
-                                                    match node.kind() {
-                                                        SyntaxKind::NODE_ATTRPATH => {
-                                                            if node.to_string() == "description" {
-                                                                println!(
-                                                                    "Description Node: {node}"
-                                                                );
-                                                                print_node_enter_info(
-                                                                    &node_or_token,
-                                                                );
-                                                                continue;
-                                                            }
-                                                            if node.to_string() == "inputs" {
-                                                                println!("Input Node: {node}");
-                                                                print_node_enter_info(
-                                                                    &node_or_token,
-                                                                );
-                                                                for node in node.children() {
-                                                                    println!(
-                                                            "Input NODE_ATTRPATH NODE Children: {node}"
-                                                        );
-                                                                    println!(
-                                                            "Input NODE_ATTRPATH NODE Children index: {}", node.index()
-                                                        );
-                                                                }
-                                                                for node in node.siblings(
-                                                                    rowan::Direction::Next,
-                                                                ) {
-                                                                    println!(
-                                                            "Input NODE_ATTRPATH NODE Siblings: {node}"
-                                                        );
-                                                                    println!(
-                                                            "Input NODE_ATTRPATH NODE Sibling Kind: {:?}", node.kind()
-                                                        );
-                                                                    println!(
-                                                            "Input NODE_ATTRPATH NODE Sibling Kind: {:?}", node.kind()
-                                                        );
-                                                                    if node.kind()
-                                                                        == SyntaxKind::NODE_ATTR_SET
-                                                                    {
-                                                                        println!(
-                                                                            "Matched node: {node}"
-                                                                        );
-                                                                        let inputs =
-                                                                        inputs_from_node_attr_set(
-                                                                            node.green().into(),
-                                                                        );
-                                                                        println!(
-                                                                            "Extending with: {:?}",
-                                                                            inputs
-                                                                        );
-                                                                        res.extend(inputs);
-                                                                    }
-                                                                }
-                                                            }
-                                                            // print_node_enter_info(&node);
-                                                        }
-                                                        _ => {
-                                                            // print_node_enter_info(&node);
-                                                        }
-                                                    }
-                                                }
-                                                NodeOrToken::Token(_) => {}
-                                            }
-                                        }
-                                        rowan::WalkEvent::Leave(_node) => {} // print_node_leave_info(&node),
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    NodeOrToken::Token(_) => {}
-                }
-            }
-            rowan::WalkEvent::Leave(node) => match node.kind() {
-                SyntaxKind::TOKEN_COMMENT
-                | SyntaxKind::TOKEN_ERROR
-                | SyntaxKind::TOKEN_WHITESPACE
-                | SyntaxKind::TOKEN_L_BRACE
-                | SyntaxKind::TOKEN_R_BRACE
-                | SyntaxKind::TOKEN_L_BRACK
-                | SyntaxKind::TOKEN_R_BRACK
-                | SyntaxKind::TOKEN_COLON
-                | SyntaxKind::TOKEN_COMMA
-                | SyntaxKind::TOKEN_SEMICOLON
-                | SyntaxKind::TOKEN_DOT
-                | SyntaxKind::TOKEN_L_PAREN
-                | SyntaxKind::TOKEN_R_PAREN => {
-                    continue;
-                }
-                _ => {}
-            },
-        }
-    }
-    println!("Original: {}", input);
-    println!("Changed: {}", input);
-    Ok(res)
-}
-
-// Handles attrsets of the following form they are assumed to be nested inside the inputs attribute:
-// { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; }
-// { nixpkgs.url = "github:nixos/nixpkgs";}
-fn inputs_from_node_attr_set(node: GreenNode) -> Vec<Input> {
-    let node = SyntaxNode::new_root(node);
-    let mut res = vec![];
-    for node_walker in node.preorder_with_tokens() {
-        match node_walker {
-            rowan::WalkEvent::Enter(node_or_token) => {
-                println!("Inputs from node attrs set");
-                print_node_enter_info(&node_or_token);
-                if let Some(node) = node_or_token.as_node() {
-                    if SyntaxKind::NODE_ATTRPATH_VALUE == node.kind() {
-                        if let Some(input) = input_from_node_attrpath_value(node) {
-                            res.push(input);
-                        }
-                    }
-                }
-            }
-            rowan::WalkEvent::Leave(_) => {}
-        }
-    }
-    res
-}
-
-// Handles NODE_ATTRPATH_VALUES for a single input
-// Example: crane.url = "github:nix-community/crane";
-// TODO: handle nested attribute sets:
-// Example: crane = { url = "github:nix-community/crane";};
-fn input_from_node_attrpath_value(input_node: &SyntaxNode) -> Option<Input> {
-    println!();
-    println!("ATTRPATHVALUE:");
-    println!("{input_node}");
-    println!();
-    let mut res: Option<Input> = None;
-    for walker in input_node.preorder_with_tokens() {
-        match walker {
-            rowan::WalkEvent::Enter(node_or_token) => match &node_or_token {
-                NodeOrToken::Node(node) => {
-                    match node.kind() {
-                        SyntaxKind::NODE_ATTRPATH => {}
-                        SyntaxKind::NODE_IDENT => {
-                            println!("IDENT KIND: {:?}", node.kind());
-                            println!("IDENT: {}", node);
-                            if res.is_none()
-                                && node.to_string() != "url"
-                                && node.to_string() != "inputs"
-                            {
-                                res = Some(Input::new(node.to_string()));
-                            }
-                        }
-                        // TODO: preserve string vs literal
-                        SyntaxKind::NODE_STRING | SyntaxKind::NODE_LITERAL => {
-                            if let Some(ref mut input) = res {
-                                // if let Some(token) = node_or_token.as_token() {
-                                // let replacement_token =
-                                //     GreenToken::new(rowan::SyntaxKind(50), "hui");
-                                // let replacement_node = GreenNode::new(rowan::SyntaxKind(50), "hui");
-                                let replacement_node = GreenNode::new(
-                                    rowan::SyntaxKind(63),
-                                    std::iter::once(NodeOrToken::Token(GreenToken::new(
-                                        rowan::SyntaxKind(63),
-                                        "hui",
-                                    ))),
-                                );
-                                // let (replacement_node, _errors) =
-                                //     rnix::parser::parse(Tokenizer::new("hui"));
-                                // println!("Replacement Node: {:#?}", replacement_node);
-
-                                let tree = node.replace_with(replacement_node);
-                                println!("Tree: {}", tree);
-                                // } else {
-                                //     println!("No tree for you");
-                                // }
-                                let url = node.to_string().strip_prefix('\"').unwrap().to_string();
-                                let url = url.to_string().strip_suffix('\"').unwrap().to_string();
-                                input.url = url;
-                                return res;
-                            }
-                        }
-                        _ => {}
-                    }
-                    println!("Node: {node}");
-                    println!("Kind: {:?}", node.kind());
-                }
-                NodeOrToken::Token(token) => {
-                    println!("Token: {token}");
-                    println!("Token Kind: {:?}", token.kind());
-                }
-            },
-            rowan::WalkEvent::Leave(node_or_token) => match &node_or_token {
-                NodeOrToken::Node(_node) => {
-                    print_node_leave_info(&node_or_token);
-                }
-                NodeOrToken::Token(_) => {}
-            },
-        }
-    }
-    None
-}
-
 pub fn print_node_enter_info(node: &NodeOrToken<rnix::SyntaxNode, rnix::SyntaxToken>) {
-    println!("Enter: {node}");
-    println!("Enter Kind: {:?}", node.kind());
-    println!("Enter Parent: {:?}", node.parent());
+    tracing::debug!("Enter: {node}");
+    tracing::debug!("Enter Kind: {:?}", node.kind());
+    tracing::debug!("Enter Parent: {:?}", node.parent());
     if let Some(parent) = node.parent() {
-        println!("Enter Parent Node: {:?}", parent);
-        println!("Enter Parent Node Kind: {:?}", parent.kind());
+        tracing::debug!("Enter Parent Node: {:?}", parent);
+        tracing::debug!("Enter Parent Node Kind: {:?}", parent.kind());
     }
     if let Some(node) = node.as_node() {
-        println!("Enter Green Kind: {:?}", node.green().kind());
+        tracing::debug!("Enter Green Kind: {:?}", node.green().kind());
         for child in node.children() {
-            println!("Enter Children: {:?}", child);
-            println!("Enter Children Kind: {:?}", child.green().kind());
+            tracing::debug!("Enter Children: {:?}", child);
+            tracing::debug!("Enter Children Kind: {:?}", child.green().kind());
         }
-        println!("Node Next Sibling: {:?}", node.next_sibling());
-        println!("Node Prev Sibling: {:?}", node.prev_sibling());
+        tracing::debug!("Node Next Sibling: {:?}", node.next_sibling());
+        tracing::debug!("Node Prev Sibling: {:?}", node.prev_sibling());
     }
     if let Some(token) = node.as_token() {
-        println!("Token: {}", token);
+        tracing::debug!("Token: {}", token);
     }
     // if let Some(kind) = node.as_node() {
     //     println!("Enter Node Kind: {:?}", kind);
@@ -504,21 +493,19 @@ pub fn print_node_enter_info(node: &NodeOrToken<rnix::SyntaxNode, rnix::SyntaxTo
     // if let Some(kind) = node.as_token() {
     //     println!("Enter Token Kind: {:?}", kind);
     // }
-    println!("Node Index: {}", node.index());
-    println!();
+    tracing::debug!("Node Index: {}", node.index());
 }
 
 pub fn print_node_leave_info(node: &NodeOrToken<rnix::SyntaxNode, rnix::SyntaxToken>) {
-    println!("Leave: {node}");
-    println!("Leave Index: {:?}", node.index());
-    println!("Leave Kind: {:?}", node.kind());
+    tracing::debug!("Leave: {node}");
+    tracing::debug!("Leave Index: {:?}", node.index());
+    tracing::debug!("Leave Kind: {:?}", node.kind());
     if let Some(node) = node.as_node() {
-        println!("Leave Green Kind: {:?}", node.green().kind());
-        println!("Leave Kind Next Sibling: {:?}", node.next_sibling());
-        println!("Leave Kind Prev Sibling: {:?}", node.prev_sibling());
+        tracing::debug!("Leave Green Kind: {:?}", node.green().kind());
+        tracing::debug!("Leave Kind Next Sibling: {:?}", node.next_sibling());
+        tracing::debug!("Leave Kind Prev Sibling: {:?}", node.prev_sibling());
     }
-    println!("Leave Kind Parent: {:?}", node.parent());
-    println!();
+    tracing::debug!("Leave Kind Parent: {:?}", node.parent());
 }
 
 /// Parse the toplevel AST

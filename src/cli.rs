@@ -43,7 +43,11 @@ impl CliArgs {
 pub(crate) enum Command {
     /// Add a new flake reference.
     #[clap(alias = "a")]
-    Add { add: Option<String> },
+    Add {
+        add: Option<String>,
+        #[arg(long)]
+        ref_or_rev: Option<String>,
+    },
     /// Pin a specific flake reference based on its id.
     Pin { pin: Option<String> },
     /// Remove a specific flake reference, based on its id.
