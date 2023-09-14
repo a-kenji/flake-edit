@@ -50,7 +50,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut state = flake_add::State::default();
 
-    if let Some(command) = args.command() {
+    if let Some(command) = args.subcommand() {
         match command {
             cli::Command::Add { add, ref_or_rev } => {
                 let change = flake_add::Change::Change {

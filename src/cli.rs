@@ -17,7 +17,7 @@ pub(crate) struct CliArgs {
     // #[arg(long)]
     // param: Option<Parameter>,
     #[command(subcommand)]
-    command: Option<Command>,
+    subcommand: Option<Command>,
 }
 
 impl CliArgs {
@@ -34,8 +34,8 @@ impl CliArgs {
         self.flake_ref.clone()
     }
 
-    pub(crate) fn command(&self) -> Option<&Command> {
-        self.command.as_ref()
+    pub(crate) fn subcommand(&self) -> Option<&Command> {
+        self.subcommand.as_ref()
     }
 }
 

@@ -191,57 +191,78 @@ impl State {
                 rowan::WalkEvent::Enter(node_or_token) => {
                     match &node_or_token {
                         NodeOrToken::Node(node) => {
+                            tracing::debug!("Node: {node}");
+                            tracing::debug!("Node Kind: {:?}", node.kind());
                             match node.kind() {
-                            SyntaxKind::NODE_ATTR_SET
-                            | SyntaxKind::NODE_ATTRPATH
-                            // | SyntaxKind::NODE_ATTRPATH_VALUE
-                                => {
-                                let new_root = SyntaxNode::new_root(node.green().into());
-                                tracing::debug!("Create new root: {new_root:?}");
-                                for walk_node_or_token in new_root.preorder_with_tokens() {
-                                    match walk_node_or_token {
-                                        rowan::WalkEvent::Enter(node_or_token) => {
-                                            match &node_or_token {
-                                                NodeOrToken::Node(node) => {
-                                                    match node.kind() {
-                                                        SyntaxKind::NODE_ATTRPATH => {
-                                                            if node.to_string() == "description" {
+                                SyntaxKind::NODE_ATTR_SET
+                                | SyntaxKind::NODE_ATTRPATH
+                                | SyntaxKind::NODE_ATTRPATH_VALUE => {
+                                    let new_root = SyntaxNode::new_root(node.green().into());
+                                    tracing::debug!("Create new root: {new_root:?}");
+                                    tracing::debug!("Create new root: {new_root}");
+                                    for walk_node_or_token in new_root.preorder_with_tokens() {
+                                        match walk_node_or_token {
+                                            rowan::WalkEvent::Enter(node_or_token) => {
+                                                match &node_or_token {
+                                                    NodeOrToken::Node(node) => {
+                                                        match node.kind() {
+                                                            SyntaxKind::NODE_ATTRPATH => {
                                                                 tracing::debug!(
-                                                                    "Description Node: {node}"
+                                                                    "Toplevel Node: {node}"
                                                                 );
-                                                                print_node_enter_info(
-                                                                    &node_or_token,
+                                                                tracing::debug!(
+                                                                    "Toplevel Node Kind: {:?}",
+                                                                    node.kind()
                                                                 );
-                                                                continue;
-                                                            }
-                                                            if node.to_string() == "inputs" {
-                                                                tracing::debug!("Input Node: {node}");
-                                                                print_node_enter_info(
-                                                                    &node_or_token,
-                                                                );
-                                                                for node in node.children() {
+                                                                if node.to_string() == "description"
+                                                                {
                                                                     tracing::debug!(
+                                                                        "Description Node: {node}"
+                                                                    );
+                                                                    print_node_enter_info(
+                                                                        &node_or_token,
+                                                                    );
+                                                                    continue;
+                                                                }
+                                                                if node.to_string() == "inputs"
+                                                                    || node
+                                                                        .first_child()
+                                                                        .map(|c| {
+                                                                            c.to_string()
+                                                                                == "inputs"
+                                                                        })
+                                                                        .unwrap_or_default()
+                                                                {
+                                                                    tracing::debug!(
+                                                                        "Input Node: {node}"
+                                                                    );
+                                                                    print_node_enter_info(
+                                                                        &node_or_token,
+                                                                    );
+                                                                    for node in node.children() {
+                                                                        tracing::debug!(
                                                             "Input NODE_ATTRPATH NODE Children: {node}"
                                                         );
-                                                                    tracing::debug!(
+                                                                        tracing::debug!(
                                                             "Input NODE_ATTRPATH NODE Children index: {}", node.index()
                                                         );
-                                                                }
-                                                                for node in node.siblings(
-                                                                    rowan::Direction::Next,
-                                                                ) {
-                                                                    tracing::debug!(
+                                                                    }
+                                                                    for node in node.siblings(
+                                                                        rowan::Direction::Next,
+                                                                    ) {
+                                                                        tracing::debug!(
                                                             "Input NODE_ATTRPATH NODE Siblings: {node}"
                                                         );
-                                                                    tracing::debug!(
+                                                                        tracing::debug!(
                                                             "Input NODE_ATTRPATH NODE Sibling Kind: {:?}", node.kind()
                                                         );
-                                                                    tracing::debug!(
+                                                                        tracing::debug!(
                                                             "Input NODE_ATTRPATH NODE Sibling Index: {:?}", node.index()
                                                         );
-                                                                    if node.kind()
-                                                                        == SyntaxKind::NODE_ATTR_SET
-                                                                    {
+                                                                        match node.kind() {
+                                                                                    SyntaxKind::NODE_ATTRPATH => {
+                                                                                    }
+                                                                                    SyntaxKind::NODE_ATTR_SET => {
                                                                                     // Node that is
                                                                                     // constructed
                                                                                     // here needs
@@ -255,24 +276,40 @@ impl State {
                                                                             node.green().into(),
                                                                         );
                                                                     }
+
+                                                                                    _ => {}
+                                                                                }
+                                                                    }
+                                                                } else {
+                                                                    for child in node.children() {
+                                                                        tracing::debug!(
+                                                                            "Print Child: {}",
+                                                                            child
+                                                                        );
+                                                                    }
+                                                                    let child =
+                                                                        node.first_child().unwrap();
+                                                                    tracing::debug!(
+                                                                        "First Child: {}",
+                                                                        child
+                                                                    );
                                                                 }
+                                                                // print_node_enter_info(&node);
                                                             }
-                                                            // print_node_enter_info(&node);
-                                                        }
-                                                        _ => {
-                                                            // print_node_enter_info(&node);
+                                                            _ => {
+                                                                // print_node_enter_info(&node);
+                                                            }
                                                         }
                                                     }
+                                                    NodeOrToken::Token(_) => {}
                                                 }
-                                                NodeOrToken::Token(_) => {}
                                             }
+                                            rowan::WalkEvent::Leave(_node) => {} // print_node_leave_info(&node),
                                         }
-                                        rowan::WalkEvent::Leave(_node) => {} // print_node_leave_info(&node),
                                     }
                                 }
+                                _ => {}
                             }
-                            _ => {}
-                        }
                         }
                         NodeOrToken::Token(_) => {}
                     }
@@ -301,10 +338,10 @@ impl State {
         // println!("Changed: {}", input);
         Ok(())
     }
-    // Handles attrsets of the following form they are assumed to be nested inside the inputs attribute:
-    // { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; }
-    // { nixpkgs.url = "github:nixos/nixpkgs";}
-    // TODO: create a GreenNode from all changed inputs
+    /// Handles attrsets of the following form they are assumed to be nested inside the inputs attribute:
+    /// { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; }
+    /// { nixpkgs.url = "github:nixos/nixpkgs";}
+    /// TODO: create a GreenNode from all changed inputs
     fn inputs_from_node_attr_set(&mut self, node: GreenNode) {
         tracing::debug!("Inputs from node attrs node: {node}");
         let node = SyntaxNode::new_root(node);
