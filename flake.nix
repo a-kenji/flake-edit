@@ -72,6 +72,8 @@
         rustc = rustToolchainTOML;
         cargo = rustToolchainTOML;
 
+        buildInputs = [ pkgs.installShellFiles ];
+
         devInputs = [
           rustToolchainDevTOML
           rustFmtToolchainTOML
@@ -186,6 +188,7 @@
           fullShell = (pkgs.mkShell.override { inherit stdenv; }) {
             buildInputs = shellInputs ++ fmtInputs ++ devInputs;
             inherit name;
+            ASSET_DIR = assetDir;
             RUST_LOG = "debug";
             RUST_BACKTRACE = true;
             # RUSTFLAGS = "-C linker=clang -C link-arg=-fuse-ld=${pkgs.mold}/bin/mold -C target-cpu=native";
@@ -201,18 +204,18 @@
             cargoDepsName = name;
             GIT_DATE = gitDate;
             GIT_REV = gitRev;
+            ASSET_DIR = assetDir;
             doCheck = false;
             version = "unstable" + gitDate;
             inherit
+              assetDir
+              buildInputs
+              cargoLock
+              meta
               name
+              postInstall
               src
               stdenv
-              cargoLock
-              # postInstall
-
-              # assetDir
-
-              meta
             ;
           };
           crane = craneLib.buildPackage (
@@ -221,18 +224,18 @@
               cargoExtraArgs = "-p ${name}";
               GIT_DATE = gitDate;
               GIT_REV = gitRev;
+              ASSET_DIR = assetDir;
               doCheck = false;
               version = "unstable-" + gitDate;
               pname = name;
               inherit
+                assetDir
+                buildInputs
                 cargoArtifacts
                 meta
                 name
+                postInstall
                 stdenv
-              # postInstall
-
-              # assetDir
-
               ;
             }
           );
