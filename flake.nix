@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -207,8 +208,10 @@
               src
               stdenv
               cargoLock
-              postInstall
-              assetDir
+              # postInstall
+
+              # assetDir
+
               meta
             ;
           };
