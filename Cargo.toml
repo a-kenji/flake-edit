@@ -24,7 +24,7 @@ homepage = "https://github.com/a-kenji/flk"
 
 [workspace]
 resolver = "2"
-members = [".", "lib/*"]
+# members = [".", "lib/*"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
