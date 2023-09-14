@@ -45,10 +45,10 @@ rowan = "0.15.11"
 thiserror = "1.0.48"
 tracing = "0.1.36"
 tracing-subscriber = { version = "0.3.17", features = [
-    "time",
-    "std",
-    "fmt",
-    "env-filter",
+  "time",
+  "std",
+  "fmt",
+  "env-filter",
 ] }
 
 
