@@ -194,9 +194,9 @@ impl State {
                             tracing::debug!("Node: {node}");
                             tracing::debug!("Node Kind: {:?}", node.kind());
                             match node.kind() {
-                                SyntaxKind::NODE_ATTR_SET
-                                | SyntaxKind::NODE_ATTRPATH
-                                | SyntaxKind::NODE_ATTRPATH_VALUE => {
+                                // SyntaxKind::NODE_ATTR_SET
+                                // | SyntaxKind::NODE_ATTRPATH
+                                SyntaxKind::NODE_ATTRPATH_VALUE => {
                                     let new_root = SyntaxNode::new_root(node.green().into());
                                     tracing::debug!("Create new root: {new_root:?}");
                                     tracing::debug!("Create new root: {new_root}");
@@ -272,9 +272,12 @@ impl State {
                                                                         tracing::info!(
                                                                             "Matched node: {node}"
                                                                         );
-                                                                        self.inputs_from_node_attr_set(
+                                                                        if let Some(replacement) = self.inputs_from_node_attr_set(
                                                                             node.green().into(),
-                                                                        );
+                                                                        ) {
+                                                                                        let tree = node.replace_with(replacement);
+                                                                                        println!("{}", tree);
+                                                                                    }
                                                                     }
 
                                                                                     _ => {}
@@ -342,18 +345,26 @@ impl State {
     /// { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; }
     /// { nixpkgs.url = "github:nixos/nixpkgs";}
     /// TODO: create a GreenNode from all changed inputs
-    fn inputs_from_node_attr_set(&mut self, node: GreenNode) {
+    fn inputs_from_node_attr_set(&mut self, node: GreenNode) -> Option<GreenNode> {
         tracing::debug!("Inputs from node attrs node: {node}");
-        let node = SyntaxNode::new_root(node);
+        let root_node = SyntaxNode::new_root(node);
         // let mut res = vec![];
-        for node_walker in node.preorder_with_tokens() {
+        for node_walker in root_node.preorder_with_tokens() {
             match node_walker {
                 rowan::WalkEvent::Enter(node_or_token) => {
                     tracing::debug!("Inputs from node attrs set");
                     print_node_enter_info(&node_or_token);
                     if let Some(node) = node_or_token.as_node() {
                         if SyntaxKind::NODE_ATTRPATH_VALUE == node.kind() {
-                            if let Some(_input) = self.input_from_node_attrpath_value(node) {
+                            if let Some(replacement) = self.input_from_node_attrpath_value(node) {
+                                println!("Original Node: {node}");
+                                println!("Node Changed: {replacement}");
+                                println!("Node Kind: {:?}", node.kind());
+                                println!("Node Green Kind: {:?}", node.green().kind());
+                                println!("Replacement Kind: {:?}", replacement.kind());
+                                let tree = root_node.replace_with(replacement);
+                                println!("Changed tree:\n {}", tree);
+                                return Some(tree);
                                 // res.push(input);
                                 // self.add_input(input);
                             }
@@ -363,12 +374,13 @@ impl State {
                 rowan::WalkEvent::Leave(_) => {}
             }
         }
+        None
     }
     // Handles NODE_ATTRPATH_VALUES for a single input
     // Example: crane.url = "github:nix-community/crane";
     // TODO: handle nested attribute sets:
     // Example: crane = { url = "github:nix-community/crane";};
-    fn input_from_node_attrpath_value(&mut self, input_node: &SyntaxNode) -> Option<SyntaxNode> {
+    fn input_from_node_attrpath_value(&mut self, input_node: &SyntaxNode) -> Option<GreenNode> {
         tracing::debug!("ATTRPATHVALUE:");
         tracing::debug!("Input node: {input_node}");
         let mut res: Option<Input> = None;
@@ -396,6 +408,8 @@ impl State {
                                     let url =
                                         url.to_string().strip_suffix('\"').unwrap().to_string();
                                     input.url = url.clone();
+                                    tracing::debug!("Adding input: {input:?}");
+                                    self.add_input(input.clone());
 
                                     let maybe_change = self.find_change(input.id.clone());
                                     if let Some(change) = maybe_change {
@@ -420,16 +434,27 @@ impl State {
                                                 std::iter::once(NodeOrToken::Token(
                                                     GreenToken::new(
                                                         rowan::SyntaxKind(63),
-                                                        &flake_ref.to_string(),
+                                                        format!("\"{}\"", &flake_ref.to_string())
+                                                            .as_str(),
                                                     ),
                                                 )),
                                             );
                                             let tree = node.replace_with(replacement_node);
                                             println!("Tree: {}", tree);
+                                            println!("Tree kind: {:?}", tree.kind());
+                                            println!("Input Node kind: {:?}", input_node.kind());
+                                            println!(
+                                                "Input Node Green kind: {:?}",
+                                                input_node.green().kind()
+                                            );
+                                            // let tree = GreenNode::new(
+                                            //     rowan::SyntaxKind(77),
+                                            //     std::iter::once(NodeOrToken::Node(tree)),
+                                            // );
+                                            // println!("Tree kind: {:?}", tree.kind());
+                                            return Some(tree);
                                         }
                                     }
-                                    tracing::debug!("Adding input: {input:?}");
-                                    self.add_input(input.clone());
                                 }
                             }
                             _ => {}
@@ -459,7 +484,13 @@ pub struct Input {
     pub id: String,
     pub flake: bool,
     pub url: String,
-    follows: Vec<String>,
+    follows: Vec<Follows>,
+}
+
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
+pub enum Follows {
+    Indirect(String),
+    Direct(Input),
 }
 
 impl Default for Input {
