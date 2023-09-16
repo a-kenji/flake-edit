@@ -4,35 +4,42 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
+    flake-utelinos.url = "github:numtide/flake-utils";
+
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-utils.follows = "flake-utils";
+      # inputs.nixpkgs.follows = "nixpkgs";
+      # inputs.flake-utils.follows = "flake-utils";
     };
     crane = {
       url = "github:ipetkov/crane";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.rust-overlay.follows = "rust-overlay";
-      inputs.flake-utils.follows = "flake-utils";
+      # inputs.nixpkgs.follows = "nixpkgs";
+      # inputs.rust-overlay.follows = "rust-overlay";
+      # inputs.flake-utils.follows = "flake-utils";
     };
   };
 
-  outputs = {
-    self,
-    nixpkgs,
-    flake-utils,
-    rust-overlay,
-    crane,
-  }:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      flake-utelinos,
+      rust-overlay,
+      crane,
+    }:
     flake-utils.lib.eachDefaultSystem (
-      system: let
+      system:
+      let
         pkgs = nixpkgs.legacyPackages.${system};
         stdenv =
-          if pkgs.stdenv.isLinux
-          then pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv
-          else pkgs.stdenv;
-        overlays = [(import rust-overlay)];
-        rustPkgs = import nixpkgs {inherit system overlays;};
+          if pkgs.stdenv.isLinux then
+            pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv
+          else
+            pkgs.stdenv
+        ;
+        overlays = [ (import rust-overlay) ];
+        rustPkgs = import nixpkgs { inherit system overlays; };
         src = self;
         RUST_TOOLCHAIN = src + "/rust-toolchain.toml";
         RUSTFMT_TOOLCHAIN = src + "/.rustfmt-toolchain.toml";
@@ -44,7 +51,7 @@
 
         rustFmtToolchainTOML =
           rustPkgs.rust-bin.fromRustupToolchainFile
-          RUSTFMT_TOOLCHAIN;
+            RUSTFMT_TOOLCHAIN;
 
         rustToolchainDevTOML = rustToolchainTOML.override {
           extensions = [
@@ -52,11 +59,11 @@
             "rust-analysis"
             "rust-docs"
           ];
-          targets = [];
+          targets = [ ];
         };
         gitDate = "${builtins.substring 0 4 self.lastModifiedDate}-${
-          builtins.substring 4 2 self.lastModifiedDate
-        }-${builtins.substring 6 2 self.lastModifiedDate}";
+            builtins.substring 4 2 self.lastModifiedDate
+          }-${builtins.substring 6 2 self.lastModifiedDate}";
         gitRev = self.shortRev or "Not committed yet.";
         cargoLock = {
           lockFile = builtins.path {
@@ -68,7 +75,7 @@
         rustc = rustToolchainTOML;
         cargo = rustToolchainTOML;
 
-        buildInputs = [pkgs.installShellFiles];
+        buildInputs = [ pkgs.installShellFiles ];
 
         devInputs = [
           rustToolchainDevTOML
@@ -128,22 +135,25 @@
           #alternative linker
           pkgs.clang
         ];
-        shellInputs = [
-          # pkgs.shellcheck
-          # pkgs.actionlint
-        ];
+        shellInputs =
+          [
+            # pkgs.shellcheck
+            # pkgs.actionlint
+          ];
         fmtInputs = [
           pkgs.alejandra
           pkgs.treefmt
           pkgs.taplo
           pkgs.typos
         ];
-        editorConfigInputs = [
-          # pkgs.editorconfig-checker
-        ];
-        actionlintInputs = [
-          # pkgs.actionlint
-        ];
+        editorConfigInputs =
+          [
+            # pkgs.editorconfig-checker
+          ];
+        actionlintInputs =
+          [
+            # pkgs.actionlint
+          ];
         # Common arguments for the crane build
         commonArgs = {
           inherit stdenv version name;
@@ -172,12 +182,13 @@
         meta = with pkgs.lib; {
           homepage = "https://github.com/a-kenji/flake-add";
           description = "Manage your flake inputs comfortably.";
-          license = [licenses.mit];
+          license = [ licenses.mit ];
         };
-      in rec {
+      in
+      rec {
         devShells = {
           default = devShells.fullShell;
-          fullShell = (pkgs.mkShell.override {inherit stdenv;}) {
+          fullShell = (pkgs.mkShell.override { inherit stdenv; }) {
             buildInputs = shellInputs ++ fmtInputs ++ devInputs;
             inherit name;
             ASSET_DIR = assetDir;
@@ -186,13 +197,13 @@
             # RUSTFLAGS = "-C linker=clang -C link-arg=-fuse-ld=${pkgs.mold}/bin/mold -C target-cpu=native";
             RUSTFLAGS = "-C linker=clang -C link-arg=-fuse-ld=${pkgs.mold}/bin/mold";
           };
-          editorConfigShell = pkgs.mkShell {buildInputs = editorConfigInputs;};
-          actionlintShell = pkgs.mkShell {buildInputs = actionlintInputs;};
-          fmtShell = pkgs.mkShell {buildInputs = fmtInputs;};
+          editorConfigShell = pkgs.mkShell { buildInputs = editorConfigInputs; };
+          actionlintShell = pkgs.mkShell { buildInputs = actionlintInputs; };
+          fmtShell = pkgs.mkShell { buildInputs = fmtInputs; };
         };
         packages = {
           default = packages.crane;
-          upstream = (pkgs.makeRustPlatform {inherit cargo rustc;}).buildRustPackage {
+          upstream = (pkgs.makeRustPlatform { inherit cargo rustc; }).buildRustPackage {
             cargoDepsName = name;
             GIT_DATE = gitDate;
             GIT_REV = gitRev;
@@ -208,7 +219,7 @@
               postInstall
               src
               stdenv
-              ;
+            ;
           };
           crane = craneLib.buildPackage (
             commonArgs
@@ -228,7 +239,7 @@
                 name
                 postInstall
                 stdenv
-                ;
+              ;
             }
           );
         };

@@ -28,9 +28,10 @@ fn main() -> anyhow::Result<()> {
 
       inputs = {
         nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+        #flake-utils.url = "github:numtide/flake-utils";
         rust-overlay = {
           url = "github:oxalica/rust-overlay";
-          # inputs.nixpkgs.follows = "nixpkgs";
+          inputs.nixpkgs.follows = "nixpkgs";
           # inputs.flake-utils.follows = "flake-utils";
         };
         crane = {
@@ -46,8 +47,8 @@ fn main() -> anyhow::Result<()> {
 
     let app = FlakeAdd::init()?;
 
-    // let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
-    let (node, _errors) = rnix::parser::parse(Tokenizer::new(&app.root.text.to_string()));
+    let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
+    // let (node, _errors) = rnix::parser::parse(Tokenizer::new(&app.root.text.to_string()));
 
     let mut state = flake_add::State::default();
 

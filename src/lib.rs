@@ -225,13 +225,13 @@ impl State {
                                                                     continue;
                                                                 }
                                                                 if node.to_string() == "inputs"
-                                                                    || node
-                                                                        .first_child()
-                                                                        .map(|c| {
-                                                                            c.to_string()
-                                                                                == "inputs"
-                                                                        })
-                                                                        .unwrap_or_default()
+                                                                // || node
+                                                                //     .first_child()
+                                                                //     .map(|c| {
+                                                                //         c.to_string()
+                                                                //             == "inputs"
+                                                                //     })
+                                                                //     .unwrap_or_default()
                                                                 {
                                                                     tracing::debug!(
                                                                         "Input Node: {node}"
@@ -263,6 +263,7 @@ impl State {
                                                                                     SyntaxKind::NODE_ATTRPATH => {
                                                                                     }
                                                                                     SyntaxKind::NODE_ATTR_SET => {
+                                                                                    println!("ATTRS_SET_NODE: {node}");
                                                                                     // Node that is
                                                                                     // constructed
                                                                                     // here needs
@@ -276,7 +277,7 @@ impl State {
                                                                             node.green().into(),
                                                                         ) {
                                                                                         let tree = node.replace_with(replacement);
-                                                                                        println!("{}", tree);
+                                                                                        // println!("{}", tree);
                                                                                         let whole_tree = main_node.replace_with(tree);
                                                                                         println!("Whole Tree:\n{}", whole_tree);
                                                                                     }
@@ -348,8 +349,11 @@ impl State {
     /// { nixpkgs.url = "github:nixos/nixpkgs";}
     /// TODO: create a GreenNode from all changed inputs
     fn inputs_from_node_attr_set(&mut self, node: GreenNode) -> Option<GreenNode> {
+        println!("Inputs from node attr set");
         tracing::debug!("Inputs from node attrs node: {node}");
         let root_node = SyntaxNode::new_root(node);
+        // Only query root attributes in the toplevel
+        let parent_id = 0;
         // let mut res = vec![];
         for node_walker in root_node.preorder_with_tokens() {
             match node_walker {
@@ -358,17 +362,23 @@ impl State {
                     print_node_enter_info(&node_or_token);
                     if let Some(node) = node_or_token.as_node() {
                         if SyntaxKind::NODE_ATTRPATH_VALUE == node.kind() {
-                            if let Some(replacement) = self.input_from_node_attrpath_value(node) {
-                                println!("Original Node: {node}");
-                                println!("Node Changed: {replacement}");
-                                println!("Node Kind: {:?}", node.kind());
-                                println!("Node Green Kind: {:?}", node.green().kind());
-                                println!("Replacement Kind: {:?}", replacement.kind());
-                                let tree = root_node.replace_with(replacement);
-                                println!("Changed tree:\n {}", tree);
-                                return Some(tree);
-                                // res.push(input);
-                                // self.add_input(input);
+                            if let Some(parent) = node.parent() {
+                                if parent.index() == parent_id {
+                                    if let Some(replacement) =
+                                        self.input_from_node_attrpath_value(node)
+                                    {
+                                        println!("Original Node: {node}");
+                                        println!("Node Changed: {replacement}");
+                                        println!("Node Kind: {:?}", node.kind());
+                                        println!("Node Green Kind: {:?}", node.green().kind());
+                                        println!("Replacement Kind: {:?}", replacement.kind());
+                                        let tree = root_node.replace_with(replacement);
+                                        println!("Changed tree:\n {}", tree);
+                                        return Some(tree);
+                                        // res.push(input);
+                                        // self.add_input(input);
+                                    }
+                                }
                             }
                         }
                     }
@@ -390,8 +400,14 @@ impl State {
             match walker {
                 rowan::WalkEvent::Enter(node_or_token) => match &node_or_token {
                     NodeOrToken::Node(node) => {
+                        println!("Node: {node}");
+                        println!("Node Kind: {:?}", node.kind());
+                        println!("Node ID: {:?}", node.index());
                         match node.kind() {
                             SyntaxKind::NODE_ATTRPATH => {}
+                            SyntaxKind::NODE_ATTRPATH_VALUE => {
+                                println!("ENTER: NODE_ATTRPATH_VALUE: \n{}", node);
+                            }
                             SyntaxKind::NODE_IDENT => {
                                 tracing::debug!("IDENT KIND: {:?}", node.kind());
                                 tracing::debug!("IDENT: {}", node);
@@ -471,7 +487,14 @@ impl State {
                 },
                 rowan::WalkEvent::Leave(node_or_token) => match &node_or_token {
                     NodeOrToken::Node(_node) => {
-                        print_node_leave_info(&node_or_token);
+                        match _node.kind() {
+                            SyntaxKind::NODE_ATTRPATH_VALUE => {
+                                println!("LEAVE: NODE_ATTRPATH_VALUE: \n{}", _node);
+                            }
+
+                            _ => {}
+                        }
+                        // print_node_leave_info(&node_or_token);
                     }
                     NodeOrToken::Token(_) => {}
                 },
@@ -539,6 +562,7 @@ pub fn write_node(node: &SyntaxNode) -> SyntaxNode {
 
 pub fn print_node_enter_info(node: &NodeOrToken<rnix::SyntaxNode, rnix::SyntaxToken>) {
     tracing::debug!("Enter: {node}");
+    tracing::debug!("Enter Index: {:?}", node.index());
     tracing::debug!("Enter Kind: {:?}", node.kind());
     tracing::debug!("Enter Parent: {:?}", node.parent());
     if let Some(parent) = node.parent() {
