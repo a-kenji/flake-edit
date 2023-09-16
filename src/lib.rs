@@ -190,14 +190,14 @@ impl State {
             match walk_node_or_token {
                 rowan::WalkEvent::Enter(node_or_token) => {
                     match &node_or_token {
-                        NodeOrToken::Node(node) => {
-                            tracing::debug!("Node: {node}");
-                            tracing::debug!("Node Kind: {:?}", node.kind());
-                            match node.kind() {
+                        NodeOrToken::Node(main_node) => {
+                            tracing::debug!("Node: {main_node}");
+                            tracing::debug!("Node Kind: {:?}", main_node.kind());
+                            match main_node.kind() {
                                 // SyntaxKind::NODE_ATTR_SET
                                 // | SyntaxKind::NODE_ATTRPATH
                                 SyntaxKind::NODE_ATTRPATH_VALUE => {
-                                    let new_root = SyntaxNode::new_root(node.green().into());
+                                    let new_root = SyntaxNode::new_root(main_node.green().into());
                                     tracing::debug!("Create new root: {new_root:?}");
                                     tracing::debug!("Create new root: {new_root}");
                                     for walk_node_or_token in new_root.preorder_with_tokens() {
@@ -277,6 +277,8 @@ impl State {
                                                                         ) {
                                                                                         let tree = node.replace_with(replacement);
                                                                                         println!("{}", tree);
+                                                                                        let whole_tree = main_node.replace_with(tree);
+                                                                                        println!("Whole Tree:\n{}", whole_tree);
                                                                                     }
                                                                     }
 
