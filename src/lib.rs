@@ -405,6 +405,10 @@ impl State {
                             SyntaxKind::NODE_IDENT => {
                                 tracing::debug!("IDENT KIND: {:?}", node.kind());
                                 tracing::debug!("IDENT: {}", node);
+                                if id.is_some() && node.to_string() == "inputs" {
+                                    // This is now a potential follows node
+                                }
+
                                 if id.is_none() {
                                     id = Some(node.to_string())
                                 }
@@ -906,6 +910,15 @@ mod tests {
     //     let state = setup_inputs(inputs);
     //     insta::assert_yaml_snapshot!(state.inputs);
     // }
+    //     let inputs = "{inputs.nixpkgs.url = github:nixos/nixpkgs; inputs.crane.url = github:nix-community/crane;}";
+    #[test]
+    fn parse_simple_input_two_urls() {
+        let inputs = r#"{ inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane";};}"#;
+        let state = setup_inputs(inputs);
+        insta::with_settings!({sort_maps => true}, {
+            insta::assert_yaml_snapshot!(state.inputs);
+        });
+    }
     #[test]
     fn parse_simple_input_url() {
         let inputs = r#"{ inputs = { nixpkgs.url = "github:nixos/nixpkgs";};}"#;

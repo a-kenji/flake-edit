@@ -16,6 +16,29 @@ pub enum Follows {
     Direct(String, Input),
 }
 
+impl Follows {}
+
+#[derive(Debug, Default)]
+struct FollowsBuilder {
+    attrs: Vec<String>,
+}
+
+impl FollowsBuilder {
+    pub(crate) fn push_str(&mut self, attr: &str) -> Option<Follows> {
+        self.attrs.push(attr.to_owned());
+        if attr.len() == 3 {
+            Some(self.build())
+        } else {
+            None
+        }
+    }
+    fn build(&self) -> Follows {
+        let from = self.attrs.get(0).unwrap();
+        let to = self.attrs.get(1).unwrap();
+        Follows::Indirect(from.to_owned(), to.to_owned())
+    }
+}
+
 impl Default for Input {
     fn default() -> Self {
         Self {
