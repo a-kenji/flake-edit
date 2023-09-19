@@ -1,0 +1,10 @@
+---
+source: src/lib.rs
+expression: state.inputs
+---
+nixpkgs:
+  id: nixpkgs
+  flake: true
+  url: "github:nixos/nixpkgs"
+  follows: []
+

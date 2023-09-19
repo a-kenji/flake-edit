@@ -255,6 +255,7 @@ dependencies = [
  "rnix",
  "ropey",
  "rowan",
+ "serde",
  "thiserror",
  "tracing",
  "tracing-subscriber",
@@ -298,6 +299,7 @@ dependencies = [
  "console",
  "lazy_static",
  "linked-hash-map",
+ "serde",
  "similar",
  "yaml-rust",
 ]

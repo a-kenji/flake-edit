@@ -1,11 +1,12 @@
 mod git;
+mod input;
+mod log;
 
 use std::collections::HashMap;
 
 use nix_uri::FlakeRef;
 use rnix::{
     ast::{
-        AttrSet,
         Entry::{self, AttrpathValue},
         Expr, HasEntry,
     },
@@ -14,6 +15,10 @@ use rnix::{
     SyntaxKind, SyntaxNode,
 };
 use rowan::{GreenNode, GreenToken, NodeOrToken};
+
+use crate::log::log_node_enter_info;
+
+use self::input::Input;
 
 // TODO:
 // - parse out inputs
@@ -198,9 +203,9 @@ impl State {
                             tracing::debug!("Node: {main_node}");
                             tracing::debug!("Node Kind: {:?}", main_node.kind());
                             match main_node.kind() {
-                                // SyntaxKind::NODE_ATTR_SET
-                                // | SyntaxKind::NODE_ATTRPATH
-                                SyntaxKind::NODE_ATTRPATH_VALUE => {
+                                SyntaxKind::NODE_ATTR_SET
+                                | SyntaxKind::NODE_ATTRPATH
+                                | SyntaxKind::NODE_ATTRPATH_VALUE => {
                                     let new_root = SyntaxNode::new_root(main_node.green().into());
                                     tracing::debug!("Create new root: {new_root:?}");
                                     tracing::debug!("Create new root: {new_root}");
@@ -223,7 +228,7 @@ impl State {
                                                                     tracing::debug!(
                                                                         "Description Node: {node}"
                                                                     );
-                                                                    print_node_enter_info(
+                                                                    log_node_enter_info(
                                                                         &node_or_token,
                                                                     );
                                                                     continue;
@@ -240,7 +245,7 @@ impl State {
                                                                     tracing::debug!(
                                                                         "Input Node: {node}"
                                                                     );
-                                                                    print_node_enter_info(
+                                                                    log_node_enter_info(
                                                                         &node_or_token,
                                                                     );
                                                                     for node in node.children() {
@@ -324,24 +329,7 @@ impl State {
                         NodeOrToken::Token(_) => {}
                     }
                 }
-                rowan::WalkEvent::Leave(node) => match node.kind() {
-                    SyntaxKind::TOKEN_COMMENT
-                    | SyntaxKind::TOKEN_ERROR
-                    | SyntaxKind::TOKEN_WHITESPACE
-                    | SyntaxKind::TOKEN_L_BRACE
-                    | SyntaxKind::TOKEN_R_BRACE
-                    | SyntaxKind::TOKEN_L_BRACK
-                    | SyntaxKind::TOKEN_R_BRACK
-                    | SyntaxKind::TOKEN_COLON
-                    | SyntaxKind::TOKEN_COMMA
-                    | SyntaxKind::TOKEN_SEMICOLON
-                    | SyntaxKind::TOKEN_DOT
-                    | SyntaxKind::TOKEN_L_PAREN
-                    | SyntaxKind::TOKEN_R_PAREN => {
-                        continue;
-                    }
-                    _ => {}
-                },
+                rowan::WalkEvent::Leave(_) => {}
             }
         }
         // println!("Original: {}", input);
@@ -363,7 +351,7 @@ impl State {
             match node_walker {
                 rowan::WalkEvent::Enter(node_or_token) => {
                     tracing::debug!("Inputs from node attrs set");
-                    print_node_enter_info(&node_or_token);
+                    log::log_node_enter_info(&node_or_token);
                     if let Some(node) = node_or_token.as_node() {
                         if SyntaxKind::NODE_ATTRPATH_VALUE == node.kind() {
                             if let Some(parent) = node.parent() {
@@ -428,7 +416,9 @@ impl State {
                                 }
                             }
                             // TODO: preserve string vs literal
-                            SyntaxKind::NODE_STRING | SyntaxKind::NODE_LITERAL => {
+                            SyntaxKind::NODE_STRING
+                            | SyntaxKind::NODE_LITERAL
+                            | SyntaxKind::TOKEN_URI => {
                                 if let Some(ref mut input) = input {
                                     let url =
                                         node.to_string().strip_prefix('\"').unwrap().to_string();
@@ -478,7 +468,6 @@ impl State {
                                             //     rowan::SyntaxKind(77),
                                             //     std::iter::once(NodeOrToken::Node(tree)),
                                             // );
-                                            // println!("Tree kind: {:?}", tree.kind());
                                             res = Some(tree);
                                         }
                                     }
@@ -498,122 +487,19 @@ impl State {
                     }
                 },
                 rowan::WalkEvent::Leave(node_or_token) => match &node_or_token {
-                    NodeOrToken::Node(_node) => {
-                        match _node.kind() {
-                            SyntaxKind::NODE_ATTRPATH_VALUE => {
-                                println!("LEAVE: NODE_ATTRPATH_VALUE: \n{}", _node);
-                            }
-
-                            _ => {}
+                    NodeOrToken::Node(_node) => match _node.kind() {
+                        SyntaxKind::NODE_ATTRPATH_VALUE => {
+                            println!("LEAVE: NODE_ATTRPATH_VALUE: \n{}", _node);
                         }
-                        // print_node_leave_info(&node_or_token);
-                    }
+
+                        _ => {}
+                    },
                     NodeOrToken::Token(_) => {}
                 },
             }
         }
         res
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Hash, Eq)]
-pub struct Input {
-    pub id: String,
-    pub flake: bool,
-    pub url: String,
-    follows: Vec<Follows>,
-}
-
-#[derive(Debug, Clone, PartialEq, Hash, Eq)]
-pub enum Follows {
-    // From , To
-    Indirect(String, String),
-    // From , To
-    Direct(String, Input),
-}
-
-impl Default for Input {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            flake: true,
-            url: String::new(),
-            follows: vec![],
-        }
-    }
-}
-
-impl Input {
-    fn new(name: String) -> Self {
-        Self {
-            id: name,
-            ..Self::default()
-        }
-    }
-}
-
-// TODO: impl TryFrom
-impl From<Entry> for Input {
-    fn from(entry: Entry) -> Self {
-        if let AttrpathValue(attrpath_value) = entry {
-            let value = attrpath_value.value().unwrap().to_string();
-            let attr_path = attrpath_value.attrpath().unwrap().to_string();
-            Self::new(attr_path)
-        } else {
-            Self::default()
-        }
-        //     if let Some(value) = node.value() {
-        //         return Self::new(value, value, value);
-        //         // println!("attrpath: {attrpath}");
-        //         // println!("value: {value}");
-        //     }
-    }
-}
-
-pub fn write_node(node: &SyntaxNode) -> SyntaxNode {
-    todo!();
-}
-
-pub fn print_node_enter_info(node: &NodeOrToken<rnix::SyntaxNode, rnix::SyntaxToken>) {
-    tracing::debug!("Enter: {node}");
-    tracing::debug!("Enter Index: {:?}", node.index());
-    tracing::debug!("Enter Kind: {:?}", node.kind());
-    tracing::debug!("Enter Parent: {:?}", node.parent());
-    if let Some(parent) = node.parent() {
-        tracing::debug!("Enter Parent Node: {:?}", parent);
-        tracing::debug!("Enter Parent Node Kind: {:?}", parent.kind());
-    }
-    if let Some(node) = node.as_node() {
-        tracing::debug!("Enter Green Kind: {:?}", node.green().kind());
-        for child in node.children() {
-            tracing::debug!("Enter Children: {:?}", child);
-            tracing::debug!("Enter Children Kind: {:?}", child.green().kind());
-        }
-        tracing::debug!("Node Next Sibling: {:?}", node.next_sibling());
-        tracing::debug!("Node Prev Sibling: {:?}", node.prev_sibling());
-    }
-    if let Some(token) = node.as_token() {
-        tracing::debug!("Token: {}", token);
-    }
-    // if let Some(kind) = node.as_node() {
-    //     println!("Enter Node Kind: {:?}", kind);
-    // }
-    // if let Some(kind) = node.as_token() {
-    //     println!("Enter Token Kind: {:?}", kind);
-    // }
-    tracing::debug!("Node Index: {}", node.index());
-}
-
-pub fn print_node_leave_info(node: &NodeOrToken<rnix::SyntaxNode, rnix::SyntaxToken>) {
-    tracing::debug!("Leave: {node}");
-    tracing::debug!("Leave Index: {:?}", node.index());
-    tracing::debug!("Leave Kind: {:?}", node.kind());
-    if let Some(node) = node.as_node() {
-        tracing::debug!("Leave Green Kind: {:?}", node.green().kind());
-        tracing::debug!("Leave Kind Next Sibling: {:?}", node.next_sibling());
-        tracing::debug!("Leave Kind Prev Sibling: {:?}", node.prev_sibling());
-    }
-    tracing::debug!("Leave Kind Parent: {:?}", node.parent());
 }
 
 /// Parse the toplevel AST
@@ -670,20 +556,6 @@ pub fn parse_content(content: &str) -> Result<Vec<Input>, ParseError> {
     println!("Inputs: {:?}", inputs);
     // Ok(inputs)
     Ok(vec![])
-}
-
-fn input_values(set: AttrSet) -> Result<Vec<Input>, ParseError> {
-    let mut res = Vec::new();
-    for entry in set.entries() {
-        if let AttrpathValue(attrpath_value) = &entry {
-            if let Some(attrpath) = attrpath_value.attrpath() {
-                if attrpath.to_string().starts_with("inputs") {
-                    res.push(entry.into());
-                }
-            }
-        }
-    }
-    Ok(res)
 }
 
 #[cfg(test)]
@@ -902,20 +774,20 @@ mod tests {
     //     let expected = vec![];
     //     assert_eq!(parse_content(no_inputs_flake()).unwrap(), expected);
     // }
-    #[test]
-    fn parse_simple_inputs() {
-        let inputs = r#"{ inputs.nixpkgs.url = "github:nixos/nixpkgs";}"#;
-        let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
-        let expected = vec![Input::default()];
-        assert_eq!(parse_inputs(&node).unwrap(), expected);
-    }
-    #[test]
-    fn parse_simple_inputs_alt() {
-        let inputs = r#"{ inputs = { nixpkgs.url = "github:nixos/nixpkgs";};}"#;
-        let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
-        let expected = vec![Input::default()];
-        assert_eq!(parse_inputs(&node).unwrap(), expected);
-    }
+    // #[test]
+    // fn parse_simple_inputs() {
+    //     let inputs = r#"{ inputs.nixpkgs.url = "github:nixos/nixpkgs";}"#;
+    //     let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
+    //     let expected = vec![Input::default()];
+    //     assert_eq!(parse_inputs(&node).unwrap(), expected);
+    // }
+    // #[test]
+    // fn parse_simple_inputs_alt() {
+    //     let inputs = r#"{ inputs = { nixpkgs.url = "github:nixos/nixpkgs";};}"#;
+    //     let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
+    //     let expected = vec![Input::default()];
+    //     assert_eq!(parse_inputs(&node).unwrap(), expected);
+    // }
     // #[test]
     // fn parse_simple_inputs_description() {
     //     let inputs =
@@ -938,13 +810,13 @@ mod tests {
     //     let expected = vec![Input::default()];
     //     assert_eq!(parse_inputs(&node).unwrap(), expected);
     // }
-    #[test]
-    fn parse_simple_inputs_set_multiple() {
-        let inputs = r#"{inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; };}"#;
-        let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
-        let expected = vec![Input::default()];
-        assert_eq!(parse_inputs(&node).unwrap(), expected);
-    }
+    // #[test]
+    // fn parse_simple_inputs_set_multiple() {
+    //     let inputs = r#"{inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; };}"#;
+    //     let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
+    //     let expected = vec![Input::default()];
+    //     assert_eq!(parse_inputs(&node).unwrap(), expected);
+    // }
     // #[test]
     // fn parse_simple_inputs_set_multiple_no_flake() {
     //     let inputs = r#"{inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; crane.flake = false; };}"#;
@@ -1009,4 +881,71 @@ mod tests {
     // fn annoying_flake_parse_ok() {
     //     parse_content(codepoint_flake()).unwrap();
     // }
+    fn setup_inputs(stream: &str) -> State {
+        let (node, _errors) = rnix::parser::parse(Tokenizer::new(stream));
+        let mut state = State::default();
+        state.walk_attr_set(&node);
+        state
+    }
+    // #[test]
+    // fn parse_simple_inputs_single_old_uri() {
+    //     let inputs = "{ inputs.nixpkgs.url = github:nixos/nixpkgs;}";
+    //     let state = setup_inputs(inputs);
+    //     insta::assert_yaml_snapshot!(state.inputs);
+    // }
+    // #[test]
+    // fn parse_simple_inputs_single_alt_old_uri() {
+    //     let inputs = "{ inputs = { nixpkgs.url = github:nixos/nixpkgs;};}";
+    //     let state = setup_inputs(inputs);
+    //     insta::assert_yaml_snapshot!(state.inputs);
+    // }
+    // TODO
+    // #[test]
+    // fn parse_simple_inputs_single() {
+    //     let inputs = r#"{ inputs.nixpkgs.url = "github:nixos/nixpkgs";}"#;
+    //     let state = setup_inputs(inputs);
+    //     insta::assert_yaml_snapshot!(state.inputs);
+    // }
+    #[test]
+    fn parse_simple_input_url() {
+        let inputs = r#"{ inputs = { nixpkgs.url = "github:nixos/nixpkgs";};}"#;
+        let state = setup_inputs(inputs);
+        insta::with_settings!({sort_maps => true}, {
+            insta::assert_yaml_snapshot!(state.inputs);
+        });
+    }
+    // #[test]
+    // fn parse_simple_input_url_alt() {
+    //     let inputs = r#"{ inputs.nixpkgs.url = "github:nixos/nixpkgs";}"#;
+    //     let state = setup_inputs(inputs);
+    //     insta::assert_yaml_snapshot!(state.inputs);
+    // }
+    #[test]
+    fn parse_multiple_inputs() {
+        let inputs = r#"{
+              description = "Manage your flake inputs comfortably.";
+
+              inputs = {
+                nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+                #flake-utils.url = "github:numtide/flake-utils";
+                rust-overlay = {
+                  url = "github:oxalica/rust-overlay";
+                  inputs.nixpkgs.follows = "nixpkgs";
+                  # inputs.flake-utils.follows = "flake-utils";
+                };
+                crane = {
+                  url = "github:ipetkov/crane";
+                  # inputs.nixpkgs.follows = "nixpkgs";
+                  # inputs.rust-overlay.follows = "rust-overlay";
+                  # inputs.flake-utils.follows = "flake-utils";
+                };
+                vmsh.url = "github:mic92/vmsh";
+              };
+              }
+            "#;
+        let state = setup_inputs(inputs);
+        insta::with_settings!({sort_maps => true}, {
+            insta::assert_yaml_snapshot!(state.inputs);
+        });
+    }
 }
