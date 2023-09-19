@@ -1,3 +1,7 @@
+mod git;
+
+use std::collections::HashMap;
+
 use nix_uri::FlakeRef;
 use rnix::{
     ast::{
@@ -28,7 +32,7 @@ use rowan::{GreenNode, GreenToken, NodeOrToken};
 #[derive(Debug, Default, Clone)]
 pub struct State {
     // All the parsed inputs that are present in the attr set
-    inputs: Vec<Input>,
+    inputs: HashMap<String, Input>,
     changes: Vec<Change>,
 }
 
@@ -67,8 +71,8 @@ impl State {
         }
         None
     }
-    pub fn add_input(&mut self, input: Input) {
-        self.inputs.push(input);
+    pub fn add_input(&mut self, key: String, input: Input) {
+        self.inputs.insert(key, input);
     }
 
     // Traverses the whole flake.nix toplevel attr set.
@@ -395,7 +399,9 @@ impl State {
     fn input_from_node_attrpath_value(&mut self, input_node: &SyntaxNode) -> Option<GreenNode> {
         tracing::debug!("ATTRPATHVALUE:");
         tracing::debug!("Input node: {input_node}");
-        let mut res: Option<Input> = None;
+        let mut res: Option<GreenNode> = None;
+        let mut input: Option<Input> = None;
+        let mut id: Option<String> = None;
         for walker in input_node.preorder_with_tokens() {
             match walker {
                 rowan::WalkEvent::Enter(node_or_token) => match &node_or_token {
@@ -411,23 +417,26 @@ impl State {
                             SyntaxKind::NODE_IDENT => {
                                 tracing::debug!("IDENT KIND: {:?}", node.kind());
                                 tracing::debug!("IDENT: {}", node);
-                                if res.is_none()
+                                if id.is_none() {
+                                    id = Some(node.to_string())
+                                }
+                                if input.is_none()
                                     && node.to_string() != "url"
                                     && node.to_string() != "inputs"
                                 {
-                                    res = Some(Input::new(node.to_string()));
+                                    input = Some(Input::new(node.to_string()));
                                 }
                             }
                             // TODO: preserve string vs literal
                             SyntaxKind::NODE_STRING | SyntaxKind::NODE_LITERAL => {
-                                if let Some(ref mut input) = res {
+                                if let Some(ref mut input) = input {
                                     let url =
                                         node.to_string().strip_prefix('\"').unwrap().to_string();
                                     let url =
                                         url.to_string().strip_suffix('\"').unwrap().to_string();
                                     input.url = url.clone();
                                     tracing::debug!("Adding input: {input:?}");
-                                    self.add_input(input.clone());
+                                    self.add_input(input.id.clone(), input.clone());
 
                                     let maybe_change = self.find_change(input.id.clone());
                                     if let Some(change) = maybe_change {
@@ -470,9 +479,12 @@ impl State {
                                             //     std::iter::once(NodeOrToken::Node(tree)),
                                             // );
                                             // println!("Tree kind: {:?}", tree.kind());
-                                            return Some(tree);
+                                            res = Some(tree);
                                         }
                                     }
+                                }
+                                if input.is_some() {
+                                    input = None;
                                 }
                             }
                             _ => {}
@@ -500,7 +512,7 @@ impl State {
                 },
             }
         }
-        None
+        res
     }
 }
 
@@ -514,8 +526,10 @@ pub struct Input {
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum Follows {
-    Indirect(String),
-    Direct(Input),
+    // From , To
+    Indirect(String, String),
+    // From , To
+    Direct(String, Input),
 }
 
 impl Default for Input {
