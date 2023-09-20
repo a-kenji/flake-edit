@@ -2,11 +2,6 @@
 source: src/lib.rs
 expression: state.inputs
 ---
-crane:
-  id: crane
-  flake: true
-  url: "github:ipetkov/crane"
-  follows: []
 nixpkgs:
   id: nixpkgs
   flake: true
@@ -20,9 +15,4 @@ rust-overlay:
     - Indirect:
         - nixpkgs
         - "\"nixpkgs\""
-vmsh:
-  id: vmsh
-  flake: true
-  url: "github:mic92/vmsh"
-  follows: []
 

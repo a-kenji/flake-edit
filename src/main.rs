@@ -31,16 +31,16 @@ fn main() -> anyhow::Result<()> {
         #flake-utils.url = "github:numtide/flake-utils";
         rust-overlay = {
           url = "github:oxalica/rust-overlay";
-          inputs.nixpkgs.follows = "nixpkgs";
-          # inputs.flake-utils.follows = "flake-utils";
+          #inputs.nixpkgs.follows = "nixpkgs";
+          inputs.flake-utils.follows = "flake-utils";
         };
-        crane = {
-          url = "github:ipetkov/crane";
+        #crane = {
+          #url = "github:ipetkov/crane";
           # inputs.nixpkgs.follows = "nixpkgs";
           # inputs.rust-overlay.follows = "rust-overlay";
           # inputs.flake-utils.follows = "flake-utils";
-        };
-        vmsh.url = "github:mic92/vmsh";
+        #};
+        #vmsh.url = "github:mic92/vmsh";
       };
       }
     "#;

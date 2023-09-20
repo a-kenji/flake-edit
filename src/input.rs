@@ -2,10 +2,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize, Serialize)]
 pub struct Input {
-    pub id: String,
-    pub flake: bool,
-    pub url: String,
-    follows: Vec<Follows>,
+    pub(crate) id: String,
+    pub(crate) flake: bool,
+    pub(crate) url: String,
+    pub(crate) follows: Vec<Follows>,
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize, Serialize)]
@@ -19,22 +19,22 @@ pub enum Follows {
 impl Follows {}
 
 #[derive(Debug, Default)]
-struct FollowsBuilder {
+pub(crate) struct FollowsBuilder {
     attrs: Vec<String>,
 }
 
 impl FollowsBuilder {
     pub(crate) fn push_str(&mut self, attr: &str) -> Option<Follows> {
         self.attrs.push(attr.to_owned());
-        if attr.len() == 3 {
+        if self.attrs.len() == 4 {
             Some(self.build())
         } else {
             None
         }
     }
     fn build(&self) -> Follows {
-        let from = self.attrs.get(0).unwrap();
-        let to = self.attrs.get(1).unwrap();
+        let from = self.attrs.get(1).unwrap();
+        let to = self.attrs.get(3).unwrap();
         Follows::Indirect(from.to_owned(), to.to_owned())
     }
 }

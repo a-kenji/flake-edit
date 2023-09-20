@@ -76,8 +76,13 @@ impl State {
         }
         None
     }
-    pub fn add_input(&mut self, key: String, input: Input) {
-        self.inputs.insert(key, input);
+    pub fn add_input(&mut self, key: &str, input: Input) {
+        self.inputs.insert(key.into(), input);
+    }
+    pub fn add_follows(&mut self, key: &str, follows: input::Follows) {
+        if let Some(input) = self.inputs.get_mut(key) {
+            input.follows.push(follows);
+        }
     }
 
     // Traverses the whole flake.nix toplevel attr set.
@@ -390,6 +395,7 @@ impl State {
         let mut res: Option<GreenNode> = None;
         let mut input: Option<Input> = None;
         let mut id: Option<String> = None;
+        let mut follows: Option<input::FollowsBuilder> = None;
         for walker in input_node.preorder_with_tokens() {
             match walker {
                 rowan::WalkEvent::Enter(node_or_token) => match &node_or_token {
@@ -407,16 +413,30 @@ impl State {
                                 tracing::debug!("IDENT: {}", node);
                                 if id.is_some() && node.to_string() == "inputs" {
                                     // This is now a potential follows node
+                                    follows = Some(input::FollowsBuilder::default());
                                 }
 
-                                if id.is_none() {
-                                    id = Some(node.to_string())
+                                if let Some(id) = &id {
+                                    if let Some(ref mut builder) = follows {
+                                        println!("Pushing: {:?}", node.to_string());
+                                        if let Some(built) = builder.push_str(&node.to_string()) {
+                                            println!("Follows: {:?}", built);
+                                            self.add_follows(id, built);
+                                            follows = None;
+                                        }
+                                    }
                                 }
+
                                 if input.is_none()
+                                    && id.is_none()
                                     && node.to_string() != "url"
                                     && node.to_string() != "inputs"
                                 {
                                     input = Some(Input::new(node.to_string()));
+                                }
+
+                                if id.is_none() {
+                                    id = Some(node.to_string())
                                 }
                             }
                             // TODO: preserve string vs literal
@@ -430,7 +450,7 @@ impl State {
                                         url.to_string().strip_suffix('\"').unwrap().to_string();
                                     input.url = url.clone();
                                     tracing::debug!("Adding input: {input:?}");
-                                    self.add_input(input.id.clone(), input.clone());
+                                    self.add_input(&input.id, input.clone());
 
                                     let maybe_change = self.find_change(input.id.clone());
                                     if let Some(change) = maybe_change {
@@ -478,6 +498,16 @@ impl State {
                                 }
                                 if input.is_some() {
                                     input = None;
+                                }
+                                if let Some(id) = &id {
+                                    if let Some(ref mut builder) = follows {
+                                        println!("Pushing: {:?}", node.to_string());
+                                        if let Some(built) = builder.push_str(&node.to_string()) {
+                                            println!("Follows: {:?}", built);
+                                            self.add_follows(id, built);
+                                            follows = None;
+                                        }
+                                    }
                                 }
                             }
                             _ => {}
@@ -933,6 +963,45 @@ mod tests {
     //     let state = setup_inputs(inputs);
     //     insta::assert_yaml_snapshot!(state.inputs);
     // }
+    #[test]
+    fn parse_single_follows() {
+        let inputs = r#"{
+              description = "Manage your flake inputs comfortably.";
+
+              inputs = {
+                nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+                rust-overlay = {
+                  url = "github:oxalica/rust-overlay";
+                  inputs.nixpkgs.follows = "nixpkgs";
+                };
+              };
+              }
+            "#;
+        let state = setup_inputs(inputs);
+        insta::with_settings!({sort_maps => true}, {
+            insta::assert_yaml_snapshot!(state.inputs);
+        });
+    }
+    #[test]
+    fn parse_multiple_follows() {
+        let inputs = r#"{
+              description = "Manage your flake inputs comfortably.";
+
+              inputs = {
+                nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+                rust-overlay = {
+                  url = "github:oxalica/rust-overlay";
+                  inputs.nixpkgs.follows = "nixpkgs";
+                  inputs.flake-utils.follows = "flake-utils";
+                };
+              };
+              }
+            "#;
+        let state = setup_inputs(inputs);
+        insta::with_settings!({sort_maps => true}, {
+            insta::assert_yaml_snapshot!(state.inputs);
+        });
+    }
     #[test]
     fn parse_multiple_inputs() {
         let inputs = r#"{
