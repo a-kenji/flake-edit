@@ -83,4 +83,4 @@ opt-level = 3
 opt-level = 3
 
 [dev-dependencies]
-insta = { version = "1.31.0", features = ["yaml"] }
+insta = { version = "1.32.0", features = ["yaml"] }
