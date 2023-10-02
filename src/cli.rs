@@ -37,6 +37,12 @@ impl CliArgs {
     pub(crate) fn subcommand(&self) -> Option<&Command> {
         self.subcommand.as_ref()
     }
+    pub(crate) fn list(&self) -> bool {
+        if let Some(subcommand) = self.subcommand.as_ref() {
+            return matches!(subcommand, Command::List { .. });
+        }
+        false
+    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -52,6 +58,11 @@ pub(crate) enum Command {
     Pin { pin: Option<String> },
     /// Remove a specific flake reference, based on its id.
     Remove { remove: Option<String> },
+    /// List flake inputs
+    List {
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Debug, Clone)]

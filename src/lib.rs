@@ -37,7 +37,7 @@ use self::input::Input;
 #[derive(Debug, Default, Clone)]
 pub struct State {
     // All the parsed inputs that are present in the attr set
-    inputs: HashMap<String, Input>,
+    pub inputs: HashMap<String, Input>,
     changes: Vec<Change>,
 }
 

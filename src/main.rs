@@ -63,6 +63,7 @@ fn main() -> anyhow::Result<()> {
             }
             cli::Command::Pin { .. } => todo!(),
             cli::Command::Remove { .. } => todo!(),
+            cli::Command::List { .. } => {}
         }
     }
 
@@ -75,7 +76,12 @@ fn main() -> anyhow::Result<()> {
     // let stream = &app.root.text.to_string();
     // state.walk_expr_set(stream);
 
-    println!("State: {:#?}", state);
+    if args.list() {
+        println!("{:#?}", state.inputs);
+    } else {
+        println!("Inputs:");
+        println!("State: {:#?}", state);
+    }
 
     Ok(())
 }
