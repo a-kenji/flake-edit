@@ -1,6 +1,7 @@
 mod git;
 mod input;
 mod log;
+pub mod walk;
 
 use std::collections::HashMap;
 

@@ -7,6 +7,7 @@ use std::io;
 
 use crate::cli::CliArgs;
 use clap::Parser;
+use flake_add::walk::Walker;
 use rnix::tokenizer::Tokenizer;
 use ropey::Rope;
 
@@ -49,6 +50,8 @@ fn main() -> anyhow::Result<()> {
 
     let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
     // let (node, _errors) = rnix::parser::parse(Tokenizer::new(&app.root.text.to_string()));
+    let mut walker = Walker::new(inputs).unwrap();
+    walker.walk_toplevel();
 
     let mut state = flake_add::State::default();
 
@@ -85,8 +88,8 @@ fn main() -> anyhow::Result<()> {
     if args.list() {
         println!("{:#?}", state.inputs);
     } else {
-        println!("Inputs:");
-        println!("State: {:#?}", state);
+        // println!("Inputs:");
+        // println!("State: {:#?}", state);
     }
 
     Ok(())
