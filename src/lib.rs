@@ -47,6 +47,7 @@ pub enum Change {
     None,
     Add {
         id: Option<String>,
+        uri: Option<String>,
     },
     Remove {
         id: Option<String>,
@@ -65,7 +66,7 @@ impl State {
         for change in &self.changes {
             match change {
                 Change::None => {}
-                Change::Add { id } | Change::Remove { id } | Change::Change { id, .. } => {
+                Change::Add { id, .. } | Change::Remove { id } | Change::Change { id, .. } => {
                     if let Some(id) = id {
                         if *id == target_id {
                             return Some(change.clone());
@@ -346,7 +347,6 @@ impl State {
     /// { nixpkgs.url = "github:nixos/nixpkgs";}
     /// TODO: create a GreenNode from all changed inputs
     fn inputs_from_node_attr_set(&mut self, node: GreenNode) -> Option<GreenNode> {
-        println!("Inputs from node attr set");
         tracing::debug!("Inputs from node attrs node: {node}");
         let root_node = SyntaxNode::new_root(node);
         // Only query root attributes in the toplevel
@@ -364,13 +364,19 @@ impl State {
                                     if let Some(replacement) =
                                         self.input_from_node_attrpath_value(node)
                                     {
-                                        println!("Original Node: {node}");
-                                        println!("Node Changed: {replacement}");
-                                        println!("Node Kind: {:?}", node.kind());
-                                        println!("Node Green Kind: {:?}", node.green().kind());
-                                        println!("Replacement Kind: {:?}", replacement.kind());
+                                        tracing::debug!("Original Node: {node}");
+                                        tracing::debug!("Node Changed: {replacement}");
+                                        tracing::debug!("Node Kind: {:?}", node.kind());
+                                        tracing::debug!(
+                                            "Node Green Kind: {:?}",
+                                            node.green().kind()
+                                        );
+                                        tracing::debug!(
+                                            "Replacement Kind: {:?}",
+                                            replacement.kind()
+                                        );
                                         let tree = root_node.replace_with(replacement);
-                                        println!("Changed tree:\n {}", tree);
+                                        tracing::debug!("Changed tree:\n {}", tree);
                                         return Some(tree);
                                         // res.push(input);
                                         // self.add_input(input);

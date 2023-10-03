@@ -50,15 +50,21 @@ pub(crate) enum Command {
     /// Add a new flake reference.
     #[clap(alias = "a")]
     Add {
-        add: Option<String>,
+        /// The name of an input attribute.
+        id: Option<String>,
+        /// The uri that should be added to the input.
+        #[arg(last = true)]
+        uri: Option<String>,
         #[arg(long)]
         ref_or_rev: Option<String>,
     },
     /// Pin a specific flake reference based on its id.
-    Pin { pin: Option<String> },
+    Pin { id: Option<String> },
     /// Remove a specific flake reference, based on its id.
-    Remove { remove: Option<String> },
+    #[clap(alias = "rm")]
+    Remove { id: Option<String> },
     /// List flake inputs
+    #[clap(alias = "l")]
     List {
         #[arg(long)]
         json: bool,

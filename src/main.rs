@@ -54,15 +54,21 @@ fn main() -> anyhow::Result<()> {
 
     if let Some(command) = args.subcommand() {
         match command {
-            cli::Command::Add { add, ref_or_rev } => {
+            cli::Command::Add {
+                uri,
+                ref_or_rev,
+                id: _,
+            } => {
                 let change = flake_add::Change::Change {
-                    id: add.clone(),
+                    id: uri.clone(),
                     ref_or_rev: ref_or_rev.clone(),
                 };
                 state.add_change(change);
             }
             cli::Command::Pin { .. } => todo!(),
-            cli::Command::Remove { .. } => todo!(),
+            cli::Command::Remove { .. } => {
+                todo!();
+            }
             cli::Command::List { .. } => {}
         }
     }
