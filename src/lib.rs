@@ -51,12 +51,23 @@ pub enum Change {
         uri: Option<String>,
     },
     Remove {
-        id: Option<String>,
+        id: String,
     },
     Change {
         id: Option<String>,
         ref_or_rev: Option<String>,
     },
+}
+
+impl Change {
+    pub fn id(&self) -> Option<String> {
+        match self {
+            Change::None => None,
+            Change::Add { id, .. } => id.clone(),
+            Change::Remove { id } => Some(id.clone()),
+            Change::Change { id, .. } => id.clone(),
+        }
+    }
 }
 
 impl State {
@@ -67,7 +78,12 @@ impl State {
         for change in &self.changes {
             match change {
                 Change::None => {}
-                Change::Add { id, .. } | Change::Remove { id } | Change::Change { id, .. } => {
+                Change::Remove { id } => {
+                    if *id == target_id {
+                        return Some(change.clone());
+                    }
+                }
+                Change::Add { id, .. } | Change::Change { id, .. } => {
                     if let Some(id) = id {
                         if *id == target_id {
                             return Some(change.clone());

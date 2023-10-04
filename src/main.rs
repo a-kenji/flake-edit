@@ -29,29 +29,63 @@ fn main() -> anyhow::Result<()> {
 
       inputs = {
         nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-        #flake-utils.url = "github:numtide/flake-utils";
+        flake-utils.url = "github:numtide/flake-utils";
+        flake-utils.flake = false;
         rust-overlay = {
           url = "github:oxalica/rust-overlay";
-          #inputs.nixpkgs.follows = "nixpkgs";
           inputs.flake-utils.follows = "flake-utils";
         };
-        #crane = {
-          #url = "github:ipetkov/crane";
-          # inputs.nixpkgs.follows = "nixpkgs";
-          # inputs.rust-overlay.follows = "rust-overlay";
-          # inputs.flake-utils.follows = "flake-utils";
-        #};
-        #vmsh.url = "github:mic92/vmsh";
       };
       }
     "#;
+
+    // let inputs = r#"{
+    //   description = "Manage your flake inputs comfortably.";
+    //
+    //   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    //   inputs.flake-utils.url = "github:numtide/flake-utils";
+    //   inputs.flake-utils.flake = false;
+    //   inputs.rust-overlay = {
+    //       url = "github:oxalica/rust-overlay";
+    //       inputs.flake-utils.follows = "flake-utils";
+    //     };
+    //   };
+    //   }
+    // "#;
+
+    // let inputs = r#"{
+    //   description = "Manage your flake inputs comfortably.";
+    //
+    //   inputs = {
+    //     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    //     flake-utils.url = "github:numtide/flake-utils";
+    //     flake-utils.flake = false;
+    //     rust-overlay = {
+    //       url = "github:oxalica/rust-overlay";
+    //       #inputs.nixpkgs.follows = "nixpkgs";
+    //       inputs.flake-utils.follows = "flake-utils";
+    //     };
+    //     #crane = {
+    //       #url = "github:ipetkov/crane";
+    //       # inputs.nixpkgs.follows = "nixpkgs";
+    //       # inputs.rust-overlay.follows = "rust-overlay";
+    //       # inputs.flake-utils.follows = "flake-utils";
+    //     #};
+    //     #vmsh.url = "github:mic92/vmsh";
+    //   };
+    //   }
+    // "#;
 
     let app = FlakeAdd::init()?;
 
     let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
     // let (node, _errors) = rnix::parser::parse(Tokenizer::new(&app.root.text.to_string()));
     let mut walker = Walker::new(inputs).unwrap();
-    walker.walk_toplevel();
+    if let Some(change) = walker.walk_toplevel() {
+        println!("Changed Node: \n{}", change);
+    } else {
+        println!("Nothing changed in the node.");
+    }
 
     let mut state = flake_add::State::default();
 
@@ -81,7 +115,9 @@ fn main() -> anyhow::Result<()> {
     //     ref_or_rev: Some("test".to_owned()),
     // };
     // state.add_change(change);
-    state.walk_attr_set(&node);
+
+    // state.walk_attr_set(&node);
+
     // let stream = &app.root.text.to_string();
     // state.walk_expr_set(stream);
 
