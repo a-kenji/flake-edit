@@ -41,7 +41,7 @@ impl<'a> Walker<'a> {
         let root = Root::parse(stream).syntax();
         // let changes = Vec::new();
         let changes = vec![Change::Remove {
-            id: "flake-utils".into(),
+            id: "nixpkgs".into(),
         }];
         Ok(Self {
             stream,
@@ -66,7 +66,7 @@ impl<'a> Walker<'a> {
         } else {
             for root in cst.children() {
                 // Because it is the node root this is the toplevel attribute
-                for (i, toplevel) in root.children().enumerate() {
+                for toplevel in root.children() {
                     // Match attr_sets inputs, and outputs
                     // println!("Toplevel: {}", toplevel);
                     // println!("Kind: {:?}", toplevel.kind());
@@ -79,10 +79,14 @@ impl<'a> Walker<'a> {
                                 if let Some(replacement) =
                                     self.walk_inputs(child.next_sibling().unwrap())
                                 {
-                                    let green = toplevel
-                                        .green()
-                                        .replace_child(child.index(), replacement.green().into());
+                                    println!("Replacement Noode: {replacement}");
+                                    let green = toplevel.green().replace_child(
+                                        child.next_sibling().unwrap().index(),
+                                        replacement.green().into(),
+                                    );
+                                    let green = toplevel.replace_with(green);
                                     let node = Root::parse(green.to_string().as_str()).syntax();
+                                    println!("Noode: {node}");
                                     return Some(node);
                                 }
                             }
@@ -102,7 +106,10 @@ impl<'a> Walker<'a> {
                     println!("Child Id: {}", child.index());
                     println!("Index: {}", i);
                     println!("Input replacement node: {}", node);
-                    let green = node.green().remove_child(child.index());
+                    // let green = node.green().remove_child(child.index());
+                    let green = node
+                        .green()
+                        .replace_child(child.index(), replacement.green().into());
                     let node = Root::parse(green.to_string().as_str()).syntax();
                     // let green = child.replace_with(replacement.green().into());
                     // let node = Root::parse(green.to_string().as_str()).syntax();
