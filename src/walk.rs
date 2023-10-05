@@ -217,18 +217,6 @@ impl<'a> Walker<'a> {
                                     if let Change::Remove { id } = change {
                                         if *id == prev_id.to_string() {
                                             println!("Removing: {id}");
-                                            for node_replacement in
-                                                node.parent().unwrap().children_with_tokens()
-                                            {
-                                                println!(
-                                                    "Replacement Kind: {:?}",
-                                                    node_replacement.kind()
-                                                );
-                                                println!(
-                                                    "Node Replacement Len :{}: {node_replacement}",
-                                                    node_replacement.to_string().len()
-                                                );
-                                            }
                                             let empty = Root::parse("").syntax();
                                             return Some(empty);
                                         }
@@ -267,6 +255,19 @@ impl<'a> Walker<'a> {
                             let mut input = Input::new(id.to_string());
                             input.url = uri.to_string();
                             self.inputs.insert(id.to_string(), input);
+
+                            // Remove matched node.
+                            if let Some(change) = self.changes.first() {
+                                if self.commit {
+                                    if let Change::Remove { id: candidate } = change {
+                                        if *candidate == id.to_string() {
+                                            println!("Removing: {id}");
+                                            let empty = Root::parse("").syntax();
+                                            return Some(empty);
+                                        }
+                                    }
+                                }
+                            }
                         }
                         println!("Child of ATTRSET KIND #:{i} {:?}", leaf.kind());
                         println!("Child of ATTRSET CHILD #:{i} {}", leaf);
