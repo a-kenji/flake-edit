@@ -129,71 +129,61 @@ impl<'a> Walker<'a> {
             println!("Inputs Child Kind: {:?}", child.kind());
             println!("Inputs Child: {child}");
             println!("Inputs Child Len: {}", child.to_string().len());
-            match child.kind() {
-                SyntaxKind::NODE_ATTRPATH_VALUE => {
-                    if let Some(replacement) = self.walk_input(child.as_node().unwrap()) {
-                        println!("Child Id: {}", child.index());
-                        println!("Input replacement node: {}", node);
-                        // let green = node.green().remove_child(child.index());
-                        let mut green = node
-                            .green()
-                            .replace_child(child.index(), replacement.green().into());
-                        if replacement.text().is_empty() {
-                            let prev = child.prev_sibling_or_token();
-                            if let Some(prev) = prev {
-                                if let SyntaxKind::TOKEN_WHITESPACE = prev.kind() {
-                                    green = green.remove_child(prev.index());
-                                }
-                            } else if let Some(next) = child.next_sibling_or_token() {
-                                if let SyntaxKind::TOKEN_WHITESPACE = next.kind() {
-                                    green = green.remove_child(next.index());
-                                }
+            if let SyntaxKind::NODE_ATTRPATH_VALUE = child.kind() {
+                if let Some(replacement) = self.walk_input(child.as_node().unwrap()) {
+                    println!("Child Id: {}", child.index());
+                    println!("Input replacement node: {}", node);
+                    // let green = node.green().remove_child(child.index());
+                    let mut green = node
+                        .green()
+                        .replace_child(child.index(), replacement.green().into());
+                    if replacement.text().is_empty() {
+                        let prev = child.prev_sibling_or_token();
+                        if let Some(prev) = prev {
+                            if let SyntaxKind::TOKEN_WHITESPACE = prev.kind() {
+                                green = green.remove_child(prev.index());
                             }
-                        }
-                        let node = Root::parse(green.to_string().as_str()).syntax();
-                        // let green = child.replace_with(replacement.green().into());
-                        // let node = Root::parse(green.to_string().as_str()).syntax();
-                        println!("Input replacement node: {}", node);
-                        return Some(node);
-                    } else if let Some(change) = self.changes.first() {
-                        if (change.id().is_some()) && self.commit {
-                            if let Change::Add { id, uri } = change {
-                                let uri = Root::parse(&format!(
-                                    "{} = \"{}\";",
-                                    id.clone().unwrap(),
-                                    uri.clone().unwrap(),
-                                ))
-                                .syntax();
-                                // let whitespace = Root::parse(&format!("{}", "".repeat(10))).syntax();
-                                let mut green =
-                                    node.green().insert_child(child.index(), uri.green().into());
-                                let prev = child.prev_sibling_or_token().unwrap();
-                                println!("Token:{}", prev);
-                                println!("Token Kind: {:?}", prev.kind());
-                                if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
-                                    let whitespace =
-                                        Root::parse(prev.as_token().unwrap().green().text())
-                                            .syntax();
-                                    green = green
-                                        .insert_child(child.index() + 1, whitespace.green().into());
-                                }
-                                // let green =
-                                // green.insert_child(child.index() + 1, whitespace.green().into());
-                                println!("green: {}", green);
-                                println!("node: {}", node);
-                                println!("node kind: {:?}", node.kind());
-                                let node = Root::parse(green.to_string().as_str()).syntax();
-                                return Some(node);
+                        } else if let Some(next) = child.next_sibling_or_token() {
+                            if let SyntaxKind::TOKEN_WHITESPACE = next.kind() {
+                                green = green.remove_child(next.index());
                             }
                         }
                     }
-                }
-                SyntaxKind::NODE_ATTRPATH => {
-                    println!("Node Attrpath: {}", node);
-                }
-                _ => {
-                    println!("Whoot Kind: {:?}", node.kind());
-                    println!("Whoot: {}", node);
+                    let node = Root::parse(green.to_string().as_str()).syntax();
+                    // let green = child.replace_with(replacement.green().into());
+                    // let node = Root::parse(green.to_string().as_str()).syntax();
+                    println!("Input replacement node: {}", node);
+                    return Some(node);
+                } else if let Some(change) = self.changes.first() {
+                    if (change.id().is_some()) && self.commit {
+                        if let Change::Add { id, uri } = change {
+                            let uri = Root::parse(&format!(
+                                "{} = \"{}\";",
+                                id.clone().unwrap(),
+                                uri.clone().unwrap(),
+                            ))
+                            .syntax();
+                            // let whitespace = Root::parse(&format!("{}", "".repeat(10))).syntax();
+                            let mut green =
+                                node.green().insert_child(child.index(), uri.green().into());
+                            let prev = child.prev_sibling_or_token().unwrap();
+                            println!("Token:{}", prev);
+                            println!("Token Kind: {:?}", prev.kind());
+                            if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
+                                let whitespace =
+                                    Root::parse(prev.as_token().unwrap().green().text()).syntax();
+                                green = green
+                                    .insert_child(child.index() + 1, whitespace.green().into());
+                            }
+                            // let green =
+                            // green.insert_child(child.index() + 1, whitespace.green().into());
+                            println!("green: {}", green);
+                            println!("node: {}", node);
+                            println!("node kind: {:?}", node.kind());
+                            let node = Root::parse(green.to_string().as_str()).syntax();
+                            return Some(node);
+                        }
+                    }
                 }
             }
         }
@@ -219,6 +209,7 @@ impl<'a> Walker<'a> {
             if child.kind() == SyntaxKind::NODE_ATTRPATH {
                 for attr in child.children() {
                     println!("Child of ATTRPATH #:{i} {}", child);
+                    println!("Child of ATTR #:{i} {}", attr);
                     if attr.to_string() == "url" {
                         if let Some(prev_id) = attr.prev_sibling() {
                             if let Some(change) = self.changes.first() {
@@ -249,7 +240,12 @@ impl<'a> Walker<'a> {
                                         }
                                     }
                                 }
-                                println!("Id: {prev_id}");
+                            }
+                            if let Some(sibling) = child.next_sibling() {
+                                println!("This is an url from {} - {}", prev_id, sibling);
+                                let mut input = Input::new(prev_id.to_string());
+                                input.url = sibling.to_string();
+                                self.inputs.insert(prev_id.to_string(), input);
                             }
                         }
                         println!("This is the parent: {}", child.parent().unwrap());
@@ -257,9 +253,6 @@ impl<'a> Walker<'a> {
                             "This is the next_sibling: {}",
                             child.next_sibling().unwrap()
                         );
-                        if let Some(sibling) = child.next_sibling() {
-                            println!("This is an url from:{} {}", attr, sibling);
-                        }
                         if let Some(parent) = child.parent() {
                             if let Some(sibling) = parent.next_sibling() {
                                 println!("This is an url:{} {}", attr, sibling);
@@ -269,12 +262,19 @@ impl<'a> Walker<'a> {
                 }
             }
             if child.kind() == SyntaxKind::NODE_ATTR_SET {
-                for child in child.children() {
+                for attr in child.children() {
                     println!("Child of ATTRSET KIND #:{i} {:?}", child.kind());
                     println!("Child of ATTRSET #:{i} {}", child);
-                    for child in child.children() {
-                        println!("Child of ATTRSET KIND #:{i} {:?}", child.kind());
-                        println!("Child of ATTRSET #:{i} {}", child);
+                    for leaf in attr.children() {
+                        if leaf.to_string() == "url" {
+                            println!(
+                                "This is an url from {} - {}",
+                                child.prev_sibling().unwrap(),
+                                leaf.next_sibling().unwrap(),
+                            );
+                        }
+                        println!("Child of ATTRSET KIND #:{i} {:?}", leaf.kind());
+                        println!("Child of ATTRSET CHILD #:{i} {}", leaf);
                     }
                 }
             }

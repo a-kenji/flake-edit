@@ -127,6 +127,8 @@ fn main() -> anyhow::Result<()> {
         let new = change.to_string();
         let diff = Diff::new(&old, &new);
         diff.compare();
+    } else if args.list() {
+        println!("{:#?}", walker.inputs);
     } else {
         println!("Nothing changed in the node.");
         for change in walker.changes {
