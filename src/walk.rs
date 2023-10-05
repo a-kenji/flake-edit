@@ -230,12 +230,6 @@ impl<'a> Walker<'a> {
                                                 );
                                             }
                                             let empty = Root::parse("").syntax();
-                                            // let green = node.replace_with(empty.green().into());
-                                            // let replacement = attr.replace_with(green.into());
-                                            // let green = rnix::NodeOrToken::Node(
-                                            //     rnix::Root::parse("").syntax().green().into_owned(),
-                                            // ).as_node();
-                                            // let node = Root::parse("").syntax();
                                             return Some(empty);
                                         }
                                     }
@@ -267,11 +261,12 @@ impl<'a> Walker<'a> {
                     println!("Child of ATTRSET #:{i} {}", child);
                     for leaf in attr.children() {
                         if leaf.to_string() == "url" {
-                            println!(
-                                "This is an url from {} - {}",
-                                child.prev_sibling().unwrap(),
-                                leaf.next_sibling().unwrap(),
-                            );
+                            let id = child.prev_sibling().unwrap();
+                            let uri = leaf.next_sibling().unwrap();
+                            println!("This is an url from {} - {}", id, uri,);
+                            let mut input = Input::new(id.to_string());
+                            input.url = uri.to_string();
+                            self.inputs.insert(id.to_string(), input);
                         }
                         println!("Child of ATTRSET KIND #:{i} {:?}", leaf.kind());
                         println!("Child of ATTRSET CHILD #:{i} {}", leaf);
