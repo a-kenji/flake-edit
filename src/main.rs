@@ -7,6 +7,7 @@ use std::io;
 
 use crate::cli::CliArgs;
 use clap::Parser;
+use flake_add::diff::Diff;
 use flake_add::walk::Walker;
 use rnix::tokenizer::Tokenizer;
 use ropey::Rope;
@@ -24,11 +25,11 @@ fn main() -> anyhow::Result<()> {
     // let inputs = r#"{inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; };}"#;
     // let inputs = r#"{ inputs.nixpkgs.url = github:nixos/nixpkgs; inputs.crane.url = "github:ivpetkov/crane";}"#;
 
+    // nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     let inputs = r#"{
       description = "Manage your flake inputs comfortably.";
 
       inputs = {
-        nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
         flake-utils.url = "github:numtide/flake-utils";
         flake-utils.flake = false;
         rust-overlay = {
@@ -78,35 +79,58 @@ fn main() -> anyhow::Result<()> {
 
     let app = FlakeAdd::init()?;
 
-    let (node, _errors) = rnix::parser::parse(Tokenizer::new(inputs));
-    // let (node, _errors) = rnix::parser::parse(Tokenizer::new(&app.root.text.to_string()));
-    let mut walker = Walker::new(inputs).unwrap();
-    if let Some(change) = walker.walk_toplevel() {
-        println!("Changed Node: \n{}", change);
-    } else {
-        println!("Nothing changed in the node.");
+    // let (node, errors) = rnix::parser::parse(Tokenizer::new(inputs));
+    let (node, errors) = rnix::parser::parse(Tokenizer::new(&app.root.text.to_string()));
+    if !errors.is_empty() {
+        println!("There are errors in the root document.");
     }
+
+    // let mut walker = Walker::new(inputs).unwrap();
+    let text = app.root.text.to_string();
+    let mut walker = Walker::new(&text).unwrap();
 
     let mut state = flake_add::State::default();
 
-    if let Some(command) = args.subcommand() {
-        match command {
-            cli::Command::Add {
-                uri,
-                ref_or_rev,
-                id: _,
-            } => {
-                let change = flake_add::Change::Change {
-                    id: uri.clone(),
-                    ref_or_rev: ref_or_rev.clone(),
-                };
-                state.add_change(change);
+    match args.subcommand() {
+        cli::Command::Add {
+            uri,
+            ref_or_rev: _,
+            id,
+        } => {
+            let change = flake_add::Change::Add {
+                id: id.clone(),
+                uri: uri.clone(),
+            };
+            walker.changes.push(change);
+        }
+        cli::Command::Pin { .. } => todo!(),
+        cli::Command::Remove { id } => {
+            if let Some(id) = id {
+                let change = flake_add::Change::Remove { id: id.clone() };
+                walker.changes.push(change);
             }
-            cli::Command::Pin { .. } => todo!(),
-            cli::Command::Remove { .. } => {
-                todo!();
-            }
-            cli::Command::List { .. } => {}
+        }
+        cli::Command::List { .. } => {}
+    }
+
+    if let Some(change) = walker.walk_toplevel() {
+        let root = rnix::Root::parse(&change.to_string());
+        let errors = root.errors();
+        if errors.is_empty() {
+            println!("No errors in the changes.");
+        } else {
+            println!("There are errors in the changes.");
+        }
+        // println!("Original Node: \n{}\n", walker.root);
+        // println!("Changed Node: \n{}\n", change);
+        let old = walker.root.to_string();
+        let new = change.to_string();
+        let diff = Diff::new(&old, &new);
+        diff.compare();
+    } else {
+        println!("Nothing changed in the node.");
+        for change in walker.changes {
+            println!("The following change could not be applied: \n{:?}", change);
         }
     }
 

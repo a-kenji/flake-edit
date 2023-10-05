@@ -1,0 +1,10 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: nix-analyzer
+Upstream-Contact: Alexander Kenji Berthold <aks.kenji@protonmail.com>
+Source: https://github.com/a-kenji/nix-analyzer
+
+# Sample paragraph, commented out:
+#
+# Files: src/*
+# Copyright: $YEAR $NAME <$CONTACT>
+# License: ...

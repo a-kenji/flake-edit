@@ -1,0 +1,45 @@
+# This is a workflow, consisting of jobs that only need to be run,
+# once `*nix`, or `flake.lock` files change
+name: nix-develop
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '**.nix'
+      - 'flake.lock'
+      - 'rust-toolchain.toml'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '**.nix'
+      - 'flake.lock'
+      - 'rust-toolchain.toml'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    name: "nix check develop"
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Nix Flakes doesn't work on shallow clones
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v23
+      - run: nix develop .#fmtShell --command treefmt --fail-on-change
+      ## nix flake check still fails on IFD
+      #- run: nix flake check --print-build-logs --show-trace
+  develop:
+    runs-on: ubuntu-latest
+    name: "nix develop"
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Nix Flakes doesn't work on shallow clones
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v23
+      - run: nix develop --profile devShell

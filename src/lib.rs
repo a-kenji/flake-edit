@@ -1,3 +1,4 @@
+pub mod diff;
 mod git;
 mod input;
 mod log;
