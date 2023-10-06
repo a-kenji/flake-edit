@@ -25,7 +25,6 @@ use crate::{input::Input, Change, State};
 // NODE_ATTR_SET 76,
 // NODE_ATTRPATH 55,
 // TOKEN_URI 49,
-//
 
 #[derive(Debug, Clone)]
 pub struct Walker<'a> {
@@ -96,26 +95,36 @@ impl<'a> Walker<'a> {
                                     return Some(node);
                                 }
                             } else if child.to_string().starts_with("inputs") {
-                                self.walk_inputs(child);
-                                // for input in child.children() {
-                                //     println!("Input Kind: {:?}", input.kind());
-                                //     println!("Input: {}", input);
-                                // }
-                                // for input in child.next_sibling().unwrap().children() {
-                                //     println!(
-                                //         "Input Sibling Kind Child of {child}: {:?}",
-                                //         input.kind()
-                                //     );
-                                //     println!("Input Sibling Child of {child}: {}", input);
-                                // }
-                                // self.walk_inputs(child);
-                                // if let Some(input) = child.next_sibling() {
-                                //     if let Some(first_child) = input.first_child() {
-                                //         if let Some(replacement) = self.walk_inputs(first_child) {
-                                //             println!("Replacement: {}", replacement);
-                                //         }
-                                //     }
-                                // }
+                                // This is a toplevel node, of the form:
+                                // input.id ...
+                                // If the node should be empty,
+                                // it's toplevel should be empty too.
+                                if let Some(replacement) = self.walk_inputs(child.clone()) {
+                                    if replacement.to_string().is_empty() {
+                                        // let green =
+                                        //     toplevel.parent().unwrap().green().replace_child(
+                                        //         child.index(),
+                                        //         replacement.green().into(),
+                                        //     );
+                                        // let green = toplevel.replace_with(green);
+                                        // let node = Root::parse(green.to_string().as_str()).syntax();
+                                        // let green =
+                                        //     toplevel.replace_with(replacement.green().into());
+                                        let mut green = root.green().remove_child(toplevel.index());
+                                        if let Some(prev) = toplevel.prev_sibling_or_token() {
+                                            if let SyntaxKind::TOKEN_WHITESPACE = prev.kind() {
+                                                green = green.remove_child(prev.index());
+                                            }
+                                        } else if let Some(next) = child.next_sibling_or_token() {
+                                            if let SyntaxKind::TOKEN_WHITESPACE = next.kind() {
+                                                green = green.remove_child(next.index());
+                                            }
+                                        }
+                                        let node = Root::parse(green.to_string().as_str()).syntax();
+                                        tracing::debug!("Noode: {node}");
+                                        return Some(node);
+                                    }
+                                }
                             }
                         }
                     } else {
@@ -174,8 +183,6 @@ impl<'a> Walker<'a> {
                                     green = green
                                         .insert_child(child.index() + 1, whitespace.green().into());
                                 }
-                                // let green =
-                                // green.insert_child(child.index() + 1, whitespace.green().into());
                                 tracing::debug!("green: {}", green);
                                 tracing::debug!("node: {}", node);
                                 tracing::debug!("node kind: {:?}", node.kind());
@@ -216,6 +223,39 @@ impl<'a> Walker<'a> {
                                                             next_sibling.to_string(),
                                                             input,
                                                         );
+                                                        if let Some(change) = self.changes.first() {
+                                                            if change.is_remove() && self.commit {
+                                                                if let Some(id) = change.id() {
+                                                                    if id
+                                                                        == next_sibling.to_string()
+                                                                    {
+                                                                        let replacement =
+                                                                            Root::parse("")
+                                                                                .syntax();
+                                                                        // let green = node
+                                                                        //     .green()
+                                                                        //     .replace_child(
+                                                                        //         child.index(),
+                                                                        //         replacement
+                                                                        //             .green()
+                                                                        //             .into(),
+                                                                        //     );
+                                                                        // let green = toplevel
+                                                                        //     .replace_with(green);
+                                                                        // let node = Root::parse(
+                                                                        //     green
+                                                                        //         .to_string()
+                                                                        //         .as_str(),
+                                                                        // )
+                                                                        // .syntax();
+                                                                        tracing::debug!(
+                                                                            "Noode: {node}"
+                                                                        );
+                                                                        return Some(replacement);
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
                                                     }
                                                 } else {
                                                     tracing::debug!(
@@ -258,6 +298,20 @@ impl<'a> Walker<'a> {
                                                             next_sibling.to_string(),
                                                             input,
                                                         );
+                                                    }
+                                                    if let Some(change) = self.changes.first() {
+                                                        if change.is_remove() && self.commit {
+                                                            if let Some(id) = change.id() {
+                                                                if id == next_sibling.to_string() {
+                                                                    let replacement =
+                                                                        Root::parse("").syntax();
+                                                                    tracing::debug!(
+                                                                        "Noode: {node}"
+                                                                    );
+                                                                    return Some(replacement);
+                                                                }
+                                                            }
+                                                        }
                                                     }
                                                     tracing::debug!(
                                                         "Nested input attr binding: {}",

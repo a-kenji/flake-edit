@@ -69,6 +69,12 @@ impl Change {
             Change::Change { id, .. } => id.clone(),
         }
     }
+    pub fn is_remove(&self) -> bool {
+        match self {
+            Change::Remove { .. } => true,
+            _ => false,
+        }
+    }
 }
 
 impl State {
