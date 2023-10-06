@@ -17,7 +17,7 @@ pub(crate) struct CliArgs {
     // #[arg(long)]
     // param: Option<Parameter>,
     #[command(subcommand)]
-    subcommand: Option<Command>,
+    subcommand: Command,
 }
 
 impl CliArgs {
@@ -34,14 +34,11 @@ impl CliArgs {
         self.flake_ref.clone()
     }
 
-    pub(crate) fn subcommand(&self) -> Option<&Command> {
-        self.subcommand.as_ref()
+    pub(crate) fn subcommand(&self) -> &Command {
+        &self.subcommand
     }
     pub(crate) fn list(&self) -> bool {
-        if let Some(subcommand) = self.subcommand.as_ref() {
-            return matches!(subcommand, Command::List { .. });
-        }
-        false
+        return matches!(self.subcommand, Command::List { .. });
     }
 }
 
@@ -49,16 +46,24 @@ impl CliArgs {
 pub(crate) enum Command {
     /// Add a new flake reference.
     #[clap(alias = "a")]
+    #[command(arg_required_else_help = true)]
     Add {
-        add: Option<String>,
+        /// The name of an input attribute.
+        id: Option<String>,
+        /// The uri that should be added to the input.
+        // #[arg(last = true)]
+        uri: Option<String>,
         #[arg(long)]
         ref_or_rev: Option<String>,
     },
     /// Pin a specific flake reference based on its id.
-    Pin { pin: Option<String> },
+    #[command(arg_required_else_help = true)]
+    Pin { id: Option<String> },
     /// Remove a specific flake reference, based on its id.
-    Remove { remove: Option<String> },
+    #[clap(alias = "rm")]
+    Remove { id: Option<String> },
     /// List flake inputs
+    #[clap(alias = "l")]
     List {
         #[arg(long)]
         json: bool,

@@ -1,0 +1,11 @@
+[all]
+workspace = true
+avoid_cfg_tarpaulin = true
+all-features = true
+exclude = []
+out = ["Html"]
+exclude-files = [
+  "examples/**/*",
+  "bench/**/*",
+  "fuzz/**/*",
+]
