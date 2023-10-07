@@ -14,7 +14,8 @@ include!("src/cli.rs");
 fn main() {
     println!("cargo:rerun-if-env-changed=ASSET_DIR");
 
-    const NAME: &str = "flake-add";
+    // const NAME: &str = "flake-add";
+    const NAME: &str = "fe";
 
     if let Some(dir) = env::var_os("ASSET_DIR") {
         let out = &Path::new(&dir);

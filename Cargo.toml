@@ -64,6 +64,9 @@ clap = { version = "4.4.4", features = ["derive"], optional = true }
 clap_complete = { version = "4.4.3", features = [], optional = true }
 clap_mangen = { version = "0.2.14", features = [], optional = true }
 
+[[bench]]
+name = "benches"
+harness = false
 
 [profile.release]
 lto = true
@@ -88,4 +91,5 @@ opt-level = 3
 opt-level = 3
 
 [dev-dependencies]
+criterion = "0.5.1"
 insta = { version = "1.33.0", features = ["yaml"] }

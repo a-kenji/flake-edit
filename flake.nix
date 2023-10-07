@@ -163,7 +163,7 @@
         # Build *just* the cargo dependencies, so we can reuse
         # all of that work (e.g. via cachix) when running in CI
         assetDir = "target/assets";
-        postInstall = ''
+        postInstall = name: ''
           # install the manpage
           installManPage ${assetDir}/${name}.1
           # explicit behavior
@@ -231,9 +231,12 @@
               pname = "fe";
               name = "fe";
               installPhase = ''
+                runHook preInstall
                 mkdir -p $out/bin
                 cp target/release/flake-add $out/bin/fe
+                runHook postInstall
               '';
+              postInstall = postInstall "fe";
               inherit
                 assetDir
                 buildInputs
@@ -241,7 +244,6 @@
                 meta
                 # name
 
-                postInstall
                 stdenv
               ;
             }
