@@ -71,6 +71,13 @@ pub(crate) enum Command {
         #[arg(long)]
         json: bool,
     },
+    #[clap(hide = true)]
+    #[command(name = "completion")]
+    /// Meant for shell completions.
+    Completion {
+        #[arg(long)]
+        inputs: bool,
+    },
 }
 
 #[derive(Debug, Clone)]

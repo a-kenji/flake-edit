@@ -128,6 +128,7 @@ fn main() -> anyhow::Result<()> {
         }
         cli::Command::List { .. } => {}
         cli::Command::Change { id } => todo!(),
+        cli::Command::Completion { inputs } => todo!(),
     }
 
     if let Some(change) = walker.walk_toplevel() {
