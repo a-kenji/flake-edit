@@ -9,6 +9,7 @@ use crate::cli::CliArgs;
 use clap::Parser;
 use flake_add::diff::Diff;
 use flake_add::walk::Walker;
+use nix_uri::{FlakeRef, NixUriResult};
 use rnix::tokenizer::Tokenizer;
 use ropey::Rope;
 
@@ -97,11 +98,26 @@ fn main() -> anyhow::Result<()> {
             ref_or_rev: _,
             id,
         } => {
-            let change = flake_add::Change::Add {
-                id: id.clone(),
-                uri: uri.clone(),
-            };
-            walker.changes.push(change);
+            if id.is_some() && uri.is_some() {
+                let change = flake_add::Change::Add {
+                    id: id.clone(),
+                    uri: uri.clone(),
+                };
+                walker.changes.push(change);
+            } else if let Some(uri) = id {
+                let flake_ref: NixUriResult<FlakeRef> = uri.parse();
+                if let Ok(flake_ref) = flake_ref {
+                    if let Some(id) = flake_ref.id() {
+                        let change = flake_add::Change::Add {
+                            id: Some(id),
+                            uri: Some(uri.clone()),
+                        };
+                        walker.changes.push(change);
+                    }
+                } else {
+                    println!("Please specify an [ID] for this flake reference.")
+                }
+            }
         }
         cli::Command::Pin { .. } => todo!(),
         cli::Command::Remove { id } => {
@@ -111,6 +127,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         cli::Command::List { .. } => {}
+        cli::Command::Change { id } => todo!(),
     }
 
     if let Some(change) = walker.walk_toplevel() {

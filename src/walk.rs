@@ -166,7 +166,7 @@ impl<'a> Walker<'a> {
                         if (change.id().is_some()) && self.commit {
                             if let Change::Add { id, uri } = change {
                                 let uri = Root::parse(&format!(
-                                    "{} = \"{}\";",
+                                    "{}.url = \"{}\";",
                                     id.clone().unwrap(),
                                     uri.clone().unwrap(),
                                 ))

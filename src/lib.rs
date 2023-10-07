@@ -54,6 +54,9 @@ pub enum Change {
     Remove {
         id: String,
     },
+    Pin {
+        id: String,
+    },
     Change {
         id: Option<String>,
         ref_or_rev: Option<String>,
@@ -67,6 +70,7 @@ impl Change {
             Change::Add { id, .. } => id.clone(),
             Change::Remove { id } => Some(id.clone()),
             Change::Change { id, .. } => id.clone(),
+            Change::Pin { id } => Some(id.clone()),
         }
     }
     pub fn is_remove(&self) -> bool {
@@ -85,7 +89,7 @@ impl State {
         for change in &self.changes {
             match change {
                 Change::None => {}
-                Change::Remove { id } => {
+                Change::Remove { id } | Change::Pin { id } => {
                     if *id == target_id {
                         return Some(change.clone());
                     }
@@ -499,6 +503,7 @@ impl State {
                                                         .params
                                                         .set_dir(Some("assets".to_owned()));
                                                 }
+                                                Change::Pin { id } => todo!(),
                                             }
                                             let replacement_node = GreenNode::new(
                                                 rowan::SyntaxKind(63),

@@ -40,6 +40,9 @@ impl FlakeRef {
         self.r#type = r#type;
         self
     }
+    pub fn id(&self) -> Option<String> {
+        self.r#type.get_id()
+    }
 
     pub fn params(&mut self, params: FlakeRefParameters) -> &mut Self {
         self.params = params;
@@ -529,6 +532,33 @@ impl FlakeRefType {
                     ref_or_rev: owner_and_repo_or_ref.get(1).map(|s| s.to_string()),
                 })
             }
+        }
+    }
+    /// Extract a common identifier from it's [`FlakeRefType`] variant.
+    pub(crate) fn get_id(&self) -> Option<String> {
+        match self {
+            FlakeRefType::File { url } => None,
+            FlakeRefType::Git { url, r#type } => None,
+            FlakeRefType::GitHub {
+                owner,
+                repo,
+                ref_or_rev,
+            } => Some(repo.to_string()),
+            FlakeRefType::GitLab {
+                owner,
+                repo,
+                ref_or_rev,
+            } => Some(repo.to_string()),
+            FlakeRefType::Indirect { id, ref_or_rev } => None,
+            FlakeRefType::Mercurial { url, r#type } => None,
+            FlakeRefType::Path { path } => None,
+            FlakeRefType::Sourcehut {
+                owner,
+                repo,
+                ref_or_rev,
+            } => Some(repo.to_string()),
+            FlakeRefType::Tarball { url, r#type } => None,
+            FlakeRefType::None => None,
         }
     }
     pub fn ref_or_rev(&mut self, ref_or_rev_alt: Option<String>) -> Result<(), NixUriError> {
