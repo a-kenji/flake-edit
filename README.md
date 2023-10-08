@@ -4,9 +4,9 @@
 [![Documentation](https://img.shields.io/badge/flake_edit-documentation-fc0060?style=flat-square)](https://docs.rs/flake-edit)
 [![Matrix Chat Room](https://img.shields.io/badge/chat-on%20matrix-1d7e64?logo=matrix&style=flat-square)](https://matrix.to/#/#flake-edit:matrix.org)
 
-`$ fe` (**f**lake **e**dit): edit your flake inputs with ease.
+`$ fe` - **f**lake **e**dit - edit your flake inputs with ease.
 
-## Cli usage
+## `$ fe` - usage
 
 The cli interface `fe` has the following interface:
 `$ fe help`
