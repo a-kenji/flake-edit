@@ -146,8 +146,6 @@ fn main() -> anyhow::Result<()> {
         let new = change.to_string();
         let diff = Diff::new(&old, &new);
         diff.compare();
-    } else if args.list() {
-        println!("{:#?}", walker.inputs);
     } else {
         println!("Nothing changed in the node.");
         for change in walker.changes {
@@ -155,11 +153,25 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    if args.list() {
-        println!("{:#?}", state.inputs);
-    } else {
-        // println!("Inputs:");
-        // println!("State: {:#?}", state);
+    if let Command::List { json, raw } = args.subcommand() {
+        if *json {
+            let json = serde_json::to_string(&walker.inputs).unwrap();
+            println!("{json}");
+            return Ok(());
+        }
+
+        if *raw {
+            println!("{:#?}", walker.inputs);
+            return Ok(());
+        }
+
+        let inputs = walker.inputs;
+        let mut buf = String::new();
+        for input in inputs.keys() {
+            buf.push_str(input);
+            buf.push('\n');
+        }
+        println!("{buf}");
     }
 
     Ok(())

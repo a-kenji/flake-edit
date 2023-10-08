@@ -70,6 +70,8 @@ pub(crate) enum Command {
     List {
         #[arg(long)]
         json: bool,
+        #[arg(long)]
+        raw: bool,
     },
     #[clap(hide = true)]
     #[command(name = "completion")]
