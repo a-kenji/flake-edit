@@ -451,8 +451,8 @@ impl<'a> Walker<'a> {
                         );
                         let fake_id = format!("{ctx:?}{id}");
                         let mut input = Input::new(fake_id.to_string());
-                        input.url = sibling.to_string();
-                        self.inputs.insert(prev_id.to_string(), input);
+                        input.url = follows.to_string();
+                        self.inputs.insert(fake_id.to_string(), input);
                         // panic!("Attr {attr}, ctx: {ctx:?}");
                     }
                 }
