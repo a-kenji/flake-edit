@@ -1,5 +1,6 @@
 alias d := doc
 alias l := lint
+alias f := format
 alias uf := update-flake-dependencies
 alias uc := update-cargo-dependencies
 alias r := run
@@ -34,6 +35,9 @@ cargo-public-api:
 
 cargo-diff:
     nix develop .#lintShell --command cargo public-api diff
+
+format:
+    nix develop .#formatShell --command treefmt
 
 lint:
     nix develop .#lintShell --command cargo diet
