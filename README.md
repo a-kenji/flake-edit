@@ -43,4 +43,40 @@ Options:
           Print version
 ```
 
+### `$fe add`
+`$ fe add --help`
+```
+Add a new flake reference
+
+Usage: fe add [OPTIONS] [ID] [URI]
+
+Arguments:
+  [ID]
+          The name of an input attribute
+  [URI]
+          The uri that should be added to the input
+
+Options:
+      --ref-or-rev <REF_OR_REV>
+          
+  -h, --help
+          Print help
+```
+
+### `$fe remove`
+`$ fe remove --help`
+```
+Remove a specific flake reference, based on its id
+
+Usage: fe remove [ID]
+
+Arguments:
+  [ID]
+          
+
+Options:
+  -h, --help
+          Print help
+```
+
 ## Examples:
