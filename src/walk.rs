@@ -429,7 +429,31 @@ impl<'a> Walker<'a> {
                     }
                     if attr.to_string() == "follows" {
                         // Construct the follows attribute
-                        panic!();
+                        // TODO: is the inputs check necessary?
+                        // Maybe we can omit it for composability.
+                        println!(
+                            "Prev Prev Sibling: {}",
+                            attr.prev_sibling().unwrap().prev_sibling().unwrap()
+                        );
+                        // TODO:
+                        // - check for possible removal / change
+                        // - construct input
+                        println!("Prev Sibling: {}", attr.prev_sibling().unwrap());
+                        let id = attr.prev_sibling().unwrap();
+                        let follows = attr.parent().unwrap().next_sibling().unwrap();
+                        println!("The following attribute follows: {id}:{follows} is nested inside the attr: {ctx:?}");
+                        // TODO: Construct follows attribute if not yet ready.
+                        // For now assume that the url is the first attribute.
+                        // This assumption doesn't generally hold true.
+                        println!(
+                            "This Parent Next Sibling: {}",
+                            attr.parent().unwrap().next_sibling().unwrap()
+                        );
+                        let fake_id = format!("{ctx:?}{id}");
+                        let mut input = Input::new(fake_id.to_string());
+                        input.url = sibling.to_string();
+                        self.inputs.insert(prev_id.to_string(), input);
+                        // panic!("Attr {attr}, ctx: {ctx:?}");
                     }
                 }
             }
