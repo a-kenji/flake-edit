@@ -146,7 +146,7 @@ fn main() -> anyhow::Result<()> {
         let new = change.to_string();
         let diff = Diff::new(&old, &new);
         diff.compare();
-    } else {
+    } else if !args.list() {
         println!("Nothing changed in the node.");
         for change in walker.changes {
             println!("The following change could not be applied: \n{:?}", change);
@@ -168,8 +168,10 @@ fn main() -> anyhow::Result<()> {
         let inputs = walker.inputs;
         let mut buf = String::new();
         for input in inputs.keys() {
-            buf.push_str(input);
-            buf.push('\n');
+            if !buf.is_empty() {
+                buf.push('\n');
+            }
+            buf.push_str(&input.to_string());
         }
         println!("{buf}");
     }
