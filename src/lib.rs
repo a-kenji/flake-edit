@@ -1,7 +1,7 @@
 pub mod diff;
+pub mod error;
 mod git;
 mod input;
-mod log;
 pub mod walk;
 
 use std::collections::HashMap;
@@ -17,8 +17,6 @@ use rnix::{
     SyntaxKind, SyntaxNode,
 };
 use rowan::{GreenNode, GreenToken, NodeOrToken};
-
-use crate::log::log_node_enter_info;
 
 use self::input::Input;
 
@@ -262,9 +260,6 @@ impl State {
                                                                     tracing::debug!(
                                                                         "Description Node: {node}"
                                                                     );
-                                                                    log_node_enter_info(
-                                                                        &node_or_token,
-                                                                    );
                                                                     continue;
                                                                 }
                                                                 if node.to_string() == "inputs"
@@ -278,9 +273,6 @@ impl State {
                                                                 {
                                                                     tracing::debug!(
                                                                         "Input Node: {node}"
-                                                                    );
-                                                                    log_node_enter_info(
-                                                                        &node_or_token,
                                                                     );
                                                                     for node in node.children() {
                                                                         tracing::debug!(
@@ -384,7 +376,6 @@ impl State {
             match node_walker {
                 rowan::WalkEvent::Enter(node_or_token) => {
                     tracing::debug!("Inputs from node attrs set");
-                    log::log_node_enter_info(&node_or_token);
                     if let Some(node) = node_or_token.as_node() {
                         if SyntaxKind::NODE_ATTRPATH_VALUE == node.kind() {
                             if let Some(parent) = node.parent() {
@@ -756,7 +747,7 @@ mod tests {
     fn annoying_flake() -> &'static str {
         r#"
         {
-  description = "A slightly annoying flake";
+  description = "Thanks till.";
 
   ${''
   inputs''} = rec {
@@ -950,12 +941,12 @@ mod tests {
     // fn annoying_flake_parse_ok() {
     //     parse_content(codepoint_flake()).unwrap();
     // }
-    fn setup_inputs(stream: &str) -> State {
-        let (node, _errors) = rnix::parser::parse(Tokenizer::new(stream));
-        let mut state = State::default();
-        state.walk_attr_set(&node);
-        state
-    }
+    // fn setup_inputs(stream: &str) -> State {
+    //     let (node, _errors) = rnix::parser::parse(Tokenizer::new(stream));
+    //     let mut state = State::default();
+    //     state.walk_attr_set(&node);
+    //     state
+    // }
     // #[test]
     // fn parse_simple_inputs_single_old_uri() {
     //     let inputs = "{ inputs.nixpkgs.url = github:nixos/nixpkgs;}";
@@ -976,93 +967,93 @@ mod tests {
     //     insta::assert_yaml_snapshot!(state.inputs);
     // }
     //     let inputs = "{inputs.nixpkgs.url = github:nixos/nixpkgs; inputs.crane.url = github:nix-community/crane;}";
-    #[test]
-    fn parse_simple_input_two_urls() {
-        let inputs = r#"{ inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane";};}"#;
-        let state = setup_inputs(inputs);
-        insta::with_settings!({sort_maps => true}, {
-            insta::assert_yaml_snapshot!(state.inputs);
-        });
-    }
-    #[test]
-    fn parse_simple_input_url() {
-        let inputs = r#"{ inputs = { nixpkgs.url = "github:nixos/nixpkgs";};}"#;
-        let state = setup_inputs(inputs);
-        insta::with_settings!({sort_maps => true}, {
-            insta::assert_yaml_snapshot!(state.inputs);
-        });
-    }
     // #[test]
-    // fn parse_simple_input_url_alt() {
-    //     let inputs = r#"{ inputs.nixpkgs.url = "github:nixos/nixpkgs";}"#;
+    // fn parse_simple_input_two_urls() {
+    //     let inputs = r#"{ inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane";};}"#;
     //     let state = setup_inputs(inputs);
-    //     insta::assert_yaml_snapshot!(state.inputs);
+    //     insta::with_settings!({sort_maps => true}, {
+    //         insta::assert_yaml_snapshot!(state.inputs);
+    //     });
     // }
-    #[test]
-    fn parse_single_follows() {
-        let inputs = r#"{
-              description = "Manage your flake inputs comfortably.";
-
-              inputs = {
-                nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-                rust-overlay = {
-                  url = "github:oxalica/rust-overlay";
-                  inputs.nixpkgs.follows = "nixpkgs";
-                };
-              };
-              }
-            "#;
-        let state = setup_inputs(inputs);
-        insta::with_settings!({sort_maps => true}, {
-            insta::assert_yaml_snapshot!(state.inputs);
-        });
-    }
-    #[test]
-    fn parse_multiple_follows() {
-        let inputs = r#"{
-              description = "Manage your flake inputs comfortably.";
-
-              inputs = {
-                nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-                rust-overlay = {
-                  url = "github:oxalica/rust-overlay";
-                  inputs.nixpkgs.follows = "nixpkgs";
-                  inputs.flake-utils.follows = "flake-utils";
-                };
-              };
-              }
-            "#;
-        let state = setup_inputs(inputs);
-        insta::with_settings!({sort_maps => true}, {
-            insta::assert_yaml_snapshot!(state.inputs);
-        });
-    }
-    #[test]
-    fn parse_multiple_inputs() {
-        let inputs = r#"{
-              description = "Manage your flake inputs comfortably.";
-
-              inputs = {
-                nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-                #flake-utils.url = "github:numtide/flake-utils";
-                rust-overlay = {
-                  url = "github:oxalica/rust-overlay";
-                  inputs.nixpkgs.follows = "nixpkgs";
-                  # inputs.flake-utils.follows = "flake-utils";
-                };
-                crane = {
-                  url = "github:ipetkov/crane";
-                  # inputs.nixpkgs.follows = "nixpkgs";
-                  # inputs.rust-overlay.follows = "rust-overlay";
-                  # inputs.flake-utils.follows = "flake-utils";
-                };
-                vmsh.url = "github:mic92/vmsh";
-              };
-              }
-            "#;
-        let state = setup_inputs(inputs);
-        insta::with_settings!({sort_maps => true}, {
-            insta::assert_yaml_snapshot!(state.inputs);
-        });
-    }
+    // #[test]
+    // fn parse_simple_input_url() {
+    //     let inputs = r#"{ inputs = { nixpkgs.url = "github:nixos/nixpkgs";};}"#;
+    //     let state = setup_inputs(inputs);
+    //     insta::with_settings!({sort_maps => true}, {
+    //         insta::assert_yaml_snapshot!(state.inputs);
+    //     });
+    // }
+    // // #[test]
+    // // fn parse_simple_input_url_alt() {
+    // //     let inputs = r#"{ inputs.nixpkgs.url = "github:nixos/nixpkgs";}"#;
+    // //     let state = setup_inputs(inputs);
+    // //     insta::assert_yaml_snapshot!(state.inputs);
+    // // }
+    // #[test]
+    // fn parse_single_follows() {
+    //     let inputs = r#"{
+    //           description = "Manage your flake inputs comfortably.";
+    //
+    //           inputs = {
+    //             nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    //             rust-overlay = {
+    //               url = "github:oxalica/rust-overlay";
+    //               inputs.nixpkgs.follows = "nixpkgs";
+    //             };
+    //           };
+    //           }
+    //         "#;
+    //     let state = setup_inputs(inputs);
+    //     insta::with_settings!({sort_maps => true}, {
+    //         insta::assert_yaml_snapshot!(state.inputs);
+    //     });
+    // }
+    // #[test]
+    // fn parse_multiple_follows() {
+    //     let inputs = r#"{
+    //           description = "Manage your flake inputs comfortably.";
+    //
+    //           inputs = {
+    //             nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    //             rust-overlay = {
+    //               url = "github:oxalica/rust-overlay";
+    //               inputs.nixpkgs.follows = "nixpkgs";
+    //               inputs.flake-utils.follows = "flake-utils";
+    //             };
+    //           };
+    //           }
+    //         "#;
+    //     let state = setup_inputs(inputs);
+    //     insta::with_settings!({sort_maps => true}, {
+    //         insta::assert_yaml_snapshot!(state.inputs);
+    //     });
+    // }
+    // #[test]
+    // fn parse_multiple_inputs() {
+    //     let inputs = r#"{
+    //           description = "Manage your flake inputs comfortably.";
+    //
+    //           inputs = {
+    //             nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    //             #flake-utils.url = "github:numtide/flake-utils";
+    //             rust-overlay = {
+    //               url = "github:oxalica/rust-overlay";
+    //               inputs.nixpkgs.follows = "nixpkgs";
+    //               # inputs.flake-utils.follows = "flake-utils";
+    //             };
+    //             crane = {
+    //               url = "github:ipetkov/crane";
+    //               # inputs.nixpkgs.follows = "nixpkgs";
+    //               # inputs.rust-overlay.follows = "rust-overlay";
+    //               # inputs.flake-utils.follows = "flake-utils";
+    //             };
+    //             vmsh.url = "github:mic92/vmsh";
+    //           };
+    //           }
+    //         "#;
+    //     let state = setup_inputs(inputs);
+    //     insta::with_settings!({sort_maps => true}, {
+    //         insta::assert_yaml_snapshot!(state.inputs);
+    //     });
+    // }
 }

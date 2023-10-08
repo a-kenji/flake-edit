@@ -9,7 +9,7 @@ use std::{
     path::Path,
 };
 
-include!("src/cli.rs");
+include!("src/bin/fe/cli.rs");
 
 fn main() {
     println!("cargo:rerun-if-env-changed=ASSET_DIR");

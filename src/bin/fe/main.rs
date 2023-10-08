@@ -6,15 +6,16 @@ use std::fs::File;
 use std::io;
 
 use crate::cli::CliArgs;
+use crate::cli::Command;
 use clap::Parser;
-use flake_add::diff::Diff;
-use flake_add::walk::Walker;
+use flake_edit::diff::Diff;
+use flake_edit::error;
+use flake_edit::walk::Walker;
 use nix_uri::{FlakeRef, NixUriResult};
 use rnix::tokenizer::Tokenizer;
 use ropey::Rope;
 
 mod cli;
-mod error;
 mod log;
 
 fn main() -> anyhow::Result<()> {
@@ -90,7 +91,7 @@ fn main() -> anyhow::Result<()> {
     let text = app.root.text.to_string();
     let mut walker = Walker::new(&text).unwrap();
 
-    let mut state = flake_add::State::default();
+    let mut state = flake_edit::State::default();
 
     match args.subcommand() {
         cli::Command::Add {
@@ -99,7 +100,7 @@ fn main() -> anyhow::Result<()> {
             id,
         } => {
             if id.is_some() && uri.is_some() {
-                let change = flake_add::Change::Add {
+                let change = flake_edit::Change::Add {
                     id: id.clone(),
                     uri: uri.clone(),
                 };
@@ -108,7 +109,7 @@ fn main() -> anyhow::Result<()> {
                 let flake_ref: NixUriResult<FlakeRef> = uri.parse();
                 if let Ok(flake_ref) = flake_ref {
                     if let Some(id) = flake_ref.id() {
-                        let change = flake_add::Change::Add {
+                        let change = flake_edit::Change::Add {
                             id: Some(id),
                             uri: Some(uri.clone()),
                         };
@@ -122,7 +123,7 @@ fn main() -> anyhow::Result<()> {
         cli::Command::Pin { .. } => todo!(),
         cli::Command::Remove { id } => {
             if let Some(id) = id {
-                let change = flake_add::Change::Remove { id: id.clone() };
+                let change = flake_edit::Change::Remove { id: id.clone() };
                 walker.changes.push(change);
             }
         }
@@ -153,17 +154,6 @@ fn main() -> anyhow::Result<()> {
             println!("The following change could not be applied: \n{:?}", change);
         }
     }
-
-    // let change = flake_add::Change::Change {
-    //     id: Some("crane".into()),
-    //     ref_or_rev: Some("test".to_owned()),
-    // };
-    // state.add_change(change);
-
-    // state.walk_attr_set(&node);
-
-    // let stream = &app.root.text.to_string();
-    // state.walk_expr_set(stream);
 
     if args.list() {
         println!("{:#?}", state.inputs);
