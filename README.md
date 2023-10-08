@@ -9,6 +9,7 @@
 ## `$ fe` - usage
 
 The cli interface `fe` has the following interface:
+
 `$ fe help`
 ```
 Usage: fe [OPTIONS] [FLAKE_REF] <COMMAND>
