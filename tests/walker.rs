@@ -80,3 +80,56 @@ fn root_remove_toplevel_input_multiple() {
         insta::assert_snapshot!(change.to_string());
     });
 }
+#[test]
+fn root_alt_list() {
+    let (flake, _lock) = load_fixtures("root_alt");
+    let mut walker = Walker::new(&flake).unwrap();
+    walker.walk_toplevel();
+    let info = Info::new("".into(), vec![]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_yaml_snapshot!(walker.inputs);
+    });
+}
+#[test]
+fn root_alt_add_toplevel_id_uri() {
+    let (flake, _lock) = load_fixtures("root_alt");
+    let mut walker = Walker::new(&flake).unwrap();
+    let change = Change::Add {
+        id: Some("vmsh".to_owned()),
+        uri: Some("github:mic92/vmsh".to_owned()),
+    };
+    walker.changes.push(change.clone());
+    let info = Info::new("".into(), vec![change]);
+    let change = walker.walk_toplevel().unwrap();
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(change.to_string());
+    });
+}
+#[test]
+fn root_alt_remove_toplevel_uri() {
+    let (flake, _lock) = load_fixtures("root_alt");
+    let mut walker = Walker::new(&flake).unwrap();
+    let change = Change::Remove {
+        id: "nixpkgs".to_owned(),
+    };
+    walker.changes.push(change.clone());
+    let info = Info::new("".into(), vec![change]);
+    let change = walker.walk_toplevel().unwrap();
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(change.to_string());
+    });
+}
+#[test]
+fn root_alt_remove_toplevel_input_multiple() {
+    let (flake, _lock) = load_fixtures("root_alt");
+    let mut walker = Walker::new(&flake).unwrap();
+    let change = Change::Remove {
+        id: "crane".to_owned(),
+    };
+    walker.changes.push(change.clone());
+    let info = Info::new("".into(), vec![change]);
+    let change = walker.walk_toplevel().unwrap();
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(change.to_string());
+    });
+}
