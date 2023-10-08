@@ -31,7 +31,7 @@ fn root_load() {
 fn root_list() {
     let (flake, _lock) = load_fixtures("root");
     let mut walker = Walker::new(&flake).unwrap();
-    walker.walk_toplevel();
+    walker.walk();
     let info = Info::new("".into(), vec![]);
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_yaml_snapshot!(walker.inputs);
@@ -47,7 +47,7 @@ fn root_add_toplevel_id_uri() {
     };
     walker.changes.push(change.clone());
     let info = Info::new("".into(), vec![change]);
-    let change = walker.walk_toplevel().unwrap();
+    let change = walker.walk().unwrap();
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_snapshot!(change.to_string());
     });
@@ -61,7 +61,7 @@ fn root_remove_toplevel_uri() {
     };
     walker.changes.push(change.clone());
     let info = Info::new("".into(), vec![change]);
-    let change = walker.walk_toplevel().unwrap();
+    let change = walker.walk().unwrap();
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_snapshot!(change.to_string());
     });
@@ -75,7 +75,7 @@ fn root_remove_toplevel_input_multiple() {
     };
     walker.changes.push(change.clone());
     let info = Info::new("".into(), vec![change]);
-    let change = walker.walk_toplevel().unwrap();
+    let change = walker.walk().unwrap();
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_snapshot!(change.to_string());
     });
@@ -84,7 +84,7 @@ fn root_remove_toplevel_input_multiple() {
 fn root_alt_list() {
     let (flake, _lock) = load_fixtures("root_alt");
     let mut walker = Walker::new(&flake).unwrap();
-    walker.walk_toplevel();
+    walker.walk();
     let info = Info::new("".into(), vec![]);
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_yaml_snapshot!(walker.inputs);
@@ -100,7 +100,7 @@ fn root_alt_add_toplevel_id_uri() {
     };
     walker.changes.push(change.clone());
     let info = Info::new("".into(), vec![change]);
-    let change = walker.walk_toplevel().unwrap();
+    let change = walker.walk().unwrap();
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_snapshot!(change.to_string());
     });
@@ -114,7 +114,7 @@ fn root_alt_remove_toplevel_uri() {
     };
     walker.changes.push(change.clone());
     let info = Info::new("".into(), vec![change]);
-    let change = walker.walk_toplevel().unwrap();
+    let change = walker.walk().unwrap();
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_snapshot!(change.to_string());
     });
@@ -128,7 +128,7 @@ fn root_alt_remove_toplevel_input_multiple() {
     };
     walker.changes.push(change.clone());
     let info = Info::new("".into(), vec![change]);
-    let change = walker.walk_toplevel().unwrap();
+    let change = walker.walk().unwrap();
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_snapshot!(change.to_string());
     });

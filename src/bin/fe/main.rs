@@ -132,7 +132,7 @@ fn main() -> anyhow::Result<()> {
         cli::Command::Completion { inputs } => todo!(),
     }
 
-    if let Some(change) = walker.walk_toplevel() {
+    if let Some(change) = walker.walk() {
         let root = rnix::Root::parse(&change.to_string());
         let errors = root.errors();
         if errors.is_empty() {

@@ -1,15 +1,8 @@
 use std::collections::HashMap;
 
-use rnix::{
-    ast::{
-        Entry::{self, AttrpathValue},
-        Expr, HasEntry,
-    },
-    NixLanguage, Root, SyntaxKind, SyntaxNode,
-};
-use rowan::GreenNode;
+use rnix::{Root, SyntaxKind, SyntaxNode};
 
-use crate::{input::Input, Change, State};
+use crate::{input::Input, Change};
 
 // TODO:
 // - parse out inputs
@@ -33,6 +26,18 @@ pub struct Walker<'a> {
     pub inputs: HashMap<String, Input>,
     pub changes: Vec<Change>,
     commit: bool,
+}
+
+#[derive(Debug)]
+/// A helper for the [`Walker`], in order to hold context while traversing the tree.
+struct Context {
+    level: Vec<String>,
+}
+
+impl Context {
+    fn new(level: Vec<String>) -> Self {
+        Self { level }
+    }
 }
 
 impl<'a> Walker<'a> {
@@ -61,88 +66,95 @@ impl<'a> Walker<'a> {
     /// - description
     /// - inputs
     /// - outputs
-    pub fn walk_toplevel(&mut self) -> Option<SyntaxNode> {
-        // let expr = self.root.expr().unwrap();
+    pub fn walk(&mut self) -> Option<SyntaxNode> {
         let cst = &self.root;
-
         if cst.kind() != SyntaxKind::NODE_ROOT {
             // TODO: handle this as an error
             panic!("Should be a topevel node.")
         } else {
-            for root in cst.children() {
-                // Because it is the node root this is the toplevel attribute
-                for toplevel in root.children() {
-                    // Match attr_sets inputs, and outputs
-                    tracing::debug!("Toplevel: {}", toplevel);
-                    tracing::debug!("Kind: {:?}", toplevel.kind());
-                    if toplevel.kind() == SyntaxKind::NODE_ATTRPATH_VALUE {
-                        for child in toplevel.children() {
-                            if child.to_string() == "description" {
-                                break;
+            self.walk_toplevel(cst.clone(), None)
+        }
+    }
+    /// Traverse the toplevel `flake.nix` file.
+    /// It should consist of three attribute keys:
+    /// - description
+    /// - inputs
+    /// - outputs
+    fn walk_toplevel(&mut self, node: SyntaxNode, ctx: Option<Context>) -> Option<SyntaxNode> {
+        for root in node.children() {
+            // Because it is the node root this is the toplevel attribute
+            for toplevel in root.children() {
+                // Match attr_sets inputs, and outputs
+                tracing::debug!("Toplevel: {}", toplevel);
+                tracing::debug!("Kind: {:?}", toplevel.kind());
+                if toplevel.kind() == SyntaxKind::NODE_ATTRPATH_VALUE {
+                    for child in toplevel.children() {
+                        if child.to_string() == "description" {
+                            break;
+                        }
+                        if child.to_string() == "inputs" {
+                            if let Some(replacement) =
+                                self.walk_inputs(child.next_sibling().unwrap(), &ctx)
+                            {
+                                tracing::debug!("Replacement Noode: {replacement}");
+                                let green = toplevel.green().replace_child(
+                                    child.next_sibling().unwrap().index(),
+                                    replacement.green().into(),
+                                );
+                                let green = toplevel.replace_with(green);
+                                let node = Root::parse(green.to_string().as_str()).syntax();
+                                tracing::debug!("Noode: {node}");
+                                return Some(node);
                             }
-                            if child.to_string() == "inputs" {
-                                if let Some(replacement) =
-                                    self.walk_inputs(child.next_sibling().unwrap())
-                                {
-                                    tracing::debug!("Replacement Noode: {replacement}");
-                                    let green = toplevel.green().replace_child(
-                                        child.next_sibling().unwrap().index(),
-                                        replacement.green().into(),
-                                    );
-                                    let green = toplevel.replace_with(green);
+                        } else if child.to_string().starts_with("inputs") {
+                            // This is a toplevel node, of the form:
+                            // input.id ...
+                            // If the node should be empty,
+                            // it's toplevel should be empty too.
+                            if let Some(replacement) = self.walk_inputs(child.clone(), &ctx) {
+                                if replacement.to_string().is_empty() {
+                                    // let green =
+                                    //     toplevel.parent().unwrap().green().replace_child(
+                                    //         child.index(),
+                                    //         replacement.green().into(),
+                                    //     );
+                                    // let green = toplevel.replace_with(green);
+                                    // let node = Root::parse(green.to_string().as_str()).syntax();
+                                    // let green =
+                                    //     toplevel.replace_with(replacement.green().into());
+                                    let mut green = root.green().remove_child(toplevel.index());
+                                    if let Some(prev) = toplevel.prev_sibling_or_token() {
+                                        if let SyntaxKind::TOKEN_WHITESPACE = prev.kind() {
+                                            green = green.remove_child(prev.index());
+                                        }
+                                    } else if let Some(next) = child.next_sibling_or_token() {
+                                        if let SyntaxKind::TOKEN_WHITESPACE = next.kind() {
+                                            green = green.remove_child(next.index());
+                                        }
+                                    }
                                     let node = Root::parse(green.to_string().as_str()).syntax();
                                     tracing::debug!("Noode: {node}");
                                     return Some(node);
                                 }
-                            } else if child.to_string().starts_with("inputs") {
-                                // This is a toplevel node, of the form:
-                                // input.id ...
-                                // If the node should be empty,
-                                // it's toplevel should be empty too.
-                                if let Some(replacement) = self.walk_inputs(child.clone()) {
-                                    if replacement.to_string().is_empty() {
-                                        // let green =
-                                        //     toplevel.parent().unwrap().green().replace_child(
-                                        //         child.index(),
-                                        //         replacement.green().into(),
-                                        //     );
-                                        // let green = toplevel.replace_with(green);
-                                        // let node = Root::parse(green.to_string().as_str()).syntax();
-                                        // let green =
-                                        //     toplevel.replace_with(replacement.green().into());
-                                        let mut green = root.green().remove_child(toplevel.index());
-                                        if let Some(prev) = toplevel.prev_sibling_or_token() {
-                                            if let SyntaxKind::TOKEN_WHITESPACE = prev.kind() {
-                                                green = green.remove_child(prev.index());
-                                            }
-                                        } else if let Some(next) = child.next_sibling_or_token() {
-                                            if let SyntaxKind::TOKEN_WHITESPACE = next.kind() {
-                                                green = green.remove_child(next.index());
-                                            }
-                                        }
-                                        let node = Root::parse(green.to_string().as_str()).syntax();
-                                        tracing::debug!("Noode: {node}");
-                                        return Some(node);
-                                    }
-                                }
                             }
                         }
-                    } else {
-                        panic!("Should be a NODE_ATTRPATH_VALUE");
                     }
+                } else {
+                    // TODO: handle
+                    panic!("Should be a NODE_ATTRPATH_VALUE");
                 }
             }
-            None
         }
+        None
     }
-    pub fn walk_inputs(&mut self, node: SyntaxNode) -> Option<SyntaxNode> {
+    fn walk_inputs(&mut self, node: SyntaxNode, ctx: &Option<Context>) -> Option<SyntaxNode> {
         for child in node.children_with_tokens() {
             tracing::debug!("Inputs Child Kind: {:?}", child.kind());
             tracing::debug!("Inputs Child: {child}");
             tracing::debug!("Inputs Child Len: {}", child.to_string().len());
             match child.kind() {
                 SyntaxKind::NODE_ATTRPATH_VALUE => {
-                    if let Some(replacement) = self.walk_input(child.as_node().unwrap()) {
+                    if let Some(replacement) = self.walk_input(child.as_node().unwrap(), ctx) {
                         tracing::debug!("Child Id: {}", child.index());
                         tracing::debug!("Input replacement node: {}", node);
                         let mut green = node
@@ -282,7 +294,12 @@ impl<'a> Walker<'a> {
                                         {
                                             tracing::debug!("Nested input: {}", nested_attr);
                                             for attr in nested_attr.children() {
-                                                tracing::debug!("Nested input attr: {}", attr);
+                                                tracing::debug!(
+                                                    "Nested input attr: {}, from: {}",
+                                                    attr,
+                                                    next_sibling
+                                                );
+
                                                 for binding in attr.children() {
                                                     if binding.to_string() == "url" {
                                                         let url = binding.next_sibling().unwrap();
@@ -317,6 +334,15 @@ impl<'a> Walker<'a> {
                                                         "Nested input attr binding: {}",
                                                         binding
                                                     );
+                                                }
+                                                let context =
+                                                    Context::new(vec![next_sibling.to_string()]);
+                                                tracing::debug!("Walking inputs with: {attr}, context: {context:?}");
+                                                if let Some(change) =
+                                                    self.walk_input(&attr, &Some(context))
+                                                {
+                                                    println!("Nested change: {change}");
+                                                    panic!("Matched nested");
                                                 }
                                             }
                                         }
@@ -362,7 +388,7 @@ impl<'a> Walker<'a> {
     ///  inputs.flake-utils.follows = "flake-utils";
     ///  };
     /// ```
-    pub fn walk_input(&mut self, node: &SyntaxNode) -> Option<SyntaxNode> {
+    fn walk_input(&mut self, node: &SyntaxNode, ctx: &Option<Context>) -> Option<SyntaxNode> {
         tracing::debug!("\nInput: {node}\n");
         for (i, child) in node.children().enumerate() {
             tracing::debug!("Kind #:{i} {:?}", child.kind());
@@ -401,6 +427,10 @@ impl<'a> Walker<'a> {
                             }
                         }
                     }
+                    if attr.to_string() == "follows" {
+                        // Construct the follows attribute
+                        panic!();
+                    }
                 }
             }
             if child.kind() == SyntaxKind::NODE_ATTR_SET {
@@ -438,88 +468,6 @@ impl<'a> Walker<'a> {
         }
         None
     }
-
-    // pub fn walk_input_expr(&mut self, entry: Option<Expr>) -> Option<SyntaxNode> {
-    //     let entry = match entry {
-    //         Some(entry) => match entry {
-    //             Expr::AttrSet(attr_set) => Some(attr_set),
-    //             _ => {
-    //                 println!("Not matched: {:?}", entry);
-    //                 None
-    //             }
-    //         },
-    //         None => todo!(),
-    //     }
-    //     .unwrap();
-    //     for entry in entry.entries() {
-    //         println!("Entry: {}", entry);
-    //     }
-    //     for attr_value in entry.attrpath_values() {
-    //         println!("Input Attr: {}", attr_value);
-    //         // self.walk_input(Entry::AttrpathValue(attr_value));
-    //         // for attr in attr_value.value() {
-    //         //     println!("Attr: {}", attr);
-    //         // }
-    //     }
-    //     None
-    // }
-    // Walk a single input field.
-    // Example:
-    // ```nix
-    //  flake-utils.url = "github:numtide/flake-utils";
-    // ```
-    // or
-    // ```nix
-    //  rust-overlay = {
-    //  url = "github:oxalica/rust-overlay";
-    //  inputs.nixpkgs.follows = "nixpkgs";
-    //  inputs.flake-utils.follows = "flake-utils";
-    //  };
-    // ```
-    // pub fn walk_input(&mut self, attrpath_values: Entry) -> Option<SyntaxNode> {
-    //     let attr_values = match attrpath_values {
-    //         Entry::AttrpathValue(attr_set) => Some(attr_set),
-    //         _ => {
-    //             println!("Not matched: {:?}", attrpath_values);
-    //             None
-    //         }
-    //     }
-    //     .unwrap();
-    //
-    //     // for entry in attr_values.attrpath() {
-    //     println!("Individual: {}", attr_values);
-    //     println!("Individual Value: {}", attr_values.value().unwrap());
-    //     self.input_expr(attr_values.value());
-    //     println!("Individual Attrpath: {}", attr_values.attrpath().unwrap());
-    //     for attr in attr_values.attrpath().unwrap().attrs() {
-    //         println!("Individual Attrpath Attrs: {}", attr);
-    //     }
-    //     // }
-    //     None
-    // }
-    // pub fn input_expr(&mut self, maybe_expr: Option<Expr>) -> Option<SyntaxNode> {
-    //     let entry = match maybe_expr {
-    //         Some(entry) => match entry {
-    //             Expr::AttrSet(attr_set) => Some(attr_set),
-    //             _ => {
-    //                 println!("Not matched: {:?}", entry);
-    //                 println!("Not matched: {}", entry);
-    //                 None
-    //             }
-    //         },
-    //         None => todo!(),
-    //     };
-    //     // We should know the toplevel attr by now, for example
-    //     // the flake-utils part of `flake-utils = { url = ""; };`
-    //     // or also the id.
-    //     if let Some(entry) = entry {
-    //         println!("Individual Value: {}", entry);
-    //         for entry in entry.entries() {
-    //             println!("Entry: {}", entry);
-    //         }
-    //     }
-    //     None
-    // }
 }
 
 #[cfg(test)]
