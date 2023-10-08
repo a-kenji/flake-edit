@@ -1,7 +1,7 @@
 # flake-edit (fe)
 [![Built with Nix](https://img.shields.io/static/v1?label=built%20with&message=nix&color=5277C3&logo=nixos&style=flat-square&logoColor=ffffff)](https://builtwithnix.org)
 [![Crates](https://img.shields.io/crates/v/flake-edit?style=flat-square)](https://crates.io/crates/flake-edit)
-[![Documentation](https://img.shields.io/badge/flake-edit-documentation-fc0060?style=flat-square)](https://docs.rs/flake-edit)
+[![Documentation](https://img.shields.io/badge/flake_edit-documentation-fc0060?style=flat-square)](https://docs.rs/flake-edit)
 [![Matrix Chat Room](https://img.shields.io/badge/chat-on%20matrix-1d7e64?logo=matrix&style=flat-square)](https://matrix.to/#/#flake-edit:matrix.org)
 
 Manipulate the inputs of your flake.
