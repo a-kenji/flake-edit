@@ -1,5 +1,5 @@
 {
-  description = "Manage your flake inputs comfortably.";
+  description = "Edit your flake inputs with ease";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -82,7 +82,7 @@
           rustFmtToolchainTOML
           # pkgs.just
           # pkgs.lychee
-          pkgs.taplo
+          pkgs.vhs
           pkgs.cargo-watch
           pkgs.cargo-tarpaulin
           #
@@ -135,11 +135,6 @@
           #alternative linker
           pkgs.clang
         ];
-        shellInputs =
-          [
-            # pkgs.shellcheck
-            # pkgs.actionlint
-          ];
         fmtInputs = [
           pkgs.alejandra
           pkgs.treefmt
@@ -150,7 +145,10 @@
           [
             # pkgs.editorconfig-checker
           ];
-        actionlintInputs = [ pkgs.actionlint ];
+        actionlintInputs = [
+          pkgs.actionlint
+          pkgs.shellcheck
+        ];
         # Common arguments for the crane build
         commonArgs = {
           inherit stdenv version name;
@@ -177,8 +175,8 @@
 
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
         meta = with pkgs.lib; {
-          homepage = "https://github.com/a-kenji/flake-add";
-          description = "Manage your flake inputs comfortably.";
+          homepage = "https://github.com/a-kenji/fe";
+          description = "Edit your flake inputs with ease";
           license = [ licenses.mit ];
         };
       in
@@ -186,7 +184,7 @@
         devShells = {
           default = devShells.fullShell;
           fullShell = (pkgs.mkShell.override { inherit stdenv; }) {
-            buildInputs = shellInputs ++ fmtInputs ++ devInputs;
+            buildInputs = fmtInputs ++ devInputs;
             inherit name;
             ASSET_DIR = assetDir;
             RUST_LOG = "debug";

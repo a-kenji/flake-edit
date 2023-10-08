@@ -8,7 +8,7 @@
 
 ## `$ fe` - usage
 
-The cli interface `fe` has the following interface:
+`fe` has the following cli interface:
 
 `$ fe help`
 ```
@@ -78,5 +78,3 @@ Options:
   -h, --help
           Print help
 ```
-
-## Examples:
