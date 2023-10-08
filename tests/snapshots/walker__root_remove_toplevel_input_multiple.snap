@@ -1,3 +1,12 @@
+---
+source: tests/walker.rs
+expression: change.to_string()
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        id: crane
+---
 {
   description = "Manage your flake inputs comfortably.";
 
@@ -11,13 +20,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.flake-utils.follows = "flake-utils";
     };
-    crane = {
-      url = "github:ipetkov/crane";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.rust-overlay.follows = "rust-overlay";
-      inputs.flake-utils.follows = "flake-utils";
-    };
   };
 
   outputs = _: { };
 }
+

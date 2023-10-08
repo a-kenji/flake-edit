@@ -1,8 +1,16 @@
+---
+source: tests/walker.rs
+expression: change.to_string()
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        id: nixpkgs
+---
 {
   description = "Manage your flake inputs comfortably.";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     flake-utelinos.url = "github:numtide/flake-utils";
 
@@ -21,3 +29,4 @@
 
   outputs = _: { };
 }
+

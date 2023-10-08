@@ -1,7 +1,18 @@
+---
+source: tests/walker.rs
+expression: change.to_string()
+info:
+  flake_nix: ""
+  changes:
+    - Add:
+        id: vmsh
+        uri: "github:mic92/vmsh"
+---
 {
   description = "Manage your flake inputs comfortably.";
 
   inputs = {
+    vmsh.url = "github:mic92/vmsh";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     flake-utelinos.url = "github:numtide/flake-utils";
@@ -21,3 +32,4 @@
 
   outputs = _: { };
 }
+

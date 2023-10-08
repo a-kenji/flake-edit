@@ -41,7 +41,7 @@ pub struct State {
     changes: Vec<Change>,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Change {
     #[default]
     None,
