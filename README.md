@@ -61,6 +61,8 @@ Options:
           
   -h, --help
           Print help
+
+![fe add example](assets/tape/output/add_input.gif)
 ```
 
 ### `$ fe remove`
@@ -78,3 +80,4 @@ Options:
   -h, --help
           Print help
 ```
+![fe remove example](assets/tape/output/remove_input.gif)
