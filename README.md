@@ -43,7 +43,7 @@ Options:
           Print version
 ```
 
-### `$fe add`
+### `$ fe add`
 `$ fe add --help`
 ```
 Add a new flake reference
@@ -63,7 +63,7 @@ Options:
           Print help
 ```
 
-### `$fe remove`
+### `$ fe remove`
 `$ fe remove --help`
 ```
 Remove a specific flake reference, based on its id

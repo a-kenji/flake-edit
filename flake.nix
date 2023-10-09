@@ -64,7 +64,7 @@
         gitDate = "${builtins.substring 0 4 self.lastModifiedDate}-${
             builtins.substring 4 2 self.lastModifiedDate
           }-${builtins.substring 6 2 self.lastModifiedDate}";
-        gitRev = self.shortRev or "Not committed yet.";
+        gitRev = self.shortRev or self.dirtyShortRev;
         cargoLock = {
           lockFile = builtins.path {
             path = self + "/Cargo.lock";

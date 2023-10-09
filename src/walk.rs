@@ -148,6 +148,7 @@ impl<'a> Walker<'a> {
         None
     }
     fn walk_inputs(&mut self, node: SyntaxNode, ctx: &Option<Context>) -> Option<SyntaxNode> {
+        tracing::debug!("WalkInputs: \n{node}\n with ctx: {ctx:?}");
         for child in node.children_with_tokens() {
             tracing::debug!("Inputs Child Kind: {:?}", child.kind());
             tracing::debug!("Inputs Child: {child}");
@@ -389,9 +390,10 @@ impl<'a> Walker<'a> {
     ///  };
     /// ```
     fn walk_input(&mut self, node: &SyntaxNode, ctx: &Option<Context>) -> Option<SyntaxNode> {
-        tracing::debug!("\nInput: {node}\n");
+        tracing::debug!("\nInput: {node}\n with ctx: {ctx:?}");
         for (i, child) in node.children().enumerate() {
             tracing::debug!("Kind #:{i} {:?}", child.kind());
+            tracing::debug!("Kind #:{i} {}", child);
             if child.kind() == SyntaxKind::NODE_ATTRPATH {
                 for attr in child.children() {
                     tracing::debug!("Child of ATTRPATH #:{i} {}", child);
@@ -423,7 +425,8 @@ impl<'a> Walker<'a> {
                         );
                         if let Some(parent) = child.parent() {
                             if let Some(sibling) = parent.next_sibling() {
-                                tracing::debug!("This is an url:{} {}", attr, sibling);
+                                // TODO: Is this correct?
+                                tracing::debug!("This is an possible url:{} {}", attr, sibling);
                             }
                         }
                     }
@@ -431,21 +434,21 @@ impl<'a> Walker<'a> {
                         // Construct the follows attribute
                         // TODO: is the inputs check necessary?
                         // Maybe we can omit it for composability.
-                        println!(
+                        tracing::debug!(
                             "Prev Prev Sibling: {}",
                             attr.prev_sibling().unwrap().prev_sibling().unwrap()
                         );
                         // TODO:
                         // - check for possible removal / change
                         // - construct input
-                        println!("Prev Sibling: {}", attr.prev_sibling().unwrap());
+                        tracing::debug!("Prev Sibling: {}", attr.prev_sibling().unwrap());
                         let id = attr.prev_sibling().unwrap();
                         let follows = attr.parent().unwrap().next_sibling().unwrap();
-                        println!("The following attribute follows: {id}:{follows} is nested inside the attr: {ctx:?}");
+                        tracing::debug!("The following attribute follows: {id}:{follows} is nested inside the attr: {ctx:?}");
                         // TODO: Construct follows attribute if not yet ready.
                         // For now assume that the url is the first attribute.
                         // This assumption doesn't generally hold true.
-                        println!(
+                        tracing::debug!(
                             "This Parent Next Sibling: {}",
                             attr.parent().unwrap().next_sibling().unwrap()
                         );
@@ -453,7 +456,6 @@ impl<'a> Walker<'a> {
                         let mut input = Input::new(fake_id.to_string());
                         input.url = follows.to_string();
                         self.inputs.insert(fake_id.to_string(), input);
-                        // panic!("Attr {attr}, ctx: {ctx:?}");
                     }
                 }
             }
@@ -462,6 +464,7 @@ impl<'a> Walker<'a> {
                     tracing::debug!("Child of ATTRSET KIND #:{i} {:?}", child.kind());
                     tracing::debug!("Child of ATTRSET #:{i} {}", child);
                     for leaf in attr.children() {
+                        tracing::debug!("LEAF of ATTRSET #:{i} {}", leaf);
                         if leaf.to_string() == "url" {
                             let id = child.prev_sibling().unwrap();
                             let uri = leaf.next_sibling().unwrap();
@@ -483,8 +486,22 @@ impl<'a> Walker<'a> {
                                 }
                             }
                         }
-                        tracing::debug!("Child of ATTRSET KIND #:{i} {:?}", leaf.kind());
-                        tracing::debug!("Child of ATTRSET CHILD #:{i} {}", leaf);
+                        if leaf.to_string().starts_with("inputs") {
+                            let id = child.prev_sibling().unwrap();
+                            let context = Context::new(vec![id.to_string()]);
+                            tracing::debug!("Walking inputs with: {attr}, context: {context:?}");
+                            // panic!("Walking inputs with: {attr}, context: {context:?}");
+                            if let Some(replacement) =
+                                self.walk_inputs(child.clone(), &Some(context))
+                            {
+                                // if let Some(change) = self.walk_input(&attr, &Some(context)) {
+                                //     println!("Nested change: {change}");
+                                //     panic!("Matched nested");
+                                // }
+                            }
+                            tracing::debug!("Child of ATTRSET KIND #:{i} {:?}", leaf.kind());
+                            tracing::debug!("Child of ATTRSET CHILD #:{i} {}", leaf);
+                        }
                     }
                 }
             }
