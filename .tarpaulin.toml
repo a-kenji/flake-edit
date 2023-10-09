@@ -1,8 +1,4 @@
 [default-config]
 debug = false
 workspace = true
-exclude-files = [
-    "benches/*",
-    "assets/*",
-    "vendor/*",
-]
+exclude-files = ["benches/*", "assets/*", "vendor/*"]

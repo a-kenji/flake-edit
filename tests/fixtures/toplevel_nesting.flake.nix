@@ -16,5 +16,5 @@
     inputs.flake-utils.follows = "flake-utils";
   };
 
-  outputs = _: { };
+  outputs = _: {};
 }
