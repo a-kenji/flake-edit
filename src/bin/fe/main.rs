@@ -9,13 +9,13 @@ use crate::cli::CliArgs;
 use crate::cli::Command;
 use clap::Parser;
 use flake_edit::diff::Diff;
-use flake_edit::error;
 use flake_edit::walk::Walker;
 use nix_uri::{FlakeRef, NixUriResult};
 use rnix::tokenizer::Tokenizer;
 use ropey::Rope;
 
 mod cli;
+mod error;
 mod log;
 
 fn main() -> anyhow::Result<()> {
@@ -89,7 +89,7 @@ fn main() -> anyhow::Result<()> {
 
     // let mut walker = Walker::new(inputs).unwrap();
     let text = app.root.text.to_string();
-    let mut walker = Walker::new(&text).unwrap();
+    let mut walker = Walker::new(&text);
 
     let mut state = flake_edit::State::default();
 

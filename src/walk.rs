@@ -28,7 +28,7 @@ pub struct Walker<'a> {
     commit: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// A helper for the [`Walker`], in order to hold context while traversing the tree.
 struct Context {
     level: Vec<String>,
@@ -41,7 +41,7 @@ impl Context {
 }
 
 impl<'a> Walker<'a> {
-    pub fn new(stream: &'a str) -> Result<Self, ()> {
+    pub fn new(stream: &'a str) -> Self {
         let root = Root::parse(stream).syntax();
         let changes = Vec::new();
         // let changes = vec![
@@ -53,13 +53,13 @@ impl<'a> Walker<'a> {
         //         id: "nixpkgs".into(),
         //     },
         // ];
-        Ok(Self {
+        Self {
             stream,
             root,
             inputs: HashMap::new(),
             commit: true,
             changes,
-        })
+        }
     }
     /// Traverse the toplevel `flake.nix` file.
     /// It should consist of three attribute keys:
@@ -155,7 +155,18 @@ impl<'a> Walker<'a> {
             tracing::debug!("Inputs Child Len: {}", child.to_string().len());
             match child.kind() {
                 SyntaxKind::NODE_ATTRPATH_VALUE => {
-                    if let Some(replacement) = self.walk_input(child.as_node().unwrap(), ctx) {
+                    // TODO: Append to context, instead of creating a new one.
+                    let ctx = if ctx.is_none() {
+                        let maybe_input_id = child.as_node().unwrap().children().find_map(|c| {
+                            c.children()
+                                .find(|child| child.to_string() == "inputs")
+                                .and_then(|input_child| input_child.prev_sibling())
+                        });
+                        maybe_input_id.map(|id| Context::new(vec![id.to_string()]))
+                    } else {
+                        ctx.clone()
+                    };
+                    if let Some(replacement) = self.walk_input(child.as_node().unwrap(), &ctx) {
                         tracing::debug!("Child Id: {}", child.index());
                         tracing::debug!("Input replacement node: {}", node);
                         let mut green = node
@@ -426,7 +437,11 @@ impl<'a> Walker<'a> {
                         if let Some(parent) = child.parent() {
                             if let Some(sibling) = parent.next_sibling() {
                                 // TODO: Is this correct?
-                                tracing::debug!("This is an possible url:{} {}", attr, sibling);
+                                tracing::debug!(
+                                    "This is a possible follows attribute:{} {}",
+                                    attr,
+                                    sibling
+                                );
                             }
                         }
                     }
@@ -496,7 +511,7 @@ impl<'a> Walker<'a> {
                             {
                                 // if let Some(change) = self.walk_input(&attr, &Some(context)) {
                                 //     println!("Nested change: {change}");
-                                //     panic!("Matched nested");
+                                panic!("Matched nested");
                                 // }
                             }
                             tracing::debug!("Child of ATTRSET KIND #:{i} {:?}", leaf.kind());

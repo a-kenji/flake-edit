@@ -1,6 +1,5 @@
 ---
 source: tests/walker.rs
-assertion_line: 144
 expression: walker.inputs
 info:
   flake_nix: ""
@@ -35,6 +34,11 @@ crane:
   id: crane
   flake: true
   url: "\"github:ipetkov/crane\""
+  follows: []
+flake-utelinos:
+  id: flake-utelinos
+  flake: true
+  url: "\"github:numtide/flake-utils\""
   follows: []
 nixpkgs:
   id: nixpkgs
