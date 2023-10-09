@@ -62,8 +62,8 @@ Options:
   -h, --help
           Print help
 
-![fe add example](assets/tape/output/add_input.gif)
 ```
+![fe add example](assets/tape/output/add_input.gif)
 
 ### `$ fe remove`
 `$ fe remove --help`
