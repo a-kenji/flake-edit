@@ -67,5 +67,5 @@ Type "set -x fish_function_path ''" Enter
 Type "clear" Enter
 Show
 
-Type "fe list --format json | jq .rust-overlay" Sleep 1000ms Enter
+Type "fe list --format json | jq .crane" Sleep 1000ms Enter
 Sleep 5s

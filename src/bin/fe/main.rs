@@ -11,6 +11,7 @@ use clap::Parser;
 use flake_edit::diff::Diff;
 use flake_edit::input::Follows;
 use flake_edit::walk::Walker;
+use nix_uri::urls::UrlWrapper;
 use nix_uri::{FlakeRef, NixUriResult};
 use rnix::tokenizer::Tokenizer;
 use ropey::Rope;
@@ -51,7 +52,7 @@ fn main() -> anyhow::Result<()> {
                 };
                 walker.changes.push(change);
             } else if let Some(uri) = id {
-                let flake_ref: NixUriResult<FlakeRef> = uri.parse();
+                let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(uri);
                 if let Ok(flake_ref) = flake_ref {
                     if let Some(id) = flake_ref.id() {
                         let change = flake_edit::Change::Add {
