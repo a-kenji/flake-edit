@@ -5,6 +5,9 @@ pub type NixUriResult<T> = Result<T, NixUriError>;
 #[derive(Debug, Error, PartialEq)]
 #[non_exhaustive]
 pub enum NixUriError {
+    /// Generic nix uri error
+    #[error("Error: {0}")]
+    Error(String),
     /// Generic parsing fail
     #[error("Error parsing: {0}")]
     ParseError(String),

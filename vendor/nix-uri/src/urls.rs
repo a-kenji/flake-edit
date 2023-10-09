@@ -1,7 +1,7 @@
 // use url::{ParseError, Url};
 use url::{ParseError, Url};
 
-use crate::{parser::is_tarball, FlakeRef, FlakeRefType, NixUriResult};
+use crate::{parser::is_tarball, FlakeRef, FlakeRefType, NixUriError, NixUriResult};
 
 pub struct UrlWrapper {
     url: Url,
@@ -58,12 +58,22 @@ impl UrlWrapper {
                     .url
                     .path_segments()
                     .map(|c| c.collect::<Vec<_>>())
-                    .unwrap();
+                    .ok_or(NixUriError::Error(format!(
+                        "Error parsing from host: {}",
+                        input
+                    )))?;
                 let ref_or_rev = if segments.len() > 2 {
                     Some(segments[2..].join("/"))
                 } else {
                     None
                 };
+
+                if segments.len() < 2 {
+                    return Err(NixUriError::Error(format!(
+                        "Error parsing from host: {}",
+                        input
+                    )));
+                }
 
                 Ok(FlakeRefType::GitHub {
                     owner: segments[0].to_string(),
