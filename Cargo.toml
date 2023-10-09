@@ -15,7 +15,6 @@ include = ["src/**/*", "LICENSE", "README.md", "build.rs"]
 
 [[bin]]
 name = "fe"
-# path = "src/bin/main.rs"
 
 [workspace.package]
 version = "0.1.0"
@@ -70,7 +69,9 @@ tracing-subscriber = { version = "0.3.17", features = [
 [build-dependencies]
 clap = { version = "4.4.4", features = ["derive"], optional = true }
 clap_complete = { version = "4.4.3", features = [], optional = true }
+clap_complete_nushell = "4.4.1"
 clap_mangen = { version = "0.2.14", features = [], optional = true }
+roff = "0.2.1"
 
 [[bench]]
 name = "benches"

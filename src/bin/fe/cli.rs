@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[command(author, version = CliArgs::unstable_version(), about, long_about = None)]
+#[command(name = "fe")]
 #[command(next_line_help = true)]
 pub(crate) struct CliArgs {
     // The `flake.nix` file that will be used
@@ -21,6 +22,7 @@ pub(crate) struct CliArgs {
     subcommand: Command,
 }
 
+#[allow(unused)]
 impl CliArgs {
     /// Surface current version together with the current git revision and date, if available
     fn unstable_version() -> &'static str {
@@ -63,10 +65,10 @@ pub(crate) enum Command {
     /// Pin a specific flake reference based on its id.
     #[command(alias = "p", arg_required_else_help = true)]
     Pin { id: Option<String> },
-    /// Pin a specific flake reference based on its id.
+    /// Change a specific flake reference based on its id.
     #[command(alias = "c", arg_required_else_help = true)]
     Change { id: Option<String> },
-    /// Remove a specific flake reference, based on its id.
+    /// Remove a specific flake reference based on its id.
     #[clap(alias = "rm")]
     Remove { id: Option<String> },
     /// List flake inputs
