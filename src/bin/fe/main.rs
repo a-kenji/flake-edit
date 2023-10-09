@@ -23,65 +23,8 @@ fn main() -> anyhow::Result<()> {
     log::init()?;
     tracing::debug!("Cli args: {args:?}");
 
-    // let inputs = r#"{ inputs = { nixpkgs.url = "github:nixos/nixpkgs";};}"#;
-    // let inputs = r#"{inputs = { nixpkgs.url = "github:nixos/nixpkgs"; crane.url = "github:nix-community/crane"; };}"#;
-    // let inputs = r#"{ inputs.nixpkgs.url = github:nixos/nixpkgs; inputs.crane.url = "github:ivpetkov/crane";}"#;
-
-    // nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    let inputs = r#"{
-      description = "Manage your flake inputs comfortably.";
-
-      inputs = {
-        flake-utils.url = "github:numtide/flake-utils";
-        flake-utils.flake = false;
-        rust-overlay = {
-          url = "github:oxalica/rust-overlay";
-          inputs.flake-utils.follows = "flake-utils";
-        };
-      };
-      }
-    "#;
-
-    // let inputs = r#"{
-    //   description = "Manage your flake inputs comfortably.";
-    //
-    //   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    //   inputs.flake-utils.url = "github:numtide/flake-utils";
-    //   inputs.flake-utils.flake = false;
-    //   inputs.rust-overlay = {
-    //       url = "github:oxalica/rust-overlay";
-    //       inputs.flake-utils.follows = "flake-utils";
-    //     };
-    //   };
-    //   }
-    // "#;
-
-    // let inputs = r#"{
-    //   description = "Manage your flake inputs comfortably.";
-    //
-    //   inputs = {
-    //     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    //     flake-utils.url = "github:numtide/flake-utils";
-    //     flake-utils.flake = false;
-    //     rust-overlay = {
-    //       url = "github:oxalica/rust-overlay";
-    //       #inputs.nixpkgs.follows = "nixpkgs";
-    //       inputs.flake-utils.follows = "flake-utils";
-    //     };
-    //     #crane = {
-    //       #url = "github:ipetkov/crane";
-    //       # inputs.nixpkgs.follows = "nixpkgs";
-    //       # inputs.rust-overlay.follows = "rust-overlay";
-    //       # inputs.flake-utils.follows = "flake-utils";
-    //     #};
-    //     #vmsh.url = "github:mic92/vmsh";
-    //   };
-    //   }
-    // "#;
-
     let app = FlakeAdd::init()?;
 
-    // let (node, errors) = rnix::parser::parse(Tokenizer::new(inputs));
     let (node, errors) = rnix::parser::parse(Tokenizer::new(&app.root.text.to_string()));
     if !errors.is_empty() {
         println!("There are errors in the root document.");
