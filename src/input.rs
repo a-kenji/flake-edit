@@ -57,4 +57,11 @@ impl Input {
             ..Self::default()
         }
     }
+
+    pub fn id(&self) -> &str {
+        self.id.as_ref()
+    }
+    pub fn follows(&self) -> &Vec<Follows> {
+        self.follows.as_ref()
+    }
 }

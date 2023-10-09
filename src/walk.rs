@@ -75,6 +75,22 @@ impl<'a> Walker<'a> {
             self.walk_toplevel(cst.clone(), None)
         }
     }
+    /// Insert a new Input node at the correct positon
+    /// or update it with new information.
+    fn insert_with_ctx(&mut self, id: String, input: Input, ctx: &Option<Context>) {
+        if let Some(ctx) = ctx {
+            // TODO: add more nesting
+            if let Some(follows) = ctx.level.first() {
+                if let Some(node) = self.inputs.get_mut(follows) {
+                    // TODO: only indirect follows is handled
+                    node.follows
+                        .push(crate::input::Follows::Indirect(id, input.url))
+                }
+            }
+        } else {
+            self.inputs.insert(id, input);
+        }
+    }
     /// Traverse the toplevel `flake.nix` file.
     /// It should consist of three attribute keys:
     /// - description
@@ -243,9 +259,10 @@ impl<'a> Walker<'a> {
                                                         let mut input =
                                                             Input::new(next_sibling.to_string());
                                                         input.url = url.to_string();
-                                                        self.inputs.insert(
+                                                        self.insert_with_ctx(
                                                             next_sibling.to_string(),
                                                             input,
+                                                            ctx,
                                                         );
                                                         if let Some(change) = self.changes.first() {
                                                             if change.is_remove() && self.commit {
@@ -323,9 +340,10 @@ impl<'a> Walker<'a> {
                                                         let mut input =
                                                             Input::new(next_sibling.to_string());
                                                         input.url = url.to_string();
-                                                        self.inputs.insert(
+                                                        self.insert_with_ctx(
                                                             next_sibling.to_string(),
                                                             input,
+                                                            ctx,
                                                         );
                                                     }
                                                     if let Some(change) = self.changes.first() {
@@ -426,7 +444,8 @@ impl<'a> Walker<'a> {
                                 tracing::debug!("This is an url from {} - {}", prev_id, sibling);
                                 let mut input = Input::new(prev_id.to_string());
                                 input.url = sibling.to_string();
-                                self.inputs.insert(prev_id.to_string(), input);
+                                // self.inputs.insert(prev_id.to_string(), input);
+                                self.insert_with_ctx(prev_id.to_string(), input, ctx);
                             }
                         }
                         tracing::debug!("This is the parent: {}", child.parent().unwrap());
@@ -470,7 +489,8 @@ impl<'a> Walker<'a> {
                         let fake_id = format!("{ctx:?}{id}");
                         let mut input = Input::new(fake_id.to_string());
                         input.url = follows.to_string();
-                        self.inputs.insert(fake_id.to_string(), input);
+                        // self.inputs.insert(fake_id.to_string(), input);
+                        self.insert_with_ctx(id.to_string(), input, ctx);
                     }
                 }
             }

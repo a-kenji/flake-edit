@@ -72,7 +72,7 @@ pub(crate) enum Command {
     /// List flake inputs
     #[clap(alias = "l")]
     List {
-        #[arg(long)]
+        #[arg(long, default_value = "simple")]
         format: ListFormat,
     },
     #[clap(hide = true)]
@@ -89,10 +89,11 @@ pub(crate) enum Parameter {}
 
 #[derive(Debug, Clone, Default)]
 pub(crate) enum ListFormat {
-    #[default]
     None,
-    Detailed,
+    #[default]
     Simple,
+    Toplevel,
+    Detailed,
     Raw,
     Json,
 }
@@ -103,6 +104,7 @@ impl From<String> for ListFormat {
         match value.to_lowercase().as_str() {
             "detailed" => Detailed,
             "simple" => Simple,
+            "toplevel" => Toplevel,
             "raw" => Raw,
             "json" => Json,
             _ => None,

@@ -1,7 +1,7 @@
 pub mod diff;
 pub mod error;
 mod git;
-mod input;
+pub mod input;
 pub mod walk;
 
 use std::collections::HashMap;

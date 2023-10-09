@@ -9,6 +9,7 @@ use crate::cli::CliArgs;
 use crate::cli::Command;
 use clap::Parser;
 use flake_edit::diff::Diff;
+use flake_edit::input::Follows;
 use flake_edit::walk::Walker;
 use nix_uri::{FlakeRef, NixUriResult};
 use rnix::tokenizer::Tokenizer;
@@ -99,30 +100,48 @@ fn main() -> anyhow::Result<()> {
 
     if let Command::List { format } = args.subcommand() {
         match format {
-            cli::ListFormat::None => {}
+            cli::ListFormat::Simple => {
+                let inputs = walker.inputs;
+                let mut buf = String::new();
+                for input in inputs.values() {
+                    if !buf.is_empty() {
+                        buf.push('\n');
+                    }
+                    buf.push_str(input.id());
+                    for follows in input.follows() {
+                        if let Follows::Indirect(id, _) = follows {
+                            let id = format!("{}.{}", input.id(), id);
+                            if !buf.is_empty() {
+                                buf.push('\n');
+                            }
+                            buf.push_str(&id);
+                        }
+                    }
+                }
+                println!("{buf}");
+            }
             cli::ListFormat::Detailed => todo!(),
-            cli::ListFormat::Simple => todo!(),
             cli::ListFormat::Raw => {
                 println!("{:#?}", walker.inputs);
-                return Ok(());
             }
             cli::ListFormat::Json => {
                 let json = serde_json::to_string(&walker.inputs).unwrap();
                 println!("{json}");
             }
-        }
-
-        let inputs = walker.inputs;
-        let mut buf = String::new();
-        for input in inputs.keys() {
-            if !buf.is_empty() {
-                buf.push('\n');
+            cli::ListFormat::None => todo!(),
+            cli::ListFormat::Toplevel => {
+                let inputs = walker.inputs;
+                let mut buf = String::new();
+                for input in inputs.keys() {
+                    if !buf.is_empty() {
+                        buf.push('\n');
+                    }
+                    buf.push_str(&input.to_string());
+                }
+                println!("{buf}");
             }
-            buf.push_str(&input.to_string());
         }
-        println!("{buf}");
     }
-
     Ok(())
 }
 
