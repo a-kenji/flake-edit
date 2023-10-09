@@ -66,7 +66,11 @@ Options:
   -h, --help
           Print help
 ```
+For some types, the id will be automatically inferred.
 ![fe add example](assets/tape/output/add_input.gif)
+
+For some inputs, the uri can be put in directly and the id and type will be inferred.
+![fe add inferred example](assets/tape/output/add_input_inferred.gif)
 
 ### `$ fe remove`
 `$ fe help remove`
@@ -98,4 +102,7 @@ Options:
   -h, --help
           Print help
 ```
+List the outputs, that are specified inside the inputs attribute.
 ![fe list example](assets/tape/output/list_inputs.gif)
+List the outputs, that are specified inside the inputs attribute, in json format.
+![fe list example](assets/tape/output/list_inputs_json.gif)
