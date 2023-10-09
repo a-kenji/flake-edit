@@ -15,7 +15,7 @@
 Usage: fe [OPTIONS] [FLAKE_REF] <COMMAND>
 
 Commands:
-  add
+  [add](#fe-add)
           Add a new flake reference
   pin
           Pin a specific flake reference based on its id
