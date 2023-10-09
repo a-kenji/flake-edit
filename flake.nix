@@ -88,70 +88,69 @@
         devInputs = [
           rustToolchainDevTOML
           rustFmtToolchainTOML
-          # pkgs.just
-          # pkgs.lychee
+          pkgs.cargo-insta
+          pkgs.just
           pkgs.vhs
           pkgs.cargo-watch
           pkgs.cargo-tarpaulin
-          #
-          # pkgs.cargo-deny
+
           # pkgs.cargo-bloat
           # pkgs.cargo-machete
-          # pkgs.cargo-outdated
           # pkgs.cargo-flamegraph
-          # pkgs.cargo-diet
-          # pkgs.cargo-modules
-          # pkgs.cargo-nextest
           # pkgs.cargo-dist
           # pkgs.cargo-public-api
           # pkgs.cargo-unused-features
-          #
-          # # snapshot testing
-          pkgs.cargo-insta
-          #
-          # (pkgs.symlinkJoin {
-          #   name = "cargo-udeps-wrapped";
-          #   paths = [pkgs.cargo-udeps];
-          #   nativeBuildInputs = [pkgs.makeWrapper];
-          #   postBuild = ''
-          #     wrapProgram $out/bin/cargo-udeps \
-          #       --prefix PATH : ${pkgs.lib.makeBinPath [
-          #       (rustPkgs.rust-bin.selectLatestNightlyWith
-          #         (toolchain: toolchain.default))
-          #     ]}
-          #   '';
-          # })
-          # (pkgs.symlinkJoin {
-          #   name = "cargo-careful-wrapped";
-          #   paths = [pkgs.cargo-careful];
-          #   nativeBuildInputs = [pkgs.makeWrapper];
-          #   postBuild = ''
-          #     wrapProgram $out/bin/cargo-careful \
-          #       --prefix PATH : ${pkgs.lib.makeBinPath [
-          #       (rustPkgs.rust-bin.selectLatestNightlyWith
-          #         (
-          #           toolchain:
-          #             toolchain
-          #             .default
-          #             .override {
-          #               extensions = ["rust-src"];
-          #             }
-          #         ))
-          #     ]}
-          #   '';
-          # })
+
           #alternative linker
           pkgs.clang
         ];
+        lintInputs =
+          [
+            pkgs.cargo-deny
+            pkgs.cargo-outdated
+            pkgs.cargo-diet
+            pkgs.lychee
+            pkgs.typos
+            (pkgs.symlinkJoin {
+              name = "cargo-udeps-wrapped";
+              paths = [pkgs.cargo-udeps];
+              nativeBuildInputs = [pkgs.makeWrapper];
+              postBuild = ''
+                wrapProgram $out/bin/cargo-udeps \
+                  --prefix PATH : ${
+                  pkgs.lib.makeBinPath [
+                    (rustPkgs.rust-bin.selectLatestNightlyWith (toolchain: toolchain.default))
+                  ]
+                }
+              '';
+            })
+            (pkgs.symlinkJoin {
+              name = "cargo-careful-wrapped";
+              paths = [pkgs.cargo-careful];
+              nativeBuildInputs = [pkgs.makeWrapper];
+              postBuild = ''
+                wrapProgram $out/bin/cargo-careful \
+                  --prefix PATH : ${
+                  pkgs.lib.makeBinPath [
+                    (rustPkgs.rust-bin.selectLatestNightlyWith (
+                      toolchain: toolchain.default.override {extensions = ["rust-src"];}
+                    ))
+                  ]
+                }
+              '';
+            })
+          ]
+          ++ devInputs
+          ++ editorConfigInputs
+          ++ actionlintInputs
+          ++ fmtInputs;
         fmtInputs = [
           pkgs.alejandra
           pkgs.treefmt
           pkgs.taplo
           pkgs.typos
         ];
-        editorConfigInputs = [
-          # pkgs.editorconfig-checker
-        ];
+        editorConfigInputs = [pkgs.editorconfig-checker];
         actionlintInputs = [
           pkgs.actionlint
           pkgs.shellcheck
@@ -200,6 +199,7 @@
           };
           editorConfigShell = pkgs.mkShell {buildInputs = editorConfigInputs;};
           actionlintShell = pkgs.mkShell {buildInputs = actionlintInputs;};
+          lintShell = pkgs.mkShell {buildInputs = lintInputs;};
           fmtShell = pkgs.mkShell {buildInputs = fmtInputs;};
         };
         packages = {

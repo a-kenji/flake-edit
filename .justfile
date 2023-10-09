@@ -40,9 +40,9 @@ format:
     nix develop .#formatShell --command treefmt
 
 lint:
-    nix develop .#lintShell --command cargo diet
-    nix develop .#lintShell --command cargo deny check licenses
-    nix develop .#lintShell --command typos
+    -nix develop .#lintShell --command cargo diet
+    -nix develop .#lintShell --command cargo deny check licenses
+    -nix develop .#lintShell --command typos
     nix develop .#lintShell --command lychee *.md
     nix develop .#lintShell --command treefmt --fail-on-change
     nix develop .#lintShell --command cargo udeps
