@@ -84,7 +84,10 @@ impl<'a> Walker<'a> {
                 if let Some(node) = self.inputs.get_mut(follows) {
                     // TODO: only indirect follows is handled
                     node.follows
-                        .push(crate::input::Follows::Indirect(id, input.url))
+                        .push(crate::input::Follows::Indirect(id, input.url));
+                    // TODO: this should not be necessary
+                    node.follows.sort();
+                    node.follows.dedup();
                 }
             }
         } else {
@@ -506,7 +509,8 @@ impl<'a> Walker<'a> {
                             tracing::debug!("This is an url from {} - {}", id, uri,);
                             let mut input = Input::new(id.to_string());
                             input.url = uri.to_string();
-                            self.inputs.insert(id.to_string(), input);
+                            // self.inputs.insert(id.to_string(), input);
+                            self.insert_with_ctx(id.to_string(), input, ctx);
 
                             // Remove matched node.
                             if let Some(change) = self.changes.first() {

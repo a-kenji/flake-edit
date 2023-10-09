@@ -5,36 +5,20 @@ info:
   flake_nix: ""
   changes: []
 ---
-"Some(Context { level: [\"crane\"] })flake-utils":
-  id: "Some(Context { level: [\"crane\"] })flake-utils"
-  flake: true
-  url: "\"flake-utils\""
-  follows: []
-"Some(Context { level: [\"crane\"] })nixpkgs":
-  id: "Some(Context { level: [\"crane\"] })nixpkgs"
-  flake: true
-  url: "\"nixpkgs\""
-  follows: []
-"Some(Context { level: [\"crane\"] })rust-overlay":
-  id: "Some(Context { level: [\"crane\"] })rust-overlay"
-  flake: true
-  url: "\"rust-overlay\""
-  follows: []
-"Some(Context { level: [\"rust-overlay\"] })flake-utils":
-  id: "Some(Context { level: [\"rust-overlay\"] })flake-utils"
-  flake: true
-  url: "\"flake-utils\""
-  follows: []
-"Some(Context { level: [\"rust-overlay\"] })nixpkgs":
-  id: "Some(Context { level: [\"rust-overlay\"] })nixpkgs"
-  flake: true
-  url: "\"nixpkgs\""
-  follows: []
 crane:
   id: crane
   flake: true
   url: "\"github:ipetkov/crane\""
-  follows: []
+  follows:
+    - Indirect:
+        - flake-utils
+        - "\"flake-utils\""
+    - Indirect:
+        - nixpkgs
+        - "\"nixpkgs\""
+    - Indirect:
+        - rust-overlay
+        - "\"rust-overlay\""
 flake-utelinos:
   id: flake-utelinos
   flake: true
@@ -49,5 +33,11 @@ rust-overlay:
   id: rust-overlay
   flake: true
   url: "\"github:oxalica/rust-overlay\""
-  follows: []
+  follows:
+    - Indirect:
+        - flake-utils
+        - "\"flake-utils\""
+    - Indirect:
+        - nixpkgs
+        - "\"nixpkgs\""
 

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize, Serialize, PartialOrd, Ord)]
 pub struct Input {
     pub(crate) id: String,
     pub(crate) flake: bool,
@@ -8,7 +8,7 @@ pub struct Input {
     pub(crate) follows: Vec<Follows>,
 }
 
-#[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize, Serialize, PartialOrd, Ord)]
 pub enum Follows {
     // From , To
     Indirect(String, String),
