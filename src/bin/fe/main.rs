@@ -14,7 +14,6 @@ use nix_uri::{FlakeRef, NixUriResult};
 use rnix::tokenizer::Tokenizer;
 use ropey::Rope;
 
-#[allow(clippy::dead_code)]
 mod cli;
 mod error;
 mod log;
@@ -42,6 +41,7 @@ fn main() -> anyhow::Result<()> {
             uri,
             ref_or_rev: _,
             id,
+            force: _,
         } => {
             if id.is_some() && uri.is_some() {
                 let change = flake_edit::Change::Add {
@@ -97,16 +97,19 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    if let Command::List { json, raw } = args.subcommand() {
-        if *json {
-            let json = serde_json::to_string(&walker.inputs).unwrap();
-            println!("{json}");
-            return Ok(());
-        }
-
-        if *raw {
-            println!("{:#?}", walker.inputs);
-            return Ok(());
+    if let Command::List { format } = args.subcommand() {
+        match format {
+            cli::ListFormat::None => {}
+            cli::ListFormat::Detailed => todo!(),
+            cli::ListFormat::Simple => todo!(),
+            cli::ListFormat::Raw => {
+                println!("{:#?}", walker.inputs);
+                return Ok(());
+            }
+            cli::ListFormat::Json => {
+                let json = serde_json::to_string(&walker.inputs).unwrap();
+                println!("{json}");
+            }
         }
 
         let inputs = walker.inputs;

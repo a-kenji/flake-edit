@@ -56,6 +56,9 @@ pub(crate) enum Command {
         uri: Option<String>,
         #[arg(long)]
         ref_or_rev: Option<String>,
+        /// Allow operations on uncommitted files.
+        #[arg(long)]
+        force: Option<String>,
     },
     /// Pin a specific flake reference based on its id.
     #[command(alias = "p", arg_required_else_help = true)]
@@ -70,9 +73,7 @@ pub(crate) enum Command {
     #[clap(alias = "l")]
     List {
         #[arg(long)]
-        json: bool,
-        #[arg(long)]
-        raw: bool,
+        format: ListFormat,
     },
     #[clap(hide = true)]
     #[command(name = "completion")]
@@ -85,3 +86,26 @@ pub(crate) enum Command {
 
 #[derive(Debug, Clone)]
 pub(crate) enum Parameter {}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) enum ListFormat {
+    #[default]
+    None,
+    Detailed,
+    Simple,
+    Raw,
+    Json,
+}
+
+impl From<String> for ListFormat {
+    fn from(value: String) -> Self {
+        use ListFormat::*;
+        match value.to_lowercase().as_str() {
+            "detailed" => Detailed,
+            "simple" => Simple,
+            "raw" => Raw,
+            "json" => Json,
+            _ => None,
+        }
+    }
+}
