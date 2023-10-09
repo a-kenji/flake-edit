@@ -65,6 +65,8 @@ fn main() -> anyhow::Result<()> {
                             uri: Some(uri),
                         };
                         walker.changes.push(change);
+                    } else {
+                        println!("Please specify an [ID] for this flake reference.")
                     }
                 } else {
                     println!("Please specify an [ID] for this flake reference.")
