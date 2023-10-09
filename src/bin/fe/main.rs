@@ -54,10 +54,15 @@ fn main() -> anyhow::Result<()> {
             } else if let Some(uri) = id {
                 let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(uri);
                 if let Ok(flake_ref) = flake_ref {
+                    let uri = if flake_ref.to_string().is_empty() {
+                        uri.clone()
+                    } else {
+                        flake_ref.to_string()
+                    };
                     if let Some(id) = flake_ref.id() {
                         let change = flake_edit::Change::Add {
                             id: Some(id),
-                            uri: Some(uri.clone()),
+                            uri: Some(uri),
                         };
                         walker.changes.push(change);
                     }
