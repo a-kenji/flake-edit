@@ -14,6 +14,7 @@ use nix_uri::{FlakeRef, NixUriResult};
 use rnix::tokenizer::Tokenizer;
 use ropey::Rope;
 
+#[allow(clippy::dead_code)]
 mod cli;
 mod error;
 mod log;

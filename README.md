@@ -44,7 +44,7 @@ Options:
 ```
 
 ### `$ fe add`
-`$ fe add --help`
+`$ fe help add`
 ```
 Add a new flake reference
 
@@ -61,12 +61,11 @@ Options:
           
   -h, --help
           Print help
-
 ```
 ![fe add example](assets/tape/output/add_input.gif)
 
 ### `$ fe remove`
-`$ fe remove --help`
+`$ fe help remove`
 ```
 Remove a specific flake reference, based on its id
 

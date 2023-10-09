@@ -4,6 +4,9 @@ use clap::{Parser, Subcommand};
 #[command(author, version = CliArgs::unstable_version(), about, long_about = None)]
 #[command(next_line_help = true)]
 pub(crate) struct CliArgs {
+    // The `flake.nix` file that will be used
+    #[arg(long)]
+    flake: Option<String>,
     // The flake ref, or id that should be passed through to the nix command
     // By default will choose the local flake.
     flake_ref: Option<String>,
@@ -13,9 +16,7 @@ pub(crate) struct CliArgs {
     /// Pin to a specific ref_or_rev
     #[arg(long)]
     ref_or_rev: Option<String>,
-    // /// Set a flake parameter for a flake_ref
-    // #[arg(long)]
-    // param: Option<Parameter>,
+
     #[command(subcommand)]
     subcommand: Command,
 }
@@ -38,7 +39,7 @@ impl CliArgs {
         &self.subcommand
     }
     pub(crate) fn list(&self) -> bool {
-        return matches!(self.subcommand, Command::List { .. });
+        matches!(self.subcommand, Command::List { .. })
     }
 }
 
