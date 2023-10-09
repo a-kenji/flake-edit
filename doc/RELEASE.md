@@ -1,6 +1,6 @@
 # Releases
 
-Releases will attempt to track upstream `ratatui` releases.
+Releases will attempt to track upstream `ratatouille` releases.
 
 ## Creating a Release
 

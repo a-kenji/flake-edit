@@ -11,7 +11,6 @@ include!("src/bin/fe/cli.rs");
 fn main() {
     println!("cargo:rerun-if-env-changed=ASSET_DIR");
 
-    // const NAME: &str = "flake-add";
     const NAME: &str = "fe";
 
     if let Some(dir) = env::var_os("ASSET_DIR") {
@@ -37,7 +36,6 @@ fn gen_man(name: &str, dir: PathBuf) {
 
     let path = dir.join(format!("{name}.1"));
     let mut buf: Vec<u8> = Vec::new();
-    let mut roff = Roff::new();
     let man = Man::new(CliArgs::command());
 
     man.render_title(&mut buf)
@@ -46,12 +44,21 @@ fn gen_man(name: &str, dir: PathBuf) {
         .expect("Not able to render name section.");
     man.render_synopsis_section(&mut buf)
         .expect("Not able to render synopsis section.");
-    man.render_description_section(&mut buf)
-        .expect("Not able to render description section.");
+    let mut roff = Roff::new();
+    roff.control("SH", ["DESCRIPTION"]);
+    roff.text(["Edit your flake inputs with ease.".into()]);
+    roff.to_writer(&mut buf)
+        .expect("Not able to write description.");
+    // man.render_description_section(&mut buf)
+    //     .expect("Not able to render description section.");
     man.render_options_section(&mut buf)
         .expect("Not able to render options section.");
     man.render_subcommands_section(&mut buf)
         .expect("Not able to render subcommands section.");
+
+    // Examples
+    roff.control("SH", ["EXAMPLES"]);
+    roff.to_writer(&mut buf).expect("Not able to write roff.");
 
     // Footer
     man.render_version_section(&mut buf)

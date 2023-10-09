@@ -444,7 +444,7 @@ impl FlakeRefType {
                 "path" => {
                     // TODO: check if path is an absolute path, if not error
                     let path = Path::new(input);
-                    // TODO: make this check configurable for cli useage
+                    // TODO: make this check configurable for cli usage
                     if !path.is_absolute() || input.contains(']') || input.contains('[') {
                         return Err(NixUriError::NotAbsolute(input.into()));
                     }
@@ -484,7 +484,7 @@ impl FlakeRefType {
             if input.starts_with('/') || input == "." {
                 let flake_ref_type = FlakeRefType::Path { path: input.into() };
                 let path = Path::new(input);
-                // TODO: make this check configurable for cli useage
+                // TODO: make this check configurable for cli usage
                 if !path.is_absolute()
                     || input.contains(']')
                     || input.contains('[')

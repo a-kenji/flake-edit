@@ -393,10 +393,10 @@ impl<'a> Walker<'a> {
                         }
                     }
                     if let Some(parent) = child.parent() {
-                        tracing::debug!("Childs Parent: {}", parent);
-                        tracing::debug!("Childs Parent: {}", parent);
+                        tracing::debug!("Children Parent: {}", parent);
+                        tracing::debug!("Children Parent: {}", parent);
                         if let Some(sibling) = parent.next_sibling() {
-                            tracing::debug!("Childs Sibling: {}", sibling);
+                            tracing::debug!("Children Sibling: {}", sibling);
                         }
                     }
                 }

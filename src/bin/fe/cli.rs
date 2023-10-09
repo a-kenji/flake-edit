@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand};
 #[command(author, version = CliArgs::unstable_version(), about, long_about = None)]
 #[command(name = "fe")]
 #[command(next_line_help = true)]
+/// Edit your flake inputs with ease
 pub(crate) struct CliArgs {
     // The `flake.nix` file that will be used
     #[arg(long)]

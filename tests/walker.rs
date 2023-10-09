@@ -189,7 +189,7 @@ fn root_toplevel_nesting_list() {
 // }
 
 #[test]
-fn comletely_flat_toplevel_list() {
+fn completely_flat_toplevel_list() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel");
     let mut walker = Walker::new(&flake);
     walker.walk();
