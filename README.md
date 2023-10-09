@@ -106,3 +106,7 @@ List the outputs, that are specified inside the inputs attribute.
 ![fe list example](assets/tape/output/list_inputs.gif)
 List the outputs, that are specified inside the inputs attribute, in json format.
 ![fe list example](assets/tape/output/list_inputs_json.gif)
+
+
+## License
+MIT
