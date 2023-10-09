@@ -33,6 +33,8 @@ Arguments:
           
 
 Options:
+      --flake <FLAKE>
+          
       --health
           Checks for potential errors in the setup
       --ref-or-rev <REF_OR_REV>
@@ -59,6 +61,8 @@ Arguments:
 Options:
       --ref-or-rev <REF_OR_REV>
           
+      --force <FORCE>
+          Allow operations on uncommitted files
   -h, --help
           Print help
 ```
@@ -80,3 +84,18 @@ Options:
           Print help
 ```
 ![fe remove example](assets/tape/output/remove_input.gif)
+
+### `$ fe list`
+`$ fe help list`
+```
+List flake inputs
+
+Usage: fe list [OPTIONS]
+
+Options:
+      --format <FORMAT>
+          [default: simple]
+  -h, --help
+          Print help
+```
+![fe list example](assets/tape/output/list_inputs.gif)

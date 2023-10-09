@@ -120,7 +120,27 @@ fn main() -> anyhow::Result<()> {
                 }
                 println!("{buf}");
             }
-            cli::ListFormat::Detailed => todo!(),
+            cli::ListFormat::Detailed => {
+                let inputs = walker.inputs;
+                let mut buf = String::new();
+                for input in inputs.values() {
+                    if !buf.is_empty() {
+                        buf.push('\n');
+                    }
+                    let id = format!("· {} - {}", input.id(), input.url());
+                    buf.push_str(&id);
+                    for follows in input.follows() {
+                        if let Follows::Indirect(id, follow_id) = follows {
+                            let id = format!("{}{} => {}", " ".repeat(5), id, follow_id);
+                            if !buf.is_empty() {
+                                buf.push('\n');
+                            }
+                            buf.push_str(&id);
+                        }
+                    }
+                }
+                println!("{buf}");
+            }
             cli::ListFormat::Raw => {
                 println!("{:#?}", walker.inputs);
             }
