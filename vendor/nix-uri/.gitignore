@@ -1,9 +1,0 @@
-# nix support
-/.direnv
-result
-result-*
-
-# rust support
-target
-tarpaulin-report.html
-

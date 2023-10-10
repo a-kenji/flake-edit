@@ -37,7 +37,7 @@ cargo-diff:
     nix develop .#lintShell --command cargo public-api diff
 
 format:
-    nix develop .#formatShell --command treefmt
+    nix develop .#fmtShell --command treefmt
 
 lint:
     -nix develop .#lintShell --command cargo diet
