@@ -48,7 +48,7 @@ lint:
     -nix develop .#lintShell --command cargo udeps
     -nix develop .#lintShell --command cargo machete
     -nix develop .#lintShell --command cargo outdated
-    nix develop .#mdshShell --command mdsh --frozen
+    nix develop .#mdShell --command mdsh --frozen
     nix develop .#actionlintShell --command actionlint --ignore SC2002
     cargo check --future-incompat-report
     nix flake check
