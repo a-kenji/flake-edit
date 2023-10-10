@@ -343,7 +343,6 @@ dependencies = [
  "rnix",
  "roff",
  "ropey",
- "rowan",
  "serde",
  "serde_json",
  "thiserror",
