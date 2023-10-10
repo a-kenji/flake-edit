@@ -27,6 +27,6 @@ info:
     };
   };
 
-  outputs = _: { };
+  outputs = _: {};
 }
 
