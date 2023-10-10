@@ -4,6 +4,8 @@
 //!
 use std::fs::File;
 use std::io;
+use std::path::Path;
+use std::path::PathBuf;
 
 use crate::cli::CliArgs;
 use crate::cli::Command;
@@ -16,9 +18,12 @@ use nix_uri::{FlakeRef, NixUriResult};
 use rnix::tokenizer::Tokenizer;
 use ropey::Rope;
 
+use self::error::FeError;
+
 mod cli;
 mod error;
 mod log;
+mod root;
 
 fn main() -> anyhow::Result<()> {
     let args = CliArgs::parse();
@@ -180,8 +185,12 @@ pub struct FlakeAdd {
 }
 
 impl FlakeAdd {
-    pub fn init() -> io::Result<Self> {
-        let root = FlakeBuf::from_path("flake.nix")?;
+    const FLAKE: &str = "flake.nix";
+    pub fn init() -> Result<Self, FeError> {
+        let path = PathBuf::from(Self::FLAKE);
+        let binding = root::Root::from_path(path)?;
+        let root = binding.path();
+        let root = FlakeBuf::from_path(root.to_path_buf())?;
         Ok(Self { root, _lock: None })
     }
 }
@@ -194,11 +203,12 @@ pub struct FlakeBuf {
 }
 
 impl FlakeBuf {
-    fn from_path(path: &str) -> io::Result<Self> {
-        let text = Rope::from_reader(&mut io::BufReader::new(File::open(path)?))?;
+    fn from_path(path: PathBuf) -> io::Result<Self> {
+        let text = Rope::from_reader(&mut io::BufReader::new(File::open(&path)?))?;
+        let path = format!("{:?}", path);
         Ok(Self {
             text,
-            path: path.to_string(),
+            path,
             dirty: false,
         })
     }
