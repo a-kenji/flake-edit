@@ -1,10 +1,9 @@
 # Releases
 
-Releases will attempt to track upstream `ratatouille` releases.
-
 ## Creating a Release
 
-1. Adjust `docs/assets/demo.tape`, and regenerate if necessary.
+1. Adjust `assets/tape/*.tape`, and regenerate if necessary.
+1. Check generate manpages, they are genreated in `build.rs`.
 1. Bump the version in `Cargo.toml`.
 1. Update the changelog.
 1. Commit and push the changes.
