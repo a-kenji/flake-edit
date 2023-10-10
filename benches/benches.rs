@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use flake_add::walk::Walker;
+use flake_edit::walk::Walker;
 
 const INPUTS: &str = r#"{
       description = "Manage your flake inputs comfortably.";
@@ -16,31 +16,31 @@ const INPUTS: &str = r#"{
     "#;
 
 fn collect_inputs() {
-    let mut walker = Walker::new(INPUTS).unwrap();
-    walker.walk_toplevel();
+    let mut walker = Walker::new(INPUTS);
+    walker.walk();
     // a simple sanity check
     assert!(!walker.inputs.is_empty())
 }
 
 fn add_input() {
-    let mut walker = Walker::new(INPUTS).unwrap();
-    let change = flake_add::Change::Add {
+    let mut walker = Walker::new(INPUTS);
+    let change = flake_edit::Change::Add {
         id: Some("nixpkgs".to_owned()),
         uri: Some("github/nixos/nixpkgs".to_owned()),
     };
     walker.changes.push(change);
-    walker.walk_toplevel();
+    walker.walk();
     // a simple sanity check
     assert!(!walker.inputs.is_empty())
 }
 
 fn remove_input() {
-    let mut walker = Walker::new(INPUTS).unwrap();
-    let change = flake_add::Change::Remove {
+    let mut walker = Walker::new(INPUTS);
+    let change = flake_edit::Change::Remove {
         id: "nixpkgs".to_owned(),
     };
     walker.changes.push(change);
-    walker.walk_toplevel();
+    walker.walk();
     // a simple sanity check
     assert!(!walker.inputs.is_empty())
 }
