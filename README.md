@@ -12,17 +12,19 @@
 
 `$ fe help`
 ```
+Edit your flake inputs with ease
+
 Usage: fe [OPTIONS] [FLAKE_REF] <COMMAND>
 
 Commands:
-  [add](#fe-add)
+  add
           Add a new flake reference
   pin
           Pin a specific flake reference based on its id
   change
-          Pin a specific flake reference based on its id
+          Change a specific flake reference based on its id
   remove
-          Remove a specific flake reference, based on its id
+          Remove a specific flake reference based on its id
   list
           List flake inputs
   help
@@ -75,7 +77,7 @@ For some inputs, the uri can be put in directly and the id and type will be infe
 ### `$ fe remove`
 `$ fe help remove`
 ```
-Remove a specific flake reference, based on its id
+Remove a specific flake reference based on its id
 
 Usage: fe remove [ID]
 
