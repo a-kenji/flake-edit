@@ -23,5 +23,5 @@
   };
   inputs.crane.inputs.nixpkgs.follows = "nixpkgs";
 
-  outputs = _: { };
+  outputs = _: {};
 }

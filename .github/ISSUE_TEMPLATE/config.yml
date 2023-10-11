@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: Matrix Chat
-    url: https://matrix.to/#/#flake-edit:matrix.org
+    url: https://matrix.to/#/#fe-flake-edit:matrix.org
     about: Ask questions and have discussions about fe or flake-edit on Matrix
