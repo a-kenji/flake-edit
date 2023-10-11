@@ -168,6 +168,7 @@ impl<'a> Walker<'a> {
     }
     fn walk_inputs(&mut self, node: SyntaxNode, ctx: &Option<Context>) -> Option<SyntaxNode> {
         tracing::debug!("WalkInputs: \n{node}\n with ctx: {ctx:?}");
+        tracing::debug!("WalkInputsKind: {:?}", node.kind());
         for child in node.children_with_tokens() {
             tracing::debug!("Inputs Child Kind: {:?}", child.kind());
             tracing::debug!("Inputs Child: {child}");
@@ -392,6 +393,18 @@ impl<'a> Walker<'a> {
                             }
                         }
                     }
+                    // TODO: flat tree attributes
+                    if child.to_string().starts_with("inputs") {
+                        let child_node = child.as_node().unwrap();
+                        let id = child_node.next_sibling().unwrap();
+                        let context = Context::new(vec![id.to_string()]);
+                        tracing::debug!("Walking inputs with: {child}, context: {context:?}");
+                        if let Some(_replacement) =
+                            self.walk_inputs(child_node.clone(), &Some(context))
+                        {
+                            panic!("Not yet implemented");
+                        }
+                    }
                     if let Some(parent) = child.parent() {
                         tracing::debug!("Children Parent: {}", parent);
                         tracing::debug!("Children Parent: {}", parent);
@@ -447,7 +460,6 @@ impl<'a> Walker<'a> {
                                 tracing::debug!("This is an url from {} - {}", prev_id, sibling);
                                 let mut input = Input::new(prev_id.to_string());
                                 input.url = sibling.to_string();
-                                // self.inputs.insert(prev_id.to_string(), input);
                                 self.insert_with_ctx(prev_id.to_string(), input, ctx);
                             }
                         }
@@ -464,6 +476,43 @@ impl<'a> Walker<'a> {
                                     attr,
                                     sibling
                                 );
+                                if let Some(child) = sibling.first_child() {
+                                    if child.to_string() == "inputs" {
+                                        if let Some(attr_set) = child.next_sibling() {
+                                            if SyntaxKind::NODE_ATTR_SET == attr_set.kind() {
+                                                for attr in attr_set.children() {
+                                                    let is_follows = attr
+                                                        .first_child()
+                                                        .unwrap()
+                                                        .first_child()
+                                                        .unwrap()
+                                                        .next_sibling()
+                                                        .unwrap();
+
+                                                    if is_follows.to_string() == "follows" {
+                                                        let id = is_follows.prev_sibling().unwrap();
+                                                        let follows = attr
+                                                            .first_child()
+                                                            .unwrap()
+                                                            .next_sibling()
+                                                            .unwrap();
+                                                        tracing::debug!("The following attribute follows: {id}:{follows} is nested inside the attr: {ctx:?}");
+                                                        let mut input = Input::new(id.to_string());
+                                                        input.url = follows.to_string();
+                                                        self.insert_with_ctx(
+                                                            id.to_string(),
+                                                            input,
+                                                            ctx,
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                for input in sibling.children() {
+                                    tracing::debug!("Follows: {input}");
+                                }
                             }
                         }
                     }
@@ -492,16 +541,16 @@ impl<'a> Walker<'a> {
                         let fake_id = format!("{ctx:?}{id}");
                         let mut input = Input::new(fake_id.to_string());
                         input.url = follows.to_string();
-                        // self.inputs.insert(fake_id.to_string(), input);
                         self.insert_with_ctx(id.to_string(), input, ctx);
                     }
                 }
             }
             if child.kind() == SyntaxKind::NODE_ATTR_SET {
                 for attr in child.children() {
-                    tracing::debug!("Child of ATTRSET KIND #:{i} {:?}", child.kind());
-                    tracing::debug!("Child of ATTRSET #:{i} {}", child);
+                    tracing::debug!("Child of ATTRSET KIND #:{i} {:?}", attr.kind());
+                    tracing::debug!("Child of ATTRSET #:{i} {}", attr);
                     for leaf in attr.children() {
+                        tracing::debug!("LEAF of ATTRSET KIND #:{i} {:?}", leaf.kind());
                         tracing::debug!("LEAF of ATTRSET #:{i} {}", leaf);
                         if leaf.to_string() == "url" {
                             let id = child.prev_sibling().unwrap();
@@ -532,6 +581,7 @@ impl<'a> Walker<'a> {
                             // panic!("Walking inputs with: {attr}, context: {context:?}");
                             if let Some(replacement) =
                                 self.walk_inputs(child.clone(), &Some(context))
+                            // self.walk_inputs(attr.clone(), &Some(context))
                             {
                                 // if let Some(change) = self.walk_input(&attr, &Some(context)) {
                                 //     println!("Nested change: {change}");
