@@ -169,6 +169,28 @@ impl<'a> Walker<'a> {
     fn walk_inputs(&mut self, node: SyntaxNode, ctx: &Option<Context>) -> Option<SyntaxNode> {
         tracing::debug!("WalkInputs: \n{node}\n with ctx: {ctx:?}");
         tracing::debug!("WalkInputsKind: {:?}", node.kind());
+        match node.kind() {
+            SyntaxKind::NODE_ATTR_SET => {}
+            SyntaxKind::NODE_ATTRPATH_VALUE => {}
+            SyntaxKind::NODE_IDENT => {}
+            SyntaxKind::NODE_ATTRPATH => {
+                let maybe_follows_id = node
+                    .children()
+                    .find(|child| child.to_string() == "follows")
+                    .and_then(|input_child| input_child.prev_sibling());
+                if let Some(follows_id) = maybe_follows_id {
+                    let maybe_input_id = node
+                        .children()
+                        .find(|child| child.to_string() == "inputs")
+                        .and_then(|input_child| input_child.next_sibling());
+                    let ctx = maybe_input_id.map(|id| Context::new(vec![id.to_string()]));
+                    let mut input = Input::new(follows_id.to_string());
+                    input.url = node.next_sibling().unwrap().to_string();
+                    self.insert_with_ctx(follows_id.to_string(), input, &ctx);
+                }
+            }
+            _ => {}
+        }
         for child in node.children_with_tokens() {
             tracing::debug!("Inputs Child Kind: {:?}", child.kind());
             tracing::debug!("Inputs Child: {child}");
@@ -406,11 +428,16 @@ impl<'a> Walker<'a> {
                         }
                     }
                     if let Some(parent) = child.parent() {
+                        tracing::debug!("Children Parent Child: {}", child);
+                        tracing::debug!("Children Parent Child Kind: {:?}", child.kind());
                         tracing::debug!("Children Parent Kind: {:?}", parent.kind());
                         tracing::debug!("Children Parent: {}", parent);
                         tracing::debug!("Children Parent Context: {:?}", ctx);
                         if let Some(sibling) = parent.next_sibling() {
                             tracing::debug!("Children Sibling: {}", sibling);
+                        }
+                        for child in parent.children() {
+                            tracing::debug!("Children Sibling --: {}", child);
                         }
                     }
                 }

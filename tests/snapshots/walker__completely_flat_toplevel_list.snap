@@ -9,7 +9,16 @@ crane:
   id: crane
   flake: true
   url: "\"github:ipetkov/crane\""
-  follows: []
+  follows:
+    - Indirect:
+        - flake-utils
+        - "\"flake-utils\""
+    - Indirect:
+        - nixpkgs
+        - "\"nixpkgs\""
+    - Indirect:
+        - rust-overlay
+        - "\"rust-overlay\""
 flake-utelinos:
   id: flake-utelinos
   flake: true
@@ -24,5 +33,11 @@ rust-overlay:
   id: rust-overlay
   flake: true
   url: "\"github:oxalica/rust-overlay\""
-  follows: []
+  follows:
+    - Indirect:
+        - flake-utils
+        - "\"flake-utils\""
+    - Indirect:
+        - nixpkgs
+        - "\"nixpkgs\""
 
