@@ -75,7 +75,7 @@ pub(crate) enum Command {
     /// List flake inputs
     #[clap(alias = "l")]
     List {
-        #[arg(long, default_value = "simple")]
+        #[arg(long, default_value = "detailed")]
         format: ListFormat,
     },
     #[clap(hide = true)]

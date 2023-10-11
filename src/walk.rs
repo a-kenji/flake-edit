@@ -406,7 +406,7 @@ impl<'a> Walker<'a> {
                         }
                     }
                     if let Some(parent) = child.parent() {
-                        tracing::debug!("Children Parent: {}", parent);
+                        tracing::debug!("Children Parent Kind: {:?}", parent.kind());
                         tracing::debug!("Children Parent: {}", parent);
                         if let Some(sibling) = parent.next_sibling() {
                             tracing::debug!("Children Sibling: {}", sibling);
