@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand};
 #[command(name = "fe")]
 #[command(next_line_help = true)]
 /// Edit your flake inputs with ease
-pub(crate) struct CliArgs {
+pub struct CliArgs {
     // The `flake.nix` file that will be used
     #[arg(long)]
     flake: Option<String>,
@@ -43,6 +43,10 @@ impl CliArgs {
     }
     pub(crate) fn list(&self) -> bool {
         matches!(self.subcommand, Command::List { .. })
+    }
+
+    pub fn flake(&self) -> Option<&String> {
+        self.flake.as_ref()
     }
 }
 

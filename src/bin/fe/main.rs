@@ -2,10 +2,7 @@
 //!     - In the cwd
 //!     - In the directory upwards to `git_root`
 //!
-use std::fs::File;
-use std::io;
-use std::path::PathBuf;
-
+use crate::app::FlakeEdit;
 use crate::cli::CliArgs;
 use crate::cli::Command;
 use clap::Parser;
@@ -16,10 +13,8 @@ use flake_edit::walk::Walker;
 use nix_uri::urls::UrlWrapper;
 use nix_uri::{FlakeRef, NixUriResult};
 use rnix::tokenizer::Tokenizer;
-use ropey::Rope;
 
-use self::error::FeError;
-
+mod app;
 mod cli;
 mod error;
 mod log;
@@ -27,21 +22,18 @@ mod root;
 
 fn main() -> anyhow::Result<()> {
     let args = CliArgs::parse();
-    log::init()?;
+    log::init().ok();
     tracing::debug!("Cli args: {args:?}");
 
-    let app = FlakeAdd::init()?;
+    let app = FlakeEdit::init(&args)?;
 
-    let (_node, errors) = rnix::parser::parse(Tokenizer::new(&app.root.text.to_string()));
+    let (_node, errors) = rnix::parser::parse(Tokenizer::new(&app.root().text().to_string()));
     if !errors.is_empty() {
-        println!("There are errors in the root document.");
+        eprintln!("There are errors in the root document.");
     }
 
-    // let mut walker = Walker::new(inputs).unwrap();
-    let text = app.root.text.to_string();
+    let text = app.root().text().to_string();
     let mut walker = Walker::new(&text);
-
-    // let mut state = flake_edit::State::default();
 
     match args.subcommand() {
         cli::Command::Add {
@@ -176,40 +168,4 @@ fn main() -> anyhow::Result<()> {
         }
     }
     Ok(())
-}
-
-#[derive(Debug, Default)]
-pub struct FlakeAdd {
-    root: FlakeBuf,
-    _lock: Option<FlakeBuf>,
-}
-
-impl FlakeAdd {
-    const FLAKE: &str = "flake.nix";
-    pub fn init() -> Result<Self, FeError> {
-        let path = PathBuf::from(Self::FLAKE);
-        let binding = root::Root::from_path(path)?;
-        let root = binding.path();
-        let root = FlakeBuf::from_path(root.to_path_buf())?;
-        Ok(Self { root, _lock: None })
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct FlakeBuf {
-    text: Rope,
-    path: String,
-    dirty: bool,
-}
-
-impl FlakeBuf {
-    fn from_path(path: PathBuf) -> io::Result<Self> {
-        let text = Rope::from_reader(&mut io::BufReader::new(File::open(&path)?))?;
-        let path = format!("{:?}", path);
-        Ok(Self {
-            text,
-            path,
-            dirty: false,
-        })
-    }
 }
