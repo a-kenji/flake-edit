@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use rnix::{Root, SyntaxKind, SyntaxNode};
 
-use crate::{input::Input, Change};
+use crate::{change::Change, input::Input};
 
 // TODO:
 // - parse out inputs

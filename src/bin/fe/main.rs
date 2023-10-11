@@ -4,12 +4,12 @@
 //!
 use std::fs::File;
 use std::io;
-use std::path::Path;
 use std::path::PathBuf;
 
 use crate::cli::CliArgs;
 use crate::cli::Command;
 use clap::Parser;
+use flake_edit::change::Change;
 use flake_edit::diff::Diff;
 use flake_edit::input::Follows;
 use flake_edit::walk::Walker;
@@ -32,7 +32,7 @@ fn main() -> anyhow::Result<()> {
 
     let app = FlakeAdd::init()?;
 
-    let (node, errors) = rnix::parser::parse(Tokenizer::new(&app.root.text.to_string()));
+    let (_node, errors) = rnix::parser::parse(Tokenizer::new(&app.root.text.to_string()));
     if !errors.is_empty() {
         println!("There are errors in the root document.");
     }
@@ -41,7 +41,7 @@ fn main() -> anyhow::Result<()> {
     let text = app.root.text.to_string();
     let mut walker = Walker::new(&text);
 
-    let mut state = flake_edit::State::default();
+    // let mut state = flake_edit::State::default();
 
     match args.subcommand() {
         cli::Command::Add {
@@ -51,7 +51,7 @@ fn main() -> anyhow::Result<()> {
             force: _,
         } => {
             if id.is_some() && uri.is_some() {
-                let change = flake_edit::Change::Add {
+                let change = Change::Add {
                     id: id.clone(),
                     uri: uri.clone(),
                 };
@@ -65,7 +65,7 @@ fn main() -> anyhow::Result<()> {
                         flake_ref.to_string()
                     };
                     if let Some(id) = flake_ref.id() {
-                        let change = flake_edit::Change::Add {
+                        let change = Change::Add {
                             id: Some(id),
                             uri: Some(uri),
                         };
@@ -81,13 +81,13 @@ fn main() -> anyhow::Result<()> {
         cli::Command::Pin { .. } => todo!(),
         cli::Command::Remove { id } => {
             if let Some(id) = id {
-                let change = flake_edit::Change::Remove { id: id.clone() };
+                let change = Change::Remove { id: id.clone() };
                 walker.changes.push(change);
             }
         }
         cli::Command::List { .. } => {}
-        cli::Command::Change { id } => todo!(),
-        cli::Command::Completion { inputs } => todo!(),
+        cli::Command::Change { id: _ } => todo!(),
+        cli::Command::Completion { inputs: _ } => todo!(),
     }
 
     if let Some(change) = walker.walk() {

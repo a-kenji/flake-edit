@@ -1,5 +1,5 @@
+use flake_edit::change::Change;
 use flake_edit::walk::Walker;
-use flake_edit::Change;
 
 fn load_fixtures(name: &str) -> (String, String) {
     let dir = env!("CARGO_MANIFEST_DIR");
