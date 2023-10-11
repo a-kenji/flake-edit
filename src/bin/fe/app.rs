@@ -31,6 +31,10 @@ impl FlakeEdit {
     pub fn root(&self) -> &FlakeBuf {
         &self.root
     }
+
+    pub fn run(&self) -> Result<(), FeError> {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Default)]

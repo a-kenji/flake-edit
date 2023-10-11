@@ -1,5 +1,6 @@
 pub mod change;
 pub mod diff;
+pub mod edit;
 pub mod error;
 mod git;
 pub mod input;

@@ -90,8 +90,6 @@ fn main() -> anyhow::Result<()> {
         } else {
             println!("There are errors in the changes.");
         }
-        // println!("Original Node: \n{}\n", walker.root);
-        // println!("Changed Node: \n{}\n", change);
         let old = walker.root.to_string();
         let new = change.to_string();
         let diff = Diff::new(&old, &new);

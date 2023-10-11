@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
@@ -79,7 +81,7 @@ pub(crate) enum Command {
     /// List flake inputs
     #[clap(alias = "l")]
     List {
-        #[arg(long, default_value = "detailed")]
+        #[arg(long, default_value_t = ListFormat::default())]
         format: ListFormat,
     },
     #[clap(hide = true)]
@@ -97,9 +99,9 @@ pub(crate) enum Parameter {}
 #[derive(Debug, Clone, Default)]
 pub(crate) enum ListFormat {
     None,
-    #[default]
     Simple,
     Toplevel,
+    #[default]
     Detailed,
     Raw,
     Json,
@@ -115,6 +117,19 @@ impl From<String> for ListFormat {
             "raw" => Raw,
             "json" => Json,
             _ => None,
+        }
+    }
+}
+
+impl Display for ListFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ListFormat::None => write!(f, ""),
+            ListFormat::Simple => write!(f, "simple"),
+            ListFormat::Toplevel => write!(f, "toplevel"),
+            ListFormat::Detailed => write!(f, "detailed"),
+            ListFormat::Raw => write!(f, "raw"),
+            ListFormat::Json => write!(f, "json"),
         }
     }
 }
