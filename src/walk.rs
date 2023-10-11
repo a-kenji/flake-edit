@@ -20,12 +20,9 @@ use crate::{change::Change, input::Input};
 // TOKEN_URI 49,
 
 #[derive(Debug, Clone)]
-pub struct Walker<'a> {
-    stream: &'a str,
+pub struct Walker {
     pub root: SyntaxNode,
     pub inputs: HashMap<String, Input>,
-    pub changes: Vec<Change>,
-    commit: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -40,25 +37,12 @@ impl Context {
     }
 }
 
-impl<'a> Walker<'a> {
+impl<'a> Walker {
     pub fn new(stream: &'a str) -> Self {
         let root = Root::parse(stream).syntax();
-        let changes = Vec::new();
-        // let changes = vec![
-        //     Change::Add {
-        //         id: Some("nixpkgs".into()),
-        //         uri: Some("github:nixos/nixpkgs".into()),
-        //     },
-        //     Change::Remove {
-        //         id: "nixpkgs".into(),
-        //     },
-        // ];
         Self {
-            stream,
             root,
             inputs: HashMap::new(),
-            commit: true,
-            changes,
         }
     }
     /// Traverse the toplevel `flake.nix` file.
@@ -66,13 +50,13 @@ impl<'a> Walker<'a> {
     /// - description
     /// - inputs
     /// - outputs
-    pub fn walk(&mut self) -> Option<SyntaxNode> {
+    pub fn walk(&mut self, change: &Change) -> Option<SyntaxNode> {
         let cst = &self.root;
         if cst.kind() != SyntaxKind::NODE_ROOT {
             // TODO: handle this as an error
             panic!("Should be a topevel node.")
         } else {
-            self.walk_toplevel(cst.clone(), None)
+            self.walk_toplevel(cst.clone(), None, change)
         }
     }
     /// Insert a new Input node at the correct positon
@@ -99,7 +83,12 @@ impl<'a> Walker<'a> {
     /// - description
     /// - inputs
     /// - outputs
-    fn walk_toplevel(&mut self, node: SyntaxNode, ctx: Option<Context>) -> Option<SyntaxNode> {
+    fn walk_toplevel(
+        &mut self,
+        node: SyntaxNode,
+        ctx: Option<Context>,
+        change: &Change,
+    ) -> Option<SyntaxNode> {
         for root in node.children() {
             // Because it is the node root this is the toplevel attribute
             for toplevel in root.children() {
@@ -113,7 +102,7 @@ impl<'a> Walker<'a> {
                         }
                         if child.to_string() == "inputs" {
                             if let Some(replacement) =
-                                self.walk_inputs(child.next_sibling().unwrap(), &ctx)
+                                self.walk_inputs(child.next_sibling().unwrap(), &ctx, &change)
                             {
                                 tracing::debug!("Replacement Noode: {replacement}");
                                 let green = toplevel.green().replace_child(
@@ -130,7 +119,9 @@ impl<'a> Walker<'a> {
                             // input.id ...
                             // If the node should be empty,
                             // it's toplevel should be empty too.
-                            if let Some(replacement) = self.walk_inputs(child.clone(), &ctx) {
+                            if let Some(replacement) =
+                                self.walk_inputs(child.clone(), &ctx, &change)
+                            {
                                 if replacement.to_string().is_empty() {
                                     // let green =
                                     //     toplevel.parent().unwrap().green().replace_child(
@@ -166,7 +157,12 @@ impl<'a> Walker<'a> {
         }
         None
     }
-    fn walk_inputs(&mut self, node: SyntaxNode, ctx: &Option<Context>) -> Option<SyntaxNode> {
+    fn walk_inputs(
+        &mut self,
+        node: SyntaxNode,
+        ctx: &Option<Context>,
+        change: &Change,
+    ) -> Option<SyntaxNode> {
         tracing::debug!("WalkInputs: \n{node}\n with ctx: {ctx:?}");
         tracing::debug!("WalkInputsKind: {:?}", node.kind());
         match node.kind() {
@@ -208,7 +204,9 @@ impl<'a> Walker<'a> {
                     } else {
                         ctx.clone()
                     };
-                    if let Some(replacement) = self.walk_input(child.as_node().unwrap(), &ctx) {
+                    if let Some(replacement) =
+                        self.walk_input(child.as_node().unwrap(), &ctx, change)
+                    {
                         tracing::debug!("Child Id: {}", child.index());
                         tracing::debug!("Input replacement node: {}", node);
                         let mut green = node
@@ -228,33 +226,30 @@ impl<'a> Walker<'a> {
                         }
                         let node = Root::parse(green.to_string().as_str()).syntax();
                         return Some(node);
-                    } else if let Some(change) = self.changes.first() {
-                        if (change.id().is_some()) && self.commit {
-                            if let Change::Add { id, uri } = change {
-                                let uri = Root::parse(&format!(
-                                    "{}.url = \"{}\";",
-                                    id.clone().unwrap(),
-                                    uri.clone().unwrap(),
-                                ))
-                                .syntax();
-                                let mut green =
-                                    node.green().insert_child(child.index(), uri.green().into());
-                                let prev = child.prev_sibling_or_token().unwrap();
-                                tracing::debug!("Token:{}", prev);
-                                tracing::debug!("Token Kind: {:?}", prev.kind());
-                                if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
-                                    let whitespace =
-                                        Root::parse(prev.as_token().unwrap().green().text())
-                                            .syntax();
-                                    green = green
-                                        .insert_child(child.index() + 1, whitespace.green().into());
-                                }
-                                tracing::debug!("green: {}", green);
-                                tracing::debug!("node: {}", node);
-                                tracing::debug!("node kind: {:?}", node.kind());
-                                let node = Root::parse(green.to_string().as_str()).syntax();
-                                return Some(node);
+                    } else if change.is_some() && change.id().is_some() {
+                        if let Change::Add { id, uri } = change {
+                            let uri = Root::parse(&format!(
+                                "{}.url = \"{}\";",
+                                id.clone().unwrap(),
+                                uri.clone().unwrap(),
+                            ))
+                            .syntax();
+                            let mut green =
+                                node.green().insert_child(child.index(), uri.green().into());
+                            let prev = child.prev_sibling_or_token().unwrap();
+                            tracing::debug!("Token:{}", prev);
+                            tracing::debug!("Token Kind: {:?}", prev.kind());
+                            if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
+                                let whitespace =
+                                    Root::parse(prev.as_token().unwrap().green().text()).syntax();
+                                green = green
+                                    .insert_child(child.index() + 1, whitespace.green().into());
                             }
+                            tracing::debug!("green: {}", green);
+                            tracing::debug!("node: {}", node);
+                            tracing::debug!("node kind: {:?}", node.kind());
+                            let node = Root::parse(green.to_string().as_str()).syntax();
+                            return Some(node);
                         }
                     }
                 }
@@ -290,36 +285,31 @@ impl<'a> Walker<'a> {
                                                             input,
                                                             ctx,
                                                         );
-                                                        if let Some(change) = self.changes.first() {
-                                                            if change.is_remove() && self.commit {
-                                                                if let Some(id) = change.id() {
-                                                                    if id
-                                                                        == next_sibling.to_string()
-                                                                    {
-                                                                        let replacement =
-                                                                            Root::parse("")
-                                                                                .syntax();
-                                                                        // let green = node
-                                                                        //     .green()
-                                                                        //     .replace_child(
-                                                                        //         child.index(),
-                                                                        //         replacement
-                                                                        //             .green()
-                                                                        //             .into(),
-                                                                        //     );
-                                                                        // let green = toplevel
-                                                                        //     .replace_with(green);
-                                                                        // let node = Root::parse(
-                                                                        //     green
-                                                                        //         .to_string()
-                                                                        //         .as_str(),
-                                                                        // )
-                                                                        // .syntax();
-                                                                        tracing::debug!(
-                                                                            "Noode: {node}"
-                                                                        );
-                                                                        return Some(replacement);
-                                                                    }
+                                                        if change.is_some() && change.is_remove() {
+                                                            if let Some(id) = change.id() {
+                                                                if id == next_sibling.to_string() {
+                                                                    let replacement =
+                                                                        Root::parse("").syntax();
+                                                                    // let green = node
+                                                                    //     .green()
+                                                                    //     .replace_child(
+                                                                    //         child.index(),
+                                                                    //         replacement
+                                                                    //             .green()
+                                                                    //             .into(),
+                                                                    //     );
+                                                                    // let green = toplevel
+                                                                    //     .replace_with(green);
+                                                                    // let node = Root::parse(
+                                                                    //     green
+                                                                    //         .to_string()
+                                                                    //         .as_str(),
+                                                                    // )
+                                                                    // .syntax();
+                                                                    tracing::debug!(
+                                                                        "Noode: {node}"
+                                                                    );
+                                                                    return Some(replacement);
                                                                 }
                                                             }
                                                         }
@@ -372,17 +362,13 @@ impl<'a> Walker<'a> {
                                                             ctx,
                                                         );
                                                     }
-                                                    if let Some(change) = self.changes.first() {
-                                                        if change.is_remove() && self.commit {
-                                                            if let Some(id) = change.id() {
-                                                                if id == next_sibling.to_string() {
-                                                                    let replacement =
-                                                                        Root::parse("").syntax();
-                                                                    tracing::debug!(
-                                                                        "Noode: {node}"
-                                                                    );
-                                                                    return Some(replacement);
-                                                                }
+                                                    if change.is_some() && change.is_remove() {
+                                                        if let Some(id) = change.id() {
+                                                            if id == next_sibling.to_string() {
+                                                                let replacement =
+                                                                    Root::parse("").syntax();
+                                                                tracing::debug!("Noode: {node}");
+                                                                return Some(replacement);
                                                             }
                                                         }
                                                     }
@@ -395,7 +381,7 @@ impl<'a> Walker<'a> {
                                                     Context::new(vec![next_sibling.to_string()]);
                                                 tracing::debug!("Walking inputs with: {attr}, context: {context:?}");
                                                 if let Some(change) =
-                                                    self.walk_input(&attr, &Some(context))
+                                                    self.walk_input(&attr, &Some(context), change)
                                                 {
                                                     println!("Nested change: {change}");
                                                     panic!("Matched nested");
@@ -422,7 +408,7 @@ impl<'a> Walker<'a> {
                         let context = Context::new(vec![id.to_string()]);
                         tracing::debug!("Walking inputs with: {child}, context: {context:?}");
                         if let Some(_replacement) =
-                            self.walk_inputs(child_node.clone(), &Some(context))
+                            self.walk_inputs(child_node.clone(), &Some(context), change)
                         {
                             panic!("Not yet implemented");
                         }
@@ -462,7 +448,12 @@ impl<'a> Walker<'a> {
     ///  inputs.flake-utils.follows = "flake-utils";
     ///  };
     /// ```
-    fn walk_input(&mut self, node: &SyntaxNode, ctx: &Option<Context>) -> Option<SyntaxNode> {
+    fn walk_input(
+        &mut self,
+        node: &SyntaxNode,
+        ctx: &Option<Context>,
+        change: &Change,
+    ) -> Option<SyntaxNode> {
         tracing::debug!("\nInput: {node}\n with ctx: {ctx:?}");
         for (i, child) in node.children().enumerate() {
             tracing::debug!("Kind #:{i} {:?}", child.kind());
@@ -473,14 +464,12 @@ impl<'a> Walker<'a> {
                     tracing::debug!("Child of ATTR #:{i} {}", attr);
                     if attr.to_string() == "url" {
                         if let Some(prev_id) = attr.prev_sibling() {
-                            if let Some(change) = self.changes.first() {
-                                if self.commit {
-                                    if let Change::Remove { id } = change {
-                                        if *id == prev_id.to_string() {
-                                            tracing::debug!("Removing: {id}");
-                                            let empty = Root::parse("").syntax();
-                                            return Some(empty);
-                                        }
+                            if change.is_some() {
+                                if let Change::Remove { id } = change {
+                                    if *id == prev_id.to_string() {
+                                        tracing::debug!("Removing: {id}");
+                                        let empty = Root::parse("").syntax();
+                                        return Some(empty);
                                     }
                                 }
                             }
@@ -590,14 +579,12 @@ impl<'a> Walker<'a> {
                             self.insert_with_ctx(id.to_string(), input, ctx);
 
                             // Remove matched node.
-                            if let Some(change) = self.changes.first() {
-                                if self.commit {
-                                    if let Change::Remove { id: candidate } = change {
-                                        if *candidate == id.to_string() {
-                                            tracing::debug!("Removing: {id}");
-                                            let empty = Root::parse("").syntax();
-                                            return Some(empty);
-                                        }
+                            if change.is_some() {
+                                if let Change::Remove { id: candidate } = change {
+                                    if *candidate == id.to_string() {
+                                        tracing::debug!("Removing: {id}");
+                                        let empty = Root::parse("").syntax();
+                                        return Some(empty);
                                     }
                                 }
                             }
@@ -608,7 +595,7 @@ impl<'a> Walker<'a> {
                             tracing::debug!("Walking inputs with: {attr}, context: {context:?}");
                             // panic!("Walking inputs with: {attr}, context: {context:?}");
                             if let Some(replacement) =
-                                self.walk_inputs(child.clone(), &Some(context))
+                                self.walk_inputs(child.clone(), &Some(context), change)
                             // self.walk_inputs(attr.clone(), &Some(context))
                             {
                                 // if let Some(change) = self.walk_input(&attr, &Some(context)) {
@@ -628,107 +615,107 @@ impl<'a> Walker<'a> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    fn minimal_flake() -> &'static str {
-        r#"
-        {
-  description = "flk - a tui for your flakes.";
-
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-
-  inputs.rust-overlay = {
-    url = "github:oxalica/rust-overlay";
-    inputs.nixpkgs.follows = "nixpkgs";
-    inputs.flake-utils.follows = "flake-utils";
-  }
-
-  inputs.crane = {
-    url = "github:ipetkov/crane";
-    inputs.nixpkgs.follows = "nixpkgs";
-    inputs.rust-overlay.follows = "rust-overlay";
-    inputs.flake-utils.follows = "flake-utils";
-  };
-
-  outputs = {
-    self,
-    nixpkgs,
-    flake-utils,
-    rust-overlay,
-    crane,
-  }:
-  {};
-  }
-    "#
-    }
-    fn minimal_flake_inputs_attrs() -> &'static str {
-        r#"
-        {
-  description = "flk - a tui for your flakes.";
-
-  inputs = {
-  nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-
-  rust-overlay = {
-    url = "github:oxalica/rust-overlay";
-    inputs.nixpkgs.follows = "nixpkgs";
-    inputs.flake-utils.follows = "flake-utils";
-  };
-
-  crane = {
-    url = "github:ipetkov/crane";
-    inputs.nixpkgs.follows = "nixpkgs";
-    inputs.rust-overlay.follows = "rust-overlay";
-    inputs.flake-utils.follows = "flake-utils";
-  };
-  };
-
-  outputs = {
-    self,
-    nixpkgs,
-    flake-utils,
-    rust-overlay,
-    crane,
-  }:
-  {};
-  }
-    "#
-    }
-    fn only_inputs_flake() -> &'static str {
-        r#"
-        {
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-
-  inputs.rust-overlay = {
-    url = "github:oxalica/rust-overlay";
-    inputs.nixpkgs.follows = "nixpkgs";
-    inputs.flake-utils.follows = "flake-utils";
-  };
-
-  inputs.crane = {
-    url = "github:ipetkov/crane";
-    inputs.nixpkgs.follows = "nixpkgs";
-    inputs.rust-overlay.follows = "rust-overlay";
-    inputs.flake-utils.follows = "flake-utils";
-  };
-
-  outputs = {}:
-  {};
-  }
-    "#
-    }
-    fn no_inputs_flake() -> &'static str {
-        r#"
-        {
-  description = "flk - a tui for your flakes.";
-
-  outputs = {
-    self,
-    nixpkgs,
-  }:
-  {};
-  }
-    "#
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     fn minimal_flake() -> &'static str {
+//         r#"
+//         {
+//   description = "flk - a tui for your flakes.";
+//
+//   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+//
+//   inputs.rust-overlay = {
+//     url = "github:oxalica/rust-overlay";
+//     inputs.nixpkgs.follows = "nixpkgs";
+//     inputs.flake-utils.follows = "flake-utils";
+//   }
+//
+//   inputs.crane = {
+//     url = "github:ipetkov/crane";
+//     inputs.nixpkgs.follows = "nixpkgs";
+//     inputs.rust-overlay.follows = "rust-overlay";
+//     inputs.flake-utils.follows = "flake-utils";
+//   };
+//
+//   outputs = {
+//     self,
+//     nixpkgs,
+//     flake-utils,
+//     rust-overlay,
+//     crane,
+//   }:
+//   {};
+//   }
+//     "#
+//     }
+//     fn minimal_flake_inputs_attrs() -> &'static str {
+//         r#"
+//         {
+//   description = "flk - a tui for your flakes.";
+//
+//   inputs = {
+//   nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+//
+//   rust-overlay = {
+//     url = "github:oxalica/rust-overlay";
+//     inputs.nixpkgs.follows = "nixpkgs";
+//     inputs.flake-utils.follows = "flake-utils";
+//   };
+//
+//   crane = {
+//     url = "github:ipetkov/crane";
+//     inputs.nixpkgs.follows = "nixpkgs";
+//     inputs.rust-overlay.follows = "rust-overlay";
+//     inputs.flake-utils.follows = "flake-utils";
+//   };
+//   };
+//
+//   outputs = {
+//     self,
+//     nixpkgs,
+//     flake-utils,
+//     rust-overlay,
+//     crane,
+//   }:
+//   {};
+//   }
+//     "#
+//     }
+//     fn only_inputs_flake() -> &'static str {
+//         r#"
+//         {
+//   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+//
+//   inputs.rust-overlay = {
+//     url = "github:oxalica/rust-overlay";
+//     inputs.nixpkgs.follows = "nixpkgs";
+//     inputs.flake-utils.follows = "flake-utils";
+//   };
+//
+//   inputs.crane = {
+//     url = "github:ipetkov/crane";
+//     inputs.nixpkgs.follows = "nixpkgs";
+//     inputs.rust-overlay.follows = "rust-overlay";
+//     inputs.flake-utils.follows = "flake-utils";
+//   };
+//
+//   outputs = {}:
+//   {};
+//   }
+//     "#
+//     }
+//     fn no_inputs_flake() -> &'static str {
+//         r#"
+//         {
+//   description = "flk - a tui for your flakes.";
+//
+//   outputs = {
+//     self,
+//     nixpkgs,
+//   }:
+//   {};
+//   }
+//     "#
+//     }
+// }

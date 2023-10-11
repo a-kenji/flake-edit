@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum FlkError {
+pub enum FlakeEditError {
     /// Io Error
     #[error("IoError: {0}")]
     Io(#[from] std::io::Error),

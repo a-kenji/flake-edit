@@ -31,4 +31,7 @@ impl Change {
     pub fn is_remove(&self) -> bool {
         matches!(self, Change::Remove { .. })
     }
+    pub fn is_some(&self) -> bool {
+        !matches!(self, Change::None)
+    }
 }

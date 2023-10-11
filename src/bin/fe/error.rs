@@ -13,5 +13,5 @@ pub enum FeError {
     // #[error("Incorrect Channel")]
     // IncorrectChannel(String),
     #[error("FlakeEdit: {0}")]
-    FlakeEdit(#[from] flake_edit::error::FlkError),
+    FlakeEdit(#[from] flake_edit::error::FlakeEditError),
 }

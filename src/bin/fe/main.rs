@@ -34,6 +34,7 @@ fn main() -> anyhow::Result<()> {
 
     let text = app.root().text().to_string();
     let mut walker = Walker::new(&text);
+    let mut change = Change::None;
 
     match args.subcommand() {
         cli::Command::Add {
@@ -43,11 +44,10 @@ fn main() -> anyhow::Result<()> {
             force: _,
         } => {
             if id.is_some() && uri.is_some() {
-                let change = Change::Add {
+                change = Change::Add {
                     id: id.clone(),
                     uri: uri.clone(),
                 };
-                walker.changes.push(change);
             } else if let Some(uri) = id {
                 let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(uri);
                 if let Ok(flake_ref) = flake_ref {
@@ -57,11 +57,10 @@ fn main() -> anyhow::Result<()> {
                         flake_ref.to_string()
                     };
                     if let Some(id) = flake_ref.id() {
-                        let change = Change::Add {
+                        change = Change::Add {
                             id: Some(id),
                             uri: Some(uri),
                         };
-                        walker.changes.push(change);
                     } else {
                         println!("Please specify an [ID] for this flake reference.")
                     }
@@ -73,8 +72,7 @@ fn main() -> anyhow::Result<()> {
         cli::Command::Pin { .. } => todo!(),
         cli::Command::Remove { id } => {
             if let Some(id) = id {
-                let change = Change::Remove { id: id.clone() };
-                walker.changes.push(change);
+                change = Change::Remove { id: id.clone() };
             }
         }
         cli::Command::List { .. } => {}
@@ -82,7 +80,7 @@ fn main() -> anyhow::Result<()> {
         cli::Command::Completion { inputs: _ } => todo!(),
     }
 
-    if let Some(change) = walker.walk() {
+    if let Some(change) = walker.walk(&change) {
         let root = rnix::Root::parse(&change.to_string());
         let errors = root.errors();
         if errors.is_empty() {
@@ -96,9 +94,7 @@ fn main() -> anyhow::Result<()> {
         diff.compare();
     } else if !args.list() {
         println!("Nothing changed in the node.");
-        for change in walker.changes {
-            println!("The following change could not be applied: \n{:?}", change);
-        }
+        println!("The following change could not be applied: \n{:?}", change);
     }
 
     if let Command::List { format } = args.subcommand() {
