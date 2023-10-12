@@ -54,6 +54,10 @@ impl FlakeEdit {
                 // we want to remove all of the references to its toplevel.
                 let mut res = None;
                 while let Some(changed_node) = self.walker.walk(&change) {
+                    if res == Some(changed_node.clone()) {
+                        // TODO: Sanity check, turn into proper error.
+                        break;
+                    }
                     res = Some(changed_node.clone());
                     self.walker.root = changed_node.clone();
                 }
