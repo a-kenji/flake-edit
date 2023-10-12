@@ -75,6 +75,10 @@ roff = { version = "0.2.1", optional = true }
 name = "benches"
 harness = false
 
+[[bench]]
+name = "divan"
+harness = false
+
 [profile.release]
 lto = true
 codegen-units = 1
@@ -99,4 +103,5 @@ opt-level = 3
 
 [dev-dependencies]
 criterion = "0.5.1"
+divan = "0.1.0"
 insta = { version = "1.33.0", features = ["yaml"] }
