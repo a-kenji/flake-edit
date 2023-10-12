@@ -59,7 +59,7 @@ impl<'a> Walker {
             self.walk_toplevel(cst.clone(), None, change)
         }
     }
-    /// Insert a new Input node at the correct positon
+    /// Insert a new Input node at the correct position
     /// or update it with new information.
     fn insert_with_ctx(&mut self, id: String, input: Input, ctx: &Option<Context>) {
         if let Some(ctx) = ctx {

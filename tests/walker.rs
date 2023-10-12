@@ -31,7 +31,7 @@ fn root_load() {
 fn root_list() {
     let (flake, _lock) = load_fixtures("root");
     let mut walker = Walker::new(&flake);
-    walker.walk(Change::None);
+    walker.walk(&Change::None);
     let info = Info::new("".into(), vec![]);
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_yaml_snapshot!(walker.inputs);
@@ -46,7 +46,7 @@ fn root_add_toplevel_id_uri() {
         uri: Some("github:mic92/vmsh".to_owned()),
     };
     let info = Info::new("".into(), vec![change.clone()]);
-    let change = walker.walk(change).unwrap();
+    let change = walker.walk(&change).unwrap();
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_snapshot!(change.to_string());
     });
@@ -59,7 +59,7 @@ fn root_remove_toplevel_uri() {
         id: "nixpkgs".to_owned(),
     };
     let info = Info::new("".into(), vec![change.clone()]);
-    let change = walker.walk(change).unwrap();
+    let change = walker.walk(&change).unwrap();
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_snapshot!(change.to_string());
     });
@@ -72,7 +72,7 @@ fn root_remove_toplevel_input_multiple() {
         id: "crane".to_owned(),
     };
     let info = Info::new("".into(), vec![change.clone()]);
-    let change = walker.walk(change).unwrap();
+    let change = walker.walk(&change).unwrap();
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_snapshot!(change.to_string());
     });
@@ -81,7 +81,7 @@ fn root_remove_toplevel_input_multiple() {
 fn root_alt_list() {
     let (flake, _lock) = load_fixtures("root_alt");
     let mut walker = Walker::new(&flake);
-    walker.walk(Change::None);
+    walker.walk(&Change::None);
     let info = Info::new("".into(), vec![]);
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_yaml_snapshot!(walker.inputs);
@@ -96,7 +96,7 @@ fn root_alt_add_toplevel_id_uri() {
         uri: Some("github:mic92/vmsh".to_owned()),
     };
     let info = Info::new("".into(), vec![change.clone()]);
-    let change = walker.walk(change).unwrap();
+    let change = walker.walk(&change).unwrap();
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_snapshot!(change.to_string());
     });
@@ -109,7 +109,7 @@ fn root_alt_remove_toplevel_uri() {
         id: "nixpkgs".to_owned(),
     };
     let info = Info::new("".into(), vec![change.clone()]);
-    let change = walker.walk(change).unwrap();
+    let change = walker.walk(&change).unwrap();
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_snapshot!(change.to_string());
     });
@@ -122,7 +122,7 @@ fn root_alt_remove_toplevel_input_multiple() {
         id: "crane".to_owned(),
     };
     let info = Info::new("".into(), vec![change.clone()]);
-    let change = walker.walk(change).unwrap();
+    let change = walker.walk(&change).unwrap();
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_snapshot!(change.to_string());
     });
@@ -132,7 +132,7 @@ fn root_alt_remove_toplevel_input_multiple() {
 fn root_toplevel_nesting_list() {
     let (flake, _lock) = load_fixtures("toplevel_nesting");
     let mut walker = Walker::new(&flake);
-    walker.walk(Change::None);
+    walker.walk(&Change::None);
     let info = Info::new("".into(), vec![]);
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_yaml_snapshot!(walker.inputs);
@@ -186,7 +186,7 @@ fn root_toplevel_nesting_list() {
 fn completely_flat_toplevel_list() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel");
     let mut walker = Walker::new(&flake);
-    walker.walk(Change::None);
+    walker.walk(&Change::None);
     let info = Info::new("".into(), vec![]);
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_yaml_snapshot!(walker.inputs);
@@ -240,7 +240,7 @@ fn completely_flat_toplevel_list() {
 fn one_level_nesting_flat() {
     let (flake, _lock) = load_fixtures("one_level_nesting_flat");
     let mut walker = Walker::new(&flake);
-    walker.walk(Change::None);
+    walker.walk(&Change::None);
     let info = Info::new("".into(), vec![]);
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_yaml_snapshot!(walker.inputs);

@@ -33,6 +33,8 @@ impl FlakeEdit {
         &self.walker.inputs
     }
 
+    /// Apply a specific change to a walker, on some inputs, it will need to walk
+    /// multiple times, will error, if the edit could not be applied successfully.
     pub fn apply_change(&mut self, change: Change) -> Result<(), FlakeEditError> {
         self.walker.walk(&change);
         Ok(())
