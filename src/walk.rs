@@ -555,8 +555,7 @@ impl<'a> Walker {
                             "This Parent Next Sibling: {}",
                             attr.parent().unwrap().next_sibling().unwrap()
                         );
-                        let fake_id = format!("{ctx:?}{id}");
-                        let mut input = Input::new(fake_id.to_string());
+                        let mut input = Input::new(id.to_string());
                         input.url = follows.to_string();
                         self.insert_with_ctx(id.to_string(), input, ctx);
                     }
