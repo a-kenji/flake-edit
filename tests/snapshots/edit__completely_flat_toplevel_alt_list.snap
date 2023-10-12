@@ -13,6 +13,12 @@ crane:
     - Indirect:
         - flake-utils
         - "\"flake-utils\""
+    - Indirect:
+        - nixpkgs
+        - "\"nixpkgs\""
+    - Indirect:
+        - rust-overlay
+        - "\"rust-overlay\""
 flake-utelinos:
   id: flake-utelinos
   flake: true
@@ -31,4 +37,7 @@ rust-overlay:
     - Indirect:
         - flake-utils
         - "\"flake-utils\""
+    - Indirect:
+        - nixpkgs
+        - "\"nixpkgs\""
 

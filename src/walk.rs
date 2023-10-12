@@ -62,6 +62,8 @@ impl<'a> Walker {
     /// Insert a new Input node at the correct position
     /// or update it with new information.
     fn insert_with_ctx(&mut self, id: String, input: Input, ctx: &Option<Context>) {
+        tracing::debug!("Inserting id: {id}, input: {input:?} with: ctx: {ctx:?}");
+
         if let Some(ctx) = ctx {
             // TODO: add more nesting
             if let Some(follows) = ctx.level.first() {
@@ -74,9 +76,10 @@ impl<'a> Walker {
                     node.follows.dedup();
                 } else {
                     // In case the Input is not fully constructed
-                    let mut stub = Input::new(id.clone());
+                    let mut stub = Input::new(follows.to_string());
                     stub.follows
                         .push(crate::input::Follows::Indirect(id, input.url));
+                    self.inputs.insert(follows.to_string(), stub);
                 }
             }
         } else {
@@ -87,6 +90,7 @@ impl<'a> Walker {
                 self.inputs.insert(id, input);
             }
         }
+        tracing::debug!("Self Inputs: {:#?}", self.inputs);
     }
     /// Traverse the toplevel `flake.nix` file.
     /// It should consist of three attribute keys:
