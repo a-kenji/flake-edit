@@ -559,10 +559,6 @@ impl<'a> Walker {
                         // TODO: Construct follows attribute if not yet ready.
                         // For now assume that the url is the first attribute.
                         // This assumption doesn't generally hold true.
-                        tracing::debug!(
-                            "This Parent Next Sibling: {}",
-                            attr.parent().unwrap().next_sibling().unwrap()
-                        );
                         let mut input = Input::new(id.to_string());
                         input.url = follows.to_string();
                         self.insert_with_ctx(id.to_string(), input, ctx);
