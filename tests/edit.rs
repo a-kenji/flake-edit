@@ -29,7 +29,7 @@ fn root_load() {
 }
 
 #[test]
-fn root_list() {
+fn root_edit_list() {
     let (flake, _lock) = load_fixtures("root");
     let mut flake_edit = FlakeEdit::from(&flake).unwrap();
     let info = Info::new("".into(), vec![]);
