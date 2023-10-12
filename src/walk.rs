@@ -474,13 +474,11 @@ impl<'a> Walker {
                     tracing::debug!("Child of ATTR #:{i} {}", attr);
                     if attr.to_string() == "url" {
                         if let Some(prev_id) = attr.prev_sibling() {
-                            if change.is_some() {
-                                if let Change::Remove { id } = change {
-                                    if *id == prev_id.to_string() {
-                                        tracing::debug!("Removing: {id}");
-                                        let empty = Root::parse("").syntax();
-                                        return Some(empty);
-                                    }
+                            if let Change::Remove { id } = change {
+                                if *id == prev_id.to_string() {
+                                    tracing::debug!("Removing: {id}");
+                                    let empty = Root::parse("").syntax();
+                                    return Some(empty);
                                 }
                             }
                             if let Some(sibling) = child.next_sibling() {
