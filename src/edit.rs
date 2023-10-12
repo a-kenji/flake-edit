@@ -41,8 +41,21 @@ impl FlakeEdit {
 
     /// Apply a specific change to a walker, on some inputs, it will need to walk
     /// multiple times, will error, if the edit could not be applied successfully.
-    pub fn apply_change(&mut self, change: Change) -> Result<(), FlakeEditError> {
-        self.walker.walk(&change);
-        Ok(())
+    pub fn apply_change(&mut self, change: Change) -> Result<Option<String>, FlakeEditError> {
+        let maybe_changed_node = self.walker.walk(&change);
+        match change {
+            Change::None => {
+                assert!(maybe_changed_node.is_none())
+            }
+            Change::Add { id, uri } => {}
+            Change::Remove { id } => {
+                // If we remove a node, it could be a flat structure,
+                // we want to remove all of the references to its toplevel.
+                println!("{:#?}", self.curr_list());
+            }
+            Change::Pin { id } => todo!(),
+            Change::Change { id, ref_or_rev } => todo!(),
+        }
+        Ok(maybe_changed_node.map(|n| n.to_string()))
     }
 }

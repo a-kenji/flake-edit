@@ -1,0 +1,35 @@
+---
+source: tests/edit.rs
+expression: flake_edit.apply_change(change).unwrap().unwrap()
+info:
+  flake_nix: ""
+  changes:
+    - Add:
+        id: vmsh
+        uri: "github:mic92/vmsh"
+---
+{
+  description = "Manage your flake inputs comfortably.";
+
+  inputs = {
+    vmsh.url = "github:mic92/vmsh";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+    flake-utelinos.url = "github:numtide/flake-utils";
+
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+  };
+
+  outputs = _: {};
+}
+

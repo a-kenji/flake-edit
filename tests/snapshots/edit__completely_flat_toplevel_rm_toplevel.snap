@@ -1,7 +1,14 @@
+---
+source: tests/edit.rs
+expression: flake_edit.apply_change(change).unwrap().unwrap()
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        id: nixpkgs
+---
 {
   description = "Edit your flake inputs with ease";
-
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
   inputs.flake-utelinos.url = "github:numtide/flake-utils";
   inputs.rust-overlay.url = "github:oxalica/rust-overlay";
   inputs.rust-overlay.inputs.nixpkgs.follows = "nixpkgs";

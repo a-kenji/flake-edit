@@ -1,3 +1,12 @@
+---
+source: tests/edit.rs
+expression: flake_edit.apply_change(change).unwrap().unwrap()
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        id: crane
+---
 {
   description = "Edit your flake inputs with ease";
 
@@ -6,7 +15,6 @@
   inputs.rust-overlay.url = "github:oxalica/rust-overlay";
   inputs.rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
   inputs.rust-overlay.inputs.flake-utils.follows = "flake-utils";
-  inputs.crane.url = "github:ipetkov/crane";
   inputs.crane.inputs.nixpkgs.follows = "nixpkgs";
   inputs.crane.inputs.rust-overlay.follows = "rust-overlay";
   inputs.crane.inputs.flake-utils.follows = "flake-utils";

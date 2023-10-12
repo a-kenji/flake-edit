@@ -37,33 +37,32 @@ fn root_edit_list() {
         insta::assert_yaml_snapshot!(flake_edit.list());
     });
 }
-// #[test]
-// fn root_add_toplevel_id_uri() {
-//     let (flake, _lock) = load_fixtures("root");
-//     let mut flake_edit = FlakeEdit::from(&flake).unwrap();
-//     let change = Change::Add {
-//         id: Some("vmsh".to_owned()),
-//         uri: Some("github:mic92/vmsh".to_owned()),
-//     };
-//     let info = Info::new("".into(), vec![change.clone()]);
-//     let change = walker.walk(&change).unwrap();
-//     insta::with_settings!({sort_maps => true, info => &info}, {
-//         insta::assert_snapshot!(change.to_string());
-//     });
-// }
-// #[test]
-// fn root_remove_toplevel_uri() {
-//     let (flake, _lock) = load_fixtures("root");
-//     let mut walker = Walker::new(&flake);
-//     let change = Change::Remove {
-//         id: "nixpkgs".to_owned(),
-//     };
-//     let info = Info::new("".into(), vec![change.clone()]);
-//     let change = walker.walk(&change).unwrap();
-//     insta::with_settings!({sort_maps => true, info => &info}, {
-//         insta::assert_snapshot!(change.to_string());
-//     });
-// }
+#[test]
+fn root_add_toplevel_id_uri() {
+    let (flake, _lock) = load_fixtures("root");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Add {
+        id: Some("vmsh".to_owned()),
+        uri: Some("github:mic92/vmsh".to_owned()),
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+#[test]
+fn root_remove_toplevel_uri() {
+    let (flake, _lock) = load_fixtures("root");
+    let mut walker = Walker::new(&flake);
+    let change = Change::Remove {
+        id: "nixpkgs".to_owned(),
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    let change = walker.walk(&change).unwrap();
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(change.to_string());
+    });
+}
 // #[test]
 // fn root_remove_toplevel_input_multiple() {
 //     let (flake, _lock) = load_fixtures("root");
@@ -183,28 +182,49 @@ fn root_toplevel_nesting_list() {
 #[test]
 fn completely_flat_toplevel_list() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel");
-    let mut walker = Walker::new(&flake);
-    walker.walk(&Change::None);
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
     let info = Info::new("".into(), vec![]);
     insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_yaml_snapshot!(walker.inputs);
+        insta::assert_yaml_snapshot!(flake_edit.list());
     });
 }
 // #[test]
-// fn root_alt_add_toplevel_id_uri() {
-//     let (flake, _lock) = load_fixtures("root_alt");
-//     let mut walker = Walker::new(&flake).unwrap();
+// fn completely_flat_toplevel_add_id_uri() {
+//     let (flake, _lock) = load_fixtures("completely_flat_toplevel");
+//     let mut flake_edit = FlakeEdit::from(&flake).unwrap();
 //     let change = Change::Add {
 //         id: Some("vmsh".to_owned()),
-//         uri: Some("github:mic92/vmsh".to_owned()),
+//         uri: Some("mic92/vmsh".to_owned()),
 //     };
-//     walker.changes.push(change.clone());
-//     let info = Info::new("".into(), vec![change]);
-//     let change = walker.walk().unwrap();
+//     let info = Info::new("".into(), vec![change.clone()]);
 //     insta::with_settings!({sort_maps => true, info => &info}, {
-//         insta::assert_snapshot!(change.to_string());
+//         insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
 //     });
 // }
+#[test]
+fn completely_flat_toplevel_rm_toplevel() {
+    let (flake, _lock) = load_fixtures("completely_flat_toplevel");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Remove {
+        id: "nixpkgs".to_owned(),
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+#[test]
+fn completely_flat_toplevel_rm_toplevel_muliple() {
+    let (flake, _lock) = load_fixtures("completely_flat_toplevel");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Remove {
+        id: "crane".to_owned(),
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
 // #[test]
 // fn root_alt_remove_toplevel_uri() {
 //     let (flake, _lock) = load_fixtures("root_alt");
