@@ -72,10 +72,20 @@ impl<'a> Walker {
                     // TODO: this should not be necessary
                     node.follows.sort();
                     node.follows.dedup();
+                } else {
+                    // In case the Input is not fully constructed
+                    let mut stub = Input::new(id.clone());
+                    stub.follows
+                        .push(crate::input::Follows::Indirect(id, input.url));
                 }
             }
         } else {
-            self.inputs.insert(id, input);
+            // Update the input, in case there was already a stub present.
+            if let Some(node) = self.inputs.get_mut(&id) {
+                node.url = input.url;
+            } else {
+                self.inputs.insert(id, input);
+            }
         }
     }
     /// Traverse the toplevel `flake.nix` file.
@@ -574,17 +584,14 @@ impl<'a> Walker {
                             tracing::debug!("This is an url from {} - {}", id, uri,);
                             let mut input = Input::new(id.to_string());
                             input.url = uri.to_string();
-                            // self.inputs.insert(id.to_string(), input);
                             self.insert_with_ctx(id.to_string(), input, ctx);
 
                             // Remove matched node.
-                            if change.is_some() {
-                                if let Change::Remove { id: candidate } = change {
-                                    if *candidate == id.to_string() {
-                                        tracing::debug!("Removing: {id}");
-                                        let empty = Root::parse("").syntax();
-                                        return Some(empty);
-                                    }
+                            if let Change::Remove { id: candidate } = change {
+                                if *candidate == id.to_string() {
+                                    tracing::debug!("Removing: {id}");
+                                    let empty = Root::parse("").syntax();
+                                    return Some(empty);
                                 }
                             }
                         }
