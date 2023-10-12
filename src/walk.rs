@@ -499,6 +499,7 @@ impl<'a> Walker {
                         );
                         if let Some(parent) = child.parent() {
                             if let Some(sibling) = parent.next_sibling() {
+                                //TODO: this is only matched, when url is the first child
                                 // TODO: Is this correct?
                                 tracing::debug!(
                                     "This is a possible follows attribute:{} {}",
@@ -538,9 +539,6 @@ impl<'a> Walker {
                                             }
                                         }
                                     }
-                                }
-                                for input in sibling.children() {
-                                    tracing::debug!("Follows: {input}");
                                 }
                             }
                         }
