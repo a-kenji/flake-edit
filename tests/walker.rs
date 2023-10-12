@@ -192,6 +192,17 @@ fn completely_flat_toplevel_list() {
         insta::assert_yaml_snapshot!(walker.inputs);
     });
 }
+
+#[test]
+fn completely_flat_toplevel_alt_list() {
+    let (flake, _lock) = load_fixtures("completely_flat_toplevel_alt");
+    let mut walker = Walker::new(&flake);
+    walker.walk(&Change::None);
+    let info = Info::new("".into(), vec![]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_yaml_snapshot!(walker.inputs);
+    });
+}
 // #[test]
 // fn root_alt_add_toplevel_id_uri() {
 //     let (flake, _lock) = load_fixtures("root_alt");

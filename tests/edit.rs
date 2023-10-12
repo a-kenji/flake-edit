@@ -188,6 +188,16 @@ fn completely_flat_toplevel_list() {
         insta::assert_yaml_snapshot!(flake_edit.list());
     });
 }
+
+#[test]
+fn completely_flat_toplevel_alt_list() {
+    let (flake, _lock) = load_fixtures("completely_flat_toplevel_alt");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let info = Info::new("".into(), vec![]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_yaml_snapshot!(flake_edit.list());
+    });
+}
 // #[test]
 // fn completely_flat_toplevel_add_id_uri() {
 //     let (flake, _lock) = load_fixtures("completely_flat_toplevel");
