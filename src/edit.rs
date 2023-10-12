@@ -28,6 +28,12 @@ impl FlakeEdit {
         self.changes.push(change);
     }
 
+    pub fn curr_list(&self) -> &HashMap<String, Input> {
+        &self.walker.inputs
+    }
+
+    /// Will walk and then list the inputs, for listing the current inputs,
+    /// use `curr_list()`.
     pub fn list(&mut self) -> &HashMap<String, Input> {
         assert!(self.walker.walk(&Change::None).is_none());
         &self.walker.inputs

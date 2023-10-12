@@ -1,0 +1,38 @@
+---
+source: tests/edit.rs
+expression: flake_edit.list()
+info:
+  flake_nix: ""
+  changes: []
+---
+crane:
+  id: crane
+  flake: true
+  url: "\"github:ipetkov/crane\""
+  follows:
+    - Indirect:
+        - flake-utils
+        - "\"flake-utils\""
+    - Indirect:
+        - nixpkgs
+        - "\"nixpkgs\""
+    - Indirect:
+        - rust-overlay
+        - "\"rust-overlay\""
+nixpkgs:
+  id: nixpkgs
+  flake: true
+  url: "\"github:nixos/nixpkgs/nixos-unstable\""
+  follows: []
+rust-overlay:
+  id: rust-overlay
+  flake: true
+  url: "\"github:oxalica/rust-overlay\""
+  follows:
+    - Indirect:
+        - flake-utils
+        - "\"flake-utils\""
+    - Indirect:
+        - nixpkgs
+        - "\"nixpkgs\""
+
