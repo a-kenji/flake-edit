@@ -326,6 +326,15 @@ impl<'a> Walker {
                                                                     return Some(replacement);
                                                                 }
                                                             }
+                                                            if let Some(ctx) = ctx {
+                                                                if *ctx.level.first().unwrap()
+                                                                    == next_sibling.to_string()
+                                                                {
+                                                                    let replacement =
+                                                                        Root::parse("").syntax();
+                                                                    return Some(replacement);
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 } else {
@@ -545,16 +554,8 @@ impl<'a> Walker {
                     }
                     if attr.to_string() == "follows" {
                         // Construct the follows attribute
-                        // TODO: is the inputs check necessary?
-                        // Maybe we can omit it for composability.
-                        tracing::debug!(
-                            "Prev Prev Sibling: {}",
-                            attr.prev_sibling().unwrap().prev_sibling().unwrap()
-                        );
                         // TODO:
                         // - check for possible removal / change
-                        // - construct input
-                        tracing::debug!("Prev Sibling: {}", attr.prev_sibling().unwrap());
                         let id = attr.prev_sibling().unwrap();
                         let follows = attr.parent().unwrap().next_sibling().unwrap();
                         tracing::debug!("The following attribute follows: {id}:{follows} is nested inside the attr: {ctx:?}");
@@ -564,6 +565,14 @@ impl<'a> Walker {
                         let mut input = Input::new(id.to_string());
                         input.url = follows.to_string();
                         self.insert_with_ctx(id.to_string(), input, ctx);
+                        if let Some(id) = change.id() {
+                            if let Some(ctx) = ctx {
+                                if id == *ctx.level.first().unwrap() && change.is_remove() {
+                                    let replacement = Root::parse("").syntax();
+                                    return Some(replacement);
+                                }
+                            }
+                        }
                     }
                 }
             }

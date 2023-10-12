@@ -8,8 +8,8 @@ use crate::cli::Command;
 use clap::Parser;
 use flake_edit::change::Change;
 use flake_edit::diff::Diff;
+use flake_edit::edit;
 use flake_edit::input::Follows;
-use flake_edit::walk::Walker;
 use nix_uri::urls::UrlWrapper;
 use nix_uri::{FlakeRef, NixUriResult};
 use rnix::tokenizer::Tokenizer;
@@ -33,7 +33,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let text = app.root().text().to_string();
-    let mut walker = Walker::new(&text);
+    let mut editor = edit::FlakeEdit::from(&text)?;
     let mut change = Change::None;
 
     match args.subcommand() {
@@ -80,7 +80,7 @@ fn main() -> anyhow::Result<()> {
         cli::Command::Completion { inputs: _ } => todo!(),
     }
 
-    if let Some(change) = walker.walk(&change) {
+    if let Ok(Some(change)) = editor.apply_change(change.clone()) {
         let root = rnix::Root::parse(&change.to_string());
         let errors = root.errors();
         if errors.is_empty() {
@@ -88,8 +88,8 @@ fn main() -> anyhow::Result<()> {
         } else {
             println!("There are errors in the changes.");
         }
-        let old = walker.root.to_string();
-        let new = change.to_string();
+        let old = text;
+        let new = change;
         let diff = Diff::new(&old, &new);
         diff.compare();
     } else if !args.list() {
@@ -100,7 +100,7 @@ fn main() -> anyhow::Result<()> {
     if let Command::List { format } = args.subcommand() {
         match format {
             cli::ListFormat::Simple => {
-                let inputs = walker.inputs;
+                let inputs = editor.list();
                 let mut buf = String::new();
                 for input in inputs.values() {
                     if !buf.is_empty() {
@@ -120,7 +120,7 @@ fn main() -> anyhow::Result<()> {
                 println!("{buf}");
             }
             cli::ListFormat::Detailed => {
-                let inputs = walker.inputs;
+                let inputs = editor.list();
                 let mut buf = String::new();
                 for input in inputs.values() {
                     if !buf.is_empty() {
@@ -141,15 +141,15 @@ fn main() -> anyhow::Result<()> {
                 println!("{buf}");
             }
             cli::ListFormat::Raw => {
-                println!("{:#?}", walker.inputs);
+                println!("{:#?}", editor.list());
             }
             cli::ListFormat::Json => {
-                let json = serde_json::to_string(&walker.inputs).unwrap();
+                let json = serde_json::to_string(editor.list()).unwrap();
                 println!("{json}");
             }
             cli::ListFormat::None => todo!(),
             cli::ListFormat::Toplevel => {
-                let inputs = walker.inputs;
+                let inputs = editor.list();
                 let mut buf = String::new();
                 for input in inputs.keys() {
                     if !buf.is_empty() {

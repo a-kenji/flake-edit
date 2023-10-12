@@ -35,6 +35,7 @@ impl FlakeEdit {
     /// Will walk and then list the inputs, for listing the current inputs,
     /// use `curr_list()`.
     pub fn list(&mut self) -> &HashMap<String, Input> {
+        self.walker.inputs.clear();
         assert!(self.walker.walk(&Change::None).is_none());
         &self.walker.inputs
     }
@@ -42,20 +43,28 @@ impl FlakeEdit {
     /// Apply a specific change to a walker, on some inputs, it will need to walk
     /// multiple times, will error, if the edit could not be applied successfully.
     pub fn apply_change(&mut self, change: Change) -> Result<Option<String>, FlakeEditError> {
-        let maybe_changed_node = self.walker.walk(&change);
         match change {
-            Change::None => {
-                assert!(maybe_changed_node.is_none())
+            Change::None => Ok(None),
+            Change::Add { ref id, ref uri } => {
+                let maybe_changed_node = self.walker.walk(&change);
+                Ok(maybe_changed_node.map(|n| n.to_string()))
             }
-            Change::Add { id, uri } => {}
-            Change::Remove { id } => {
+            Change::Remove { ref id } => {
                 // If we remove a node, it could be a flat structure,
                 // we want to remove all of the references to its toplevel.
-                println!("{:#?}", self.curr_list());
+                let mut res = None;
+                while let Some(changed_node) = self.walker.walk(&change) {
+                    res = Some(changed_node.clone());
+                    self.walker.root = changed_node.clone();
+                }
+                Ok(res.map(|n| n.to_string()))
             }
             Change::Pin { id } => todo!(),
             Change::Change { id, ref_or_rev } => todo!(),
         }
-        Ok(maybe_changed_node.map(|n| n.to_string()))
+    }
+
+    pub fn walker(&self) -> &Walker {
+        &self.walker
     }
 }
