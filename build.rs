@@ -1,6 +1,7 @@
 use clap::CommandFactory;
 use clap::ValueEnum;
 use clap_complete::{generate_to, Shell};
+use clap_complete_nushell::Nushell;
 use clap_mangen::Man;
 
 use std::path::PathBuf;
@@ -23,10 +24,11 @@ fn main() {
         Shell::value_variants().iter().for_each(|shell| {
             generate_to(*shell, cmd, NAME.to_string(), out).unwrap();
         });
+        generate_to(Nushell, cmd, NAME.to_string(), out).unwrap();
     } else {
         eprintln!("ASSET_DIR environment variable not set");
-        eprintln!("Not able generate completion files");
-        eprintln!("Not able generate manpage files");
+        eprintln!("Not able to generate completion files");
+        eprintln!("Not able to generate manpage files");
     }
 }
 

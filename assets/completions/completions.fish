@@ -1,7 +1,3 @@
-function __fish_complete_inputs
-    fe complete inputs
-end
-
 function __mycommand_complete
     set -l current_word (commandline -t)
     set -l completions "$current_word hello hello $current_word"
@@ -10,15 +6,10 @@ function __mycommand_complete
 end
 
 function __fish_complete_inputs
-    fe list 2>/dev/null
+    fe list --format simple 2>/dev/null
 end
 
 complete -c mycommand --no-files --arguments "(__mycommand_complete)"
-# complete -c mycommand --no-files --arguments "(bash test.sh)"
-
-# function _fe_add
-#
-# end
 
 complete -c fe -n "__fish_seen_subcommand_from rm" -f -a "(__fish_complete_inputs)" -d Input
 complete -c fe -n "__fish_seen_subcommand_from remove" -f -a "(__fish_complete_inputs)" -d Input

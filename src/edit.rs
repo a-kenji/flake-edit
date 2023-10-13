@@ -46,8 +46,15 @@ impl FlakeEdit {
         match change {
             Change::None => Ok(None),
             Change::Add { ref id, ref uri } => {
-                let maybe_changed_node = self.walker.walk(&change);
-                Ok(maybe_changed_node.map(|n| n.to_string()))
+                if let Some(maybe_changed_node) = self.walker.walk(&change) {
+                    Ok(Some(maybe_changed_node.to_string()))
+                } else {
+                    self.walker.add_toplevel = true;
+                    let maybe_changed_node = self.walker.walk(&change);
+                    Ok(maybe_changed_node.map(|n| n.to_string()))
+                }
+
+                // Ok(maybe_changed_node.map(|n| n.to_string()))
             }
             Change::Remove { ref id } => {
                 // If we remove a node, it could be a flat structure,
