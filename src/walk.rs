@@ -225,17 +225,6 @@ impl<'a> Walker {
                                                 }
                                             }
                                         });
-                                    //     child.prev_sibling_or_token() {
-                                    //     if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
-                                    //         let whitespace =
-                                    //             Root::parse(prev.as_token().unwrap().green().text())
-                                    //                 .syntax();
-                                    //         node = node.insert_child(
-                                    //             child.index() + 1,
-                                    //             whitespace.green().into(),
-                                    //         );
-                                    //     }
-                                    // }
                                     if let Some(prev) = child.next_sibling_or_token() {
                                         if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
                                             let whitespace = Root::parse(
