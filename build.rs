@@ -4,6 +4,10 @@ use clap_complete::{generate_to, Shell};
 use clap_complete_nushell::Nushell;
 use clap_mangen::Man;
 
+use std::fs;
+use std::fs::File;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::PathBuf;
 use std::{env, fs::create_dir_all, path::Path};
 
@@ -13,6 +17,10 @@ fn main() {
     println!("cargo:rerun-if-env-changed=ASSET_DIR");
 
     const NAME: &str = "fe";
+    const COMPLETIONS_DIR: &str = "assets/completions";
+    const FISH_COMPLETIONS: &str = "completions.fish";
+    let manifest_dir =
+        env::var_os("CARGO_MANIFEST_DIR").expect("Could not find env CARGO_MANIFEST_DIR");
 
     if let Some(dir) = env::var_os("ASSET_DIR") {
         let out = &Path::new(&dir);
@@ -23,6 +31,24 @@ fn main() {
 
         Shell::value_variants().iter().for_each(|shell| {
             generate_to(*shell, cmd, NAME.to_string(), out).unwrap();
+            // claps completions generation mechanisms are very immature,
+            // include self adjusted ones
+            match shell {
+                Shell::Fish => {
+                    let mut source = PathBuf::from(manifest_dir.clone());
+                    source.push(COMPLETIONS_DIR);
+                    source.push(FISH_COMPLETIONS);
+                    let source = fs::read_to_string(source).expect("Could not read source file");
+                    let path = out.join(format!("{NAME}.fish"));
+                    let mut file = OpenOptions::new()
+                        .append(true)
+                        .open(path)
+                        .expect("Could not create path.");
+                    let _ = file.write_all(source.as_bytes());
+                }
+                Shell::Zsh => {}
+                Shell::PowerShell | Shell::Bash | Shell::Elvish | _ => {}
+            }
         });
         generate_to(Nushell, cmd, NAME.to_string(), out).unwrap();
     } else {
