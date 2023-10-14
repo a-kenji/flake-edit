@@ -144,7 +144,7 @@ impl<'a> Walker {
                         }
                         if child.to_string() == "inputs" {
                             if let Some(replacement) =
-                                self.walk_inputs(child.next_sibling().unwrap(), &ctx, &change)
+                                self.walk_inputs(child.next_sibling().unwrap(), &ctx, change)
                             {
                                 tracing::debug!("Replacement Noode: {replacement}");
                                 let green = toplevel.green().replace_child(
@@ -201,10 +201,14 @@ impl<'a> Walker {
                                         .map(|c| {
                                             if let Some(prev) = c.prev_sibling_or_token() {
                                                 if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
-                                                    let whitespace = Root::parse(&format!(
-                                                        "{}",
-                                                        prev.as_token().unwrap().green().text()
-                                                    ))
+                                                    let whitespace = Root::parse(
+                                                        &prev
+                                                            .as_token()
+                                                            .unwrap()
+                                                            .green()
+                                                            .text()
+                                                            .to_string(),
+                                                    )
                                                     .syntax();
                                                     node = node.insert_child(
                                                         toplevel.index() - 1,
@@ -213,10 +217,14 @@ impl<'a> Walker {
                                                 }
                                             } else if let Some(prev) = c.next_sibling_or_token() {
                                                 if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
-                                                    let whitespace = Root::parse(&format!(
-                                                        "{}",
-                                                        prev.as_token().unwrap().green().text()
-                                                    ))
+                                                    let whitespace = Root::parse(
+                                                        &prev
+                                                            .as_token()
+                                                            .unwrap()
+                                                            .green()
+                                                            .text()
+                                                            .to_string(),
+                                                    )
                                                     .syntax();
                                                     node = node.insert_child(
                                                         toplevel.index() - 1,
@@ -272,10 +280,24 @@ impl<'a> Walker {
                         .children()
                         .find(|child| child.to_string() == "inputs")
                         .and_then(|input_child| input_child.next_sibling());
-                    let ctx = maybe_input_id.map(|id| Context::new(vec![id.to_string()]));
+                    let ctx = maybe_input_id
+                        .clone()
+                        .map(|id| Context::new(vec![id.to_string()]));
                     let mut input = Input::new(follows_id.to_string());
                     input.url = node.next_sibling().unwrap().to_string();
                     self.insert_with_ctx(follows_id.to_string(), input, &ctx);
+
+                    // Remove a toplevel follows node
+                    if let Some(input_id) = maybe_input_id {
+                        if change.is_some() && change.is_remove() {
+                            if let Some(id) = change.id() {
+                                if id == input_id.to_string() {
+                                    let replacement = Root::parse("").syntax();
+                                    return Some(replacement);
+                                }
+                            }
+                        }
+                    }
                 }
             }
             _ => {}
