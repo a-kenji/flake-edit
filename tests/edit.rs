@@ -300,19 +300,18 @@ fn one_level_nesting_flat() {
         insta::assert_yaml_snapshot!(walker.inputs);
     });
 }
-// #[test]
-// fn one_level_nesting_flat_remove_single() {
-//     let (flake, _lock) = load_fixtures("one_level_nesting_flat");
-//     let mut walker = Walker::new(&flake);
-//     let change = Change::Remove {
-//         id: "nixpkgs".to_owned().into(),
-//     };
-//     walker.walk(&change);
-//     let info = Info::new("".into(), vec![]);
-//     insta::with_settings!({sort_maps => true, info => &info}, {
-//         insta::assert_yaml_snapshot!(walker.inputs);
-//     });
-// }
+#[test]
+fn one_level_nesting_flat_remove_single() {
+    let (flake, _lock) = load_fixtures("one_level_nesting_flat");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Remove {
+        id: "nixpkgs".to_owned().into(),
+    };
+    let info = Info::new("".into(), vec![]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
 // #[test]
 // fn root_alt_add_toplevel_id_uri() {
 //     let (flake, _lock) = load_fixtures("root_alt");
