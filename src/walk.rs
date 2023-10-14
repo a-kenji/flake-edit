@@ -655,9 +655,9 @@ impl<'a> Walker {
                                                         );
                                                         if change.is_remove() {
                                                             if let Some(id) = change.id() {
-                                                                if id.matches_with_follows(
-                                                                    &id.to_string(),
-                                                                    Some(follows.to_string()),
+                                                                if id.matches_with_ctx(
+                                                                    &follows.to_string(),
+                                                                    ctx.clone(),
                                                                 ) {
                                                                     let replacement =
                                                                         Root::parse("").syntax();
@@ -733,9 +733,11 @@ impl<'a> Walker {
                                 self.walk_inputs(child.clone(), &Some(context), change)
                             // self.walk_inputs(attr.clone(), &Some(context))
                             {
+                                // TODO: adjuestment of whitespace??
+                                panic!("TODO:: Adjustment of returned node: Matched nested");
+                                return Some(replacement);
                                 // if let Some(change) = self.walk_input(&attr, &Some(context)) {
                                 //     println!("Nested change: {change}");
-                                panic!("Matched nested");
                                 // }
                             }
                             tracing::debug!("Child of ATTRSET KIND #:{i} {:?}", leaf.kind());

@@ -63,12 +63,26 @@ fn root_remove_toplevel_uri() {
         insta::assert_snapshot!(change.to_string());
     });
 }
+#[test]
+fn root_remove_toplevel_input_multiple() {
+    let (flake, _lock) = load_fixtures("root");
+    let mut walker = Walker::new(&flake);
+    let change = Change::Remove {
+        id: "crane".to_owned().into(),
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    let change = walker.walk(&change).unwrap();
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(change.to_string());
+    });
+}
+// TODO:
 // #[test]
-// fn root_remove_toplevel_input_multiple() {
+// fn root_remove_toplevel_input_single_nested() {
 //     let (flake, _lock) = load_fixtures("root");
 //     let mut walker = Walker::new(&flake);
 //     let change = Change::Remove {
-//         id: "crane".to_owned(),
+//         id: "rust-overlay.flake-utils".to_owned().into(),
 //     };
 //     let info = Info::new("".into(), vec![change.clone()]);
 //     let change = walker.walk(&change).unwrap();
@@ -286,6 +300,19 @@ fn one_level_nesting_flat() {
         insta::assert_yaml_snapshot!(walker.inputs);
     });
 }
+// #[test]
+// fn one_level_nesting_flat_remove_single() {
+//     let (flake, _lock) = load_fixtures("one_level_nesting_flat");
+//     let mut walker = Walker::new(&flake);
+//     let change = Change::Remove {
+//         id: "nixpkgs".to_owned().into(),
+//     };
+//     walker.walk(&change);
+//     let info = Info::new("".into(), vec![]);
+//     insta::with_settings!({sort_maps => true, info => &info}, {
+//         insta::assert_yaml_snapshot!(walker.inputs);
+//     });
+// }
 // #[test]
 // fn root_alt_add_toplevel_id_uri() {
 //     let (flake, _lock) = load_fixtures("root_alt");

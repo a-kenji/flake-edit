@@ -49,11 +49,20 @@ impl ChangeId {
             false
         }
     }
-    pub fn matches_with_ctx(&self, input: &str, follows: Option<Context>) -> bool {
-        let follows = follows.and_then(|f| f.level().first().cloned());
+    // The context carries the input attribute
+    pub fn matches_with_ctx(&self, follows: &str, ctx: Option<Context>) -> bool {
+        let ctx = ctx.and_then(|f| f.level().first().cloned());
 
         if let Some(input_id) = self.input() {
-            (self.follows() == follows) && (input_id == input)
+            if let Some(ctx) = ctx {
+                if self.follows().is_some() {
+                    (input_id == ctx) && (self.follows() == Some(follows.into()))
+                } else {
+                    input_id == ctx
+                }
+            } else {
+                input_id == follows
+            }
         } else {
             false
         }

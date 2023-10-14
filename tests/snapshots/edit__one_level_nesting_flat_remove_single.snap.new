@@ -1,0 +1,10 @@
+---
+source: tests/edit.rs
+assertion_line: 313
+expression: walker.inputs
+info:
+  flake_nix: ""
+  changes: []
+---
+{}
+
