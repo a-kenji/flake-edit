@@ -312,6 +312,30 @@ fn one_level_nesting_flat_remove_single() {
         insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
     });
 }
+#[test]
+fn one_level_nesting_flat_remove_multiple() {
+    let (flake, _lock) = load_fixtures("one_level_nesting_flat");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Remove {
+        id: "rust-overlay".to_owned().into(),
+    };
+    let info = Info::new("".into(), vec![]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+#[test]
+fn one_level_nesting_flat_remove_single_nested() {
+    let (flake, _lock) = load_fixtures("one_level_nesting_flat");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Remove {
+        id: "rust-overlay.flake-utils".to_owned().into(),
+    };
+    let info = Info::new("".into(), vec![]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
 // #[test]
 // fn root_alt_add_toplevel_id_uri() {
 //     let (flake, _lock) = load_fixtures("root_alt");
