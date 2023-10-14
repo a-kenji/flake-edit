@@ -28,13 +28,17 @@ pub struct Walker {
 
 #[derive(Debug, Clone)]
 /// A helper for the [`Walker`], in order to hold context while traversing the tree.
-struct Context {
+pub struct Context {
     level: Vec<String>,
 }
 
 impl Context {
     fn new(level: Vec<String>) -> Self {
         Self { level }
+    }
+
+    pub fn level(&self) -> Vec<String> {
+        self.level.clone()
     }
 }
 
@@ -289,9 +293,9 @@ impl<'a> Walker {
 
                     // Remove a toplevel follows node
                     if let Some(input_id) = maybe_input_id {
-                        if change.is_some() && change.is_remove() {
+                        if change.is_remove() {
                             if let Some(id) = change.id() {
-                                if id == input_id.to_string() {
+                                if id.to_string() == input_id.to_string() {
                                     let replacement = Root::parse("").syntax();
                                     return Some(replacement);
                                 }
@@ -402,7 +406,9 @@ impl<'a> Walker {
                                                         );
                                                         if change.is_some() && change.is_remove() {
                                                             if let Some(id) = change.id() {
-                                                                if id == next_sibling.to_string() {
+                                                                if id.to_string()
+                                                                    == next_sibling.to_string()
+                                                                {
                                                                     let replacement =
                                                                         Root::parse("").syntax();
                                                                     // let green = node
@@ -486,9 +492,11 @@ impl<'a> Walker {
                                                             ctx,
                                                         );
                                                     }
-                                                    if change.is_some() && change.is_remove() {
+                                                    if change.is_remove() {
                                                         if let Some(id) = change.id() {
-                                                            if id == next_sibling.to_string() {
+                                                            if id.to_string()
+                                                                == next_sibling.to_string()
+                                                            {
                                                                 let replacement =
                                                                     Root::parse("").syntax();
                                                                 tracing::debug!("Noode: {node}");
@@ -589,7 +597,7 @@ impl<'a> Walker {
                     if attr.to_string() == "url" {
                         if let Some(prev_id) = attr.prev_sibling() {
                             if let Change::Remove { id } = change {
-                                if *id == prev_id.to_string() {
+                                if id.to_string() == prev_id.to_string() {
                                     tracing::debug!("Removing: {id}");
                                     let empty = Root::parse("").syntax();
                                     return Some(empty);
@@ -665,10 +673,12 @@ impl<'a> Walker {
                         // This assumption doesn't generally hold true.
                         let mut input = Input::new(id.to_string());
                         input.url = follows.to_string();
-                        self.insert_with_ctx(id.to_string(), input, ctx);
+                        self.insert_with_ctx(id.to_string(), input.clone(), ctx);
                         if let Some(id) = change.id() {
                             if let Some(ctx) = ctx {
-                                if id == *ctx.level.first().unwrap() && change.is_remove() {
+                                if id.matches_with_ctx(input.id(), Some(ctx.clone()))
+                                    && change.is_remove()
+                                {
                                     let replacement = Root::parse("").syntax();
                                     return Some(replacement);
                                 }
@@ -694,7 +704,7 @@ impl<'a> Walker {
 
                             // Remove matched node.
                             if let Change::Remove { id: candidate } = change {
-                                if *candidate == id.to_string() {
+                                if candidate.to_string() == id.to_string() {
                                     tracing::debug!("Removing: {id}");
                                     let empty = Root::parse("").syntax();
                                     return Some(empty);

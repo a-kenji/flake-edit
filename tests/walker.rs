@@ -56,7 +56,7 @@ fn root_remove_toplevel_uri() {
     let (flake, _lock) = load_fixtures("root");
     let mut walker = Walker::new(&flake);
     let change = Change::Remove {
-        id: "nixpkgs".to_owned(),
+        id: "nixpkgs".to_owned().into(),
     };
     let info = Info::new("".into(), vec![change.clone()]);
     let change = walker.walk(&change).unwrap();
@@ -69,7 +69,7 @@ fn root_remove_toplevel_input_multiple() {
     let (flake, _lock) = load_fixtures("root");
     let mut walker = Walker::new(&flake);
     let change = Change::Remove {
-        id: "crane".to_owned(),
+        id: "crane".to_owned().into(),
     };
     let info = Info::new("".into(), vec![change.clone()]);
     let change = walker.walk(&change).unwrap();
@@ -106,7 +106,7 @@ fn root_alt_remove_toplevel_uri() {
     let (flake, _lock) = load_fixtures("root_alt");
     let mut walker = Walker::new(&flake);
     let change = Change::Remove {
-        id: "nixpkgs".to_owned(),
+        id: "nixpkgs".to_owned().into(),
     };
     let info = Info::new("".into(), vec![change.clone()]);
     let change = walker.walk(&change).unwrap();
@@ -119,7 +119,7 @@ fn root_alt_remove_toplevel_input_multiple() {
     let (flake, _lock) = load_fixtures("root_alt");
     let mut walker = Walker::new(&flake);
     let change = Change::Remove {
-        id: "crane".to_owned(),
+        id: "crane".to_owned().into(),
     };
     let info = Info::new("".into(), vec![change.clone()]);
     let change = walker.walk(&change).unwrap();

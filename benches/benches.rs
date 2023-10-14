@@ -37,7 +37,7 @@ fn add_input() {
 fn remove_input() {
     let mut walker = Walker::new(INPUTS);
     let change = Change::Remove {
-        id: "nixpkgs".to_owned(),
+        id: "nixpkgs".to_owned().into(),
     };
     walker.walk(&change);
     // a simple sanity check

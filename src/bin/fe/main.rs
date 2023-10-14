@@ -72,7 +72,9 @@ fn main() -> anyhow::Result<()> {
         cli::Command::Pin { .. } => todo!(),
         cli::Command::Remove { id } => {
             if let Some(id) = id {
-                change = Change::Remove { id: id.clone() };
+                change = Change::Remove {
+                    id: id.to_owned().into(),
+                };
             }
         }
         cli::Command::List { .. } => {}

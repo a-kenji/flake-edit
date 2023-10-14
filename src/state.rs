@@ -19,8 +19,11 @@ impl State {
         for change in &self.changes {
             match change {
                 Change::None => {}
-                Change::Remove { id } | Change::Pin { id } => {
-                    if *id == target_id {
+                Change::Pin { id } => {
+                    todo!()
+                }
+                Change::Remove { id } => {
+                    if id.to_string() == target_id {
                         return Some(change.clone());
                     }
                 }
