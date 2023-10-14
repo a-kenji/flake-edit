@@ -235,6 +235,18 @@ fn completely_flat_toplevel_rm_toplevel_multiple() {
         insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
     });
 }
+#[test]
+fn completely_flat_toplevel_rm_follows_single() {
+    let (flake, _lock) = load_fixtures("completely_flat_toplevel");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Remove {
+        id: "crane.rust-overlay".to_owned().into(),
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
 // #[test]
 // fn root_alt_remove_toplevel_uri() {
 //     let (flake, _lock) = load_fixtures("root_alt");
