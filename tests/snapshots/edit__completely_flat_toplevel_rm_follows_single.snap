@@ -1,6 +1,5 @@
 ---
 source: tests/edit.rs
-assertion_line: 247
 expression: flake_edit.apply_change(change).unwrap().unwrap()
 info:
   flake_nix: ""

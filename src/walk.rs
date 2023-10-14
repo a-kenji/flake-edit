@@ -300,10 +300,6 @@ impl<'a> Walker {
                                     let replacement = Root::parse("").syntax();
                                     return Some(replacement);
                                 }
-                                // if id.to_string() == input_id.to_string() {
-                                //     let replacement = Root::parse("").syntax();
-                                //     return Some(replacement);
-                                // }
                             }
                         }
                     }
@@ -657,6 +653,18 @@ impl<'a> Walker {
                                                             input,
                                                             ctx,
                                                         );
+                                                        if change.is_remove() {
+                                                            if let Some(id) = change.id() {
+                                                                if id.matches_with_follows(
+                                                                    &id.to_string(),
+                                                                    Some(follows.to_string()),
+                                                                ) {
+                                                                    let replacement =
+                                                                        Root::parse("").syntax();
+                                                                    return Some(replacement);
+                                                                }
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
