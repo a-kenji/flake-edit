@@ -279,7 +279,7 @@ impl<'a> Walker {
                     .children()
                     .find(|child| child.to_string() == "follows")
                     .and_then(|input_child| input_child.prev_sibling());
-                if let Some(follows_id) = maybe_follows_id {
+                if let Some(follows_id) = &maybe_follows_id {
                     let maybe_input_id = node
                         .children()
                         .find(|child| child.to_string() == "inputs")
@@ -295,10 +295,15 @@ impl<'a> Walker {
                     if let Some(input_id) = maybe_input_id {
                         if change.is_remove() {
                             if let Some(id) = change.id() {
-                                if id.to_string() == input_id.to_string() {
+                                let maybe_follows = maybe_follows_id.map(|id| id.to_string());
+                                if id.matches_with_follows(&input_id.to_string(), maybe_follows) {
                                     let replacement = Root::parse("").syntax();
                                     return Some(replacement);
                                 }
+                                // if id.to_string() == input_id.to_string() {
+                                //     let replacement = Root::parse("").syntax();
+                                //     return Some(replacement);
+                                // }
                             }
                         }
                     }

@@ -224,7 +224,7 @@ fn completely_flat_toplevel_rm_toplevel() {
     });
 }
 #[test]
-fn completely_flat_toplevel_rm_toplevel_muliple() {
+fn completely_flat_toplevel_rm_toplevel_multiple() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel");
     let mut flake_edit = FlakeEdit::from(&flake).unwrap();
     let change = Change::Remove {

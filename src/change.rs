@@ -32,13 +32,19 @@ impl ChangeId {
     pub fn input(&self) -> Option<String> {
         let id = &self.0;
         let follows = id.split_once('.');
-        follows.map(|(pre, _post)| pre.into())
+        if let Some((pre, _post)) = follows {
+            Some(pre.into())
+        } else {
+            Some(id.clone())
+        }
     }
-    pub fn matches_with_follows(&self, input: &str, follows: Option<&str>) -> bool {
-        let follows = follows.map(|f| f.to_string());
-
+    pub fn matches_with_follows(&self, input: &str, follows: Option<String>) -> bool {
         if let Some(input_id) = self.input() {
-            (self.follows() == follows) && (input_id == input)
+            if self.follows().is_some() {
+                (self.follows() == follows) && (input_id == input)
+            } else {
+                input_id == input
+            }
         } else {
             false
         }
