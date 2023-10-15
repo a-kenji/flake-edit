@@ -517,7 +517,16 @@ impl<'a> Walker {
                                                     self.walk_input(&attr, &Some(context), change)
                                                 {
                                                     println!("Nested change: {change}");
-                                                    panic!("Matched nested");
+                                                    // panic!("Matched nested");
+                                                    // TODO: adjust whitespace
+                                                    // return changed node
+                                                    let replacement =
+                                                        Self::remove_child_with_whitespace(
+                                                            &node,
+                                                            child.as_node().unwrap(),
+                                                            child.index(),
+                                                        );
+                                                    return Some(replacement);
                                                 }
                                             }
                                         }
@@ -731,14 +740,14 @@ impl<'a> Walker {
                             // panic!("Walking inputs with: {attr}, context: {context:?}");
                             if let Some(replacement) =
                                 self.walk_inputs(child.clone(), &Some(context), change)
-                            // self.walk_inputs(attr.clone(), &Some(context))
                             {
-                                // TODO: adjuestment of whitespace??
-                                panic!("TODO:: Adjustment of returned node: Matched nested");
+                                // TODO: adjustment of whitespace, if node is empty
+                                // TODO: if it leaves an empty attr, then remove whole?
+                                let tree = node
+                                    .green()
+                                    .replace_child(child.index(), replacement.green().into());
+                                let replacement = Root::parse(&tree.to_string()).syntax();
                                 return Some(replacement);
-                                // if let Some(change) = self.walk_input(&attr, &Some(context)) {
-                                //     println!("Nested change: {change}");
-                                // }
                             }
                             tracing::debug!("Child of ATTRSET KIND #:{i} {:?}", leaf.kind());
                             tracing::debug!("Child of ATTRSET CHILD #:{i} {}", leaf);

@@ -76,20 +76,19 @@ fn root_remove_toplevel_input_multiple() {
         insta::assert_snapshot!(change.to_string());
     });
 }
-// TODO:
-// #[test]
-// fn root_remove_toplevel_input_single_nested() {
-//     let (flake, _lock) = load_fixtures("root");
-//     let mut walker = Walker::new(&flake);
-//     let change = Change::Remove {
-//         id: "rust-overlay.flake-utils".to_owned().into(),
-//     };
-//     let info = Info::new("".into(), vec![change.clone()]);
-//     let change = walker.walk(&change).unwrap();
-//     insta::with_settings!({sort_maps => true, info => &info}, {
-//         insta::assert_snapshot!(change.to_string());
-//     });
-// }
+#[test]
+fn root_remove_toplevel_input_single_nested() {
+    let (flake, _lock) = load_fixtures("root");
+    let mut walker = Walker::new(&flake);
+    let change = Change::Remove {
+        id: "rust-overlay.flake-utils".to_owned().into(),
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    let change = walker.walk(&change).unwrap();
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(change.to_string());
+    });
+}
 #[test]
 fn root_alt_list() {
     let (flake, _lock) = load_fixtures("root_alt");
