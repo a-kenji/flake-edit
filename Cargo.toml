@@ -91,5 +91,5 @@ opt-level = 3
 
 [dev-dependencies]
 criterion = "0.5.1"
-insta = { version = "1.33.0", features = ["yaml"] }
+insta = { version = "1.34.0", features = ["yaml"] }
 proptest = "1.3.1"
