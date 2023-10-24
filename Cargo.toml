@@ -54,7 +54,7 @@ rnix = "0.11.0"
 ropey = { version = "1.6.1", optional = true }
 serde = "1.0.189"
 serde_json = { version = "1.0.107", optional = true }
-thiserror = "1.0.49"
+thiserror = "1.0.50"
 tracing = "0.1.39"
 tracing-subscriber = { version = "0.3.17", features = [
   "time",
