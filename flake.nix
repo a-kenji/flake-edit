@@ -9,8 +9,6 @@
     rust-overlay.inputs.flake-utils.follows = "flake-utils";
     crane.url = "github:ipetkov/crane";
     crane.inputs.nixpkgs.follows = "nixpkgs";
-    crane.inputs.rust-overlay.follows = "rust-overlay";
-    crane.inputs.flake-utils.follows = "flake-utils";
   };
 
   # inputs = {
@@ -48,8 +46,7 @@
           if pkgs.stdenv.isLinux then
             pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv
           else
-            pkgs.stdenv
-        ;
+            pkgs.stdenv;
         overlays = [ (import rust-overlay) ];
         rustPkgs = import nixpkgs { inherit system overlays; };
         src = self;
