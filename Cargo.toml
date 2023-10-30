@@ -103,5 +103,5 @@ opt-level = 3
 
 [dev-dependencies]
 criterion = "0.5.1"
-divan = "0.1.0"
+divan = "0.1.2"
 insta = { version = "1.33.0", features = ["yaml"] }
