@@ -1,0 +1,29 @@
+---
+source: tests/walker.rs
+expression: walker.inputs
+info:
+  flake_nix: ""
+  changes: []
+---
+flake-utils:
+  id: flake-utils
+  flake: true
+  url: "\"github:numtide/flake-utils/master\""
+  follows: []
+nixpkgs:
+  id: nixpkgs
+  flake: true
+  url: "\"github:NixOS/nixpkgs/nixos-unstable\""
+  follows: []
+poetry2nix:
+  id: poetry2nix
+  flake: true
+  url: "\"github:nix-community/poetry2nix/master\""
+  follows:
+    - Indirect:
+        - flake-utils
+        - "\"flake-utils\""
+    - Indirect:
+        - nixpkgs
+        - "\"nixpkgs\""
+

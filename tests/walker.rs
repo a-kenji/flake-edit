@@ -257,6 +257,46 @@ fn one_level_nesting_flat() {
         insta::assert_yaml_snapshot!(walker.inputs);
     });
 }
+
+#[test]
+fn flat_nested_flat() {
+    let (flake, _lock) = load_fixtures("flat_nested_flat");
+    let mut walker = Walker::new(&flake);
+    walker.walk(&Change::None);
+    let info = Info::new("".into(), vec![]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_yaml_snapshot!(walker.inputs);
+    });
+}
+
+#[test]
+fn flat_nested_flat_remove_toplevel_input_multiple() {
+    let (flake, _lock) = load_fixtures("flat_nested_flat");
+    let mut walker = Walker::new(&flake);
+    let change = Change::Remove {
+        id: "poetry2nix".to_owned().into(),
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    let change = walker.walk(&change).unwrap();
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(change.to_string());
+    });
+}
+
+#[test]
+fn flat_nested_flat_remove_toplevel_input_nested() {
+    let (flake, _lock) = load_fixtures("flat_nested_flat");
+    let mut walker = Walker::new(&flake);
+    let change = Change::Remove {
+        id: "poetry2nix.nixpkgs".to_owned().into(),
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    let change = walker.walk(&change).unwrap();
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(change.to_string());
+    });
+}
+
 // #[test]
 // fn root_alt_add_toplevel_id_uri() {
 //     let (flake, _lock) = load_fixtures("root_alt");
