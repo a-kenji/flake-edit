@@ -29,26 +29,23 @@ rec {
   #   };
   # };
   #
-  outputs =
-    {
-      self,
-      nixpkgs,
-      flake-utils,
-      flake-utelinos,
-      rust-overlay,
-      crane,
-    }:
+  outputs = {
+    self,
+    nixpkgs,
+    flake-utils,
+    flake-utelinos,
+    rust-overlay,
+    crane,
+  }:
     flake-utils.lib.eachDefaultSystem (
-      system:
-      let
+      system: let
         pkgs = nixpkgs.legacyPackages.${system};
         stdenv =
-          if pkgs.stdenv.isLinux then
-            pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv
-          else
-            pkgs.stdenv;
-        overlays = [ (import rust-overlay) ];
-        rustPkgs = import nixpkgs { inherit system overlays; };
+          if pkgs.stdenv.isLinux
+          then pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv
+          else pkgs.stdenv;
+        overlays = [(import rust-overlay)];
+        rustPkgs = import nixpkgs {inherit system overlays;};
         src = self;
         RUST_TOOLCHAIN = src + "/rust-toolchain.toml";
         RUSTFMT_TOOLCHAIN = src + "/.rustfmt-toolchain.toml";
@@ -59,7 +56,7 @@ rec {
 
         rustFmtToolchainTOML =
           rustPkgs.rust-bin.fromRustupToolchainFile
-            RUSTFMT_TOOLCHAIN;
+          RUSTFMT_TOOLCHAIN;
 
         rustToolchainDevTOML = rustToolchainTOML.override {
           extensions = [
@@ -67,11 +64,11 @@ rec {
             "rust-analysis"
             "rust-docs"
           ];
-          targets = [ ];
+          targets = [];
         };
         gitDate = "${builtins.substring 0 4 self.lastModifiedDate}-${
-            builtins.substring 4 2 self.lastModifiedDate
-          }-${builtins.substring 6 2 self.lastModifiedDate}";
+          builtins.substring 4 2 self.lastModifiedDate
+        }-${builtins.substring 6 2 self.lastModifiedDate}";
         gitRev = self.shortRev or self.dirtyShortRev;
         cargoLock = {
           lockFile = builtins.path {
@@ -83,7 +80,7 @@ rec {
         rustc = rustToolchainTOML;
         cargo = rustToolchainTOML;
 
-        buildInputs = [ pkgs.installShellFiles ];
+        buildInputs = [pkgs.installShellFiles];
 
         devInputs = [
           rustToolchainDevTOML
@@ -104,48 +101,53 @@ rec {
           #alternative linker
           pkgs.clang
         ];
-        lintInputs = [
-          pkgs.cargo-deny
-          pkgs.cargo-outdated
-          pkgs.cargo-diet
-          pkgs.lychee
-          pkgs.typos
-          (pkgs.symlinkJoin {
-            name = "cargo-udeps-wrapped";
-            paths = [ pkgs.cargo-udeps ];
-            nativeBuildInputs = [ pkgs.makeWrapper ];
-            postBuild = ''
-              wrapProgram $out/bin/cargo-udeps \
-                --prefix PATH : ${
+        lintInputs =
+          [
+            pkgs.cargo-deny
+            pkgs.cargo-outdated
+            pkgs.cargo-diet
+            pkgs.lychee
+            pkgs.typos
+            (pkgs.symlinkJoin {
+              name = "cargo-udeps-wrapped";
+              paths = [pkgs.cargo-udeps];
+              nativeBuildInputs = [pkgs.makeWrapper];
+              postBuild = ''
+                wrapProgram $out/bin/cargo-udeps \
+                  --prefix PATH : ${
                   pkgs.lib.makeBinPath [
                     (rustPkgs.rust-bin.selectLatestNightlyWith (toolchain: toolchain.default))
                   ]
                 }
-            '';
-          })
-          (pkgs.symlinkJoin {
-            name = "cargo-careful-wrapped";
-            paths = [ pkgs.cargo-careful ];
-            nativeBuildInputs = [ pkgs.makeWrapper ];
-            postBuild = ''
-              wrapProgram $out/bin/cargo-careful \
-                --prefix PATH : ${
+              '';
+            })
+            (pkgs.symlinkJoin {
+              name = "cargo-careful-wrapped";
+              paths = [pkgs.cargo-careful];
+              nativeBuildInputs = [pkgs.makeWrapper];
+              postBuild = ''
+                wrapProgram $out/bin/cargo-careful \
+                  --prefix PATH : ${
                   pkgs.lib.makeBinPath [
                     (rustPkgs.rust-bin.selectLatestNightlyWith (
-                      toolchain: toolchain.default.override { extensions = [ "rust-src" ]; }
+                      toolchain: toolchain.default.override {extensions = ["rust-src"];}
                     ))
                   ]
                 }
-            '';
-          })
-        ] ++ devInputs ++ editorConfigInputs ++ actionlintInputs ++ fmtInputs;
+              '';
+            })
+          ]
+          ++ devInputs
+          ++ editorConfigInputs
+          ++ actionlintInputs
+          ++ fmtInputs;
         fmtInputs = [
           pkgs.alejandra
           pkgs.treefmt
           pkgs.taplo
           pkgs.typos
         ];
-        editorConfigInputs = [ pkgs.editorconfig-checker ];
+        editorConfigInputs = [pkgs.editorconfig-checker];
         actionlintInputs = [
           pkgs.actionlint
           pkgs.shellcheck
@@ -154,7 +156,7 @@ rec {
         commonArgs = {
           inherit stdenv version name;
           pname = name;
-          src = pkgs.lib.cleanSourceWith { src = craneLib.path ./.; };
+          src = pkgs.lib.cleanSourceWith {src = craneLib.path ./.;};
         };
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchainTOML;
         # Build *just* the cargo dependencies, so we can reuse
@@ -178,28 +180,22 @@ rec {
           homepage = "https://github.com/a-kenji/fe";
           inherit description;
           mainProgram = "fe";
-          license = [ licenses.mit ];
+          license = [licenses.mit];
         };
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
         cargoClippy = craneLib.cargoClippy (
           commonArgs
           // {
             inherit cargoArtifacts;
-            nativeBuildInputs = [ rustToolchainDevTOML ];
+            nativeBuildInputs = [rustToolchainDevTOML];
           }
         );
-        cargoDeny = craneLib.cargoDeny (
-          commonArgs
-          // {
-            inherit cargoArtifacts;
-            # cargoDenyChecks = "licenses sources";
-          }
-        );
+        cargoDeny = craneLib.cargoDeny (commonArgs // {inherit cargoArtifacts;});
         cargoTarpaulin = craneLib.cargoTarpaulin (
-          commonArgs // { inherit cargoArtifacts; }
+          commonArgs // {inherit cargoArtifacts;}
         );
-        cargoDoc = craneLib.cargoDoc (commonArgs // { inherit cargoArtifacts; });
-        cargoTest = craneLib.cargoTest (commonArgs // { inherit cargoArtifacts; });
+        cargoDoc = craneLib.cargoDoc (commonArgs // {inherit cargoArtifacts;});
+        cargoTest = craneLib.cargoTest (commonArgs // {inherit cargoArtifacts;});
         cranePackage = craneLib.buildPackage (
           commonArgs
           // {
@@ -218,14 +214,13 @@ rec {
               cargoArtifacts
               meta
               stdenv
-            ;
+              ;
           }
         );
-      in
-      rec {
+      in rec {
         devShells = {
           default = devShells.fullShell;
-          fullShell = (pkgs.mkShell.override { inherit stdenv; }) {
+          fullShell = (pkgs.mkShell.override {inherit stdenv;}) {
             buildInputs = fmtInputs ++ devInputs;
             inherit name;
             ASSET_DIR = assetDir;
@@ -233,34 +228,16 @@ rec {
             RUST_BACKTRACE = true;
             RUSTFLAGS = "-C linker=clang -C link-arg=-fuse-ld=${pkgs.mold}/bin/mold";
           };
-          editorConfigShell = pkgs.mkShell { buildInputs = editorConfigInputs; };
-          actionlintShell = pkgs.mkShell { buildInputs = actionlintInputs; };
-          lintShell = pkgs.mkShell { buildInputs = lintInputs; };
-          fmtShell = pkgs.mkShell { buildInputs = fmtInputs; };
+          editorConfigShell = pkgs.mkShell {buildInputs = editorConfigInputs;};
+          actionlintShell = pkgs.mkShell {buildInputs = actionlintInputs;};
+          lintShell = pkgs.mkShell {buildInputs = lintInputs;};
+          fmtShell = pkgs.mkShell {buildInputs = fmtInputs;};
           mdShell = pkgs.mkShell {
-            buildInputs = fmtInputs ++ [ self.outputs.packages.${system}.default ];
+            buildInputs = fmtInputs ++ [self.outputs.packages.${system}.default];
           };
         };
         packages = rec {
           default = fe;
-          upstream = (pkgs.makeRustPlatform { inherit cargo rustc; }).buildRustPackage {
-            cargoDepsName = "fe";
-            GIT_DATE = gitDate;
-            GIT_REV = gitRev;
-            ASSET_DIR = assetDir;
-            doCheck = false;
-            version = "unstable" + gitDate;
-            postInstall = postInstall "fe";
-            inherit
-              assetDir
-              buildInputs
-              cargoLock
-              meta
-              name
-              src
-              stdenv
-            ;
-          };
           fe = cranePackage;
           inherit
             cargoArtifacts
@@ -269,7 +246,7 @@ rec {
             cargoDoc
             cargoTest
             cargoTarpaulin
-          ;
+            ;
         };
         apps.default = {
           type = "app";
