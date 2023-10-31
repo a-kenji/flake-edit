@@ -1,4 +1,4 @@
-{
+rec {
   description = "Edit your flake inputs with ease";
 
   inputs = {
@@ -55,8 +55,7 @@
 
         cargoTOML = builtins.fromTOML (builtins.readFile (src + "/Cargo.toml"));
         inherit (cargoTOML.package) version name;
-        # rustToolchainTOML = rustPkgs.rust-bin.fromRustupToolchainFile RUST_TOOLCHAIN;
-        rustToolchainTOML = rustPkgs.rust-bin.stable.latest.minimal;
+        rustToolchainTOML = rustPkgs.rust-bin.fromRustupToolchainFile RUST_TOOLCHAIN;
 
         rustFmtToolchainTOML =
           rustPkgs.rust-bin.fromRustupToolchainFile
@@ -155,9 +154,7 @@
         commonArgs = {
           inherit stdenv version name;
           pname = name;
-          src = pkgs.lib.cleanSourceWith {
-            src = craneLib.path ./.; # The original, unfiltered source
-          };
+          src = pkgs.lib.cleanSourceWith { src = craneLib.path ./.; };
         };
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchainTOML;
         # Build *just* the cargo dependencies, so we can reuse
@@ -177,12 +174,53 @@
           cp ${assetDir}/${name}.nu $out/share/${name}.nu
         '';
 
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
         meta = with pkgs.lib; {
           homepage = "https://github.com/a-kenji/fe";
-          description = "Edit your flake inputs with ease";
+          inherit description;
+          mainProgram = "fe";
           license = [ licenses.mit ];
         };
+        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        cargoClippy = craneLib.cargoClippy (
+          commonArgs
+          // {
+            inherit cargoArtifacts;
+            nativeBuildInputs = [ rustToolchainDevTOML ];
+          }
+        );
+        cargoDeny = craneLib.cargoDeny (
+          commonArgs
+          // {
+            inherit cargoArtifacts;
+            # cargoDenyChecks = "licenses sources";
+          }
+        );
+        cargoTarpaulin = craneLib.cargoTarpaulin (
+          commonArgs // { inherit cargoArtifacts; }
+        );
+        cargoDoc = craneLib.cargoDoc (commonArgs // { inherit cargoArtifacts; });
+        cargoTest = craneLib.cargoTest (commonArgs // { inherit cargoArtifacts; });
+        cranePackage = craneLib.buildPackage (
+          commonArgs
+          // {
+            cargoExtraArgs = "-p ${name}";
+            GIT_DATE = gitDate;
+            GIT_REV = gitRev;
+            ASSET_DIR = assetDir;
+            doCheck = false;
+            version = "unstable-" + gitDate;
+            pname = "fe";
+            name = "fe";
+            postInstall = postInstall "fe";
+            inherit
+              assetDir
+              buildInputs
+              cargoArtifacts
+              meta
+              stdenv
+            ;
+          }
+        );
       in
       rec {
         devShells = {
@@ -193,7 +231,6 @@
             ASSET_DIR = assetDir;
             RUST_LOG = "debug";
             RUST_BACKTRACE = true;
-            # RUSTFLAGS = "-C linker=clang -C link-arg=-fuse-ld=${pkgs.mold}/bin/mold -C target-cpu=native";
             RUSTFLAGS = "-C linker=clang -C link-arg=-fuse-ld=${pkgs.mold}/bin/mold";
           };
           editorConfigShell = pkgs.mkShell { buildInputs = editorConfigInputs; };
@@ -204,8 +241,8 @@
             buildInputs = fmtInputs ++ [ self.outputs.packages.${system}.default ];
           };
         };
-        packages = {
-          default = packages.crane;
+        packages = rec {
+          default = fe;
           upstream = (pkgs.makeRustPlatform { inherit cargo rustc; }).buildRustPackage {
             cargoDepsName = "fe";
             GIT_DATE = gitDate;
@@ -224,32 +261,19 @@
               stdenv
             ;
           };
-          crane = craneLib.buildPackage (
-            commonArgs
-            // {
-              cargoExtraArgs = "-p ${name}";
-              GIT_DATE = gitDate;
-              GIT_REV = gitRev;
-              ASSET_DIR = assetDir;
-              doCheck = false;
-              version = "unstable-" + gitDate;
-              # pname = name;
-              pname = "fe";
-              name = "fe";
-              postInstall = postInstall "fe";
-              inherit
-                assetDir
-                buildInputs
-                cargoArtifacts
-                meta
-                stdenv
-              ;
-            }
-          );
+          fe = cranePackage;
+          inherit
+            cargoArtifacts
+            cargoClippy
+            cargoDeny
+            cargoDoc
+            cargoTest
+            cargoTarpaulin
+          ;
         };
         apps.default = {
           type = "app";
-          program = "${packages.default}/bin/${name}";
+          program = pkgs.lib.getExe self.outputs.packages.${system}.fe;
         };
         formatter = pkgs.alejandra;
       }
