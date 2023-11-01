@@ -62,10 +62,10 @@ fn main() -> anyhow::Result<()> {
                             uri: Some(uri),
                         };
                     } else {
-                        println!("Please specify an [ID] for this flake reference.")
+                        eprintln!("Please specify an [ID] for this flake reference.")
                     }
                 } else {
-                    println!("Please specify an [ID] for this flake reference.")
+                    eprintln!("Please specify an [ID] for this flake reference.")
                 }
             }
         }
@@ -78,7 +78,15 @@ fn main() -> anyhow::Result<()> {
             }
         }
         cli::Command::List { .. } => {}
-        cli::Command::Change { id: _ } => todo!(),
+        cli::Command::Change { id, uri } => {
+            if let Some(id) = id {
+                change = Change::Change {
+                    id: id.to_owned().into(),
+                    ref_or_rev: None,
+                    uri: uri.clone(),
+                };
+            }
+        }
         cli::Command::Completion { inputs: _ } => todo!(),
     }
 

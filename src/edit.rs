@@ -45,7 +45,7 @@ impl FlakeEdit {
     pub fn apply_change(&mut self, change: Change) -> Result<Option<String>, FlakeEditError> {
         match change {
             Change::None => Ok(None),
-            Change::Add { ref id, ref uri } => {
+            Change::Add { .. } => {
                 if let Some(maybe_changed_node) = self.walker.walk(&change) {
                     Ok(Some(maybe_changed_node.to_string()))
                 } else {
@@ -56,7 +56,7 @@ impl FlakeEdit {
 
                 // Ok(maybe_changed_node.map(|n| n.to_string()))
             }
-            Change::Remove { ref id } => {
+            Change::Remove { .. } => {
                 // If we remove a node, it could be a flat structure,
                 // we want to remove all of the references to its toplevel.
                 let mut res = None;
@@ -70,8 +70,14 @@ impl FlakeEdit {
                 }
                 Ok(res.map(|n| n.to_string()))
             }
-            Change::Pin { id } => todo!(),
-            Change::Change { id, ref_or_rev } => todo!(),
+            Change::Pin { .. } => todo!(),
+            Change::Change { .. } => {
+                if let Some(maybe_changed_node) = self.walker.walk(&change) {
+                    Ok(Some(maybe_changed_node.to_string()))
+                } else {
+                    panic!("No change");
+                }
+            }
         }
     }
 

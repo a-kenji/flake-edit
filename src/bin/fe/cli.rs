@@ -74,7 +74,10 @@ pub(crate) enum Command {
     Pin { id: Option<String> },
     /// Change a specific flake reference based on its id.
     #[command(alias = "c", arg_required_else_help = true)]
-    Change { id: Option<String> },
+    Change {
+        id: Option<String>,
+        uri: Option<String>,
+    },
     /// Remove a specific flake reference based on its id.
     #[clap(alias = "rm")]
     Remove { id: Option<String> },

@@ -16,6 +16,7 @@ pub enum Change {
     },
     Change {
         id: Option<String>,
+        uri: Option<String>,
         ref_or_rev: Option<String>,
     },
 }

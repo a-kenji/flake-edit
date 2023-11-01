@@ -174,7 +174,7 @@ impl<'a> Walker {
                                     );
                                     return Some(node);
                                 } else {
-                                    tracing::debug!("Replacement Noode: {replacement}");
+                                    tracing::debug!("Replacement Node: {replacement}");
                                     let green = toplevel.green().replace_child(
                                         child.next_sibling().unwrap().index(),
                                         replacement.green().into(),
