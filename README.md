@@ -100,7 +100,7 @@ Usage: fe list [OPTIONS]
 
 Options:
       --format <FORMAT>
-          [default: simple]
+          [default: detailed]
   -h, --help
           Print help
 ```
