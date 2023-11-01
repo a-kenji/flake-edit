@@ -15,13 +15,12 @@
     crane = {
       url = "github:ipetkov/crane";
       inputs = {
-        # nixpkgs.follows = "nixpkgs";
+        nixpkgs.follows = "nixpkgs";
         rust-overlay.follows = "rust-overlay";
         flake-utils.follows = "flake-utils";
       };
     };
   };
-  inputs.crane.inputs.nixpkgs.follows = "nixpkgs";
 
-  outputs = _: {};
+  outputs = _: { };
 }
