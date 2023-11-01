@@ -167,21 +167,20 @@ impl<'a> Walker {
                             if let Some(replacement) = self.walk_inputs(child.clone(), &ctx, change)
                             {
                                 if replacement.to_string().is_empty() {
-                                    // let green =
-                                    //     toplevel.parent().unwrap().green().replace_child(
-                                    //         child.index(),
-                                    //         replacement.green().into(),
-                                    //     );
-                                    // let green = toplevel.replace_with(green);
-                                    // let node = Root::parse(green.to_string().as_str()).syntax();
-                                    // let green =
-                                    //     toplevel.replace_with(replacement.green().into());
-                                    // let mut green = root.green().remove_child(toplevel.index());
                                     let node = Self::remove_child_with_whitespace(
                                         &root,
                                         &toplevel,
                                         toplevel.index(),
                                     );
+                                    return Some(node);
+                                } else {
+                                    tracing::debug!("Replacement Noode: {replacement}");
+                                    let green = toplevel.green().replace_child(
+                                        child.next_sibling().unwrap().index(),
+                                        replacement.green().into(),
+                                    );
+                                    let green = toplevel.replace_with(green);
+                                    let node = Root::parse(green.to_string().as_str()).syntax();
                                     return Some(node);
                                 }
                             }
@@ -516,16 +515,26 @@ impl<'a> Walker {
                                                 if let Some(change) =
                                                     self.walk_input(&attr, &Some(context), change)
                                                 {
+                                                    println!("Adjust !!! {}", child.index());
                                                     println!("Nested change: {change}");
+                                                    println!(
+                                                        "Child Node: {}",
+                                                        child.as_node().unwrap()
+                                                    );
+                                                    println!("Nested Attr : {}", nested_attr);
+                                                    println!("Attr : {}", attr);
+                                                    println!("Node : {}", node);
                                                     // panic!("Matched nested");
                                                     // TODO: adjust whitespace
                                                     // return changed node
+                                                    // return Some(change);
                                                     let replacement =
                                                         Self::remove_child_with_whitespace(
-                                                            &node,
-                                                            child.as_node().unwrap(),
-                                                            child.index(),
+                                                            &nested_attr,
+                                                            &attr,
+                                                            attr.index(),
                                                         );
+                                                    println!("Replacement: {}", replacement);
                                                     return Some(replacement);
                                                 }
                                             }
@@ -701,6 +710,8 @@ impl<'a> Walker {
                                 if id.matches_with_ctx(input.id(), Some(ctx.clone()))
                                     && change.is_remove()
                                 {
+                                    println!("Node: {}", node);
+                                    println!("Index: {}", node.index());
                                     let replacement = Root::parse("").syntax();
                                     return Some(replacement);
                                 }
