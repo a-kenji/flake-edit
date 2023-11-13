@@ -56,7 +56,7 @@ serde = "1.0.191"
 serde_json = { version = "1.0.108", optional = true }
 thiserror = "1.0.50"
 tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.17", features = [
+tracing-subscriber = { version = "0.3.18", features = [
   "time",
   "std",
   "fmt",
