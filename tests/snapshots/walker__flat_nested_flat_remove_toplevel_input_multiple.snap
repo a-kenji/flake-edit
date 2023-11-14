@@ -13,12 +13,10 @@ info:
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.flake-utils.url = "github:numtide/flake-utils/master";
 
-  outputs =
-    {
-      self,
-      nixpkgs,
-      flake-utils,
-      poetry2nix,
-    }:
-    { };
+  outputs = {
+    self,
+    nixpkgs,
+    flake-utils,
+    poetry2nix,
+  }: {};
 }
