@@ -93,7 +93,26 @@ pub(crate) enum Command {
     Completion {
         #[arg(long)]
         inputs: bool,
+        mode: CompletionMode,
     },
+}
+
+#[derive(Debug, Clone, Default)]
+/// Which command should be completed
+pub(crate) enum CompletionMode {
+    #[default]
+    None,
+    Add,
+}
+
+impl From<String> for CompletionMode {
+    fn from(value: String) -> Self {
+        use CompletionMode::*;
+        match value.to_lowercase().as_str() {
+            "add" => Add,
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

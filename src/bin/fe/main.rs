@@ -15,6 +15,7 @@ use nix_uri::{FlakeRef, NixUriResult};
 use rnix::tokenizer::Tokenizer;
 
 mod app;
+mod cache;
 mod cli;
 mod error;
 mod log;
@@ -87,7 +88,16 @@ fn main() -> anyhow::Result<()> {
                 };
             }
         }
-        cli::Command::Completion { inputs: _ } => todo!(),
+        cli::Command::Completion { inputs: _, mode } => match mode {
+            cli::CompletionMode::None => todo!(),
+            cli::CompletionMode::Add => {
+                let default_types = cache::default_types();
+                for default in default_types {
+                    println!("{}", default);
+                }
+                std::process::exit(0);
+            }
+        },
     }
 
     if let Ok(Some(change)) = editor.apply_change(change.clone()) {
