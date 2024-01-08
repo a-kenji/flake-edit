@@ -12,6 +12,6 @@ homepage.workspace = true
 
 [dependencies]
 serde = "1.0.192"
-serde_json = "1.0.108"
+serde_json = "1.0.109"
 thiserror = "1.0.56"
 tracing = "0.1.40"
