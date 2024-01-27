@@ -47,7 +47,7 @@ pub struct FlakeBuf {
 impl FlakeBuf {
     fn from_path(path: PathBuf) -> io::Result<Self> {
         let text = Rope::from_reader(&mut io::BufReader::new(File::open(&path)?))?;
-        let path = format!("{:?}", path);
+        let path = format!("{:?}", path.display());
         Ok(Self {
             text,
             path,
@@ -59,8 +59,9 @@ impl FlakeBuf {
         &self.text
     }
     pub fn apply(&self, change: &str) -> io::Result<()> {
+        // println!("{}", self.path);
         std::fs::write(&self.path, change)?;
-        println!("{}", change);
+        // println!("{}", change);
         Ok(())
     }
 }
