@@ -30,7 +30,7 @@ fn main() -> anyhow::Result<()> {
 
     let (_node, errors) = rnix::parser::parse(Tokenizer::new(&app.root().text().to_string()));
     if !errors.is_empty() {
-        eprintln!("There are errors in the root document.");
+        tracing::error!("There are errors in the root document.");
     }
 
     let text = app.root().text().to_string();
@@ -63,10 +63,10 @@ fn main() -> anyhow::Result<()> {
                             uri: Some(uri),
                         };
                     } else {
-                        eprintln!("Please specify an [ID] for this flake reference.")
+                        println!("Please specify an [ID] for this flake reference.")
                     }
                 } else {
-                    eprintln!("Please specify an [ID] for this flake reference.")
+                    println!("Please specify an [ID] for this flake reference.")
                 }
             }
         }
@@ -106,15 +106,26 @@ fn main() -> anyhow::Result<()> {
         if errors.is_empty() {
             println!("No errors in the changes.");
         } else {
-            println!("There are errors in the changes.");
+            println!("There are errors in the changes:");
+            for e in errors {
+                tracing::error!("Error: {e}");
+                tracing::error!("The changes will not be applied.");
+                std::process::exit(1);
+            }
         }
-        let old = text;
-        let new = change;
-        let diff = Diff::new(&old, &new);
-        diff.compare();
+        if args.diff() {
+            let old = text;
+            let new = change;
+            let diff = Diff::new(&old, &new);
+            diff.compare();
+            // Write the changes
+        } else if args.apply() {
+            app.root.apply(&change)?;
+        }
     } else if !args.list() {
         println!("Nothing changed in the node.");
         println!("The following change could not be applied: \n{:?}", change);
+        std::process::exit(1);
     }
 
     if let Command::List { format } = args.subcommand() {

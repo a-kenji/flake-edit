@@ -9,12 +9,12 @@ use ropey::Rope;
 
 #[derive(Debug, Default)]
 pub struct FlakeEdit {
-    root: FlakeBuf,
+    pub root: FlakeBuf,
     _lock: Option<FlakeBuf>,
 }
 
 impl FlakeEdit {
-    const FLAKE: &str = "flake.nix";
+    const FLAKE: &'static str = "flake.nix";
     pub fn init(args: &CliArgs) -> Result<Self, FeError> {
         let path = if let Some(flake) = args.flake() {
             PathBuf::from(flake)
@@ -57,5 +57,10 @@ impl FlakeBuf {
 
     pub fn text(&self) -> &Rope {
         &self.text
+    }
+    pub fn apply(&self, change: &str) -> io::Result<()> {
+        std::fs::write(&self.path, change)?;
+        println!("{}", change);
+        Ok(())
     }
 }
