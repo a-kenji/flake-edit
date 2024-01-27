@@ -20,6 +20,12 @@ pub struct CliArgs {
     /// Pin to a specific ref_or_rev
     #[arg(long)]
     ref_or_rev: Option<String>,
+    /// Print a diff of the changes, will set the apply flag to false.
+    #[arg(long, default_value_t = false)]
+    diff: bool,
+    /// Whether to apply possible changes.
+    #[arg(long, default_value_t = true)]
+    apply: bool,
 
     #[command(subcommand)]
     subcommand: Command,
@@ -49,6 +55,14 @@ impl CliArgs {
 
     pub fn flake(&self) -> Option<&String> {
         self.flake.as_ref()
+    }
+
+    pub fn diff(&self) -> bool {
+        self.diff
+    }
+
+    pub fn apply(&self) -> bool {
+        self.apply
     }
 }
 
