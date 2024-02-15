@@ -3,7 +3,7 @@ rec {
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    flake-utelinos.url = "github:numtide/flake-utils";
+    flake-utils.url = "github:numtide/flake-utils";
     rust-overlay.url = "github:oxalica/rust-overlay";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     rust-overlay.inputs.flake-utils.follows = "flake-utils";
@@ -33,7 +33,7 @@ rec {
     self,
     nixpkgs,
     flake-utils,
-    flake-utelinos,
+    # flake-utelinos,
     rust-overlay,
     crane,
   }:
