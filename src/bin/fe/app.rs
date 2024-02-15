@@ -47,7 +47,7 @@ pub struct FlakeBuf {
 impl FlakeBuf {
     fn from_path(path: PathBuf) -> io::Result<Self> {
         let text = Rope::from_reader(&mut io::BufReader::new(File::open(&path)?))?;
-        let path = format!("{:?}", path.display());
+        let path = path.display().to_string();
         Ok(Self {
             text,
             path,
