@@ -46,7 +46,7 @@ write = ["ropey"]
 assets = ["clap_complete", "clap_complete_nushell", "roff", "clap_mangen"]
 
 [dependencies]
-anyhow = { version = "1.0.75", optional = true }
+anyhow = { version = "1.0.80", optional = true }
 clap = { version = "4.4.18", optional = true, features = ["derive"] }
 diffy = { version = "0.3.0", optional = true }
 directories = "5.0.1"
