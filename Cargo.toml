@@ -47,7 +47,7 @@ nix-uri = { version = "0.1.4", path = "vendor/nix-uri" }
 rnix = "0.11.0"
 ropey = { version = "1.6.1", optional = true }
 rowan = "0.15.15"
-serde = "1.0.192"
+serde = "1.0.197"
 thiserror = "1.0.56"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = [
