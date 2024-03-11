@@ -38,7 +38,7 @@ write = ["ropey"]
 
 [dependencies]
 anyhow = { version = "1.0.79", optional = true }
-clap = { version = "4.4.10", optional = true, features = ["derive"] }
+clap = { version = "4.5.2", optional = true, features = ["derive"] }
 diffy = { version = "0.3.0", optional = true}
 # nix-uri = { version = "0.1.4", git = "https://github.com/a-kenji/nix-uri" }
 # nix-uri = "0.1.4"
@@ -59,7 +59,7 @@ tracing-subscriber = { version = "0.3.18", features = [
 
 
 [build-dependencies]
-clap = { version = "4.4.10", features = ["derive"], optional = true }
+clap = { version = "4.5.2", features = ["derive"], optional = true }
 clap_complete = { version = "4.4.6", features = [], optional = true }
 clap_mangen = { version = "0.2.15", features = [], optional = true }
 
