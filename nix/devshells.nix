@@ -3,7 +3,12 @@ _: {
     devShells = {
       default = pkgs.mkShellNoCC {
         inputsFrom = [ self'.packages.default ];
-        packages = [ pkgs.rust-analyzer pkgs.clippy pkgs.cargo-insta ];
+        packages = [
+          pkgs.rust-analyzer
+          pkgs.clippy
+          pkgs.cargo-insta
+          self'.formatter.outPath
+        ];
       };
       full = pkgs.mkShellNoCC {
         inputsFrom = [ self'.packages.default ];

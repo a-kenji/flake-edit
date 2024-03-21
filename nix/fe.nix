@@ -8,7 +8,7 @@ let
       builtins.substring 4 2 self.lastModifiedDate
     }-${builtins.substring 6 2 self.lastModifiedDate}";
   gitRev = self.shortRev or self.dirtyShortRev;
-  meta = import ./meta.nix {inherit lib;};
+  meta = import ./meta.nix { inherit lib; };
 in rustPlatform.buildRustPackage {
   inherit version name meta;
   env = {
