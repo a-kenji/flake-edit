@@ -11,5 +11,5 @@
   inputs.crane.inputs.rust-overlay.follows = "rust-overlay";
   inputs.crane.inputs.flake-utils.follows = "flake-utils";
 
-  outputs = _: {};
+  outputs = _: { };
 }

@@ -22,5 +22,5 @@ info:
   inputs.crane.inputs.flake-utils.follows = "flake-utils";
   inputs.vmsh = "mic92/vmsh";
 
-  outputs = _: {};
+  outputs = _: { };
 }

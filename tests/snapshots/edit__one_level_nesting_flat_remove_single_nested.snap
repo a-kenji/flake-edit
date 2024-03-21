@@ -37,23 +37,17 @@ info:
   #   };
   # };
   #
-  outputs = {
-    self,
-    nixpkgs,
-    flake-utils,
-    flake-utelinos,
-    rust-overlay,
-    crane,
-  }:
-    flake-utils.lib.eachDefaultSystem (
-      system: let
+  outputs =
+    { self, nixpkgs, flake-utils, flake-utelinos, rust-overlay, crane, }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
         pkgs = nixpkgs.legacyPackages.${system};
-        stdenv =
-          if pkgs.stdenv.isLinux
-          then pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv
-          else pkgs.stdenv;
-        overlays = [(import rust-overlay)];
-        rustPkgs = import nixpkgs {inherit system overlays;};
+        stdenv = if pkgs.stdenv.isLinux then
+          pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv
+        else
+          pkgs.stdenv;
+        overlays = [ (import rust-overlay) ];
+        rustPkgs = import nixpkgs { inherit system overlays; };
         src = self;
         RUST_TOOLCHAIN = src + "/rust-toolchain.toml";
         RUSTFMT_TOOLCHAIN = src + "/.rustfmt-toolchain.toml";
@@ -64,20 +58,15 @@ info:
         rustToolchainTOML = rustPkgs.rust-bin.stable.latest.minimal;
 
         rustFmtToolchainTOML =
-          rustPkgs.rust-bin.fromRustupToolchainFile
-          RUSTFMT_TOOLCHAIN;
+          rustPkgs.rust-bin.fromRustupToolchainFile RUSTFMT_TOOLCHAIN;
 
         rustToolchainDevTOML = rustToolchainTOML.override {
-          extensions = [
-            "clippy"
-            "rust-analysis"
-            "rust-docs"
-          ];
-          targets = [];
+          extensions = [ "clippy" "rust-analysis" "rust-docs" ];
+          targets = [ ];
         };
         gitDate = "${builtins.substring 0 4 self.lastModifiedDate}-${
-          builtins.substring 4 2 self.lastModifiedDate
-        }-${builtins.substring 6 2 self.lastModifiedDate}";
+            builtins.substring 4 2 self.lastModifiedDate
+          }-${builtins.substring 6 2 self.lastModifiedDate}";
         gitRev = self.shortRev or self.dirtyShortRev;
         cargoLock = {
           lockFile = builtins.path {
@@ -89,7 +78,7 @@ info:
         rustc = rustToolchainTOML;
         cargo = rustToolchainTOML;
 
-        buildInputs = [pkgs.installShellFiles];
+        buildInputs = [ pkgs.installShellFiles ];
 
         devInputs = [
           rustToolchainDevTOML
@@ -149,19 +138,11 @@ info:
           #alternative linker
           pkgs.clang
         ];
-        fmtInputs = [
-          pkgs.alejandra
-          pkgs.treefmt
-          pkgs.taplo
-          pkgs.typos
-        ];
+        fmtInputs = [ pkgs.alejandra pkgs.treefmt pkgs.taplo pkgs.typos ];
         editorConfigInputs = [
           # pkgs.editorconfig-checker
         ];
-        actionlintInputs = [
-          pkgs.actionlint
-          pkgs.shellcheck
-        ];
+        actionlintInputs = [ pkgs.actionlint pkgs.shellcheck ];
         # Common arguments for the crane build
         commonArgs = {
           inherit stdenv version name;
@@ -190,81 +171,66 @@ info:
         meta = with pkgs.lib; {
           homepage = "https://github.com/a-kenji/fe";
           description = "Edit your flake inputs with ease";
-          license = [licenses.mit];
+          license = [ licenses.mit ];
         };
       in rec {
         devShells = {
           default = devShells.fullShell;
-          fullShell = (pkgs.mkShell.override {inherit stdenv;}) {
+          fullShell = (pkgs.mkShell.override { inherit stdenv; }) {
             buildInputs = fmtInputs ++ devInputs;
             inherit name;
             ASSET_DIR = assetDir;
             RUST_LOG = "debug";
             RUST_BACKTRACE = true;
             # RUSTFLAGS = "-C linker=clang -C link-arg=-fuse-ld=${pkgs.mold}/bin/mold -C target-cpu=native";
-            RUSTFLAGS = "-C linker=clang -C link-arg=-fuse-ld=${pkgs.mold}/bin/mold";
+            RUSTFLAGS =
+              "-C linker=clang -C link-arg=-fuse-ld=${pkgs.mold}/bin/mold";
           };
-          editorConfigShell = pkgs.mkShell {buildInputs = editorConfigInputs;};
-          actionlintShell = pkgs.mkShell {buildInputs = actionlintInputs;};
-          fmtShell = pkgs.mkShell {buildInputs = fmtInputs;};
+          editorConfigShell =
+            pkgs.mkShell { buildInputs = editorConfigInputs; };
+          actionlintShell = pkgs.mkShell { buildInputs = actionlintInputs; };
+          fmtShell = pkgs.mkShell { buildInputs = fmtInputs; };
         };
         packages = {
           default = packages.crane;
-          upstream = (pkgs.makeRustPlatform {inherit cargo rustc;}).buildRustPackage {
-            cargoDepsName = name;
-            GIT_DATE = gitDate;
-            GIT_REV = gitRev;
-            ASSET_DIR = assetDir;
-            doCheck = false;
-            version = "unstable" + gitDate;
-            inherit
-              assetDir
-              buildInputs
-              cargoLock
-              meta
-              name
-              postInstall
-              src
-              stdenv
-              ;
-          };
-          crane = craneLib.buildPackage (
-            commonArgs
-            // {
-              cargoExtraArgs = "-p ${name}";
+          upstream =
+            (pkgs.makeRustPlatform { inherit cargo rustc; }).buildRustPackage {
+              cargoDepsName = name;
               GIT_DATE = gitDate;
               GIT_REV = gitRev;
               ASSET_DIR = assetDir;
               doCheck = false;
-              version = "unstable-" + gitDate;
-              # pname = name;
-              pname = "fe";
-              name = "fe";
-              # installPhase = ''
-              #   runHook preInstall
-              #   mkdir -p $out/bin
-              #   cp target/release/flake-add $out/bin/fe
-              #   runHook postInstall
-              # '';
-              postInstall = postInstall "fe";
-              inherit
-                assetDir
-                buildInputs
-                cargoArtifacts
-                meta
-                # name
-                
-                stdenv
-                ;
-            }
-          );
+              version = "unstable" + gitDate;
+              inherit assetDir buildInputs cargoLock meta name postInstall src
+                stdenv;
+            };
+          crane = craneLib.buildPackage (commonArgs // {
+            cargoExtraArgs = "-p ${name}";
+            GIT_DATE = gitDate;
+            GIT_REV = gitRev;
+            ASSET_DIR = assetDir;
+            doCheck = false;
+            version = "unstable-" + gitDate;
+            # pname = name;
+            pname = "fe";
+            name = "fe";
+            # installPhase = ''
+            #   runHook preInstall
+            #   mkdir -p $out/bin
+            #   cp target/release/flake-add $out/bin/fe
+            #   runHook postInstall
+            # '';
+            postInstall = postInstall "fe";
+            inherit assetDir buildInputs cargoArtifacts meta
+              # name
+
+              stdenv;
+          });
         };
         apps.default = {
           type = "app";
           program = "${packages.default}/bin/${name}";
         };
         formatter = pkgs.alejandra;
-      }
-    );
+      });
 }
-
