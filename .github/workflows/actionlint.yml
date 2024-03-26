@@ -30,4 +30,4 @@ jobs:
       with:
         diagnostic-endpoint: ""
     - name: "actionlint"
-      run: nix develop .#actionlintShell --command actionlint --ignore SC2002
+      run: nix run -Lv --refresh --inputs-from .# nixpkgs#actionlint -- --ignore SC2002
