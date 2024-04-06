@@ -6,8 +6,6 @@ _: {
         packages = [
           pkgs.rust-analyzer
           pkgs.clippy
-          pkgs.cargo
-          pkgs.rustc
           pkgs.cargo-insta
           self'.formatter.outPath
         ];
