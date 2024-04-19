@@ -54,5 +54,6 @@ in {
     postInstall = postInstall "fe";
     inherit assetDir cargoArtifacts meta;
   });
-  inherit cargoClippy cargoArtifacts cargoDeny cargoTarpaulin cargoDoc cargoTest;
+  inherit cargoClippy cargoArtifacts cargoDeny cargoTarpaulin cargoDoc
+    cargoTest;
 }
