@@ -18,7 +18,7 @@ jobs:
           access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
     - name: "install editorconfig-checker"
-      run: nix develop .#editorConfigShell
+      run: nix shell --refresh --inputs-from .# nixpkgs#lychee .
     - name: Checking EditorConfig
       run: |
         cat "$HOME/changed_files" | xargs -r editorconfig-checker -disable-indent-size
