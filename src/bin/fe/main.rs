@@ -110,8 +110,8 @@ fn main() -> anyhow::Result<()> {
             for e in errors {
                 tracing::error!("Error: {e}");
                 tracing::error!("The changes will not be applied.");
-                std::process::exit(1);
             }
+            std::process::exit(1);
         }
         if args.diff() {
             let old = text;
