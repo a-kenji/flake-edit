@@ -2,6 +2,7 @@ _: {
   perSystem = { pkgs, self', ... }: {
     devShells = {
       default = pkgs.mkShellNoCC {
+        name = "fe";
         inputsFrom = [ self'.packages.default ];
         packages = [
           pkgs.rust-analyzer
