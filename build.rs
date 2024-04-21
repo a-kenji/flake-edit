@@ -18,7 +18,7 @@ fn main() {
 
     const NAME: &str = "fe";
     const COMPLETIONS_DIR: &str = "assets/completions";
-    const FISH_COMPLETIONS: &str = "completions.fish";
+    const FISH_COMPLETIONS: &str = "fish/completions.fish";
     let manifest_dir =
         env::var_os("CARGO_MANIFEST_DIR").expect("Could not find env CARGO_MANIFEST_DIR");
 
