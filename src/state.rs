@@ -19,7 +19,7 @@ impl State {
         for change in &self.changes {
             match change {
                 Change::None => {}
-                Change::Pin { id } => {
+                Change::Pin { id: _ } => {
                     todo!()
                 }
                 Change::Remove { id } => {

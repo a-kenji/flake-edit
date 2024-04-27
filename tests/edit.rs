@@ -335,6 +335,44 @@ fn one_level_nesting_flat_remove_single_nested() {
         insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
     });
 }
+
+#[test]
+fn flat_nested_flat_remove_single() {
+    let (flake, _lock) = load_fixtures("flat_nested_flat");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Remove {
+        id: "nixpkgs".to_owned().into(),
+    };
+    let info = Info::new("".into(), vec![]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+#[test]
+fn flat_nested_flat_remove_multiple() {
+    let (flake, _lock) = load_fixtures("flat_nested_flat");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Remove {
+        id: "poetry2nix".to_owned().into(),
+    };
+    let info = Info::new("".into(), vec![]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+#[test]
+fn flat_nested_flat_add_single() {
+    let (flake, _lock) = load_fixtures("flat_nested_flat");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Add {
+        id: Some("vmsh".to_owned()),
+        uri: Some("mic92/vmsh".to_owned()),
+    };
+    let info = Info::new("".into(), vec![]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
 // #[test]
 // fn root_alt_add_toplevel_id_uri() {
 //     let (flake, _lock) = load_fixtures("root_alt");
