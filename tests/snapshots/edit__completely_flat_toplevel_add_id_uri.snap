@@ -20,7 +20,7 @@ info:
   inputs.crane.inputs.nixpkgs.follows = "nixpkgs";
   inputs.crane.inputs.rust-overlay.follows = "rust-overlay";
   inputs.crane.inputs.flake-utils.follows = "flake-utils";
-  inputs.vmsh = "mic92/vmsh";
+  inputs.vmsh.url = "mic92/vmsh";
 
   outputs = _: { };
 }

@@ -150,7 +150,7 @@ impl<'a> Walker {
                             if let Some(replacement) =
                                 self.walk_inputs(child.next_sibling().unwrap(), &ctx, change)
                             {
-                                tracing::debug!("Replacement Noode: {replacement}");
+                                tracing::debug!("Replacement Node: {replacement}");
                                 let green = toplevel.green().replace_child(
                                     child.next_sibling().unwrap().index(),
                                     replacement.green().into(),
@@ -188,7 +188,7 @@ impl<'a> Walker {
                         if child.to_string() == "outputs" && self.add_toplevel {
                             if let Change::Add { id, uri } = change {
                                 let addition = Root::parse(&format!(
-                                    "inputs.{} = \"{}\";",
+                                    "inputs.{}.url = \"{}\";",
                                     id.clone().unwrap(),
                                     uri.clone().unwrap()
                                 ))

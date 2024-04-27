@@ -1,0 +1,15 @@
+---
+source: tests/edit.rs
+expression: flake_edit.apply_change(change).unwrap().unwrap()
+info:
+  flake_nix: ""
+  changes: []
+---
+{
+  description = "flat nested flat test";
+
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.flake-utils.url = "github:numtide/flake-utils/master";
+
+  outputs = { self, nixpkgs, flake-utils, poetry2nix, }: { };
+}
