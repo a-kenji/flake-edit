@@ -6,6 +6,8 @@ use crate::app::FlakeEdit;
 use crate::cli::CliArgs;
 use crate::cli::Command;
 use clap::Parser;
+use color_eyre::eyre;
+use color_eyre::{eyre::Report, eyre::WrapErr, Section};
 use flake_edit::change::Change;
 use flake_edit::diff::Diff;
 use flake_edit::edit;
@@ -21,8 +23,9 @@ mod error;
 mod log;
 mod root;
 
-fn main() -> anyhow::Result<()> {
+fn main() -> eyre::Result<()> {
     let args = CliArgs::parse();
+    color_eyre::install()?;
     log::init().ok();
     tracing::debug!("Cli args: {args:?}");
 
@@ -50,7 +53,9 @@ fn main() -> anyhow::Result<()> {
                     uri: uri.clone(),
                 };
             } else if let Some(uri) = id {
+                tracing::debug!("No [ID] provided trying to parse [uri] to infer [ID].");
                 let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(uri);
+                tracing::debug!("The parsed flake reference is: {flake_ref:?}");
                 if let Ok(flake_ref) = flake_ref {
                     let uri = if flake_ref.to_string().is_empty() {
                         uri.clone()
@@ -63,10 +68,17 @@ fn main() -> anyhow::Result<()> {
                             uri: Some(uri),
                         };
                     } else {
-                        println!("Please specify an [ID] for this flake reference.")
+                        return Err(eyre::eyre!("Could not infer [ID] from flake reference.")
+                            .with_note(|| format!("The provided uri: {uri}")));
                     }
                 } else {
-                    println!("Please specify an [ID] for this flake reference.")
+                    return Err(
+                        eyre::eyre!("Could not infer [ID] from flake reference.")
+                            .with_note(|| format!("The provided uri: {uri}"))
+                            .suggestion(
+                            "\nPlease specify an [ID] for this flake reference.\nIn the following form: `fe add [ID] [uri]`\nIf you think the [ID] should have been able to be inferred, please open an issue.",
+                        ),
+                    );
                 }
             }
         }
@@ -123,8 +135,15 @@ fn main() -> anyhow::Result<()> {
             app.root.apply(&change)?;
         }
     } else if !args.list() {
-        println!("Nothing changed in the node.");
-        println!("The following change could not be applied: \n{:?}", change);
+        tracing::info!("Nothing changed in the node.");
+        tracing::error!("The following change could not be applied: \n{:?}", change);
+        if change.is_remove() {
+            return Err(eyre::eyre!(
+                "The input with id: {} could not be removed.",
+                change.id().unwrap()
+            )
+            .suggestion("\nPlease check if an input with that [ID] exists in the flake.nix file.\nRun `fe list --format simple` to see the current inputs by their id."));
+        }
         std::process::exit(1);
     }
 
