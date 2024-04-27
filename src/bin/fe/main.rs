@@ -135,8 +135,6 @@ fn main() -> eyre::Result<()> {
             app.root.apply(&change)?;
         }
     } else if !args.list() {
-        tracing::info!("Nothing changed in the node.");
-        tracing::error!("The following change could not be applied: \n{:?}", change);
         if change.is_remove() {
             return Err(eyre::eyre!(
                 "The input with id: {} could not be removed.",
@@ -144,6 +142,8 @@ fn main() -> eyre::Result<()> {
             )
             .suggestion("\nPlease check if an input with that [ID] exists in the flake.nix file.\nRun `fe list --format simple` to see the current inputs by their id."));
         }
+        println!("Nothing changed in the node.");
+        println!("The following change could not be applied: \n{:?}", change);
         std::process::exit(1);
     }
 
