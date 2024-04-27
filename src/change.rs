@@ -98,4 +98,7 @@ impl Change {
     pub fn is_some(&self) -> bool {
         !matches!(self, Change::None)
     }
+    pub fn is_add(&self) -> bool {
+        matches!(self, Change::Add { .. })
+    }
 }

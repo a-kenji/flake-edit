@@ -48,6 +48,7 @@ assets = ["clap_complete", "clap_complete_nushell", "roff", "clap_mangen"]
 [dependencies]
 anyhow = { version = "1.0.82", optional = true }
 clap = { version = "4.5.3", optional = true, features = ["derive"] }
+color-eyre = "0.6.3"
 diffy = { version = "0.3.0", optional = true }
 directories = "5.0.1"
 nix-uri = "0.1.5"
@@ -100,6 +101,9 @@ debug = false
 opt-level = 3
 
 [profile.dev.package.similar]
+opt-level = 3
+
+[profile.dev.package.backtrace]
 opt-level = 3
 
 [dev-dependencies]
