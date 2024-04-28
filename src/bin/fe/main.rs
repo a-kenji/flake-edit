@@ -107,32 +107,47 @@ fn main() -> eyre::Result<()> {
                 for default in default_types {
                     println!("{}", default);
                 }
+                let cached_uris = cache::FeCache::default().get_or_init().list();
+                for uri in cached_uris {
+                    println!("{}", uri);
+                }
                 std::process::exit(0);
             }
         },
     }
 
-    if let Ok(Some(change)) = editor.apply_change(change.clone()) {
-        let root = rnix::Root::parse(&change.to_string());
+    if let Ok(Some(resulting_change)) = editor.apply_change(change.clone()) {
+        let root = rnix::Root::parse(&resulting_change.to_string());
         let errors = root.errors();
         if errors.is_empty() {
-            println!("No errors in the changes.");
+            tracing::info!("No errors in the changes.");
         } else {
-            println!("There are errors in the changes:");
+            tracing::error!("There are errors in the changes:");
+            eprintln!("There are errors in the changes:");
             for e in errors {
                 tracing::error!("Error: {e}");
                 tracing::error!("The changes will not be applied.");
             }
             std::process::exit(1);
         }
+
+        // The changes are successful, so we can cache them
+        if let Change::Add { id, uri } = change {
+            let mut cache = cache::FeCache::default().get_or_init();
+            cache.add_entry(id.unwrap(), uri.unwrap());
+            cache
+                .commit()
+                .map_err(|e| eyre::eyre!("Could not write to cache file: {e}"))?;
+        }
+
         if args.diff() {
             let old = text;
-            let new = change;
+            let new = resulting_change;
             let diff = Diff::new(&old, &new);
             diff.compare();
             // Write the changes
         } else if args.apply() {
-            app.root.apply(&change)?;
+            app.root.apply(&resulting_change)?;
         }
     } else if !args.list() {
         if change.is_remove() {
