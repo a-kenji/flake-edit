@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
@@ -23,11 +24,13 @@ fn cache_file() -> &'static PathBuf {
 pub(crate) struct FeCacheEntry {
     id: String,
     uri: String,
+    // how many times the entry was used
+    hit: u32,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct FeCache {
-    entries: Vec<FeCacheEntry>,
+    entries: HashMap<String, FeCacheEntry>,
 }
 
 impl FeCache {
@@ -58,12 +61,22 @@ impl FeCache {
     }
 
     pub(crate) fn add_entry(&mut self, id: String, uri: String) {
-        self.entries.push(FeCacheEntry { id, uri });
+        let entry_id = format!("{}.{}", id, uri);
+        match self.entries.get_mut(&entry_id) {
+            Some(entry) => entry.hit += 1,
+            None => {
+                let entry = FeCacheEntry { id, uri, hit: 0 };
+                self.entries.insert(entry_id, entry);
+            }
+        }
     }
     /// Used for shell completions.
+    /// Should be sorted by hit count.
     pub(crate) fn list(&mut self) -> Vec<String> {
         let mut res = Vec::new();
-        for entry in &self.entries {
+        let mut entries: Vec<_> = self.entries.values().collect();
+        entries.sort_by(|a, b| b.hit.cmp(&a.hit));
+        for entry in entries {
             res.push(entry.uri.clone());
         }
         res
