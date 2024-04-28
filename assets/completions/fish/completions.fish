@@ -14,6 +14,6 @@ complete -c fe -n "__fish_seen_subcommand_from pin" -f -a "(__fish_complete_inpu
 complete -c fe -n "__fish_seen_subcommand_from p" -f -a "(__fish_complete_inputs)" -d Input
 
 set -x ignore_space true
-complete -c fe -n "__fish_seen_subcommand_from a" -f -r -a "(__fish_complete_add)" -d Add
-complete -c fe -n "__fish_seen_subcommand_from add" -f -r -a "(__fish_complete_add)" -d Add
+complete -c fe -n "__fish_seen_subcommand_from a" -f -r --keep-order -a  "(__fish_complete_add)" -d Add
+complete -c fe -n "__fish_seen_subcommand_from add" -f -r --keep-order -a  "(__fish_complete_add)" -d Add
 set -x ignore_space false
