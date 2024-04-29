@@ -14,6 +14,5 @@
     };
   };
 
-  outputs = { self, nixpkgs, utils, naersk, flake-compat }:
-  {};
+  outputs = { self, nixpkgs, utils, naersk, flake-compat }: { };
 }
