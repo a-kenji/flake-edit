@@ -1,0 +1,24 @@
+---
+source: tests/edit.rs
+expression: flake_edit.list()
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        id: naersk
+---
+flake-compat:
+  id: flake-compat
+  flake: true
+  url: "\"github:edolstra/flake-compat\""
+  follows: []
+nixpkgs:
+  id: nixpkgs
+  flake: true
+  url: "\"github:NixOS/nixpkgs/nixpkgs-unstable\""
+  follows: []
+utils:
+  id: utils
+  flake: true
+  url: "\"github:numtide/flake-utils\""
+  follows: []

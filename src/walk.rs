@@ -144,6 +144,7 @@ impl<'a> Walker {
                             tracing::debug!("Toplevel Child Parent Index: {:?}", parent.index());
                         }
                         if child.to_string() == "description" {
+                            // We are not interested in the description
                             break;
                         }
                         if child.to_string() == "inputs" {
@@ -345,7 +346,7 @@ impl<'a> Walker {
                         }
                         let node = Root::parse(green.to_string().as_str()).syntax();
                         return Some(node);
-                    } else if change.is_some() && change.id().is_some() {
+                    } else if change.is_some() && change.id().is_some() && ctx.is_none() {
                         if let Change::Add { id, uri } = change {
                             let uri = Root::parse(&format!(
                                 "{}.url = \"{}\";",
