@@ -1,0 +1,15 @@
+---
+source: tests/edit.rs
+expression: flake_edit.curr_list()
+info:
+  flake_nix: ""
+  changes: []
+---
+naersk:
+  id: naersk
+  flake: true
+  url: "\"github:nix-community/naersk/master\""
+  follows:
+    - Indirect:
+        - nixpkgs
+        - "\"nixpkgs\""

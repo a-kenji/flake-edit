@@ -373,6 +373,62 @@ fn flat_nested_flat_add_single() {
         insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
     });
 }
+#[test]
+fn first_nested_node_add_single() {
+    let (flake, _lock) = load_fixtures("first_nested_node");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Add {
+        id: Some("vmsh".to_owned()),
+        uri: Some("mic92/vmsh".to_owned()),
+    };
+    let info = Info::new("".into(), vec![]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!("changes", flake_edit.apply_change(change.clone()).unwrap().unwrap());
+    });
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_yaml_snapshot!("list", flake_edit.curr_list());
+    });
+}
+#[test]
+fn first_nested_node_remove_single() {
+    let (flake, _lock) = load_fixtures("first_nested_node");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Remove {
+        id: "utils".to_string().into(),
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change.clone()).unwrap().unwrap());
+    });
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_yaml_snapshot!(flake_edit.list());
+    });
+}
+#[test]
+fn first_nested_node_remove_multiple() {
+    let (flake, _lock) = load_fixtures("first_nested_node");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Remove {
+        id: "naersk".to_string().into(),
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change.clone()).unwrap().unwrap());
+    });
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_yaml_snapshot!(flake_edit.list());
+    });
+}
+#[test]
+fn first_nested_node_inputs() {
+    let (flake, _lock) = load_fixtures("first_nested_node");
+    let mut walker = Walker::new(&flake);
+    walker.walk(&Change::None);
+    let info = Info::new("".into(), vec![]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_yaml_snapshot!(walker.inputs);
+    });
+}
 // #[test]
 // fn root_alt_add_toplevel_id_uri() {
 //     let (flake, _lock) = load_fixtures("root_alt");

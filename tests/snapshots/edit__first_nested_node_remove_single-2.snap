@@ -1,0 +1,27 @@
+---
+source: tests/edit.rs
+expression: flake_edit.curr_list()
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        id: utils
+---
+flake-compat:
+  id: flake-compat
+  flake: true
+  url: "\"github:edolstra/flake-compat\""
+  follows: []
+naersk:
+  id: naersk
+  flake: true
+  url: "\"github:nix-community/naersk/master\""
+  follows:
+    - Indirect:
+        - nixpkgs
+        - "\"nixpkgs\""
+nixpkgs:
+  id: nixpkgs
+  flake: true
+  url: "\"github:NixOS/nixpkgs/nixpkgs-unstable\""
+  follows: []
