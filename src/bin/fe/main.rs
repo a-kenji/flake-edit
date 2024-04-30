@@ -7,7 +7,7 @@ use crate::cli::CliArgs;
 use crate::cli::Command;
 use clap::Parser;
 use color_eyre::eyre;
-use color_eyre::{eyre::Report, eyre::WrapErr, Section};
+use color_eyre::{Section};
 use flake_edit::change::Change;
 use flake_edit::diff::Diff;
 use flake_edit::edit;

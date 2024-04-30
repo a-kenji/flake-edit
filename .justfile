@@ -16,7 +16,7 @@ clippy:
     cargo clippy --all-targets --all-features
 
 actionlint:
-    nix develop .#actionlintShell --command actionlint
+    nix develop .#full --command actionlint
 
 deny:
     cargo deny check
@@ -25,29 +25,29 @@ cargo-test:
     cargo test
 
 cargo-diet:
-    nix develop .#lintShell --command cargo diet
+    nix develop .#full --command cargo diet
+
+cargo-mutants:
+    nix develop .#full --command cargo mutants
 
 cargo-tarpaulin:
-    nix develop .#lintShell --command cargo tarpaulin --out html --exclude-files "benches/*"
-
-cargo-public-api:
-    nix develop .#lintShell --command cargo public-api
+    nix develop .#full --command cargo tarpaulin --out html --exclude-files "benches/*"
 
 cargo-diff:
-    nix develop .#lintShell --command cargo public-api diff
+    nix develop .#full --command cargo public-api diff
 
 format:
-    nix develop .#fmtShell --command treefmt
+    nix fmt
 
 lint:
-    -nix develop .#lintShell --command cargo diet
-    -nix develop .#lintShell --command cargo deny check licenses
-    -nix develop .#lintShell --command typos
-    nix develop .#lintShell --command lychee *.md
-    nix develop .#lintShell --command treefmt --fail-on-change
-    -nix develop .#lintShell --command cargo udeps
-    -nix develop .#lintShell --command cargo machete
-    -nix develop .#lintShell --command cargo outdated
+    -nix develop .#full --command cargo diet
+    -nix develop .#full --command cargo deny check licenses
+    -nix develop .#full --command typos
+    nix develop .#full --command lychee *.md
+    nix develop .#full --command treefmt --fail-on-change
+    -nix develop .#full --command cargo udeps
+    -nix develop .#full --command cargo machete
+    -nix develop .#full --command cargo outdated
     nix develop .#mdShell --command mdsh --frozen
     nix develop .#actionlintShell --command actionlint --ignore SC2002
     cargo check --future-incompat-report

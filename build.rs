@@ -5,7 +5,7 @@ use clap_complete_nushell::Nushell;
 use clap_mangen::Man;
 
 use std::fs;
-use std::fs::File;
+
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
