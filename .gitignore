@@ -12,4 +12,4 @@ flamegraph.svg
 perf.data
 perf.data.*
 tarpaulin-report.html
-/mutants.out/
+/mutants.out*/
