@@ -1,3 +1,13 @@
+---
+source: tests/edit.rs
+assertion_line: 318
+expression: flake_edit.apply_change(change).unwrap().unwrap()
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        id: not-a-flake
+---
 {
   description = "Edit your flake inputs with ease";
 
@@ -10,10 +20,6 @@
   inputs.crane.inputs.nixpkgs.follows = "nixpkgs";
   inputs.crane.inputs.rust-overlay.follows = "rust-overlay";
   inputs.crane.inputs.flake-utils.follows = "flake-utils";
-  inputs.not-a-flake = {
-    url = "github:a-kenji/not-a-flake";
-    flake = false;
-  };
 
   outputs = _: { };
 }

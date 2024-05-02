@@ -13,5 +13,5 @@
   inputs.not-a-flake.url = "github:a-kenji/not-a-flake";
   inputs.not-a-flake.flake = false;
 
-  outputs = _: {};
+  outputs = _: { };
 }
