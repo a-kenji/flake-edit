@@ -324,7 +324,7 @@ fn completely_flat_toplevel_no_flake_rm_single_no_flake_rm_nonexistent() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel_not_a_flake");
     let mut flake_edit = FlakeEdit::from(&flake).unwrap();
     let change = Change::Remove {
-        id: "not-a-flake".to_owned().into(),
+        id: "not-an-input-at-all".to_owned().into(),
     };
     flake_edit.apply_change(change).unwrap().unwrap();
 }
