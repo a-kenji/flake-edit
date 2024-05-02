@@ -89,7 +89,7 @@ impl Change {
         match self {
             Change::None => None,
             Change::Add { id, .. } => id.clone().map(|id| id.into()),
-            Change::Remove { id } => Some(id.clone().into()),
+            Change::Remove { id } => Some(id.clone()),
             Change::Change { id, .. } => id.clone().map(|id| id.into()),
             Change::Pin { id } => Some(id.clone().into()),
         }
