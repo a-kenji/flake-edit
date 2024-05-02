@@ -33,6 +33,7 @@ fn add_input() {
     let change = Change::Add {
         id: Some("nixpkgs".to_owned()),
         uri: Some("github/nixos/nixpkgs".to_owned()),
+        flake: true,
     };
     walker.walk(&change);
     // a simple sanity check

@@ -82,6 +82,9 @@ pub(crate) enum Command {
         /// Allow operations on uncommitted files.
         #[arg(long)]
         force: Option<String>,
+        /// The input itself is not a flake.
+        #[arg(long, short)]
+        no_flake: bool,
     },
     /// Pin a specific flake reference based on its id.
     #[command(alias = "p", arg_required_else_help = true)]

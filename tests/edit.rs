@@ -44,6 +44,21 @@ fn root_add_toplevel_id_uri() {
     let change = Change::Add {
         id: Some("vmsh".to_owned()),
         uri: Some("github:mic92/vmsh".to_owned()),
+        flake: true,
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+#[test]
+fn root_add_toplevel_id_uri_no_flake() {
+    let (flake, _lock) = load_fixtures("root");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Add {
+        id: Some("not_a_flake".to_owned()),
+        uri: Some("github:a-kenji/not_a_flake".to_owned()),
+        flake: false,
     };
     let info = Info::new("".into(), vec![change.clone()]);
     insta::with_settings!({sort_maps => true, info => &info}, {
@@ -105,6 +120,22 @@ fn root_alt_add_toplevel_id_uri() {
     let change = Change::Add {
         id: Some("vmsh".to_owned()),
         uri: Some("github:mic92/vmsh".to_owned()),
+        flake: true,
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    let change = walker.walk(&change).unwrap();
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(change.to_string());
+    });
+}
+#[test]
+fn root_alt_add_toplevel_id_uri_no_flake() {
+    let (flake, _lock) = load_fixtures("root_alt");
+    let mut walker = Walker::new(&flake);
+    let change = Change::Add {
+        id: Some("not_a_flake".to_owned()),
+        uri: Some("github:a-kenji/not_a_flake".to_owned()),
+        flake: false,
     };
     let info = Info::new("".into(), vec![change.clone()]);
     let change = walker.walk(&change).unwrap();
@@ -218,6 +249,21 @@ fn completely_flat_toplevel_add_id_uri() {
     let change = Change::Add {
         id: Some("vmsh".to_owned()),
         uri: Some("mic92/vmsh".to_owned()),
+        flake: true,
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+#[test]
+fn completely_flat_toplevel_add_id_uri_no_flake() {
+    let (flake, _lock) = load_fixtures("completely_flat_toplevel");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Add {
+        id: Some("not_a_flake".to_owned()),
+        uri: Some("github:a-kenji/not_a_flake".to_owned()),
+        flake: false,
     };
     let info = Info::new("".into(), vec![change.clone()]);
     insta::with_settings!({sort_maps => true, info => &info}, {
@@ -367,6 +413,21 @@ fn flat_nested_flat_add_single() {
     let change = Change::Add {
         id: Some("vmsh".to_owned()),
         uri: Some("mic92/vmsh".to_owned()),
+        flake: true,
+    };
+    let info = Info::new("".into(), vec![]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+#[test]
+fn flat_nested_flat_add_single_no_flake() {
+    let (flake, _lock) = load_fixtures("flat_nested_flat");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Add {
+        id: Some("not_a_flake".to_owned()),
+        uri: Some("github:a-kenji/not_a_flake".to_owned()),
+        flake: false,
     };
     let info = Info::new("".into(), vec![]);
     insta::with_settings!({sort_maps => true, info => &info}, {
@@ -380,6 +441,24 @@ fn first_nested_node_add_single() {
     let change = Change::Add {
         id: Some("vmsh".to_owned()),
         uri: Some("mic92/vmsh".to_owned()),
+        flake: true,
+    };
+    let info = Info::new("".into(), vec![]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!("changes", flake_edit.apply_change(change.clone()).unwrap().unwrap());
+    });
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_yaml_snapshot!("list", flake_edit.curr_list());
+    });
+}
+#[test]
+fn first_nested_node_add_single_no_flake() {
+    let (flake, _lock) = load_fixtures("first_nested_node");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Add {
+        id: Some("vmsh".to_owned()),
+        uri: Some("mic92/vmsh".to_owned()),
+        flake: true,
     };
     let info = Info::new("".into(), vec![]);
     insta::with_settings!({sort_maps => true, info => &info}, {
