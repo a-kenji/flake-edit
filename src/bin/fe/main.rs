@@ -7,7 +7,7 @@ use crate::cli::CliArgs;
 use crate::cli::Command;
 use clap::Parser;
 use color_eyre::eyre;
-use color_eyre::{Section};
+use color_eyre::Section;
 use flake_edit::change::Change;
 use flake_edit::diff::Diff;
 use flake_edit::edit;
@@ -46,11 +46,13 @@ fn main() -> eyre::Result<()> {
             ref_or_rev: _,
             id,
             force: _,
+            no_flake,
         } => {
             if id.is_some() && uri.is_some() {
                 change = Change::Add {
                     id: id.clone(),
                     uri: uri.clone(),
+                    flake: !no_flake,
                 };
             } else if let Some(uri) = id {
                 tracing::debug!("No [ID] provided trying to parse [uri] to infer [ID].");
@@ -66,6 +68,7 @@ fn main() -> eyre::Result<()> {
                         change = Change::Add {
                             id: Some(id),
                             uri: Some(uri),
+                            flake: !no_flake,
                         };
                     } else {
                         return Err(eyre::eyre!("Could not infer [ID] from flake reference.")
@@ -132,7 +135,7 @@ fn main() -> eyre::Result<()> {
         }
 
         // The changes are successful, so we can cache them
-        if let Change::Add { id, uri } = change {
+        if let Change::Add { id, uri, flake: _ } = change {
             let mut cache = cache::FeCache::default().get_or_init();
             cache.add_entry(id.unwrap(), uri.unwrap());
             cache

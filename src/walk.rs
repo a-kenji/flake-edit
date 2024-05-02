@@ -187,7 +187,7 @@ impl<'a> Walker {
                             }
                         };
                         if child.to_string() == "outputs" && self.add_toplevel {
-                            if let Change::Add { id, uri } = change {
+                            if let Change::Add { id, uri, flake } = change {
                                 let addition = Root::parse(&format!(
                                     "inputs.{}.url = \"{}\";",
                                     id.clone().unwrap(),
@@ -206,12 +206,7 @@ impl<'a> Walker {
                                             if let Some(prev) = c.prev_sibling_or_token() {
                                                 if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
                                                     let whitespace = Root::parse(
-                                                        &prev
-                                                            .as_token()
-                                                            .unwrap()
-                                                            .green()
-                                                            .text()
-                                                            .to_string(),
+                                                        prev.as_token().unwrap().green().text(),
                                                     )
                                                     .syntax();
                                                     node = node.insert_child(
@@ -219,15 +214,10 @@ impl<'a> Walker {
                                                         whitespace.green().into(),
                                                     );
                                                 }
-                                            } else if let Some(prev) = c.next_sibling_or_token() {
-                                                if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
+                                            } else if let Some(next) = c.next_sibling_or_token() {
+                                                if next.kind() == SyntaxKind::TOKEN_WHITESPACE {
                                                     let whitespace = Root::parse(
-                                                        &prev
-                                                            .as_token()
-                                                            .unwrap()
-                                                            .green()
-                                                            .text()
-                                                            .to_string(),
+                                                        next.as_token().unwrap().green().text(),
                                                     )
                                                     .syntax();
                                                     node = node.insert_child(
@@ -237,6 +227,45 @@ impl<'a> Walker {
                                                 }
                                             }
                                         });
+                                    if !flake {
+                                        let no_flake = Root::parse(&format!(
+                                            "inputs.{}.flake = false;",
+                                            id.clone().unwrap(),
+                                        ))
+                                        .syntax();
+                                        node = node.insert_child(
+                                            toplevel.index() + 1,
+                                            no_flake.green().into(),
+                                        );
+                                        root.children()
+                                            .find(|c| c.index() == toplevel.index() - 2)
+                                            .map(|c| {
+                                                if let Some(prev) = c.prev_sibling_or_token() {
+                                                    if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
+                                                        let whitespace = Root::parse(
+                                                            prev.as_token().unwrap().green().text(),
+                                                        )
+                                                        .syntax();
+                                                        node = node.insert_child(
+                                                            toplevel.index() + 1,
+                                                            whitespace.green().into(),
+                                                        );
+                                                    }
+                                                } else if let Some(next) = c.next_sibling_or_token()
+                                                {
+                                                    if next.kind() == SyntaxKind::TOKEN_WHITESPACE {
+                                                        let whitespace = Root::parse(
+                                                            next.as_token().unwrap().green().text(),
+                                                        )
+                                                        .syntax();
+                                                        node = node.insert_child(
+                                                            toplevel.index() + 1,
+                                                            whitespace.green().into(),
+                                                        );
+                                                    }
+                                                }
+                                            });
+                                    }
                                     if let Some(prev) = child.next_sibling_or_token() {
                                         if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
                                             let whitespace = Root::parse(
@@ -347,7 +376,7 @@ impl<'a> Walker {
                         let node = Root::parse(green.to_string().as_str()).syntax();
                         return Some(node);
                     } else if change.is_some() && change.id().is_some() && ctx.is_none() {
-                        if let Change::Add { id, uri } = change {
+                        if let Change::Add { id, uri, flake } = change {
                             let uri = Root::parse(&format!(
                                 "{}.url = \"{}\";",
                                 id.clone().unwrap(),
@@ -368,6 +397,22 @@ impl<'a> Walker {
                             tracing::debug!("green: {}", green);
                             tracing::debug!("node: {}", node);
                             tracing::debug!("node kind: {:?}", node.kind());
+                            if !flake {
+                                let no_flake = Root::parse(&format!(
+                                    "{}.flake = false;",
+                                    id.clone().unwrap(),
+                                ))
+                                .syntax();
+                                green =
+                                    green.insert_child(child.index() + 2, no_flake.green().into());
+                                if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
+                                    let whitespace =
+                                        Root::parse(prev.as_token().unwrap().green().text())
+                                            .syntax();
+                                    green = green
+                                        .insert_child(child.index() + 3, whitespace.green().into());
+                                }
+                            }
                             let node = Root::parse(green.to_string().as_str()).syntax();
                             return Some(node);
                         }

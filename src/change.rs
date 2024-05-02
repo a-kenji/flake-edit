@@ -7,6 +7,8 @@ pub enum Change {
     Add {
         id: Option<String>,
         uri: Option<String>,
+        // Add an input as a flake.
+        flake: bool,
     },
     Remove {
         id: ChangeId,

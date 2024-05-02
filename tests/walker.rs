@@ -44,6 +44,22 @@ fn root_add_toplevel_id_uri() {
     let change = Change::Add {
         id: Some("vmsh".to_owned()),
         uri: Some("github:mic92/vmsh".to_owned()),
+        flake: true,
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    let change = walker.walk(&change).unwrap();
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(change.to_string());
+    });
+}
+#[test]
+fn root_add_toplevel_id_uri_no_flake() {
+    let (flake, _lock) = load_fixtures("root");
+    let mut walker = Walker::new(&flake);
+    let change = Change::Add {
+        id: Some("not_a_flake".to_owned()),
+        uri: Some("github:a-kenji/not_a_flake".to_owned()),
+        flake: false,
     };
     let info = Info::new("".into(), vec![change.clone()]);
     let change = walker.walk(&change).unwrap();
@@ -94,6 +110,22 @@ fn root_alt_add_toplevel_id_uri() {
     let change = Change::Add {
         id: Some("vmsh".to_owned()),
         uri: Some("github:mic92/vmsh".to_owned()),
+        flake: true,
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    let change = walker.walk(&change).unwrap();
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(change.to_string());
+    });
+}
+#[test]
+fn root_alt_add_toplevel_id_uri_no_flake() {
+    let (flake, _lock) = load_fixtures("root_alt");
+    let mut walker = Walker::new(&flake);
+    let change = Change::Add {
+        id: Some("not_a_flake".to_owned()),
+        uri: Some("github:a-kenji/not_a_flake".to_owned()),
+        flake: false,
     };
     let info = Info::new("".into(), vec![change.clone()]);
     let change = walker.walk(&change).unwrap();
