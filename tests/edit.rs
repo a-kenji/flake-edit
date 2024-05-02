@@ -360,6 +360,28 @@ fn completely_flat_toplevel_no_flake_nested_list() {
         insta::assert_yaml_snapshot!(flake_edit.list());
     });
 }
+#[test]
+fn one_level_nesting_flat_no_flake_rm_single_no_flake_nested() {
+    let (flake, _lock) = load_fixtures("one_level_nesting_flat_not_a_flake");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::Remove {
+        id: "not-a-flake".to_owned().into(),
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+#[test]
+fn one_level_nesting_flat_no_flake_nested_list() {
+    let (flake, _lock) = load_fixtures("one_level_nesting_flat_not_a_flake");
+    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let change = Change::None;
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_yaml_snapshot!(flake_edit.list());
+    });
+}
 // #[test]
 // fn root_alt_remove_toplevel_uri() {
 //     let (flake, _lock) = load_fixtures("root_alt");
