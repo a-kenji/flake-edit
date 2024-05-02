@@ -1,0 +1,17 @@
+{
+  description = "Edit your flake inputs with ease";
+
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+  inputs.flake-utelinos.url = "github:numtide/flake-utils";
+  inputs.rust-overlay.url = "github:oxalica/rust-overlay";
+  inputs.rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+  inputs.rust-overlay.inputs.flake-utils.follows = "flake-utils";
+  inputs.crane.url = "github:ipetkov/crane";
+  inputs.crane.inputs.nixpkgs.follows = "nixpkgs";
+  inputs.crane.inputs.rust-overlay.follows = "rust-overlay";
+  inputs.crane.inputs.flake-utils.follows = "flake-utils";
+  inputs.not-a-flake.url = "github:a-kenji/not-a-flake";
+  inputs.not-a-flake.flake = false;
+
+  outputs = _: {};
+}

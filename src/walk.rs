@@ -490,6 +490,50 @@ impl<'a> Walker {
                                                             }
                                                         }
                                                     }
+                                                } else if url_id.to_string() == "flake" {
+                                                    if let Some(is_flake) = child
+                                                        .as_node()
+                                                        .unwrap()
+                                                        .parent()
+                                                        .unwrap()
+                                                        .next_sibling()
+                                                    {
+                                                        tracing::debug!(
+                                                            "This id {} is a flake: {}",
+                                                            next_sibling,
+                                                            is_flake
+                                                        );
+                                                        // let mut input =
+                                                        //     Input::new(next_sibling.to_string());
+                                                        // input.flake =
+                                                        //     is_flake.to_string().parse().unwrap();
+                                                        // self.insert_with_ctx(
+                                                        //     next_sibling.to_string(),
+                                                        //     input,
+                                                        //     ctx,
+                                                        // );
+                                                        if change.is_some() && change.is_remove() {
+                                                            if let Some(id) = change.id() {
+                                                                if id.to_string()
+                                                                    == next_sibling.to_string()
+                                                                {
+                                                                    let replacement =
+                                                                        Root::parse("").syntax();
+                                                                    tracing::debug!("Node: {node}");
+                                                                    return Some(replacement);
+                                                                }
+                                                            }
+                                                            if let Some(ctx) = ctx {
+                                                                if *ctx.level.first().unwrap()
+                                                                    == next_sibling.to_string()
+                                                                {
+                                                                    let replacement =
+                                                                        Root::parse("").syntax();
+                                                                    return Some(replacement);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                 } else {
                                                     tracing::debug!(
                                                         "Unhandled input: {}",
