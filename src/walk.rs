@@ -457,25 +457,7 @@ impl<'a> Walker {
                                                                 {
                                                                     let replacement =
                                                                         Root::parse("").syntax();
-                                                                    // let green = node
-                                                                    //     .green()
-                                                                    //     .replace_child(
-                                                                    //         child.index(),
-                                                                    //         replacement
-                                                                    //             .green()
-                                                                    //             .into(),
-                                                                    //     );
-                                                                    // let green = toplevel
-                                                                    //     .replace_with(green);
-                                                                    // let node = Root::parse(
-                                                                    //     green
-                                                                    //         .to_string()
-                                                                    //         .as_str(),
-                                                                    // )
-                                                                    // .syntax();
-                                                                    tracing::debug!(
-                                                                        "Noode: {node}"
-                                                                    );
+                                                                    tracing::debug!("Node: {node}");
                                                                     return Some(replacement);
                                                                 }
                                                             }
@@ -589,7 +571,7 @@ impl<'a> Walker {
                                                             {
                                                                 let replacement =
                                                                     Root::parse("").syntax();
-                                                                tracing::debug!("Noode: {node}");
+                                                                tracing::debug!("Node: {node}");
                                                                 return Some(replacement);
                                                             }
                                                         }
@@ -780,6 +762,28 @@ impl<'a> Walker {
                                     }
                                 }
                             }
+                        }
+                    }
+                    if attr.to_string() == "flake" {
+                        if let Some(input_id) = attr.prev_sibling() {
+                            if let Some(is_flake) = attr.parent().unwrap().next_sibling() {
+                                tracing::debug!("The following attribute is a flake: {input_id}:{is_flake} is nested inside the context: {ctx:?}");
+                                let mut input = Input::new(input_id.to_string());
+                                input.flake = is_flake.to_string().parse().unwrap();
+                                self.insert_with_ctx(input_id.to_string(), input, ctx);
+                                if change.is_remove() {
+                                    if let Some(id) = change.id() {
+                                        if id.matches_with_ctx(&input_id.to_string(), ctx.clone()) {
+                                            let replacement = Root::parse("").syntax();
+                                            return Some(replacement);
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // TODO: handle this.
+                            // This happens, when there is a nested node.
+                            tracing::info!("Nested: This is not handled yet.");
                         }
                     }
                     if attr.to_string() == "follows" {
