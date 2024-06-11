@@ -15,13 +15,15 @@
     not-a-flake.flake = false;
   };
 
-  outputs = {
-    self,
-    nixpkgs,
-    flake-utils,
-    flake-utelinos,
-    rust-overlay,
-    crane,
-    not-a-flake,
-  }: {};
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      flake-utelinos,
+      rust-overlay,
+      crane,
+      not-a-flake,
+    }:
+    { };
 }

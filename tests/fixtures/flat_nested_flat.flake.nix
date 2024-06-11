@@ -9,5 +9,12 @@
     url = "github:nix-community/poetry2nix/master";
   };
 
-  outputs = { self, nixpkgs, flake-utils, poetry2nix, }: { };
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      poetry2nix,
+    }:
+    { };
 }
