@@ -1011,8 +1011,6 @@ impl<'a> Walker {
                                 if id.matches_with_ctx(input.id(), Some(ctx.clone()))
                                     && change.is_remove()
                                 {
-                                    println!("Node: {}", node);
-                                    println!("Index: {}", node.index());
                                     let replacement = Root::parse("").syntax();
                                     return Some(replacement);
                                 }
