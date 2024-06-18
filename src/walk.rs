@@ -196,8 +196,6 @@ impl<'a> Walker {
                                     if let OutputChange::Add(ref add) = change {
                                         let token_count = output.children_with_tokens().count();
                                         let count = output.children().count();
-                                        println!("Tokens: {}", token_count);
-                                        println!("Count: {}", count);
                                         let addition = Root::parse(&format!(", {add}")).syntax();
                                         let last_node = token_count - 2;
                                         let mut green = output
@@ -209,7 +207,6 @@ impl<'a> Walker {
                                             .unwrap()
                                             .prev_sibling_or_token()
                                         {
-                                            println!("Prev: {:?}", prev);
                                             if let SyntaxKind::TOKEN_WHITESPACE = prev.kind() {
                                                 let whitespace = Root::parse(
                                                     prev.as_token().unwrap().green().text(),
