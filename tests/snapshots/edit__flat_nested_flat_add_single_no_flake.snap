@@ -18,5 +18,12 @@ info:
   inputs.not_a_flake.url = "github:a-kenji/not_a_flake";
   inputs.not_a_flake.flake = false;
 
-  outputs = { self, nixpkgs, flake-utils, poetry2nix, }: { };
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      poetry2nix,
+    }:
+    { };
 }

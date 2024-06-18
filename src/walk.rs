@@ -2,7 +2,11 @@ use std::collections::HashMap;
 
 use rnix::{Root, SyntaxKind, SyntaxNode};
 
-use crate::{change::Change, input::Input};
+use crate::{
+    change::Change,
+    edit::{OutputChange, Outputs},
+    input::Input,
+};
 
 // TODO:
 // - parse out inputs
@@ -98,6 +102,7 @@ impl<'a> Walker {
         }
         tracing::debug!("Self Inputs: {:#?}", self.inputs);
     }
+
     fn remove_child_with_whitespace(
         parent: &SyntaxNode,
         node: &SyntaxNode,
@@ -114,6 +119,182 @@ impl<'a> Walker {
             }
         }
         Root::parse(green.to_string().as_str()).syntax()
+    }
+
+    /// Only walk the outputs attribute
+    pub(crate) fn list_outputs(&mut self) -> Outputs {
+        let mut outputs: Vec<String> = vec![];
+        let mut any = false;
+        tracing::debug!("Walking outputs.");
+        let cst = &self.root;
+        if cst.kind() != SyntaxKind::NODE_ROOT {
+            // TODO: handle this as an error
+            panic!("Should be a topevel node.")
+        }
+
+        for toplevel in cst.first_child().unwrap().children() {
+            if toplevel.kind() == SyntaxKind::NODE_ATTRPATH_VALUE {
+                {
+                    if let Some(outputs_node) = toplevel
+                        .children()
+                        .find(|child| child.to_string() == "outputs")
+                    {
+                        assert!(outputs_node.kind() == SyntaxKind::NODE_ATTRPATH);
+
+                        if let Some(outputs_lambda) = outputs_node.next_sibling() {
+                            assert!(outputs_lambda.kind() == SyntaxKind::NODE_LAMBDA);
+                            if let Some(output) = outputs_lambda
+                                .children()
+                                .find(|n| n.kind() == SyntaxKind::NODE_PATTERN)
+                            {
+                                // We need to iterate over tokens, because ellipsis ...
+                                // is not a valid node itself.
+                                for child in output.children_with_tokens() {
+                                    if child.kind() == SyntaxKind::NODE_PAT_ENTRY {
+                                        outputs.push(child.to_string());
+                                    }
+                                    if child.kind() == SyntaxKind::TOKEN_ELLIPSIS {
+                                        any = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if outputs.is_empty() {
+            Outputs::None
+        } else if any {
+            Outputs::Any(outputs)
+        } else {
+            Outputs::Multiple(outputs)
+        }
+    }
+    /// Only change the outputs attribute
+    pub(crate) fn change_outputs(&mut self, change: OutputChange) -> Option<SyntaxNode> {
+        tracing::debug!("Changing outputs.");
+        let cst = &self.root;
+        if cst.kind() != SyntaxKind::NODE_ROOT {
+            // TODO: handle this as an error
+            panic!("Should be a toplevel node.")
+        }
+
+        for toplevel in cst.first_child().unwrap().children() {
+            if toplevel.kind() == SyntaxKind::NODE_ATTRPATH_VALUE {
+                {
+                    if let Some(outputs_node) = toplevel
+                        .children()
+                        .find(|child| child.to_string() == "outputs")
+                    {
+                        assert!(outputs_node.kind() == SyntaxKind::NODE_ATTRPATH);
+
+                        if let Some(outputs_lambda) = outputs_node.next_sibling() {
+                            assert!(outputs_lambda.kind() == SyntaxKind::NODE_LAMBDA);
+                            for output in outputs_lambda.children() {
+                                if SyntaxKind::NODE_PATTERN == output.kind() {
+                                    if let OutputChange::Add(ref add) = change {
+                                        let token_count = output.children_with_tokens().count();
+                                        let count = output.children().count();
+                                        println!("Tokens: {}", token_count);
+                                        println!("Count: {}", count);
+                                        let addition = Root::parse(&format!(", {add}")).syntax();
+                                        let last_node = token_count - 2;
+                                        let mut green = output
+                                            .green()
+                                            .insert_child(last_node, addition.green().into());
+                                        if let Some(prev) = output
+                                            .children()
+                                            .nth(count - 1)
+                                            .unwrap()
+                                            .prev_sibling_or_token()
+                                        {
+                                            println!("Prev: {:?}", prev);
+                                            if let SyntaxKind::TOKEN_WHITESPACE = prev.kind() {
+                                                let whitespace = Root::parse(
+                                                    prev.as_token().unwrap().green().text(),
+                                                )
+                                                .syntax();
+                                                green = green.insert_child(
+                                                    last_node,
+                                                    whitespace.green().into(),
+                                                );
+                                            }
+                                        }
+                                        let changed_outputs_lambda = outputs_lambda
+                                            .green()
+                                            .replace_child(output.index(), green.into());
+                                        let changed_toplevel = toplevel.green().replace_child(
+                                            outputs_lambda.index(),
+                                            changed_outputs_lambda.into(),
+                                        );
+                                        let result =
+                                            cst.first_child().unwrap().green().replace_child(
+                                                toplevel.index(),
+                                                changed_toplevel.into(),
+                                            );
+                                        return Some(Root::parse(&result.to_string()).syntax());
+                                    }
+                                    for child in output.children() {
+                                        if child.kind() == SyntaxKind::NODE_PAT_ENTRY {
+                                            if let OutputChange::Remove(ref id) = change {
+                                                if child.to_string() == *id {
+                                                    let mut green =
+                                                        output.green().remove_child(child.index());
+                                                    if let Some(prev) =
+                                                        child.prev_sibling_or_token()
+                                                    {
+                                                        if let SyntaxKind::TOKEN_WHITESPACE =
+                                                            prev.kind()
+                                                        {
+                                                            green =
+                                                                green.remove_child(prev.index());
+                                                            green = green
+                                                                .remove_child(prev.index() - 1);
+                                                        }
+                                                    } else if let Some(next) =
+                                                        child.next_sibling_or_token()
+                                                    {
+                                                        if let SyntaxKind::TOKEN_WHITESPACE =
+                                                            next.kind()
+                                                        {
+                                                            green =
+                                                                green.remove_child(next.index());
+                                                        }
+                                                    }
+                                                    let changed_outputs_lambda =
+                                                        outputs_lambda.green().replace_child(
+                                                            output.index(),
+                                                            green.into(),
+                                                        );
+                                                    let changed_toplevel =
+                                                        toplevel.green().replace_child(
+                                                            outputs_lambda.index(),
+                                                            changed_outputs_lambda.into(),
+                                                        );
+                                                    let result = cst
+                                                        .first_child()
+                                                        .unwrap()
+                                                        .green()
+                                                        .replace_child(
+                                                            toplevel.index(),
+                                                            changed_toplevel.into(),
+                                                        );
+                                                    return Some(
+                                                        Root::parse(&result.to_string()).syntax(),
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
     /// Traverse the toplevel `flake.nix` file.
     /// It should consist of three attribute keys:
@@ -147,6 +328,30 @@ impl<'a> Walker {
                             // We are not interested in the description
                             break;
                         }
+                        // We now want to check, if the outputs are correct
+                        // and adjust them if necessary. After adding an input
+                        // we could have broken the flake in that case we need
+                        // to also add the input to the outputs.
+                        // if child.to_string() == "outputs" {
+                        //     println!("child next_sibling: {}", child.next_sibling().unwrap());
+                        //     println!(
+                        //         "child next_sibling kind: {:?}",
+                        //         child.next_sibling().unwrap().kind()
+                        //     );
+                        //     if let Some(child) = child.next_sibling() {
+                        //         for output in child.children() {
+                        //             // TODO: check in the children:
+                        //             // - if there is a ... already in the outputs,
+                        //             // then we don't need to add an output
+                        //             // - if our added output is not there yet,
+                        //             // then we need to add it
+                        //             for child in output.children() {
+                        //                 println!("child: {}", child);
+                        //                 println!("child kind: {:?}", child.kind());
+                        //             }
+                        //         }
+                        //     }
+                        // }
                         if child.to_string() == "inputs" {
                             if let Some(replacement) =
                                 self.walk_inputs(child.next_sibling().unwrap(), &ctx, change)
@@ -186,6 +391,8 @@ impl<'a> Walker {
                                 }
                             }
                         };
+                        // If we already see outputs, but have no inputs
+                        // we need to create a toplevel inputs attribute set.
                         if child.to_string() == "outputs" && self.add_toplevel {
                             if let Change::Add { id, uri, flake } = change {
                                 let addition = Root::parse(&format!(
@@ -284,7 +491,7 @@ impl<'a> Walker {
                         }
                     }
                 } else {
-                    // TODO: handle
+                    // TODO: proper error handling.
                     panic!("Should be a NODE_ATTRPATH_VALUE");
                 }
             }

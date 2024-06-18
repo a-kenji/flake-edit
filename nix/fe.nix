@@ -1,12 +1,17 @@
-{ self, rustPlatform, installShellFiles, lib, pkgs,
+{
+  self,
+  rustPlatform,
+  installShellFiles,
+  lib,
+  pkgs,
 
 }:
 let
   cargoTOML = builtins.fromTOML (builtins.readFile (self + "/Cargo.toml"));
   inherit (cargoTOML.package) version name;
   gitDate = "${builtins.substring 0 4 self.lastModifiedDate}-${
-      builtins.substring 4 2 self.lastModifiedDate
-    }-${builtins.substring 6 2 self.lastModifiedDate}";
+    builtins.substring 4 2 self.lastModifiedDate
+  }-${builtins.substring 6 2 self.lastModifiedDate}";
   gitRev = self.shortRev or self.dirtyShortRev;
   meta = import ./meta.nix { inherit lib; };
   # crane
@@ -17,11 +22,9 @@ let
     src = lib.cleanSourceWith { src = craneLib.path ../.; };
   };
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-  cargoClippy =
-    craneLib.cargoClippy (commonArgs // { inherit cargoArtifacts; });
+  cargoClippy = craneLib.cargoClippy (commonArgs // { inherit cargoArtifacts; });
   cargoDeny = craneLib.cargoDeny (commonArgs // { inherit cargoArtifacts; });
-  cargoTarpaulin =
-    craneLib.cargoTarpaulin (commonArgs // { inherit cargoArtifacts; });
+  cargoTarpaulin = craneLib.cargoTarpaulin (commonArgs // { inherit cargoArtifacts; });
   cargoDoc = craneLib.cargoDoc (commonArgs // { inherit cargoArtifacts; });
   cargoTest = craneLib.cargoTest (commonArgs // { inherit cargoArtifacts; });
   assetDir = "target/assets";
@@ -38,22 +41,32 @@ let
     mkdir -p $out/share/nu
     cp ${assetDir}/${name}.nu $out/share/${name}.nu
   '';
-in {
-  fe = craneLib.buildPackage (commonArgs // {
-    cargoExtraArgs = "-p ${name}";
-    buildInputs = [ installShellFiles ];
-    env = {
-      GIT_DATE = gitDate;
-      GIT_REV = gitRev;
-      ASSET_DIR = assetDir;
-    };
-    doCheck = false;
-    version = "unstable-" + gitDate;
-    pname = "fe";
-    name = "fe";
-    postInstall = postInstall "fe";
-    inherit assetDir cargoArtifacts meta;
-  });
-  inherit cargoClippy cargoArtifacts cargoDeny cargoTarpaulin cargoDoc
-    cargoTest;
+in
+{
+  fe = craneLib.buildPackage (
+    commonArgs
+    // {
+      cargoExtraArgs = "-p ${name}";
+      buildInputs = [ installShellFiles ];
+      env = {
+        GIT_DATE = gitDate;
+        GIT_REV = gitRev;
+        ASSET_DIR = assetDir;
+      };
+      doCheck = false;
+      version = "unstable-" + gitDate;
+      pname = "fe";
+      name = "fe";
+      postInstall = postInstall "fe";
+      inherit assetDir cargoArtifacts meta;
+    }
+  );
+  inherit
+    cargoClippy
+    cargoArtifacts
+    cargoDeny
+    cargoTarpaulin
+    cargoDoc
+    cargoTest
+    ;
 }

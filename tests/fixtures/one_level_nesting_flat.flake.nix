@@ -13,12 +13,14 @@
     crane.inputs.flake-utils.follows = "flake-utils";
   };
 
-  outputs = {
-    self,
-    nixpkgs,
-    flake-utils,
-    flake-utelinos,
-    rust-overlay,
-    crane,
-  }: {};
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      flake-utelinos,
+      rust-overlay,
+      crane,
+    }:
+    { };
 }

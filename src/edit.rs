@@ -10,6 +10,24 @@ pub struct FlakeEdit {
     walker: Walker,
 }
 
+#[derive(Default, Debug)]
+pub enum Outputs {
+    #[default]
+    None,
+    // needs strict inputs to output mapping
+    Multiple(Vec<String>),
+    // contains ...
+    Any(Vec<String>),
+}
+
+#[derive(Default, Debug)]
+pub enum OutputChange {
+    #[default]
+    None,
+    Add(String),
+    Remove(String),
+}
+
 impl FlakeEdit {
     pub fn new(changes: Vec<Change>, walker: Walker) -> Self {
         Self { changes, walker }
@@ -44,16 +62,30 @@ impl FlakeEdit {
     pub fn apply_change(&mut self, change: Change) -> Result<Option<String>, FlakeEditError> {
         match change {
             Change::None => Ok(None),
+            //TODO: Add outputs, if needed.
             Change::Add { .. } => {
-                if let Some(maybe_changed_node) = self.walker.walk(&change) {
+                if let Some(maybe_changed_node) = self.walker.walk(&change.clone()) {
+                    let outputs = self.walker.list_outputs();
+                    match outputs {
+                        Outputs::Multiple(out) => {
+                            let id = change.id().unwrap().to_string();
+                            if !out.contains(&id) {
+                                self.walker.root = maybe_changed_node.clone();
+                                if let Some(maybe_changed_node) =
+                                    self.walker.change_outputs(OutputChange::Add(id))
+                                {
+                                    return Ok(Some(maybe_changed_node.to_string()));
+                                }
+                            }
+                        }
+                        Outputs::None | Outputs::Any(_) => {}
+                    }
                     Ok(Some(maybe_changed_node.to_string()))
                 } else {
                     self.walker.add_toplevel = true;
                     let maybe_changed_node = self.walker.walk(&change);
                     Ok(maybe_changed_node.map(|n| n.to_string()))
                 }
-
-                // Ok(maybe_changed_node.map(|n| n.to_string()))
             }
             Change::Remove { .. } => {
                 // If we remove a node, it could be a flat structure,
@@ -66,6 +98,22 @@ impl FlakeEdit {
                     }
                     res = Some(changed_node.clone());
                     self.walker.root = changed_node.clone();
+                }
+                // Removed nodes should be removed from the outputs
+                let outputs = self.walker.list_outputs();
+                match outputs {
+                    Outputs::Multiple(out) => {
+                        let id = change.id().unwrap().to_string();
+                        if out.contains(&id) {
+                            if let Some(changed_node) =
+                                self.walker.change_outputs(OutputChange::Remove(id))
+                            {
+                                res = Some(changed_node.clone());
+                                self.walker.root = changed_node.clone();
+                            }
+                        }
+                    }
+                    Outputs::None | Outputs::Any(_) => {}
                 }
                 Ok(res.map(|n| n.to_string()))
             }

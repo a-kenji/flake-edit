@@ -17,5 +17,12 @@ info:
   };
   inputs.vmsh.url = "mic92/vmsh";
 
-  outputs = { self, nixpkgs, flake-utils, poetry2nix, }: { };
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      poetry2nix,
+    }:
+    { };
 }

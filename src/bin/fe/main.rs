@@ -131,6 +131,7 @@ fn main() -> eyre::Result<()> {
                 tracing::error!("Error: {e}");
                 tracing::error!("The changes will not be applied.");
             }
+            eprintln!("{}", resulting_change);
             std::process::exit(1);
         }
 
