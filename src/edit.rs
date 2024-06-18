@@ -102,7 +102,7 @@ impl FlakeEdit {
                 // Removed nodes should be removed from the outputs
                 let outputs = self.walker.list_outputs();
                 match outputs {
-                    Outputs::Multiple(out) => {
+                    Outputs::Multiple(out) | Outputs::Any(out) => {
                         let id = change.id().unwrap().to_string();
                         if out.contains(&id) {
                             if let Some(changed_node) =
@@ -113,7 +113,7 @@ impl FlakeEdit {
                             }
                         }
                     }
-                    Outputs::None | Outputs::Any(_) => {}
+                    Outputs::None => {}
                 }
                 Ok(res.map(|n| n.to_string()))
             }
