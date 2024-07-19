@@ -11,7 +11,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::{env, fs::create_dir_all, path::Path};
 
-include!("src/bin/fe/cli.rs");
+include!("src/bin/flake-edit/cli.rs");
 
 fn main() {
     println!("cargo:rerun-if-env-changed=ASSET_DIR");

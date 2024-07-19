@@ -1,6 +1,6 @@
 ---
 source: tests/edit.rs
-expression: flake_edit.curr_list()
+expression: flake_edit.list()
 info:
   flake_nix: ""
   changes:
@@ -12,6 +12,9 @@ flake-compat:
   flake: true
   url: "\"github:edolstra/flake-compat\""
   follows: []
+  range:
+    start: 251
+    end: 281
 naersk:
   id: naersk
   flake: true
@@ -20,8 +23,14 @@ naersk:
     - Indirect:
         - nixpkgs
         - "\"nixpkgs\""
+  range:
+    start: 72
+    end: 108
 nixpkgs:
   id: nixpkgs
   flake: true
   url: "\"github:NixOS/nixpkgs/nixpkgs-unstable\""
   follows: []
+  range:
+    start: 177
+    end: 216

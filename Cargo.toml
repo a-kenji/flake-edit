@@ -14,7 +14,7 @@ homepage = "https://github.com/a-kenji/flake-add"
 include = ["src/**/*", "LICENSE", "README.md", "build.rs"]
 
 [[bin]]
-name = "fe"
+name = "flake-edit"
 
 [workspace.package]
 version = "0.1.0"
@@ -51,9 +51,11 @@ clap = { version = "4.5.7", optional = true, features = ["derive"] }
 color-eyre = "0.6.3"
 diffy = { version = "0.4.0", optional = true }
 directories = "5.0.1"
-nix-uri = "0.1.5"
+nix-uri = "0.1.8"
+reqwest = { version = "0.12.5", features = ["blocking"] }
 rnix = "0.11.0"
 ropey = { version = "1.6.1", optional = true }
+semver = "1.0.23"
 serde = "1.0.204"
 serde_json = { version = "1.0.120", optional = true }
 thiserror = "1.0.61"

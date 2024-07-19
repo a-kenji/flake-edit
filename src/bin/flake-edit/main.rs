@@ -12,6 +12,8 @@ use flake_edit::change::Change;
 use flake_edit::diff::Diff;
 use flake_edit::edit;
 use flake_edit::input::Follows;
+use flake_edit::input::Input;
+use flake_edit::update::Updater;
 use nix_uri::urls::UrlWrapper;
 use nix_uri::{FlakeRef, NixUriResult};
 use rnix::tokenizer::Tokenizer;
@@ -93,6 +95,7 @@ fn main() -> eyre::Result<()> {
                 };
             }
         }
+        cli::Command::Update { .. } => {}
         cli::Command::List { .. } => {}
         cli::Command::Change { id, uri } => {
             if let Some(id) = id {
@@ -117,6 +120,17 @@ fn main() -> eyre::Result<()> {
                 std::process::exit(0);
             }
         },
+        Command::Add {
+            id,
+            uri,
+            ref_or_rev,
+            force,
+            no_flake,
+        } => todo!(),
+        Command::Pin { id } => todo!(),
+        Command::Change { id, uri } => todo!(),
+        Command::Remove { id } => todo!(),
+        Command::Completion { inputs, mode } => todo!(),
     }
 
     if let Ok(Some(resulting_change)) = editor.apply_change(change.clone()) {
@@ -145,7 +159,7 @@ fn main() -> eyre::Result<()> {
         }
 
         if args.diff() {
-            let old = text;
+            let old = text.clone();
             let new = resulting_change;
             let diff = Diff::new(&old, &new);
             diff.compare();
@@ -153,7 +167,7 @@ fn main() -> eyre::Result<()> {
         } else if args.apply() {
             app.root.apply(&resulting_change)?;
         }
-    } else if !args.list() {
+    } else if !args.list() && !args.update() {
         if change.is_remove() {
             return Err(eyre::eyre!(
                 "The input with id: {} could not be removed.",
@@ -228,6 +242,29 @@ fn main() -> eyre::Result<()> {
                 }
                 println!("{buf}");
             }
+        }
+    }
+    if let Command::Update {} = args.subcommand() {
+        let inputs = editor.list();
+        let mut buf = String::new();
+        flake_edit::api::get_gh_token();
+        for input in inputs.values() {
+            if !buf.is_empty() {
+                buf.push('\n');
+            }
+            buf.push_str(input.id());
+        }
+        let mut updater = Updater::new(app.root().text().clone(), inputs.clone());
+        updater.update();
+        let change = updater.get_changes();
+        if args.diff() {
+            let old = text.clone();
+            let new = change;
+            let diff = Diff::new(&old, &new);
+            diff.compare();
+            // Write the changes
+        } else if args.apply() {
+            app.root.apply(&change)?;
         }
     }
     Ok(())

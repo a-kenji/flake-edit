@@ -20,6 +20,8 @@ pub enum Outputs {
     Any(Vec<String>),
 }
 
+pub type InputMap = HashMap<String, Input>;
+
 #[derive(Default, Debug)]
 pub enum OutputChange {
     #[default]
@@ -46,13 +48,13 @@ impl FlakeEdit {
         self.changes.push(change);
     }
 
-    pub fn curr_list(&self) -> &HashMap<String, Input> {
+    pub fn curr_list(&self) -> &InputMap {
         &self.walker.inputs
     }
 
     /// Will walk and then list the inputs, for listing the current inputs,
     /// use `curr_list()`.
-    pub fn list(&mut self) -> &HashMap<String, Input> {
+    pub fn list(&mut self) -> &InputMap {
         self.walker.inputs.clear();
         assert!(self.walker.walk(&Change::None).is_none());
         &self.walker.inputs

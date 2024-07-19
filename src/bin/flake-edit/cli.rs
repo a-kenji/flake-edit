@@ -52,6 +52,9 @@ impl CliArgs {
     pub(crate) fn list(&self) -> bool {
         matches!(self.subcommand, Command::List { .. })
     }
+    pub(crate) fn update(&self) -> bool {
+        matches!(self.subcommand, Command::Update { .. })
+    }
 
     pub fn flake(&self) -> Option<&String> {
         self.flake.as_ref()
@@ -104,6 +107,9 @@ pub(crate) enum Command {
         #[arg(long, default_value_t = ListFormat::default())]
         format: ListFormat,
     },
+    /// Update inputs to their latest specified release.
+    #[clap(alias = "u")]
+    Update {},
     #[clap(hide = true)]
     #[command(name = "completion")]
     /// Meant for shell completions.
