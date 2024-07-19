@@ -13,3 +13,6 @@ naersk:
     - Indirect:
         - nixpkgs
         - "\"nixpkgs\""
+  range:
+    start: 72
+    end: 108

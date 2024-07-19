@@ -19,11 +19,17 @@ crane:
     - Indirect:
         - rust-overlay
         - "\"rust-overlay\""
+  range:
+    start: 272
+    end: 277
 nixpkgs:
   id: nixpkgs
   flake: true
   url: "\"github:nixos/nixpkgs/nixos-unstable\""
   follows: []
+  range:
+    start: 48
+    end: 55
 rust-overlay:
   id: rust-overlay
   flake: true
@@ -35,4 +41,6 @@ rust-overlay:
     - Indirect:
         - nixpkgs
         - "\"nixpkgs\""
-
+  range:
+    start: 111
+    end: 123

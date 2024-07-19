@@ -1,10 +1,10 @@
 {
   self,
-  rustPlatform,
-  installShellFiles,
   lib,
   pkgs,
-
+  installShellFiles,
+  openssl,
+  pkg-config,
 }:
 let
   cargoTOML = builtins.fromTOML (builtins.readFile (self + "/Cargo.toml"));
@@ -17,6 +17,10 @@ let
   # crane
   craneLib = self.inputs.crane.mkLib pkgs;
   commonArgs = {
+    nativeBuildInputs = [
+      pkg-config
+      openssl
+    ];
     inherit version name;
     pname = name;
     src = lib.cleanSourceWith { src = craneLib.path ../.; };
