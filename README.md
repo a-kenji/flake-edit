@@ -11,6 +11,7 @@
 `flake-edit` has the following cli interface:
 
 `$ flake-edit help`
+
 ```
 Edit your flake inputs with ease
 
@@ -19,14 +20,14 @@ Usage: flake-edit [OPTIONS] [FLAKE_REF] <COMMAND>
 Commands:
   add
           Add a new flake reference
-  pin
-          Pin a specific flake reference based on its id
   change
-          Change a specific flake reference based on its id
+          
   remove
           Remove a specific flake reference based on its id
   list
           List flake inputs
+  update
+          Update inputs to their latest specified release
   help
           Print this message or the help of the given subcommand(s)
 
@@ -37,10 +38,10 @@ Arguments:
 Options:
       --flake <FLAKE>
           
-      --health
-          Checks for potential errors in the setup
-      --ref-or-rev <REF_OR_REV>
-          Pin to a specific ref_or_rev
+      --diff
+          Print a diff of the changes, will set the apply flag to false
+      --apply
+          Whether to apply possible changes
   -h, --help
           Print help
   -V, --version
@@ -49,6 +50,7 @@ Options:
 
 ### `$ flake-edit add`
 `$ flake-edit help add`
+
 ```
 Add a new flake reference
 
@@ -62,9 +64,9 @@ Arguments:
 
 Options:
       --ref-or-rev <REF_OR_REV>
-          
-      --force <FORCE>
-          Allow operations on uncommitted files
+          Pin to a specific ref_or_rev
+  -n, --no-flake
+          The input itself is not a flake
   -h, --help
           Print help
 ```
@@ -77,6 +79,7 @@ For some inputs, the uri can be put in directly and the id and type will be infe
 
 ### `$ flake-edit remove`
 `$ flake-edit help remove`
+
 ```
 Remove a specific flake reference based on its id
 
@@ -92,8 +95,24 @@ Options:
 ```
 ![flake-edit remove example](https://vhs.charm.sh/vhs-1Uo70AaoEMuYh2UR1JVARD.gif)
 
+### `$ flake-edit update`
+`$ flake-edit help update`
+
+```
+Update inputs to their latest specified release
+
+Usage: flake-edit update
+
+Options:
+  -h, --help
+          Print help
+```
+
+![flake-edit update example](https://vhs.charm.sh/vhs-5o8mNQOSkW6ZX03fm4yS6q.gif)
+
 ### `$ flake-edit list`
 `$ flake-edit help list`
+
 ```
 List flake inputs
 
