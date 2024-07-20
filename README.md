@@ -69,10 +69,11 @@ Options:
           Print help
 ```
 For some types, the id will be automatically inferred.
-![flake-edit add example](assets/tape/output/add_input.gif)
+![flake-edit add example](https://vhs.charm.sh/vhs-iJiVTOvSd8V9WEl79Ie68.gif)
 
 For some inputs, the uri can be put in directly and the id and type will be inferred.
-![flake-edit add inferred example](assets/tape/output/add_input_inferred.gif)
+![flake-edit add inferred example](https://vhs.charm.sh/vhs-3RsaCQO9CAznelPup2kDgV.gif
+)
 
 ### `$ flake-edit remove`
 `$ flake-edit help remove`
@@ -89,7 +90,7 @@ Options:
   -h, --help
           Print help
 ```
-![flake-edit remove example](assets/tape/output/remove_input.gif)
+![flake-edit remove example](https://vhs.charm.sh/vhs-1Uo70AaoEMuYh2UR1JVARD.gif)
 
 ### `$ flake-edit list`
 `$ flake-edit help list`
@@ -105,9 +106,9 @@ Options:
           Print help
 ```
 List the outputs, that are specified inside the inputs attribute.
-![flake-edit list example](assets/tape/output/list_inputs.gif)
+![flake-edit list example](https://vhs.charm.sh/vhs-2ZSgdhkzBe3eoxuYtM1JL6.gif)
 List the outputs, that are specified inside the inputs attribute, in json format.
-![flake-edit list example](assets/tape/output/list_inputs_json.gif)
+![flake-edit list example](https://vhs.charm.sh/vhs-35E6eiL63lFTSC70rQyE1Y.gif)
 
 
 ## License

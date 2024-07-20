@@ -67,5 +67,5 @@ Type "set -x fish_function_path ''" Enter
 Type "clear" Enter
 Show
 
-Type "fe rm crane" Sleep 1000ms Enter
+Type "flake-edit --diff rm crane" Sleep 1000ms Enter
 Sleep 5s
