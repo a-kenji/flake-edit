@@ -16,7 +16,7 @@ include!("src/bin/flake-edit/cli.rs");
 fn main() {
     println!("cargo:rerun-if-env-changed=ASSET_DIR");
 
-    const NAME: &str = "fe";
+    const NAME: &str = "flake-edit";
     const COMPLETIONS_DIR: &str = "assets/completions";
     const FISH_COMPLETIONS: &str = "fish/completions.fish";
     let manifest_dir =
