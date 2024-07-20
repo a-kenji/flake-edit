@@ -12,13 +12,22 @@ flake-compat:
   flake: true
   url: "\"github:edolstra/flake-compat\""
   follows: []
+  range:
+    start: 183
+    end: 213
 nixpkgs:
   id: nixpkgs
   flake: true
   url: "\"github:NixOS/nixpkgs/nixpkgs-unstable\""
   follows: []
+  range:
+    start: 63
+    end: 102
 utils:
   id: utils
   flake: true
   url: "\"github:numtide/flake-utils\""
   follows: []
+  range:
+    start: 120
+    end: 148

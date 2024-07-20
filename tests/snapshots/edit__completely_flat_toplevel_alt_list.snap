@@ -19,16 +19,25 @@ crane:
     - Indirect:
         - rust-overlay
         - "\"rust-overlay\""
+  range:
+    start: 0
+    end: 0
 flake-utelinos:
   id: flake-utelinos
   flake: true
   url: "\"github:numtide/flake-utils\""
   follows: []
+  range:
+    start: 150
+    end: 178
 nixpkgs:
   id: nixpkgs
   flake: true
   url: "\"github:nixos/nixpkgs/nixos-unstable\""
   follows: []
+  range:
+    start: 86
+    end: 123
 rust-overlay:
   id: rust-overlay
   flake: true
@@ -40,4 +49,6 @@ rust-overlay:
     - Indirect:
         - nixpkgs
         - "\"nixpkgs\""
-
+  range:
+    start: 0
+    end: 0

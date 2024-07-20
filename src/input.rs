@@ -1,3 +1,4 @@
+use rnix::TextRange;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize, Serialize, PartialOrd, Ord)]
@@ -6,6 +7,22 @@ pub struct Input {
     pub(crate) flake: bool,
     pub(crate) url: String,
     pub(crate) follows: Vec<Follows>,
+    pub range: Range,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Hash, Eq, Deserialize, Serialize, PartialOrd, Ord)]
+pub struct Range {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl Range {
+    pub fn from_text_range(text_range: TextRange) -> Self {
+        Self {
+            start: text_range.start().into(),
+            end: text_range.end().into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize, Serialize, PartialOrd, Ord)]
@@ -46,6 +63,7 @@ impl Default for Input {
             flake: true,
             url: String::new(),
             follows: vec![],
+            range: Range::default(),
         }
     }
 }
