@@ -14,12 +14,6 @@ pub struct CliArgs {
     // The flake ref, or id that should be passed through to the nix command
     // By default will choose the local flake.
     flake_ref: Option<String>,
-    /// Checks for potential errors in the setup
-    #[arg(long)]
-    health: bool,
-    /// Pin to a specific ref_or_rev
-    #[arg(long)]
-    ref_or_rev: Option<String>,
     /// Print a diff of the changes, will set the apply flag to false.
     #[arg(long, default_value_t = false)]
     diff: bool,
@@ -81,18 +75,13 @@ pub(crate) enum Command {
         // #[arg(last = true)]
         uri: Option<String>,
         #[arg(long)]
+        /// Pin to a specific ref_or_rev
         ref_or_rev: Option<String>,
-        /// Allow operations on uncommitted files.
-        #[arg(long)]
-        force: Option<String>,
         /// The input itself is not a flake.
         #[arg(long, short)]
         no_flake: bool,
     },
-    /// Pin a specific flake reference based on its id.
-    #[command(alias = "p", arg_required_else_help = true)]
-    Pin { id: Option<String> },
-    /// Change a specific flake reference based on its id.
+    // /// Change a specific flake reference based on its id.
     #[command(alias = "c", arg_required_else_help = true)]
     Change {
         id: Option<String>,
