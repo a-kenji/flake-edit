@@ -89,7 +89,10 @@ fn query_tags(repo: &str, owner: &str) -> Result<IntermediaryTags, ()> {
     headers.insert(USER_AGENT, HeaderValue::from_str("flake-edit").unwrap());
     if let Some(token) = get_gh_token() {
         tracing::debug!("Found github token.");
-        headers.insert("authorization: Bearer", HeaderValue::from_str(&token).unwrap());
+        headers.insert(
+            "authorization: Bearer",
+            HeaderValue::from_str(&token).unwrap(),
+        );
         tracing::debug!("Settings github token.");
     }
     let body = client
