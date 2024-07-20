@@ -95,6 +95,21 @@ Options:
 ```
 ![flake-edit remove example](https://vhs.charm.sh/vhs-1Uo70AaoEMuYh2UR1JVARD.gif)
 
+### `$ flake-edit update`
+`$ flake-edit help update`
+
+```
+Update inputs to their latest specified release
+
+Usage: flake-edit update
+
+Options:
+  -h, --help
+          Print help
+```
+
+![flake-edit update example](https://vhs.charm.sh/vhs-5o8mNQOSkW6ZX03fm4yS6q.gif)
+
 ### `$ flake-edit list`
 `$ flake-edit help list`
 
