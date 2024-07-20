@@ -28,8 +28,8 @@ nixpkgs:
   url: "\"github:nixos/nixpkgs/nixos-unstable\""
   follows: []
   range:
-    start: 48
-    end: 55
+    start: 62
+    end: 99
 rust-overlay:
   id: rust-overlay
   flake: true
