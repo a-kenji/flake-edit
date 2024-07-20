@@ -80,7 +80,7 @@ fn main() -> eyre::Result<()> {
                         eyre::eyre!("Could not infer [ID] from flake reference.")
                             .with_note(|| format!("The provided uri: {uri}"))
                             .suggestion(
-                            "\nPlease specify an [ID] for this flake reference.\nIn the following form: `fe add [ID] [uri]`\nIf you think the [ID] should have been able to be inferred, please open an issue.",
+                            "\nPlease specify an [ID] for this flake reference.\nIn the following form: `flake-edit add [ID] [uri]`\nIf you think the [ID] should have been able to be inferred, please open an issue.",
                         ),
                     );
                 }
@@ -161,7 +161,7 @@ fn main() -> eyre::Result<()> {
                 "The input with id: {} could not be removed.",
                 change.id().unwrap()
             )
-            .suggestion("\nPlease check if an input with that [ID] exists in the flake.nix file.\nRun `fe list --format simple` to see the current inputs by their id."));
+            .suggestion("\nPlease check if an input with that [ID] exists in the flake.nix file.\nRun `flake-edit list --format simple` to see the current inputs by their id."));
         }
         println!("Nothing changed in the node.");
         println!("The following change could not be applied: \n{:?}", change);

@@ -4,9 +4,9 @@
     { pkgs, ... }:
     {
       packages = rec {
-        default = fe;
-        inherit ((pkgs.callPackage ./fe.nix { inherit self; }))
-          fe
+        default = flake-edit;
+        inherit ((pkgs.callPackage ./flake-edit.nix { inherit self; }))
+          flake-edit
           cargoArtifacts
           cargoClippy
           cargoDeny

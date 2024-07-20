@@ -5,12 +5,12 @@ use std::sync::OnceLock;
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 
-static CACHE_FILE_NAME: &str = "fe.json";
+static CACHE_FILE_NAME: &str = "flake_edit.json";
 
 fn cache_dir() -> &'static PathBuf {
     static CACHE_DIR: OnceLock<PathBuf> = OnceLock::new();
     CACHE_DIR.get_or_init(|| {
-        let project_dir = ProjectDirs::from("com", "a-kenji", "fe").unwrap();
+        let project_dir = ProjectDirs::from("com", "a-kenji", "flake-edit").unwrap();
         return project_dir.data_dir().to_path_buf();
     })
 }

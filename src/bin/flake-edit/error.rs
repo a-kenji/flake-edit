@@ -2,7 +2,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum FeError {
-    /// Generic fe error.
+    /// Generic flake-edit error.
     #[allow(unused)]
     #[error("Error: {0}")]
     Error(String),

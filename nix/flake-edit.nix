@@ -47,7 +47,7 @@ let
   '';
 in
 {
-  fe = craneLib.buildPackage (
+  flake-edit = craneLib.buildPackage (
     commonArgs
     // {
       cargoExtraArgs = "-p ${name}";
@@ -59,9 +59,9 @@ in
       };
       doCheck = false;
       version = "unstable-" + gitDate;
-      pname = "fe";
-      name = "fe";
-      postInstall = postInstall "fe";
+      pname = "flake-edit";
+      name = "flake-edit";
+      postInstall = postInstall "flake-edit";
       inherit assetDir cargoArtifacts meta;
     }
   );
