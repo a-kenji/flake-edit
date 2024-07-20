@@ -11,16 +11,16 @@ flake-utils:
   url: "\"github:numtide/flake-utils/master\""
   follows: []
   range:
-    start: 115
-    end: 126
+    start: 133
+    end: 168
 nixpkgs:
   id: nixpkgs
   flake: true
   url: "\"github:NixOS/nixpkgs/nixos-unstable\""
   follows: []
   range:
-    start: 53
-    end: 60
+    start: 67
+    end: 104
 poetry2nix:
   id: poetry2nix
   flake: true
