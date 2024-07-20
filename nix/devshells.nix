@@ -4,7 +4,7 @@ _: {
     {
       devShells = {
         default = pkgs.mkShellNoCC {
-          name = "fe";
+          name = "flake-edit";
           inputsFrom = [ self'.packages.default ];
           packages = [
             pkgs.rust-analyzer
