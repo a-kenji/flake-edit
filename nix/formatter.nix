@@ -4,8 +4,8 @@
 
   perSystem = _: {
     treefmt = {
-      projectRootFile = "flake.lock";
-      programs.nixfmt-rfc-style.enable = true;
+      projectRootFile = ".git/config";
+      programs.nixfmt.enable = true;
       programs.rustfmt.enable = true;
       programs.taplo.enable = true;
     };
