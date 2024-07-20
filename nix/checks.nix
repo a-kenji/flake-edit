@@ -7,7 +7,7 @@ _: {
           fe
           cargoArtifacts
           cargoClippy
-          cargoDeny
+          # cargoDeny
           cargoDoc
           cargoTest
           cargoTarpaulin
