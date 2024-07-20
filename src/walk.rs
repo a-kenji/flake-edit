@@ -298,6 +298,7 @@ impl<'a> Walker {
     /// - description
     /// - inputs
     /// - outputs
+    #[allow(clippy::option_map_unit_fn)]
     fn walk_toplevel(
         &mut self,
         node: SyntaxNode,

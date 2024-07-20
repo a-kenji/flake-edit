@@ -5,7 +5,6 @@ pub mod diff;
 pub mod edit;
 pub mod error;
 pub mod input;
-mod semver;
 pub mod state;
 pub mod update;
 pub mod walk;

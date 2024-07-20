@@ -138,9 +138,6 @@ impl From<String> for CompletionMode {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(crate) enum Parameter {}
-
 #[derive(Debug, Clone, Default)]
 pub(crate) enum ListFormat {
     None,

@@ -33,6 +33,7 @@ pub struct IntermediaryTag {
     name: String,
 }
 
+// TODO: actual error handling
 pub fn get_tags(repo: &str, owner: &str) -> Result<Tags, ()> {
     let tags = query_tags(repo, owner).unwrap();
     Ok(tags.into())
