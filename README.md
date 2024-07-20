@@ -1,20 +1,20 @@
-# `$ fe` - edit your flake inputs with ease
+# `$ flake-edit` - edit your flake inputs with ease
 [![Built with Nix](https://img.shields.io/static/v1?label=built%20with&message=nix&color=5277C3&logo=nixos&style=flat-square&logoColor=ffffff)](https://builtwithnix.org)
 [![Crates](https://img.shields.io/crates/v/flake-edit?style=flat-square)](https://crates.io/crates/flake-edit)
 [![Documentation](https://img.shields.io/badge/flake_edit-documentation-fc0060?style=flat-square)](https://docs.rs/flake-edit)
 [![Matrix Chat Room](https://img.shields.io/badge/chat-on%20matrix-1d7e64?logo=matrix&style=flat-square)](https://matrix.to/#/#flake-edit:matrix.org)
 
-`$ fe` - **f**lake **e**dit - edit your flake inputs with ease.
+`$ flake-edit` - edit your flake inputs with ease.
 
-## `$ fe` - usage
+## `$ flake-edit` - usage
 
-`fe` has the following cli interface:
+`flake-edit` has the following cli interface:
 
-`$ fe help`
+`$ flake-edit help`
 ```
 Edit your flake inputs with ease
 
-Usage: fe [OPTIONS] [FLAKE_REF] <COMMAND>
+Usage: flake-edit [OPTIONS] [FLAKE_REF] <COMMAND>
 
 Commands:
   add
@@ -47,12 +47,12 @@ Options:
           Print version
 ```
 
-### `$ fe add`
-`$ fe help add`
+### `$ flake-edit add`
+`$ flake-edit help add`
 ```
 Add a new flake reference
 
-Usage: fe add [OPTIONS] [ID] [URI]
+Usage: flake-edit add [OPTIONS] [ID] [URI]
 
 Arguments:
   [ID]
@@ -69,17 +69,17 @@ Options:
           Print help
 ```
 For some types, the id will be automatically inferred.
-![fe add example](assets/tape/output/add_input.gif)
+![flake-edit add example](assets/tape/output/add_input.gif)
 
 For some inputs, the uri can be put in directly and the id and type will be inferred.
-![fe add inferred example](assets/tape/output/add_input_inferred.gif)
+![flake-edit add inferred example](assets/tape/output/add_input_inferred.gif)
 
-### `$ fe remove`
-`$ fe help remove`
+### `$ flake-edit remove`
+`$ flake-edit help remove`
 ```
 Remove a specific flake reference based on its id
 
-Usage: fe remove [ID]
+Usage: flake-edit remove [ID]
 
 Arguments:
   [ID]
@@ -89,14 +89,14 @@ Options:
   -h, --help
           Print help
 ```
-![fe remove example](assets/tape/output/remove_input.gif)
+![flake-edit remove example](assets/tape/output/remove_input.gif)
 
-### `$ fe list`
-`$ fe help list`
+### `$ flake-edit list`
+`$ flake-edit help list`
 ```
 List flake inputs
 
-Usage: fe list [OPTIONS]
+Usage: flake-edit list [OPTIONS]
 
 Options:
       --format <FORMAT>
@@ -105,9 +105,9 @@ Options:
           Print help
 ```
 List the outputs, that are specified inside the inputs attribute.
-![fe list example](assets/tape/output/list_inputs.gif)
+![flake-edit list example](assets/tape/output/list_inputs.gif)
 List the outputs, that are specified inside the inputs attribute, in json format.
-![fe list example](assets/tape/output/list_inputs_json.gif)
+![flake-edit list example](assets/tape/output/list_inputs_json.gif)
 
 
 ## License

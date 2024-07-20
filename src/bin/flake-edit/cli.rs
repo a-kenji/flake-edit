@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[command(author, version = CliArgs::unstable_version(), about, long_about = None)]
-#[command(name = "fe")]
+#[command(name = "flake-edit")]
 #[command(next_line_help = true)]
 /// Edit your flake inputs with ease
 pub struct CliArgs {

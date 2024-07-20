@@ -4,7 +4,7 @@ _: {
     {
       checks = {
         inherit (self'.packages)
-          fe
+          flake-edit
           cargoArtifacts
           cargoClippy
           # cargoDeny
