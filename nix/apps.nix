@@ -4,7 +4,7 @@ _: {
     {
       apps = {
         default = self'.packages.default;
-        fe = self'.packages.fe;
+        flake-edit = self'.packages.flake-edit;
       };
     };
 }

@@ -5,10 +5,10 @@ Please raise an issue, to see if a potential feature is in scope of the project.
 We are always happy to receive contributions and attempt to process them in a timely manner.
 
 ## Issues
-To get an overview of what can be worked on, please take a look at the [issues](https://github.com/a-kenji/fe/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc).
+To get an overview of what can be worked on, please take a look at the [issues](https://github.com/a-kenji/flake-edit/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc).
 
 ## How to get tools 
-For your convenience you only need one tool to contribute to `fe` or `flake-edit`: `nix`.
+For your convenience you only need one tool to contribute to `flake-edit` or `flake-edit`: `nix`.
 You can drop into a development shell with:
 ```
 nix develop

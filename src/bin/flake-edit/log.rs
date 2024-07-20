@@ -40,5 +40,5 @@ pub fn init_logging(log_file: Option<PathBuf>) -> Result<(), std::io::Error> {
 }
 
 pub fn init() -> Result<(), std::io::Error> {
-    init_logging(Some("/tmp/fe/fe.log".into()))
+    init_logging(Some("/tmp/flake-edit/flake-edit.log".into()))
 }
