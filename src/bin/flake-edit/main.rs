@@ -12,7 +12,6 @@ use flake_edit::change::Change;
 use flake_edit::diff::Diff;
 use flake_edit::edit;
 use flake_edit::input::Follows;
-use flake_edit::input::Input;
 use flake_edit::update::Updater;
 use nix_uri::urls::UrlWrapper;
 use nix_uri::{FlakeRef, NixUriResult};
@@ -120,17 +119,6 @@ fn main() -> eyre::Result<()> {
                 std::process::exit(0);
             }
         },
-        Command::Add {
-            id,
-            uri,
-            ref_or_rev,
-            force,
-            no_flake,
-        } => todo!(),
-        Command::Pin { id } => todo!(),
-        Command::Change { id, uri } => todo!(),
-        Command::Remove { id } => todo!(),
-        Command::Completion { inputs, mode } => todo!(),
     }
 
     if let Ok(Some(resulting_change)) = editor.apply_change(change.clone()) {

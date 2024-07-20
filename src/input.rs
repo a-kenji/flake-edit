@@ -33,29 +33,6 @@ pub enum Follows {
     Direct(String, Input),
 }
 
-impl Follows {}
-
-#[derive(Debug, Default)]
-pub(crate) struct FollowsBuilder {
-    attrs: Vec<String>,
-}
-
-impl FollowsBuilder {
-    pub(crate) fn push_str(&mut self, attr: &str) -> Option<Follows> {
-        self.attrs.push(attr.to_owned());
-        if self.attrs.len() == 4 {
-            Some(self.build())
-        } else {
-            None
-        }
-    }
-    fn build(&self) -> Follows {
-        let from = self.attrs.get(1).unwrap();
-        let to = self.attrs.get(3).unwrap();
-        Follows::Indirect(from.to_owned(), to.to_owned())
-    }
-}
-
 impl Default for Input {
     fn default() -> Self {
         Self {

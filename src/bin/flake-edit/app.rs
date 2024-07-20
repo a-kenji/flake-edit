@@ -31,28 +31,19 @@ impl FlakeEdit {
     pub fn root(&self) -> &FlakeBuf {
         &self.root
     }
-
-    pub fn run(&self) -> Result<(), FeError> {
-        Ok(())
-    }
 }
 
 #[derive(Debug, Default)]
 pub struct FlakeBuf {
     text: Rope,
     path: String,
-    dirty: bool,
 }
 
 impl FlakeBuf {
     fn from_path(path: PathBuf) -> io::Result<Self> {
         let text = Rope::from_reader(&mut io::BufReader::new(File::open(&path)?))?;
         let path = path.display().to_string();
-        Ok(Self {
-            text,
-            path,
-            dirty: false,
-        })
+        Ok(Self { text, path })
     }
 
     pub fn text(&self) -> &Rope {

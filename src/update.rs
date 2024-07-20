@@ -40,7 +40,6 @@ impl Updater {
     }
 
     pub fn change_input(&mut self, input: &UpdateInput) {
-        let change = input.update();
         let uri = self
             .text
             .slice(
@@ -53,10 +52,12 @@ impl Updater {
                 let mut maybe_version = String::new();
                 let is_params = &parsed.params.get_ref().is_some();
 
-                if let nix_uri::FlakeRefType::GitHub { ref_or_rev, .. } = &parsed.r#type {
-                    if let Some(ref_or_rev) = ref_or_rev {
-                        maybe_version = ref_or_rev.into();
-                    }
+                if let nix_uri::FlakeRefType::GitHub {
+                    ref_or_rev: Some(ref_or_rev),
+                    ..
+                } = &parsed.r#type
+                {
+                    maybe_version = ref_or_rev.into();
                 }
                 if let Some(r#ref) = &parsed.params.get_ref() {
                     maybe_version = r#ref.to_string();
@@ -147,9 +148,3 @@ impl PartialOrd for UpdateInput {
 }
 
 impl Eq for UpdateInput {}
-
-impl UpdateInput {
-    fn update(&self) -> &str {
-        "1.3.4"
-    }
-}
