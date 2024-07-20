@@ -46,7 +46,6 @@ fn main() -> eyre::Result<()> {
             uri,
             ref_or_rev: _,
             id,
-            force: _,
             no_flake,
         } => {
             if id.is_some() && uri.is_some() {
@@ -86,7 +85,6 @@ fn main() -> eyre::Result<()> {
                 }
             }
         }
-        cli::Command::Pin { .. } => todo!(),
         cli::Command::Remove { id } => {
             if let Some(id) = id {
                 change = Change::Remove {
