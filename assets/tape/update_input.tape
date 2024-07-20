@@ -52,7 +52,7 @@
 #   Hide                            Hide the subsequent commands from the output
 #   Show                            Show the subsequent commands in the output
 
-Output output/remove_input.gif
+Output output/update_input.gif
 
 Require echo
 
@@ -67,5 +67,5 @@ Type "set -x fish_function_path ''" Enter
 Type "clear" Enter
 Show
 
-Type "fe --diff update" Sleep 1000ms Enter
+Type "flake-edit --diff update" Sleep 1000ms Enter
 Sleep 5s
