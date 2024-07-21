@@ -49,6 +49,9 @@ impl CliArgs {
     pub(crate) fn update(&self) -> bool {
         matches!(self.subcommand, Command::Update { .. })
     }
+    pub(crate) fn pin(&self) -> bool {
+        matches!(self.subcommand, Command::Pin { .. })
+    }
 
     pub fn flake(&self) -> Option<&String> {
         self.flake.as_ref()
@@ -93,6 +96,14 @@ pub(crate) enum Command {
     /// Update inputs to their latest specified release.
     #[clap(alias = "u")]
     Update {},
+    /// Pin inputs to their current or a specified rev.
+    #[clap(alias = "p")]
+    Pin {
+        /// The id of an input attribute.
+        id: String,
+        /// Optionally specify a rev for the inputs attribute.
+        rev: Option<String>,
+    },
     #[clap(hide = true)]
     #[command(name = "completion")]
     /// Meant for shell completions.

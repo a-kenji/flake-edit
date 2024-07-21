@@ -12,6 +12,7 @@ use flake_edit::change::Change;
 use flake_edit::diff::Diff;
 use flake_edit::edit;
 use flake_edit::input::Follows;
+use flake_edit::lock::FlakeLock;
 use flake_edit::update::Updater;
 use nix_uri::urls::UrlWrapper;
 use nix_uri::{FlakeRef, NixUriResult};
@@ -92,8 +93,6 @@ fn main() -> eyre::Result<()> {
                 };
             }
         }
-        cli::Command::Update { .. } => {}
-        cli::Command::List { .. } => {}
         cli::Command::Completion { inputs: _, mode } => match mode {
             cli::CompletionMode::None => todo!(),
             cli::CompletionMode::Add => {
@@ -108,6 +107,7 @@ fn main() -> eyre::Result<()> {
                 std::process::exit(0);
             }
         },
+        Command::Pin { .. } | Command::Update { .. } | Command::List { .. } => {}
     }
 
     if let Ok(Some(resulting_change)) = editor.apply_change(change.clone()) {
@@ -144,7 +144,7 @@ fn main() -> eyre::Result<()> {
         } else if args.apply() {
             app.root.apply(&resulting_change)?;
         }
-    } else if !args.list() && !args.update() {
+    } else if !args.list() && !args.update() && !args.pin() {
         if change.is_remove() {
             return Err(eyre::eyre!(
                 "The input with id: {} could not be removed.",
@@ -232,7 +232,7 @@ fn main() -> eyre::Result<()> {
             buf.push_str(input.id());
         }
         let mut updater = Updater::new(app.root().text().clone(), inputs.clone());
-        updater.update();
+        updater.update_all_inputs_to_latest_semver();
         let change = updater.get_changes();
         if args.diff() {
             let old = text.clone();
@@ -240,6 +240,37 @@ fn main() -> eyre::Result<()> {
             let diff = Diff::new(&old, &new);
             diff.compare();
             // Write the changes
+        } else if args.apply() {
+            app.root.apply(&change)?;
+        }
+    }
+    if let Command::Pin { id, rev } = args.subcommand() {
+        let lock = FlakeLock::from_default_path()?;
+
+        let target_rev = if let Some(rev) = rev {
+            rev.to_string()
+        } else {
+            lock.get_rev_by_id(id)?
+        };
+
+        let inputs = editor.list();
+        let mut buf = String::new();
+        for input in inputs.values() {
+            if !buf.is_empty() {
+                buf.push('\n');
+            }
+            buf.push_str(input.id());
+        }
+        let mut updater = Updater::new(app.root().text().clone(), inputs.clone());
+
+        updater.pin_input_to_ref(id, &target_rev);
+        let change = updater.get_changes();
+
+        if args.diff() {
+            let old = text.clone();
+            let new = change;
+            let diff = Diff::new(&old, &new);
+            diff.compare();
         } else if args.apply() {
             app.root.apply(&change)?;
         }

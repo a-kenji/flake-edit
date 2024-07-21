@@ -1002,9 +1002,9 @@ dependencies = [
 
 [[package]]
 name = "nix-uri"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "322d3e6cecd463a8f3bcbb875771eef2dcf1d402125899bfc85d327066fc95cc"
+checksum = "d4acc3f0410bee3acab7e8d7099b7e5686244da81e1e642eaf46814398d863f0"
 dependencies = [
  "nom",
  "serde",
