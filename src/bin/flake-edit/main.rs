@@ -94,15 +94,6 @@ fn main() -> eyre::Result<()> {
         }
         cli::Command::Update { .. } => {}
         cli::Command::List { .. } => {}
-        cli::Command::Change { id, uri } => {
-            if let Some(id) = id {
-                change = Change::Change {
-                    id: id.to_owned().into(),
-                    ref_or_rev: None,
-                    uri: uri.clone(),
-                };
-            }
-        }
         cli::Command::Completion { inputs: _, mode } => match mode {
             cli::CompletionMode::None => todo!(),
             cli::CompletionMode::Add => {
