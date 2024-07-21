@@ -20,8 +20,6 @@ Usage: flake-edit [OPTIONS] [FLAKE_REF] <COMMAND>
 Commands:
   add
           Add a new flake reference
-  change
-          Change a specific flake reference based on its id
   remove
           Remove a specific flake reference based on its id
   list
