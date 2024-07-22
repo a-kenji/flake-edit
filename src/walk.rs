@@ -8,21 +8,6 @@ use crate::{
     input::Input,
 };
 
-// TODO:
-// - parse out inputs
-// - SyntaxKind(44) [inputs]
-// - parse follows attribute and attrset outof the -> SyntaxKind(76) [attrset]
-//
-// // TODO: hopefully we won't need these codes where we are going
-// NODE_STRING 63,
-// NODE_IDENT 58,
-// TOKEN_IDENT 44,
-// TOKEN_DOT 21,
-// NODE_ROOT 75,
-// NODE_ATTR_SET 76,
-// NODE_ATTRPATH 55,
-// TOKEN_URI 49,
-
 #[derive(Debug, Clone)]
 pub struct Walker {
     pub root: SyntaxNode,
