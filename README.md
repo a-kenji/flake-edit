@@ -26,6 +26,8 @@ Commands:
           List flake inputs
   update
           Update inputs to their latest specified release
+  pin
+          Pin inputs to their current or a specified rev
   help
           Print this message or the help of the given subcommand(s)
 
@@ -126,6 +128,27 @@ List the outputs, that are specified inside the inputs attribute.
 ![flake-edit list example](https://vhs.charm.sh/vhs-2ZSgdhkzBe3eoxuYtM1JL6.gif)
 List the outputs, that are specified inside the inputs attribute, in json format.
 ![flake-edit list example](https://vhs.charm.sh/vhs-35E6eiL63lFTSC70rQyE1Y.gif)
+
+### `$ flake-edit pin`
+`$ flake-edit help pin`
+
+```
+Pin inputs to their current or a specified rev
+
+Usage: flake-edit pin <ID> [REV]
+
+Arguments:
+  <ID>
+          The id of an input attribute
+  [REV]
+          Optionally specify a rev for the inputs attribute
+
+Options:
+  -h, --help
+          Print help
+```
+![flake-edit pin](https://vhs.charm.sh/vhs-629lX7LqP4MS1aHffb4Ufh.gif)
+Pin a specific input to it's current revision (rev).
 
 
 ## License

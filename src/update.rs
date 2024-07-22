@@ -9,13 +9,10 @@ use crate::input::Input;
 pub struct Updater {
     text: Rope,
     inputs: Vec<UpdateInput>,
+    // Keeps track of offset for changing multiple inputs on a single pass.
     offset: i32,
 }
 
-// TODO:
-// - parse all uris for semver tags
-// - query github if they are updated
-// - update inputs that are out of date
 impl Updater {
     pub fn new(text: Rope, map: InputMap) -> Self {
         let mut inputs = vec![];
@@ -28,18 +25,58 @@ impl Updater {
             offset: 0,
         }
     }
-    pub fn update(&mut self) {
+    /// TODO:
+    /// Get an input based on it's id.
+    fn get_index(&self, id: &str) -> usize {
+        self.inputs.iter().position(|n| n.input.id == id).unwrap()
+    }
+    /// Pin an input based on it's id to a specific rev.
+    pub fn pin_input_to_ref(&mut self, id: &str, rev: &str) {
+        self.sort();
+        let inputs = self.inputs.clone();
+        if let Some(input) = inputs.get(self.get_index(id)) {
+            tracing::debug!("Input: {:?}", input);
+            self.change_input(input, rev);
+        }
+    }
+    pub fn update_all_inputs_to_latest_semver(&mut self) {
         self.sort();
         let inputs = self.inputs.clone();
         for input in inputs.iter() {
-            self.change_input(input);
+            self.query_and_update_all_inputs(input);
         }
     }
     pub fn get_changes(&self) -> String {
         self.text.to_string()
     }
 
-    pub fn change_input(&mut self, input: &UpdateInput) {
+    fn get_input_text(&self, input: &UpdateInput) -> String {
+        self.text
+            .slice(
+                ((input.input.range.start as i32) + 1 + self.offset) as usize
+                    ..((input.input.range.end as i32) + self.offset - 1) as usize,
+            )
+            .to_string()
+    }
+
+    /// Change a specific input to a specific rev.
+    /// TODO: proper error handling
+    pub fn change_input(&mut self, input: &UpdateInput, rev: &str) {
+        let uri = self.get_input_text(input);
+        match uri.parse::<FlakeRef>() {
+            Ok(mut parsed) => {
+                parsed.params.rev(Some(rev.into()));
+                // TODO: check, if rev_or_ref is already set, then change that side.
+                // let _ = parsed.r#type.ref_or_rev(Some(rev.into()));
+                self.update_input(input.clone(), &parsed.to_string());
+            }
+            Err(e) => {
+                tracing::error!("Error while changing input: {}", e);
+            }
+        }
+    }
+    /// Query a forge api for the latest release and update, if necessary.
+    pub fn query_and_update_all_inputs(&mut self, input: &UpdateInput) {
         let uri = self
             .text
             .slice(
@@ -115,7 +152,6 @@ impl Updater {
         self.update_offset(input.clone(), change);
     }
     fn update_offset(&mut self, input: UpdateInput, change: &str) {
-        // self.offset = 0;
         let previous_len = input.input.range.end as i32 - input.input.range.start as i32 - 2;
         let len = change.len() as i32;
         let offset = len - previous_len;
