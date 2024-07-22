@@ -19,6 +19,7 @@ _: {
             pkgs.cargo-deny
             pkgs.cargo-mutants
             pkgs.cargo-tarpaulin
+            pkgs.mdsh
             pkgs.vhs
           ];
         };
