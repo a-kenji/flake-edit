@@ -22,7 +22,7 @@ pub fn init_logging(log_file: Option<PathBuf>) -> Result<(), std::io::Error> {
         // will be written to output path.
         .with_max_level(Level::TRACE)
         .with_writer(Mutex::new(log_file.unwrap()))
-        .with_thread_ids(true)
+        .with_thread_ids(false)
         .with_ansi(true)
         .with_line_number(true);
 
