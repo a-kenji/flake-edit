@@ -14,14 +14,12 @@ _: {
           ];
         };
         full = pkgs.mkShellNoCC {
-          inputsFrom = [
-            self'.packages.default
-            self'.devShells.default
-          ];
+          inputsFrom = [ self'.devShells.default ];
           packages = [
             pkgs.cargo-deny
             pkgs.cargo-mutants
             pkgs.cargo-tarpaulin
+            pkgs.vhs
           ];
         };
       };
