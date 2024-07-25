@@ -26,6 +26,9 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+      - uses: DeterminateSystems/magic-nix-cache-action@v7
+        with:
+          diagnostic-endpoint: ""
       - name: "build dependencies"
         run: nix build .#cargoArtifacts -Lvv --no-update-lock-file
   formatting:
@@ -43,6 +46,9 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+      - uses: DeterminateSystems/magic-nix-cache-action@v7
+        with:
+          diagnostic-endpoint: ""
       - name: "check formatting"
         run: nix build .#checks.x86_64-linux.treefmt -Lvv --no-update-lock-file
   tests:
@@ -61,6 +67,9 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+      - uses: DeterminateSystems/magic-nix-cache-action@v7
+        with:
+          diagnostic-endpoint: ""
       - name: "run tests"
         run: nix build .#cargoTest -Lvv --no-update-lock-file
   docs:
@@ -79,6 +88,9 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+      - uses: DeterminateSystems/magic-nix-cache-action@v7
+        with:
+          diagnostic-endpoint: ""
       - name: "build cargo documentation"
         run: nix build .#cargoDoc -Lvv --no-update-lock-file
   clippy:
@@ -97,6 +109,9 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+      - uses: DeterminateSystems/magic-nix-cache-action@v7
+        with:
+          diagnostic-endpoint: ""
       - name: "run cargo clippy"
         run: nix build .#cargoClippy -Lvv --no-update-lock-file
   flake-edit:
@@ -115,5 +130,8 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+      - uses: DeterminateSystems/magic-nix-cache-action@v7
+        with:
+          diagnostic-endpoint: ""
       - name: "build falke-edit"
         run: nix build .#cargoClippy -Lvv --no-update-lock-file
