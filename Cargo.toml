@@ -1,6 +1,6 @@
 [package]
 name = "flake-edit"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
 keywords = ["nix", "flake", "terminal", "cli"]
 categories = ["command-line-utilities", "libraries"]
@@ -8,23 +8,14 @@ categories = ["command-line-utilities", "libraries"]
 authors = ["Alexander Kenji Berthold"]
 
 readme = "README.md"
-repository = "https://github.com/a-kenji/flake-add"
-documentation = "https://github.com/a-kenji/flake-add"
-homepage = "https://github.com/a-kenji/flake-add"
+license = "MIT"
+repository = "https://github.com/a-kenji/flake-edit"
+documentation = "https://github.com/a-kenji/flake-edit"
+homepage = "https://github.com/a-kenji/flake-edit"
 include = ["src/**/*", "LICENSE", "README.md", "build.rs"]
 
 [[bin]]
 name = "flake-edit"
-
-[workspace.package]
-version = "0.1.0"
-edition = "2021"
-authors = ["Alexander Kenji Berthold"]
-
-readme = "README.md"
-repository = "https://github.com/a-kenji/flk"
-documentation = "https://github.com/a-kenji/flk"
-homepage = "https://github.com/a-kenji/flk"
 
 [workspace]
 resolver = "2"
@@ -77,10 +68,12 @@ roff = { version = "0.2.1", optional = true }
 
 [[bench]]
 name = "benches"
+path = "benches/benches.rs"
 harness = false
 
 [[bench]]
 name = "divan"
+path = "benches/divan.rs"
 harness = false
 
 [profile.release]
@@ -88,10 +81,6 @@ lto = true
 codegen-units = 1
 opt-level = 'z'
 strip = true
-# opt-level = 3
-# panic = "abort"
-# for profiling
-# debug = true
 
 [profile.dev]
 incremental = true
