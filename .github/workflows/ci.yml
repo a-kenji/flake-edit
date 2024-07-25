@@ -133,5 +133,28 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@v7
         with:
           diagnostic-endpoint: ""
-      - name: "build falke-edit"
+      - name: "build flake-edit"
         run: nix build .#cargoClippy -Lvv --no-update-lock-file
+  devshells:
+    runs-on: ubuntu-latest
+    environment: cachix
+    needs: ['formatting']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@V27
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+      - uses: cachix/cachix-action@v15
+        with:
+          name: kenji
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+      - uses: DeterminateSystems/magic-nix-cache-action@v7
+        with:
+          diagnostic-endpoint: ""
+      - name: "build devshell"
+        run: nix develop -Lvv --no-update-lock-file
+      - name: "build devshell full"
+        run: nix develop .#full -Lvv --no-update-lock-file
