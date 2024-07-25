@@ -151,5 +151,16 @@ Options:
 Pin a specific input to it's current revision (rev).
 
 
+## As a library
+
+Add `flake-edit` as a library by running:
+
+```
+cargo add flake-edit --no-default-features
+```
+
+Be aware that the `lib` interface is still unstable.
+Though we are already very happy to get feedback.
+
 ## License
 MIT
