@@ -113,10 +113,16 @@ pub(crate) enum Command {
         id: String,
         /// The owner of the repo.
         #[arg(long)]
-        owner: String,
+        owner: Option<String>,
         /// The repo.
         #[arg(long)]
-        repo: String,
+        repo: Option<String>,
+        /// The ref.
+        #[arg(long)]
+        ref_: Option<String>,
+        /// The rev.
+        #[arg(long)]
+        rev: Option<String>,
     },
     #[clap(hide = true)]
     #[command(name = "completion")]
