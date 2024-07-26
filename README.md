@@ -15,7 +15,7 @@
 ```
 Edit your flake inputs with ease.
 
-Usage: flake-edit [OPTIONS] [FLAKE_REF] <COMMAND>
+Usage: flake-edit [OPTIONS] <COMMAND>
 
 Commands:
   add
@@ -31,13 +31,9 @@ Commands:
   help
           Print this message or the help of the given subcommand(s)
 
-Arguments:
-  [FLAKE_REF]
-          
-
 Options:
       --flake <FLAKE>
-          
+          Location of the `flake.nix` file, that will be used
       --diff
           Print a diff of the changes, will set the apply flag to false
       --apply
@@ -101,9 +97,15 @@ Options:
 ```
 Update inputs to their latest specified release
 
-Usage: flake-edit update
+Usage: flake-edit update [OPTIONS] [ID]
+
+Arguments:
+  [ID]
+          The id of an input attribute. If omitted will update all inputs
 
 Options:
+      --init
+          Whether the latest semver release of the remote should be used even thought the release itself isn't yet pinned to a specific release
   -h, --help
           Print help
 ```

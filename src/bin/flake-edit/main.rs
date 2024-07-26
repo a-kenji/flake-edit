@@ -221,7 +221,7 @@ fn main() -> eyre::Result<()> {
             }
         }
     }
-    if let Command::Update {} = args.subcommand() {
+    if let Command::Update { id, init } = args.subcommand() {
         let inputs = editor.list();
         let mut buf = String::new();
         flake_edit::api::get_gh_token();
@@ -232,7 +232,7 @@ fn main() -> eyre::Result<()> {
             buf.push_str(input.id());
         }
         let mut updater = Updater::new(app.root().text().clone(), inputs.clone());
-        updater.update_all_inputs_to_latest_semver();
+        updater.update_all_inputs_to_latest_semver(id.clone(), *init);
         let change = updater.get_changes();
         if args.diff() {
             let old = text.clone();

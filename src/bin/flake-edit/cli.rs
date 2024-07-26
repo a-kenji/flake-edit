@@ -88,7 +88,15 @@ pub(crate) enum Command {
     },
     /// Update inputs to their latest specified release.
     #[clap(alias = "u")]
-    Update {},
+    Update {
+        /// The id of an input attribute.
+        /// If omitted will update all inputs.
+        id: Option<String>,
+        /// Whether the latest semver release of the remote should be used even thought the release
+        /// itself isn't yet pinned to a specific release.
+        #[arg(long)]
+        init: bool,
+    },
     /// Pin inputs to their current or a specified rev.
     #[clap(alias = "p")]
     Pin {
