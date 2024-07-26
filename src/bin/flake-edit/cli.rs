@@ -105,6 +105,19 @@ pub(crate) enum Command {
         /// Optionally specify a rev for the inputs attribute.
         rev: Option<String>,
     },
+    /// Change specific values of inputs.
+    /// For example the owner, or the repo.
+    #[clap(alias = "c")]
+    Change {
+        /// The id of an input attribute.
+        id: String,
+        /// The owner of the repo.
+        #[arg(long)]
+        owner: String,
+        /// The repo.
+        #[arg(long)]
+        repo: String,
+    },
     #[clap(hide = true)]
     #[command(name = "completion")]
     /// Meant for shell completions.
