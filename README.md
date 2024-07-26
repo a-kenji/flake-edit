@@ -10,10 +10,10 @@
 
 `flake-edit` has the following cli interface:
 
-`$ flake-edit help`
+<!-- `$ flake-edit help` -->
 
 ```
-Edit your flake inputs with ease
+Edit your flake inputs with ease.
 
 Usage: flake-edit [OPTIONS] [FLAKE_REF] <COMMAND>
 
@@ -49,7 +49,7 @@ Options:
 ```
 
 ### `$ flake-edit add`
-`$ flake-edit help add`
+<!-- `$ flake-edit help add` -->
 
 ```
 Add a new flake reference
@@ -78,7 +78,7 @@ For some inputs, the uri can be put in directly and the id and type will be infe
 )
 
 ### `$ flake-edit remove`
-`$ flake-edit help remove`
+<!-- `$ flake-edit help remove` -->
 
 ```
 Remove a specific flake reference based on its id
@@ -96,7 +96,7 @@ Options:
 ![flake-edit remove example](https://vhs.charm.sh/vhs-1Uo70AaoEMuYh2UR1JVARD.gif)
 
 ### `$ flake-edit update`
-`$ flake-edit help update`
+<!-- `$ flake-edit help update` -->
 
 ```
 Update inputs to their latest specified release
@@ -111,7 +111,7 @@ Options:
 ![flake-edit update example](https://vhs.charm.sh/vhs-V3ryrOu4Sd1ZU1KmvULCN.gif)
 
 ### `$ flake-edit list`
-`$ flake-edit help list`
+<!-- `$ flake-edit help list` -->
 
 ```
 List flake inputs
@@ -130,7 +130,7 @@ List the outputs, that are specified inside the inputs attribute, in json format
 ![flake-edit list example](https://vhs.charm.sh/vhs-35E6eiL63lFTSC70rQyE1Y.gif)
 
 ### `$ flake-edit pin`
-`$ flake-edit help pin`
+<!-- `$ flake-edit help pin` -->
 
 ```
 Pin inputs to their current or a specified rev
