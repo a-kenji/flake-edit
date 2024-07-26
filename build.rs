@@ -33,7 +33,7 @@ fn main() {
             generate_to(*shell, cmd, NAME.to_string(), out).unwrap();
             // claps completions generation mechanisms are very immature,
             // include self adjusted ones
-            // Explicily ignore patterns
+            // Explicitly ignore patterns
             #[allow(clippy::wildcard_in_or_patterns)]
             match shell {
                 Shell::Fish => {
