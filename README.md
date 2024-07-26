@@ -108,7 +108,7 @@ Options:
           Print help
 ```
 
-![flake-edit update example](https://vhs.charm.sh/vhs-V3ryrOu4Sd1ZU1KmvULCN.gif)
+![flake-edit update example](https://vhs.charm.sh/vhs-289dZ9Y9cAYRkdSWtd4hT6.gif)
 
 ### `$ flake-edit list`
 <!-- `$ flake-edit help list` -->

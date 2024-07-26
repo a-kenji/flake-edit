@@ -13,7 +13,7 @@
       inputs.flake-utils.follows = "flake-utils";
     };
     crane = {
-      url = "github:ipetkov/crane?ref=0.1.6";
+      url = "github:ipetkov/crane?ref=v0.16.6";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         rust-overlay.follows = "rust-overlay";
