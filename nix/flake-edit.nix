@@ -30,7 +30,7 @@ let
   cargoDeny = craneLib.cargoDeny (commonArgs // { inherit cargoArtifacts; });
   cargoTarpaulin = craneLib.cargoTarpaulin (commonArgs // { inherit cargoArtifacts; });
   cargoDoc = craneLib.cargoDoc (commonArgs // { inherit cargoArtifacts; });
-  cargoTest = craneLib.cargoTest (commonArgs // { inherit cargoArtifacts; });
+  cargoTest = craneLib.cargoNextest (commonArgs // { inherit cargoArtifacts; });
   assetDir = "target/assets";
   postInstall = name: ''
     # install the manpage
