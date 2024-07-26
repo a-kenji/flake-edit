@@ -16,12 +16,13 @@ pub struct Tags {
 }
 
 impl Tags {
-    pub fn get_latest_tag(&mut self) -> String {
+    pub fn get_latest_tag(&mut self) -> Option<String> {
         self.sort();
         let mut buf = String::new();
         buf.push_str(&self.prefix);
-        buf.push_str(&self.versions.iter().last().unwrap().to_string());
-        buf
+        let latest_version = &self.versions.iter().last()?;
+        buf.push_str(&latest_version.to_string());
+        Some(buf)
     }
     pub fn sort(&mut self) {
         self.versions.sort_by(Version::cmp_precedence);
@@ -83,7 +84,8 @@ pub fn get_gh_token() -> Option<String> {
 }
 
 // https://api.github.com/repos/{OWNER}/{REPO}/tags
-// Query tags for
+// Query tags for github currently.
+// TODO: support other forges.
 fn query_tags(repo: &str, owner: &str) -> Result<IntermediaryTags, ()> {
     let client = Client::new();
     let mut headers = HeaderMap::new();

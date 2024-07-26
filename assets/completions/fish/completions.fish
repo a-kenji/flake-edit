@@ -16,6 +16,8 @@ complete -c flake-edit -n "__fish_seen_subcommand_from change" -f -a "(__fish_co
 complete -c flake-edit -n "__fish_seen_subcommand_from c" -f -a "(__fish_complete_inputs)" -d Input
 complete -c flake-edit -n "__fish_seen_subcommand_from pin" -f -a "(__fish_complete_inputs_toplevel)" -d Input
 complete -c flake-edit -n "__fish_seen_subcommand_from p" -f -a "(__fish_complete_inputs_toplevel)" -d Input
+complete -c flake-edit -n "__fish_seen_subcommand_from update" -f -a "(__fish_complete_inputs_toplevel)" -d Input
+complete -c flake-edit -n "__fish_seen_subcommand_from u" -f -a "(__fish_complete_inputs_toplevel)" -d Input
 
 set -x ignore_space true
 complete -c flake-edit -n "__fish_seen_subcommand_from a" -f -r --keep-order -a "(__fish_complete_add)" -d Add

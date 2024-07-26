@@ -39,11 +39,19 @@ impl Updater {
             self.change_input(input, rev);
         }
     }
-    pub fn update_all_inputs_to_latest_semver(&mut self) {
+    /// Update all inputs to a specific semver release,
+    /// if a specific input is given, just update the single input.
+    pub fn update_all_inputs_to_latest_semver(&mut self, id: Option<String>, init: bool) {
         self.sort();
         let inputs = self.inputs.clone();
         for input in inputs.iter() {
-            self.query_and_update_all_inputs(input);
+            if let Some(ref input_id) = id {
+                if input.input.id == *input_id {
+                    self.query_and_update_all_inputs(input, init);
+                }
+            } else {
+                self.query_and_update_all_inputs(input, init);
+            }
         }
     }
     pub fn get_changes(&self) -> String {
@@ -76,7 +84,7 @@ impl Updater {
         }
     }
     /// Query a forge api for the latest release and update, if necessary.
-    pub fn query_and_update_all_inputs(&mut self, input: &UpdateInput) {
+    pub fn query_and_update_all_inputs(&mut self, input: &UpdateInput, init: bool) {
         let uri = self
             .text
             .slice(
@@ -96,6 +104,7 @@ impl Updater {
                 {
                     maybe_version = ref_or_rev.into();
                 }
+
                 if let Some(r#ref) = &parsed.params.get_ref() {
                     maybe_version = r#ref.to_string();
                 }
@@ -104,13 +113,17 @@ impl Updater {
                     maybe_version = normalized_version.to_string();
                 }
 
-                let _version = match semver::Version::parse(&maybe_version) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        tracing::debug!("Skip non semver version: {maybe_version}: {e}");
-                        return;
-                    }
-                };
+                // If we init the version specifier we don't care if before there was already a
+                // working version.
+                if !init {
+                    let _version = match semver::Version::parse(&maybe_version) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            tracing::debug!("Skip non semver version: {maybe_version}: {e}");
+                            return;
+                        }
+                    };
+                }
 
                 let flake_type = &parsed.r#type;
                 let mut tags = crate::api::get_tags(
@@ -120,12 +133,14 @@ impl Updater {
                 .unwrap();
 
                 tags.sort();
-                let change = tags.get_latest_tag();
-
-                if *is_params {
-                    let _ = parsed.params.r#ref(Some(change.to_string()));
+                if let Some(change) = tags.get_latest_tag() {
+                    if *is_params {
+                        let _ = parsed.params.r#ref(Some(change.to_string()));
+                    } else {
+                        let _ = parsed.r#type.ref_or_rev(Some(change.to_string()));
+                    }
                 } else {
-                    let _ = parsed.r#type.ref_or_rev(Some(change.to_string()));
+                    tracing::error!("Could not find latest version for Input: {:?}", input);
                 }
 
                 self.update_input(input.clone(), &parsed.to_string());
