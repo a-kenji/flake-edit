@@ -154,7 +154,5 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@v7
         with:
           diagnostic-endpoint: ""
-      - name: "build devshell"
-        run: nix develop -Lvv --no-update-lock-file
-      - name: "build devshell full"
+      - name: "build devshells"
         run: nix develop .#full -Lvv --no-update-lock-file
