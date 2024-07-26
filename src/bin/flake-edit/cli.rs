@@ -8,12 +8,9 @@ use clap::{Parser, Subcommand};
 #[command(next_line_help = true)]
 /// Edit your flake inputs with ease
 pub struct CliArgs {
-    // The `flake.nix` file that will be used
+    /// Location of the `flake.nix` file, that will be used.
     #[arg(long)]
     flake: Option<String>,
-    // The flake ref, or id that should be passed through to the nix command
-    // By default will choose the local flake.
-    flake_ref: Option<String>,
     /// Print a diff of the changes, will set the apply flag to false.
     #[arg(long, default_value_t = false)]
     diff: bool,
@@ -34,10 +31,6 @@ impl CliArgs {
         let rev = option_env!("GIT_REV").unwrap_or("no_rev");
         // This is a memory leak, only use sparingly.
         Box::leak(format!("{VERSION} - {date} - {rev}").into_boxed_str())
-    }
-
-    pub(crate) fn get_flake_ref(&self) -> Option<String> {
-        self.flake_ref.clone()
     }
 
     pub(crate) fn subcommand(&self) -> &Command {
