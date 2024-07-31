@@ -88,6 +88,7 @@ fn gen_man(name: &str, dir: PathBuf) {
 
     // Examples
     roff.control("SH", ["EXAMPLES"]);
+    roff.text(["This is an example.".into()]);
     roff.to_writer(&mut buf).expect("Not able to write roff.");
 
     // Footer
