@@ -245,7 +245,13 @@ fn main() -> eyre::Result<()> {
         }
     }
     if let Command::Pin { id, rev } = args.subcommand() {
-        let lock = FlakeLock::from_default_path()?;
+        let lock = FlakeLock::from_default_path().map_err(|_|
+            eyre::eyre!(
+                "The input with id: {} could not be pinned.",
+                id,
+            )
+            .suggestion("\nPlease check if a `flake.lock` file exists.\nRun `nix flake lock` to initialize it.")
+        )?;
 
         let target_rev = if let Some(rev) = rev {
             rev.to_string()
