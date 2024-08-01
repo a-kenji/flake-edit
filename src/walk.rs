@@ -311,30 +311,6 @@ impl<'a> Walker {
                             // We are not interested in the description
                             break;
                         }
-                        // We now want to check, if the outputs are correct
-                        // and adjust them if necessary. After adding an input
-                        // we could have broken the flake in that case we need
-                        // to also add the input to the outputs.
-                        // if child.to_string() == "outputs" {
-                        //     println!("child next_sibling: {}", child.next_sibling().unwrap());
-                        //     println!(
-                        //         "child next_sibling kind: {:?}",
-                        //         child.next_sibling().unwrap().kind()
-                        //     );
-                        //     if let Some(child) = child.next_sibling() {
-                        //         for output in child.children() {
-                        //             // TODO: check in the children:
-                        //             // - if there is a ... already in the outputs,
-                        //             // then we don't need to add an output
-                        //             // - if our added output is not there yet,
-                        //             // then we need to add it
-                        //             for child in output.children() {
-                        //                 println!("child: {}", child);
-                        //                 println!("child kind: {:?}", child.kind());
-                        //             }
-                        //         }
-                        //     }
-                        // }
                         if child.to_string() == "inputs" {
                             if let Some(replacement) =
                                 self.walk_inputs(child.next_sibling().unwrap(), &ctx, change)
