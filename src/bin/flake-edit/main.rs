@@ -224,7 +224,6 @@ fn main() -> eyre::Result<()> {
     if let Command::Update { id, init } = args.subcommand() {
         let inputs = editor.list();
         let mut buf = String::new();
-        flake_edit::api::get_gh_token();
         for input in inputs.values() {
             if !buf.is_empty() {
                 buf.push('\n');
