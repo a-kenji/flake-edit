@@ -48,8 +48,7 @@ fn main() {
                         .expect("Could not create path.");
                     let _ = file.write_all(source.as_bytes());
                 }
-                Shell::Zsh => {}
-                Shell::PowerShell | Shell::Bash | Shell::Elvish | _ => {}
+                Shell::Zsh | Shell::PowerShell | Shell::Bash | Shell::Elvish | _ => {}
             }
         });
         generate_to(Nushell, cmd, NAME.to_string(), out).unwrap();
