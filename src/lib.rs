@@ -1,5 +1,4 @@
 pub mod api;
-#[allow(clippy::option_map_unit_fn)]
 pub mod change;
 pub mod diff;
 pub mod edit;
