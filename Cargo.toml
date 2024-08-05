@@ -65,7 +65,7 @@ clap = { version = "4.5.7", features = ["derive"], optional = true }
 clap_complete = { version = "4.5.11", features = [], optional = true }
 clap_complete_nushell = { version = "4.5.3", optional = true }
 clap_mangen = { version = "0.2.23", features = [], optional = true }
-roff = { version = "0.2.1", optional = true }
+roff = { version = "0.2.2", optional = true }
 
 [[bench]]
 name = "benches"
