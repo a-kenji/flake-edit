@@ -896,7 +896,7 @@ impl<'a> Walker {
                                 //TODO: this is only matched, when url is the first child
                                 // TODO: Is this correct?
                                 tracing::debug!(
-                                    "This is a possible follows attribute:{} {}",
+                                    "This is a possible follows attribute: {} {}",
                                     attr,
                                     sibling
                                 );
