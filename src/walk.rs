@@ -765,26 +765,31 @@ impl<'a> Walker {
                                                 if let Some(change) =
                                                     self.walk_input(&attr, &Some(context), change)
                                                 {
-                                                    println!("Adjust !!! {}", child.index());
-                                                    println!("Nested change: {change}");
-                                                    println!(
-                                                        "Child Node: {}",
+                                                    tracing::debug!("Adjusted change: {change}");
+                                                    tracing::debug!(
+                                                        "Adjusted change is_empty: {}",
+                                                        change.to_string().is_empty()
+                                                    );
+                                                    tracing::debug!(
+                                                        "Child index: {}",
+                                                        child.index()
+                                                    );
+                                                    tracing::debug!(
+                                                        "Child node: {}",
                                                         child.as_node().unwrap()
                                                     );
-                                                    println!("Nested Attr : {}", nested_attr);
-                                                    println!("Attr : {}", attr);
-                                                    println!("Node : {}", node);
-                                                    // panic!("Matched nested");
-                                                    // TODO: adjust whitespace
-                                                    // return changed node
-                                                    // return Some(change);
+                                                    tracing::debug!("Nested Attr: {}", nested_attr);
+                                                    tracing::debug!("Node: {}", node);
+                                                    tracing::debug!("Attr: {}", attr);
+                                                    // TODO: adjust node correctly if the change is
+                                                    // not empty
                                                     let replacement =
                                                         Self::remove_child_with_whitespace(
                                                             &nested_attr,
                                                             &attr,
                                                             attr.index(),
                                                         );
-                                                    println!("Replacement: {}", replacement);
+                                                    tracing::debug!("Replacement: {}", replacement);
                                                     return Some(replacement);
                                                 }
                                             }
