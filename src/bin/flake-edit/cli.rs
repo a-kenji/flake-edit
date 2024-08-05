@@ -105,6 +105,14 @@ pub(crate) enum Command {
         /// Optionally specify a rev for the inputs attribute.
         rev: Option<String>,
     },
+    /// Follow inputs of flake inputs.
+    #[clap(alias = "f")]
+    Follow {
+        /// The id of an input attribute.
+        id: String,
+        /// Specify which input the [ID] should follow.
+        follows: Option<String>,
+    },
     #[clap(hide = true)]
     #[command(name = "completion")]
     /// Meant for shell completions.

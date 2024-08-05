@@ -22,9 +22,20 @@ pub enum Change {
         uri: Option<String>,
         ref_or_rev: Option<String>,
     },
+    // Adds or changes an existing follows input.
+    // In the form of: [id].inputs.[id].follows = [follows]
+    Follow {
+        // Name of the follows attribute
+        // For example: crane.inputs.nixpkgs -> crane.nixpkgs
+        id: String,
+        // The attribute that should be followed
+        follows: String,
+    },
 }
 
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+/// A wrapper around String, that handles `follows` attributes in it's dot representation.
+/// For example: crane.inputs.nixpkgs -> crane.nixpkgs
 pub struct ChangeId(String);
 
 impl ChangeId {
@@ -93,6 +104,7 @@ impl Change {
             Change::Remove { id } => Some(id.clone()),
             Change::Change { id, .. } => id.clone().map(|id| id.into()),
             Change::Pin { id } => Some(id.clone().into()),
+            Change::Follow { id, .. } => Some(id.clone().into()),
         }
     }
     pub fn is_remove(&self) -> bool {

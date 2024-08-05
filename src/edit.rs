@@ -120,6 +120,13 @@ impl FlakeEdit {
                 Ok(res.map(|n| n.to_string()))
             }
             Change::Pin { .. } => todo!(),
+            Change::Follow { .. } => {
+                if let Some(maybe_changed_node) = self.walker.walk(&change) {
+                    Ok(Some(maybe_changed_node.to_string()))
+                } else {
+                    panic!("No change");
+                }
+            }
             Change::Change { .. } => {
                 if let Some(maybe_changed_node) = self.walker.walk(&change) {
                     Ok(Some(maybe_changed_node.to_string()))
