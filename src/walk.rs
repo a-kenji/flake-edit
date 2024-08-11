@@ -80,7 +80,12 @@ impl<'a> Walker {
         } else {
             // Update the input, in case there was already a stub present.
             if let Some(node) = self.inputs.get_mut(&id) {
-                node.url = input.url;
+                if !input.url.to_string().is_empty() {
+                    node.url = input.url;
+                }
+                if !input.flake {
+                    node.flake = input.flake;
+                }
             } else {
                 self.inputs.insert(id, input);
             }

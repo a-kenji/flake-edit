@@ -41,8 +41,8 @@ nixpkgs:
     end: 123
 not-a-flake:
   id: not-a-flake
-  flake: true
-  url: ""
+  flake: false
+  url: "\"github:a-kenji/not-a-flake\""
   follows: []
   range:
     start: 566
