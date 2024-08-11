@@ -2,6 +2,8 @@
   description = "Edit your flake inputs with ease";
 
   inputs = {
+    also-not-a-flake.flake = false;
+    also-not-a-flake.url = "github:a-kenji/also-not-a-flake";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utelinos.url = "github:numtide/flake-utils";
     rust-overlay.url = "github:oxalica/rust-overlay";
@@ -18,6 +20,7 @@
   outputs =
     {
       self,
+      also-not-a-flake,
       nixpkgs,
       flake-utils,
       flake-utelinos,

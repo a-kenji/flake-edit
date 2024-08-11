@@ -6,6 +6,14 @@ info:
   changes:
     - None
 ---
+also-not-a-flake:
+  id: also-not-a-flake
+  flake: false
+  url: "\"github:a-kenji/also-not-a-flake\""
+  follows: []
+  range:
+    start: 72
+    end: 88
 crane:
   id: crane
   flake: true
@@ -21,32 +29,32 @@ crane:
         - rust-overlay
         - "\"rust-overlay\""
   range:
-    start: 364
-    end: 386
+    start: 462
+    end: 484
 flake-utelinos:
   id: flake-utelinos
   flake: true
   url: "\"github:numtide/flake-utils\""
   follows: []
   range:
-    start: 150
-    end: 178
+    start: 248
+    end: 276
 nixpkgs:
   id: nixpkgs
   flake: true
   url: "\"github:nixos/nixpkgs/nixos-unstable\""
   follows: []
   range:
-    start: 86
-    end: 123
+    start: 184
+    end: 221
 not-a-flake:
   id: not-a-flake
   flake: false
   url: "\"github:a-kenji/not-a-flake\""
   follows: []
   range:
-    start: 566
-    end: 594
+    start: 664
+    end: 692
 rust-overlay:
   id: rust-overlay
   flake: true
@@ -59,5 +67,5 @@ rust-overlay:
         - nixpkgs
         - "\"nixpkgs\""
   range:
-    start: 203
-    end: 232
+    start: 301
+    end: 330
