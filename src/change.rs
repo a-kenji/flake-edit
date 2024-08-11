@@ -27,7 +27,7 @@ pub enum Change {
     Follow {
         // Name of the follows attribute
         // For example: crane.inputs.nixpkgs -> crane.nixpkgs
-        id: String,
+        id: ChangeId,
         // The attribute that should be followed
         follows: String,
     },

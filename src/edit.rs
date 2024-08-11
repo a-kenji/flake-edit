@@ -121,6 +121,8 @@ impl FlakeEdit {
             }
             Change::Pin { .. } => todo!(),
             Change::Follow { .. } => {
+                let inputs = &self.list();
+                println!("Current {inputs:#?}");
                 if let Some(maybe_changed_node) = self.walker.walk(&change) {
                     Ok(Some(maybe_changed_node.to_string()))
                 } else {

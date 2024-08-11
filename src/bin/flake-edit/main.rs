@@ -94,10 +94,10 @@ fn main() -> eyre::Result<()> {
             }
         }
         cli::Command::Follow { id, follows } => {
-                change = Change::Follow {
-                    id: id.to_owned(),
-                    follows: follows.clone().unwrap().to_owned(),
-                };
+            change = Change::Follow {
+                id: id.to_owned().into(),
+                follows: follows.clone().unwrap().to_owned(),
+            };
         }
         cli::Command::Completion { inputs: _, mode } => match mode {
             cli::CompletionMode::None => todo!(),

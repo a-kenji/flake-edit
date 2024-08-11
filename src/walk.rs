@@ -584,6 +584,31 @@ impl<'a> Walker {
                             let node = Root::parse(green.to_string().as_str()).syntax();
                             return Some(node);
                         }
+                        if let Change::Follow { id, follows } = change {
+                            let input = id.input().unwrap();
+                            let follow = id.follows().unwrap();
+                            let uri = Root::parse(&format!(
+                                "{}.inputs.{}.follows = \"{}\";",
+                                input, follow, follows,
+                            ))
+                            .syntax();
+                            let mut green =
+                                node.green().insert_child(child.index(), uri.green().into());
+                            let prev = child.prev_sibling_or_token().unwrap();
+                            tracing::debug!("Token:{}", prev);
+                            tracing::debug!("Token Kind: {:?}", prev.kind());
+                            if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
+                                let whitespace =
+                                    Root::parse(prev.as_token().unwrap().green().text()).syntax();
+                                green = green
+                                    .insert_child(child.index() + 1, whitespace.green().into());
+                            }
+                            tracing::debug!("green: {}", green);
+                            tracing::debug!("node: {}", node);
+                            tracing::debug!("node kind: {:?}", node.kind());
+                            let node = Root::parse(green.to_string().as_str()).syntax();
+                            return Some(node);
+                        }
                     }
                 }
                 SyntaxKind::NODE_IDENT => {

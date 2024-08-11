@@ -7,6 +7,7 @@ pub struct Input {
     pub(crate) flake: bool,
     pub(crate) url: String,
     pub(crate) follows: Vec<Follows>,
+    pub(crate) nested: bool,
     pub range: Range,
 }
 
@@ -41,6 +42,7 @@ impl Default for Input {
             url: String::new(),
             follows: vec![],
             range: Range::default(),
+            nested: false,
         }
     }
 }
