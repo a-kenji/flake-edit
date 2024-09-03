@@ -105,17 +105,12 @@ fn main() -> eyre::Result<()> {
             }
         },
         Command::Pin { .. } | Command::Update { .. } | Command::List { .. } => {}
-        Command::Add {
-            id,
-            uri,
-            ref_or_rev,
-            no_flake,
-        } => todo!(),
-        Command::Remove { id } => todo!(),
-        // Command::Complete { shell } => {
-        // eprintln!("Generating completion file for {shell:?}...");
-        // clap_complete::generate(*shell, &mut CliArgs::command(), CliArgs::command().get_name(), &mut std::io::stdout());
-          Command::Complete(completions) => {
+        // For dynamic completions this completion function needs to exist
+        // and is called on every completion, no stdout should be written before.
+        // Also since this function is called even for trivial completions we need
+        // don't have access to correct files on every invocation and can't do our
+        // "usual" correct error handling.
+        Command::Complete(completions) => {
             completions.complete(&mut CliArgs::command());
             std::process::exit(0);
         }

@@ -1,7 +1,5 @@
 use std::fmt::Display;
 
-// use completions;
-
 use clap::{Parser, Subcommand};
 use clap_complete::{
     engine::{ArgValueCandidates, CompletionCandidate},
@@ -47,6 +45,9 @@ impl CliArgs {
     }
     pub(crate) fn pin(&self) -> bool {
         matches!(self.subcommand, Command::Pin { .. })
+    }
+    pub(crate) fn complete(&self) -> bool {
+        matches!(self.subcommand, Command::Complete { .. })
     }
 
     pub fn flake(&self) -> Option<&String> {
@@ -122,10 +123,7 @@ pub(crate) enum Command {
     },
     #[clap(hide = true)]
     #[command(name = "complete")]
-    // Complete {
-    //     shell: Shell,
-    // }
-     Complete(CompleteArgs),
+    Complete(CompleteArgs),
 }
 
 #[derive(Debug, Clone, Default)]

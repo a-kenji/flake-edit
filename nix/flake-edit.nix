@@ -63,7 +63,14 @@ in
       };
       doCheck = false;
       version = "unstable-" + gitDate;
-      inherit name pname assetDir cargoArtifacts meta postInstall;
+      inherit
+        name
+        pname
+        assetDir
+        cargoArtifacts
+        meta
+        postInstall
+        ;
     }
   );
   inherit
