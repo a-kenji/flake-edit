@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::process::Command;
 
 use reqwest::blocking::Client;
-use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, USER_AGENT};
 use semver::Version;
 use serde::Deserialize;
 
@@ -93,8 +93,9 @@ fn query_tags(repo: &str, owner: &str) -> Result<IntermediaryTags, ()> {
     if let Some(token) = get_gh_token() {
         tracing::debug!("Found github token.");
         headers.insert(
-            "authorization: Bearer",
+            AUTHORIZATION,
             HeaderValue::from_str(&token).unwrap(),
+            // HeaderValue::from_str(&token).unwrap(),
         );
         tracing::debug!("Settings github token.");
     }
