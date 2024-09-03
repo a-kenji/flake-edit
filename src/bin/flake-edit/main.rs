@@ -11,9 +11,9 @@ use color_eyre::Section;
 use flake_edit::change::Change;
 use flake_edit::diff::Diff;
 use flake_edit::edit;
-use flake_edit::input::Follows;
 use flake_edit::lock::FlakeLock;
 use flake_edit::update::Updater;
+use list::list_inputs;
 use nix_uri::urls::UrlWrapper;
 use nix_uri::{FlakeRef, NixUriResult};
 
@@ -21,6 +21,7 @@ mod app;
 mod cache;
 mod cli;
 mod error;
+mod list;
 mod log;
 mod root;
 
@@ -150,68 +151,7 @@ fn main() -> eyre::Result<()> {
     }
 
     if let Command::List { format } = args.subcommand() {
-        match format {
-            cli::ListFormat::Simple => {
-                let inputs = editor.list();
-                let mut buf = String::new();
-                for input in inputs.values() {
-                    if !buf.is_empty() {
-                        buf.push('\n');
-                    }
-                    buf.push_str(input.id());
-                    for follows in input.follows() {
-                        if let Follows::Indirect(id, _) = follows {
-                            let id = format!("{}.{}", input.id(), id);
-                            if !buf.is_empty() {
-                                buf.push('\n');
-                            }
-                            buf.push_str(&id);
-                        }
-                    }
-                }
-                println!("{buf}");
-            }
-            cli::ListFormat::Detailed => {
-                let inputs = editor.list();
-                let mut buf = String::new();
-                for input in inputs.values() {
-                    if !buf.is_empty() {
-                        buf.push('\n');
-                    }
-                    let id = format!("· {} - {}", input.id(), input.url());
-                    buf.push_str(&id);
-                    for follows in input.follows() {
-                        if let Follows::Indirect(id, follow_id) = follows {
-                            let id = format!("{}{} => {}", " ".repeat(5), id, follow_id);
-                            if !buf.is_empty() {
-                                buf.push('\n');
-                            }
-                            buf.push_str(&id);
-                        }
-                    }
-                }
-                println!("{buf}");
-            }
-            cli::ListFormat::Raw => {
-                println!("{:#?}", editor.list());
-            }
-            cli::ListFormat::Json => {
-                let json = serde_json::to_string(editor.list()).unwrap();
-                println!("{json}");
-            }
-            cli::ListFormat::None => todo!(),
-            cli::ListFormat::Toplevel => {
-                let inputs = editor.list();
-                let mut buf = String::new();
-                for input in inputs.keys() {
-                    if !buf.is_empty() {
-                        buf.push('\n');
-                    }
-                    buf.push_str(&input.to_string());
-                }
-                println!("{buf}");
-            }
-        }
+        list_inputs(editor.list(), format);
     }
     if let Command::Update { id, init } = args.subcommand() {
         let inputs = editor.list();
