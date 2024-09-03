@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use crate::cli::CliArgs;
 use crate::error::FeError;
 use crate::root::Root;
+use rnix::tokenizer::Tokenizer;
 use ropey::Rope;
 
 #[derive(Debug, Default)]
@@ -30,6 +31,19 @@ impl FlakeEdit {
 
     pub fn root(&self) -> &FlakeBuf {
         &self.root
+    }
+
+    pub fn text(&self) -> String {
+        self.root().text().to_string()
+    }
+
+    pub fn create_editor(&self) -> Result<crate::edit::FlakeEdit, FeError> {
+        let text = self.root().text().to_string();
+        let (_node, errors) = rnix::parser::parse(Tokenizer::new(&text));
+        if !errors.is_empty() {
+            tracing::error!("There are errors in the root document.");
+        }
+        Ok(crate::edit::FlakeEdit::from_text(&text)?)
     }
 }
 

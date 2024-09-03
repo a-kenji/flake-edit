@@ -35,7 +35,7 @@ impl FlakeEdit {
         Self { changes, walker }
     }
 
-    pub fn from(stream: &str) -> Result<Self, FlakeEditError> {
+    pub fn from_text(stream: &str) -> Result<Self, FlakeEditError> {
         let walker = Walker::new(stream);
         Ok(Self::new(Vec::new(), walker))
     }

@@ -31,7 +31,7 @@ fn root_load() {
 #[test]
 fn root_edit_list() {
     let (flake, _lock) = load_fixtures("root");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let info = Info::new("".into(), vec![]);
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_yaml_snapshot!(flake_edit.list());
@@ -40,7 +40,7 @@ fn root_edit_list() {
 #[test]
 fn root_add_toplevel_id_uri() {
     let (flake, _lock) = load_fixtures("root");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Add {
         id: Some("vmsh".to_owned()),
         uri: Some("github:mic92/vmsh".to_owned()),
@@ -54,7 +54,7 @@ fn root_add_toplevel_id_uri() {
 #[test]
 fn root_add_toplevel_id_uri_no_flake() {
     let (flake, _lock) = load_fixtures("root");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Add {
         id: Some("not_a_flake".to_owned()),
         uri: Some("github:a-kenji/not_a_flake".to_owned()),
@@ -107,7 +107,7 @@ fn root_remove_toplevel_input_single_nested() {
 #[test]
 fn root_alt_list() {
     let (flake, _lock) = load_fixtures("root_alt");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let info = Info::new("".into(), vec![]);
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_yaml_snapshot!(flake_edit.list());
@@ -173,7 +173,7 @@ fn root_alt_remove_toplevel_input_multiple() {
 #[test]
 fn root_toplevel_nesting_list() {
     let (flake, _lock) = load_fixtures("toplevel_nesting");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let info = Info::new("".into(), vec![]);
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_yaml_snapshot!(flake_edit.list());
@@ -226,7 +226,7 @@ fn root_toplevel_nesting_list() {
 #[test]
 fn completely_flat_toplevel_list() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let info = Info::new("".into(), vec![]);
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_yaml_snapshot!(flake_edit.list());
@@ -236,7 +236,7 @@ fn completely_flat_toplevel_list() {
 #[test]
 fn completely_flat_toplevel_alt_list() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel_alt");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let info = Info::new("".into(), vec![]);
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_yaml_snapshot!(flake_edit.list());
@@ -245,7 +245,7 @@ fn completely_flat_toplevel_alt_list() {
 #[test]
 fn completely_flat_toplevel_add_id_uri() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Add {
         id: Some("vmsh".to_owned()),
         uri: Some("mic92/vmsh".to_owned()),
@@ -259,7 +259,7 @@ fn completely_flat_toplevel_add_id_uri() {
 #[test]
 fn completely_flat_toplevel_add_id_uri_no_flake() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Add {
         id: Some("not_a_flake".to_owned()),
         uri: Some("github:a-kenji/not_a_flake".to_owned()),
@@ -273,7 +273,7 @@ fn completely_flat_toplevel_add_id_uri_no_flake() {
 #[test]
 fn completely_flat_toplevel_rm_toplevel() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Remove {
         id: "nixpkgs".to_owned().into(),
     };
@@ -285,7 +285,7 @@ fn completely_flat_toplevel_rm_toplevel() {
 #[test]
 fn completely_flat_toplevel_rm_toplevel_multiple() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Remove {
         id: "crane".to_owned().into(),
     };
@@ -297,7 +297,7 @@ fn completely_flat_toplevel_rm_toplevel_multiple() {
 #[test]
 fn completely_flat_toplevel_rm_follows_single() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Remove {
         id: "crane.rust-overlay".to_owned().into(),
     };
@@ -309,7 +309,7 @@ fn completely_flat_toplevel_rm_follows_single() {
 #[test]
 fn completely_flat_toplevel_no_flake_rm_single_no_flake() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel_not_a_flake");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Remove {
         id: "not-a-flake".to_owned().into(),
     };
@@ -322,7 +322,7 @@ fn completely_flat_toplevel_no_flake_rm_single_no_flake() {
 #[should_panic]
 fn completely_flat_toplevel_no_flake_rm_single_no_flake_rm_nonexistent() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel_not_a_flake");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Remove {
         id: "not-an-input-at-all".to_owned().into(),
     };
@@ -331,7 +331,7 @@ fn completely_flat_toplevel_no_flake_rm_single_no_flake_rm_nonexistent() {
 #[test]
 fn completely_flat_toplevel_no_flake_list() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel_not_a_flake");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::None;
     let info = Info::new("".into(), vec![change.clone()]);
     insta::with_settings!({sort_maps => true, info => &info}, {
@@ -341,7 +341,7 @@ fn completely_flat_toplevel_no_flake_list() {
 #[test]
 fn completely_flat_toplevel_no_flake_rm_single_no_flake_nested() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel_not_a_flake_nested");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Remove {
         id: "not-a-flake".to_owned().into(),
     };
@@ -353,7 +353,7 @@ fn completely_flat_toplevel_no_flake_rm_single_no_flake_nested() {
 #[test]
 fn completely_flat_toplevel_no_flake_nested_list() {
     let (flake, _lock) = load_fixtures("completely_flat_toplevel_not_a_flake_nested");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::None;
     let info = Info::new("".into(), vec![change.clone()]);
     insta::with_settings!({sort_maps => true, info => &info}, {
@@ -363,7 +363,7 @@ fn completely_flat_toplevel_no_flake_nested_list() {
 #[test]
 fn one_level_nesting_flat_no_flake_rm_single_no_flake_nested() {
     let (flake, _lock) = load_fixtures("one_level_nesting_flat_not_a_flake");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Remove {
         id: "not-a-flake".to_owned().into(),
     };
@@ -375,7 +375,7 @@ fn one_level_nesting_flat_no_flake_rm_single_no_flake_nested() {
 #[test]
 fn one_level_nesting_flat_no_flake_nested_list() {
     let (flake, _lock) = load_fixtures("one_level_nesting_flat_not_a_flake");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::None;
     let info = Info::new("".into(), vec![change.clone()]);
     insta::with_settings!({sort_maps => true, info => &info}, {
@@ -424,7 +424,7 @@ fn one_level_nesting_flat() {
 #[test]
 fn one_level_nesting_flat_remove_single() {
     let (flake, _lock) = load_fixtures("one_level_nesting_flat");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Remove {
         id: "nixpkgs".to_owned().into(),
     };
@@ -436,7 +436,7 @@ fn one_level_nesting_flat_remove_single() {
 #[test]
 fn one_level_nesting_flat_remove_multiple() {
     let (flake, _lock) = load_fixtures("one_level_nesting_flat");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Remove {
         id: "rust-overlay".to_owned().into(),
     };
@@ -448,7 +448,7 @@ fn one_level_nesting_flat_remove_multiple() {
 #[test]
 fn one_level_nesting_flat_remove_single_nested() {
     let (flake, _lock) = load_fixtures("one_level_nesting_flat");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Remove {
         id: "rust-overlay.flake-utils".to_owned().into(),
     };
@@ -461,7 +461,7 @@ fn one_level_nesting_flat_remove_single_nested() {
 #[test]
 fn flat_nested_flat_remove_single() {
     let (flake, _lock) = load_fixtures("flat_nested_flat");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Remove {
         id: "nixpkgs".to_owned().into(),
     };
@@ -473,7 +473,7 @@ fn flat_nested_flat_remove_single() {
 #[test]
 fn flat_nested_flat_remove_multiple() {
     let (flake, _lock) = load_fixtures("flat_nested_flat");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Remove {
         id: "poetry2nix".to_owned().into(),
     };
@@ -485,7 +485,7 @@ fn flat_nested_flat_remove_multiple() {
 #[test]
 fn flat_nested_flat_add_single() {
     let (flake, _lock) = load_fixtures("flat_nested_flat");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Add {
         id: Some("vmsh".to_owned()),
         uri: Some("mic92/vmsh".to_owned()),
@@ -499,7 +499,7 @@ fn flat_nested_flat_add_single() {
 #[test]
 fn flat_nested_flat_add_single_no_flake() {
     let (flake, _lock) = load_fixtures("flat_nested_flat");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Add {
         id: Some("not_a_flake".to_owned()),
         uri: Some("github:a-kenji/not_a_flake".to_owned()),
@@ -513,7 +513,7 @@ fn flat_nested_flat_add_single_no_flake() {
 #[test]
 fn first_nested_node_add_single() {
     let (flake, _lock) = load_fixtures("first_nested_node");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Add {
         id: Some("vmsh".to_owned()),
         uri: Some("mic92/vmsh".to_owned()),
@@ -530,7 +530,7 @@ fn first_nested_node_add_single() {
 #[test]
 fn first_nested_node_add_single_no_flake() {
     let (flake, _lock) = load_fixtures("first_nested_node");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Add {
         id: Some("vmsh".to_owned()),
         uri: Some("mic92/vmsh".to_owned()),
@@ -547,7 +547,7 @@ fn first_nested_node_add_single_no_flake() {
 #[test]
 fn first_nested_node_remove_single() {
     let (flake, _lock) = load_fixtures("first_nested_node");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Remove {
         id: "utils".to_string().into(),
     };
@@ -562,7 +562,7 @@ fn first_nested_node_remove_single() {
 #[test]
 fn first_nested_node_remove_multiple() {
     let (flake, _lock) = load_fixtures("first_nested_node");
-    let mut flake_edit = FlakeEdit::from(&flake).unwrap();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Remove {
         id: "naersk".to_string().into(),
     };

@@ -16,7 +16,6 @@ use flake_edit::lock::FlakeLock;
 use flake_edit::update::Updater;
 use nix_uri::urls::UrlWrapper;
 use nix_uri::{FlakeRef, NixUriResult};
-use rnix::tokenizer::Tokenizer;
 
 mod app;
 mod cache;
@@ -32,14 +31,7 @@ fn main() -> eyre::Result<()> {
     tracing::debug!("Cli args: {args:?}");
 
     let app = FlakeEdit::init(&args)?;
-
-    let (_node, errors) = rnix::parser::parse(Tokenizer::new(&app.root().text().to_string()));
-    if !errors.is_empty() {
-        tracing::error!("There are errors in the root document.");
-    }
-
-    let text = app.root().text().to_string();
-    let mut editor = edit::FlakeEdit::from(&text)?;
+    let mut editor = app.create_editor()?;
     let mut change = Change::None;
 
     match args.subcommand() {
@@ -136,7 +128,7 @@ fn main() -> eyre::Result<()> {
         }
 
         if args.diff() {
-            let old = text.clone();
+            let old = app.text();
             let new = resulting_change;
             let diff = Diff::new(&old, &new);
             diff.compare();
@@ -230,11 +222,11 @@ fn main() -> eyre::Result<()> {
             }
             buf.push_str(input.id());
         }
-        let mut updater = Updater::new(app.root().text().clone(), inputs.clone());
+        let mut updater = Updater::new(app.text().into(), inputs.clone());
         updater.update_all_inputs_to_latest_semver(id.clone(), *init);
         let change = updater.get_changes();
         if args.diff() {
-            let old = text.clone();
+            let old = app.text();
             let new = change;
             let diff = Diff::new(&old, &new);
             diff.compare();
@@ -272,7 +264,7 @@ fn main() -> eyre::Result<()> {
         let change = updater.get_changes();
 
         if args.diff() {
-            let old = text.clone();
+            let old = app.text();
             let new = change;
             let diff = Diff::new(&old, &new);
             diff.compare();
