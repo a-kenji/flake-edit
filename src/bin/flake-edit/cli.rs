@@ -1,6 +1,12 @@
 use std::fmt::Display;
 
+// use completions;
+
 use clap::{Parser, Subcommand};
+use clap_complete::{
+    engine::{ArgValueCandidates, CompletionCandidate},
+    CompleteArgs, Shell, ValueHint,
+};
 
 #[derive(Parser, Debug)]
 #[command(author, version = CliArgs::unstable_version(), about, long_about = None)]
@@ -9,14 +15,17 @@ use clap::{Parser, Subcommand};
 /// Edit your flake inputs with ease
 pub struct CliArgs {
     /// Location of the `flake.nix` file, that will be used.
-    #[arg(long)]
+    #[arg(long, value_hint=ValueHint::FilePath)]
     flake: Option<String>,
     /// Print a diff of the changes, will not write the changes to disk.
     #[arg(long, default_value_t = false)]
     diff: bool,
 
+    #[arg(long = "generate", value_enum)]
+    pub(crate) generator: Option<Shell>,
+
     #[command(subcommand)]
-    subcommand: Command,
+    pub(crate) subcommand: Command,
 }
 
 #[allow(unused)]
@@ -59,6 +68,14 @@ pub(crate) enum Command {
     #[command(arg_required_else_help = true)]
     Add {
         /// The name of an input attribute.
+        #[arg(add = ArgValueCandidates::new(||
+            {
+            tracing::debug!("Completing Add!");
+            vec![
+            CompletionCandidate::new("foo"),
+            CompletionCandidate::new("bar"),
+            CompletionCandidate::new("baz")]
+        }))]
         id: Option<String>,
         /// The uri that should be added to the input.
         // #[arg(last = true)]
@@ -106,6 +123,11 @@ pub(crate) enum Command {
         inputs: bool,
         mode: CompletionMode,
     },
+    #[clap(hide = true)]
+    #[command(name = "complete")]
+    Complete {
+        shell: Shell,
+    }
 }
 
 #[derive(Debug, Clone, Default)]

@@ -5,7 +5,9 @@
 use crate::app::FlakeEdit;
 use crate::cli::CliArgs;
 use crate::cli::Command;
+use clap::CommandFactory;
 use clap::Parser;
+use clap_complete::CompleteEnv;
 use color_eyre::eyre;
 use color_eyre::Section;
 use flake_edit::change::Change;
@@ -20,6 +22,7 @@ use nix_uri::{FlakeRef, NixUriResult};
 mod app;
 mod cache;
 mod cli;
+mod completions;
 mod error;
 mod list;
 mod log;
@@ -27,9 +30,17 @@ mod root;
 
 fn main() -> eyre::Result<()> {
     let args = CliArgs::parse();
+    // CompleteEnv::with_factory(args).complete();
+    CompleteEnv::with_factory(CliArgs::command).complete();
     color_eyre::install()?;
     log::init().ok();
     tracing::debug!("Cli args: {args:?}");
+
+    if let Some(generator) = args.generator {
+        eprintln!("Generating completion file for {generator:?}...");
+        clap_complete::generate(generator, &mut CliArgs::command(), CliArgs::command().get_name(), &mut std::io::stdout());
+        std::process::exit(0);
+    }
 
     let app = FlakeEdit::init(&args)?;
     let mut editor = app.create_editor()?;
@@ -101,6 +112,18 @@ fn main() -> eyre::Result<()> {
             }
         },
         Command::Pin { .. } | Command::Update { .. } | Command::List { .. } => {}
+        Command::Add {
+            id,
+            uri,
+            ref_or_rev,
+            no_flake,
+        } => todo!(),
+        Command::Remove { id } => todo!(),
+        Command::Complete { shell } => {
+        eprintln!("Generating completion file for {shell:?}...");
+        clap_complete::generate(*shell, &mut CliArgs::command(), CliArgs::command().get_name(), &mut std::io::stdout());
+        std::process::exit(0);
+        }
     }
 
     if let Ok(Some(resulting_change)) = editor.apply_change(change.clone()) {
