@@ -50,9 +50,7 @@ impl FlakeBuf {
         &self.text
     }
     pub fn apply(&self, change: &str) -> io::Result<()> {
-        // println!("{}", self.path);
         std::fs::write(&self.path, change)?;
-        // println!("{}", change);
         Ok(())
     }
 }
