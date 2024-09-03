@@ -9,6 +9,7 @@
 let
   cargoTOML = builtins.fromTOML (builtins.readFile (self + "/Cargo.toml"));
   inherit (cargoTOML.package) version name;
+  pname = name;
   gitDate = "${builtins.substring 0 4 self.lastModifiedDate}-${
     builtins.substring 4 2 self.lastModifiedDate
   }-${builtins.substring 6 2 self.lastModifiedDate}";
@@ -21,8 +22,7 @@ let
       pkg-config
       openssl
     ];
-    inherit version name;
-    pname = name;
+    inherit version name pname;
     src = lib.cleanSourceWith { src = craneLib.path ../.; };
   };
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
@@ -32,18 +32,22 @@ let
   cargoDoc = craneLib.cargoDoc (commonArgs // { inherit cargoArtifacts; });
   cargoTest = craneLib.cargoNextest (commonArgs // { inherit cargoArtifacts; });
   assetDir = "target/assets";
-  postInstall = name: ''
+  postInstall = ''
     # install the manpage
     installManPage ${assetDir}/${name}.1
     # explicit behavior
-    cp ${assetDir}/${name}.bash ./completions.bash
-    installShellCompletion --bash --name ${name}.bash ./completions.bash
-    cp ${assetDir}/${name}.fish ./completions.fish
-    installShellCompletion --fish --name ${name}.fish ./completions.fish
-    cp ${assetDir}/_${name} ./completions.zsh
-    installShellCompletion --zsh --name _${name} ./completions.zsh
-    mkdir -p $out/share/nu
-    cp ${assetDir}/${name}.nu $out/share/${name}.nu
+    # cp ${assetDir}/${name}.bash ./completions.bash
+    # installShellCompletion --bash --name ${name}.bash ./completions.bash
+    # cp ${assetDir}/${name}.fish ./completions.fish
+    # installShellCompletion --fish --name ${name}.fish ./completions.fish
+    # cp ${assetDir}/_${name} ./completions.zsh
+    # installShellCompletion --zsh --name _${name} ./completions.zsh
+    # mkdir -p $out/share/nu
+    # cp ${assetDir}/${name}.nu $out/share/${name}.nu
+      installShellCompletion --cmd ${name} \
+    --bash <($out/bin/${name} complete bash) \
+    --fish <($out/bin/${name} complete fish) \
+    --zsh <($out/bin/${name} complete zsh)
   '';
 in
 {
@@ -59,10 +63,7 @@ in
       };
       doCheck = false;
       version = "unstable-" + gitDate;
-      pname = "flake-edit";
-      name = "flake-edit";
-      postInstall = postInstall "flake-edit";
-      inherit assetDir cargoArtifacts meta;
+      inherit name pname assetDir cargoArtifacts meta postInstall;
     }
   );
   inherit

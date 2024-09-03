@@ -30,17 +30,10 @@ mod root;
 
 fn main() -> eyre::Result<()> {
     let args = CliArgs::parse();
-    // CompleteEnv::with_factory(args).complete();
     CompleteEnv::with_factory(CliArgs::command).complete();
     color_eyre::install()?;
     log::init().ok();
     tracing::debug!("Cli args: {args:?}");
-
-    if let Some(generator) = args.generator {
-        eprintln!("Generating completion file for {generator:?}...");
-        clap_complete::generate(generator, &mut CliArgs::command(), CliArgs::command().get_name(), &mut std::io::stdout());
-        std::process::exit(0);
-    }
 
     let app = FlakeEdit::init(&args)?;
     let mut editor = app.create_editor()?;
@@ -119,10 +112,12 @@ fn main() -> eyre::Result<()> {
             no_flake,
         } => todo!(),
         Command::Remove { id } => todo!(),
-        Command::Complete { shell } => {
-        eprintln!("Generating completion file for {shell:?}...");
-        clap_complete::generate(*shell, &mut CliArgs::command(), CliArgs::command().get_name(), &mut std::io::stdout());
-        std::process::exit(0);
+        // Command::Complete { shell } => {
+        // eprintln!("Generating completion file for {shell:?}...");
+        // clap_complete::generate(*shell, &mut CliArgs::command(), CliArgs::command().get_name(), &mut std::io::stdout());
+          Command::Complete(completions) => {
+            completions.complete(&mut CliArgs::command());
+            std::process::exit(0);
         }
     }
 

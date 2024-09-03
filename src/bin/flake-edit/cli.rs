@@ -21,9 +21,6 @@ pub struct CliArgs {
     #[arg(long, default_value_t = false)]
     diff: bool,
 
-    #[arg(long = "generate", value_enum)]
-    pub(crate) generator: Option<Shell>,
-
     #[command(subcommand)]
     pub(crate) subcommand: Command,
 }
@@ -125,9 +122,10 @@ pub(crate) enum Command {
     },
     #[clap(hide = true)]
     #[command(name = "complete")]
-    Complete {
-        shell: Shell,
-    }
+    // Complete {
+    //     shell: Shell,
+    // }
+     Complete(CompleteArgs),
 }
 
 #[derive(Debug, Clone, Default)]
