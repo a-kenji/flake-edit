@@ -9,7 +9,6 @@ use clap::Parser;
 use color_eyre::eyre;
 use color_eyre::Section;
 use flake_edit::change::Change;
-use flake_edit::diff::Diff;
 use flake_edit::edit;
 use flake_edit::lock::FlakeLock;
 use flake_edit::update::Updater;
@@ -128,14 +127,7 @@ fn main() -> eyre::Result<()> {
                 .map_err(|e| eyre::eyre!("Could not write to cache file: {e}"))?;
         }
 
-        if args.diff() {
-            let old = app.text();
-            let new = resulting_change;
-            let diff = Diff::new(&old, &new);
-            diff.compare();
-        } else {
-            app.root.apply(&resulting_change)?;
-        }
+        app.apply_change_or_diff(&resulting_change, args.diff())?;
     } else if !args.list() && !args.update() && !args.pin() {
         if change.is_remove() {
             return Err(eyre::eyre!(
@@ -164,14 +156,7 @@ fn main() -> eyre::Result<()> {
         let mut updater = Updater::new(app.text().into(), inputs.clone());
         updater.update_all_inputs_to_latest_semver(id.clone(), *init);
         let change = updater.get_changes();
-        if args.diff() {
-            let old = app.text();
-            let new = change;
-            let diff = Diff::new(&old, &new);
-            diff.compare();
-        } else {
-            app.root.apply(&change)?;
-        }
+        app.apply_change_or_diff(&change, args.diff())?;
     }
     if let Command::Pin { id, rev } = args.subcommand() {
         let lock = FlakeLock::from_default_path().map_err(|_|
@@ -200,15 +185,7 @@ fn main() -> eyre::Result<()> {
 
         updater.pin_input_to_ref(id, &target_rev);
         let change = updater.get_changes();
-
-        if args.diff() {
-            let old = app.text();
-            let new = change;
-            let diff = Diff::new(&old, &new);
-            diff.compare();
-        } else {
-            app.root.apply(&change)?;
-        }
+        app.apply_change_or_diff(&change, args.diff())?;
     }
     Ok(())
 }

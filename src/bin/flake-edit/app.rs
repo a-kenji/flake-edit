@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use crate::cli::CliArgs;
 use crate::error::FeError;
 use crate::root::Root;
+use flake_edit::diff::Diff;
 use rnix::tokenizer::Tokenizer;
 use ropey::Rope;
 
@@ -44,6 +45,18 @@ impl FlakeEdit {
             tracing::error!("There are errors in the root document.");
         }
         Ok(crate::edit::FlakeEdit::from_text(&text)?)
+    }
+    /// Apply pending changes to the FlakeBuf,
+    /// if specified only diff the changes and don't apply.
+    pub fn apply_change_or_diff(&self, change: &str, diff: bool) -> Result<(), FeError> {
+        if diff {
+            let old = self.text();
+            let diff = Diff::new(&old, change);
+            diff.compare();
+        } else {
+            self.root.apply(change)?;
+        }
+        Ok(())
     }
 }
 
