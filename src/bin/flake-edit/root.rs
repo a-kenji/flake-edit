@@ -61,8 +61,7 @@ impl Root {
             // .arg("--show-cdup")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .output()
-            .expect("Failed to execute command");
+            .output()?;
 
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
