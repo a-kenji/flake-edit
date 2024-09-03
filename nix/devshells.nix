@@ -7,9 +7,11 @@ _: {
           name = "flake-edit";
           inputsFrom = [ self'.packages.default ];
           packages = [
-            pkgs.rust-analyzer
-            pkgs.clippy
+            pkgs.cargo
             pkgs.cargo-insta
+            pkgs.clippy
+            pkgs.rust-analyzer
+            pkgs.rustc
             self'.formatter.outPath
           ];
         };
