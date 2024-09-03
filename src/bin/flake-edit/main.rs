@@ -133,8 +133,7 @@ fn main() -> eyre::Result<()> {
             let new = resulting_change;
             let diff = Diff::new(&old, &new);
             diff.compare();
-            // Write the changes
-        } else if args.apply() {
+        } else {
             app.root.apply(&resulting_change)?;
         }
     } else if !args.list() && !args.update() && !args.pin() {
@@ -170,8 +169,7 @@ fn main() -> eyre::Result<()> {
             let new = change;
             let diff = Diff::new(&old, &new);
             diff.compare();
-            // Write the changes
-        } else if args.apply() {
+        } else {
             app.root.apply(&change)?;
         }
     }
@@ -208,7 +206,7 @@ fn main() -> eyre::Result<()> {
             let new = change;
             let diff = Diff::new(&old, &new);
             diff.compare();
-        } else if args.apply() {
+        } else {
             app.root.apply(&change)?;
         }
     }

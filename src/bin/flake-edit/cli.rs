@@ -11,12 +11,9 @@ pub struct CliArgs {
     /// Location of the `flake.nix` file, that will be used.
     #[arg(long)]
     flake: Option<String>,
-    /// Print a diff of the changes, will set the apply flag to false.
+    /// Print a diff of the changes, will not write the changes to disk.
     #[arg(long, default_value_t = false)]
     diff: bool,
-    /// Whether to apply possible changes.
-    #[arg(long, default_value_t = true)]
-    apply: bool,
 
     #[command(subcommand)]
     subcommand: Command,
@@ -52,10 +49,6 @@ impl CliArgs {
 
     pub fn diff(&self) -> bool {
         self.diff
-    }
-
-    pub fn apply(&self) -> bool {
-        self.apply
     }
 }
 
