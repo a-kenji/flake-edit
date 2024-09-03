@@ -113,8 +113,8 @@ impl Updater {
                     maybe_version = normalized_version.to_string();
                 }
 
-                // If we init the version specifier we don't care if before there was already a
-                // working version.
+                // If we init the version specifier we don't care if there was already a
+                // correct semver specified, we automatically pin to the latest semver.
                 if !init {
                     let _version = match semver::Version::parse(&maybe_version) {
                         Ok(v) => v,
@@ -134,7 +134,7 @@ impl Updater {
 
                 tags.sort();
                 if let Some(change) = tags.get_latest_tag() {
-                    if *is_params {
+                    if *is_params || init {
                         let _ = parsed.params.r#ref(Some(change.to_string()));
                     } else {
                         let _ = parsed.r#type.ref_or_rev(Some(change.to_string()));
