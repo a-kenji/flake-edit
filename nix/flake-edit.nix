@@ -9,6 +9,7 @@
 let
   cargoTOML = builtins.fromTOML (builtins.readFile (self + "/Cargo.toml"));
   inherit (cargoTOML.package) version name;
+  pname = name;
   gitDate = "${builtins.substring 0 4 self.lastModifiedDate}-${
     builtins.substring 4 2 self.lastModifiedDate
   }-${builtins.substring 6 2 self.lastModifiedDate}";
@@ -21,8 +22,7 @@ let
       pkg-config
       openssl
     ];
-    inherit version name;
-    pname = name;
+    inherit version name pname;
     src = lib.cleanSourceWith { src = craneLib.path ../.; };
   };
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
@@ -32,7 +32,7 @@ let
   cargoDoc = craneLib.cargoDoc (commonArgs // { inherit cargoArtifacts; });
   cargoTest = craneLib.cargoNextest (commonArgs // { inherit cargoArtifacts; });
   assetDir = "target/assets";
-  postInstall = name: ''
+  postInstall = ''
     # install the manpage
     installManPage ${assetDir}/${name}.1
     # explicit behavior
@@ -58,11 +58,15 @@ in
         ASSET_DIR = assetDir;
       };
       doCheck = false;
-      version = "unstable-" + gitDate;
-      pname = "flake-edit";
-      name = "flake-edit";
-      postInstall = postInstall "flake-edit";
-      inherit assetDir cargoArtifacts meta;
+      version = version + "-unstable-" + gitDate;
+      inherit
+        name
+        pname
+        postInstall
+        assetDir
+        cargoArtifacts
+        meta
+        ;
     }
   );
   inherit
