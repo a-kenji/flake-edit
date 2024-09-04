@@ -1,10 +1,22 @@
 # `$ flake-edit` - edit your flake inputs with ease
+
 [![Built with Nix](https://img.shields.io/static/v1?label=built%20with&message=nix&color=5277C3&logo=nixos&style=flat-square&logoColor=ffffff)](https://builtwithnix.org)
 [![Crates](https://img.shields.io/crates/v/flake-edit?style=flat-square)](https://crates.io/crates/flake-edit)
 [![Documentation](https://img.shields.io/badge/flake_edit-documentation-fc0060?style=flat-square)](https://docs.rs/flake-edit)
 [![Matrix Chat Room](https://img.shields.io/badge/chat-on%20matrix-1d7e64?logo=matrix&style=flat-square)](https://matrix.to/#/#flake-edit:matrix.org)
 
-`$ flake-edit` - edit your flake inputs with ease.
+<!--toc:start-->
+- [`$ flake-edit` - edit your flake inputs with ease](#flake-edit-edit-your-flake-inputs-with-ease)
+  - [`$ flake-edit` - usage](#-flake-edit---usage)
+    - [`$ flake-edit add`](#-flake-edit-add)
+    - [`$ flake-edit remove`](#-flake-edit-remove)
+    - [`$ flake-edit update`](#-flake-edit-update)
+    - [`$ flake-edit list`](#-flake-edit-list)
+    - [`$ flake-edit pin`](#-flake-edit-pin)
+  - [As a library](#as-a-library)
+  - [Status](#status)
+  - [License](#license)
+<!--toc:end-->
 
 ## `$ flake-edit` - usage
 
@@ -162,7 +174,22 @@ cargo add flake-edit --no-default-features
 ```
 
 Be aware that the `lib` interface is still unstable.
-Though we are already very happy to get feedback.
+Though we are already happy to get feedback.
+
+
+## Status
+> [!NOTE]
+> This project is currently in active development and should be considered a work in progress.
+> The goal of `flake-edit` is to provide a robust and well-tested interface to flake inputs.
+> Many edge cases are not covered yet, if you find any issues please consider opening an issue, or a pr.
+> And we would be happy for feedback of the cli interface especially.
+
+## Contributing
+We welcome contributions from the community!
+Check out the [Contributing Guidelines](./doc/CONTRIBUTING.md) on how to get started.
+
+## Release Notes
+Stay updated with the latest changes by viewing the [Changelog](./CHANGELOG.md).
 
 ## License
 MIT
