@@ -186,8 +186,20 @@ impl<'a> Walker {
                                     if let OutputChange::Add(ref add) = change {
                                         let token_count = output.children_with_tokens().count();
                                         let count = output.children().count();
-                                        let addition = Root::parse(&format!(", {add}")).syntax();
                                         let last_node = token_count - 2;
+
+                                        // Adjust the addition for trailing slasheks
+                                        let addition = if let Some(SyntaxKind::TOKEN_COMMA) = output
+                                            .children()
+                                            .last()
+                                            .and_then(|last| last.next_sibling_or_token())
+                                            .and_then(|last_token| Some(last_token.kind()))
+                                        {
+                                            Root::parse(&format!("{add},")).syntax()
+                                        } else {
+                                            Root::parse(&format!(", {add}")).syntax()
+                                        };
+
                                         let mut green = output
                                             .green()
                                             .insert_child(last_node, addition.green().into());
@@ -222,6 +234,7 @@ impl<'a> Walker {
                                             );
                                         return Some(Root::parse(&result.to_string()).syntax());
                                     }
+
                                     for child in output.children() {
                                         if child.kind() == SyntaxKind::NODE_PAT_ENTRY {
                                             if let OutputChange::Remove(ref id) = change {
