@@ -42,6 +42,9 @@ impl CliArgs {
     pub(crate) fn pin(&self) -> bool {
         matches!(self.subcommand, Command::Pin { .. })
     }
+    pub(crate) fn change(&self) -> bool {
+        matches!(self.subcommand, Command::Change { .. })
+    }
 
     pub fn flake(&self) -> Option<&String> {
         self.flake.as_ref()
@@ -69,6 +72,25 @@ pub(crate) enum Command {
         /// The input itself is not a flake.
         #[arg(long, short)]
         no_flake: bool,
+    },
+    /// Change a specific flake reference based on its id.
+    #[clap(alias = "c")]
+    #[command(arg_required_else_help = true)]
+    Change {
+        /// The name of an input attribute.
+        id: String,
+        /// The uri that the id should be changed to.
+        uri: Option<String>,
+        #[arg(long, short)]
+        owner: Option<String>,
+        #[arg(long, short)]
+        repo: Option<String>,
+        #[arg(long)]
+        _ref: Option<String>,
+        #[arg(long)]
+        rev: Option<String>,
+        #[arg(long)]
+        host: Option<String>,
     },
     /// Remove a specific flake reference based on its id.
     #[clap(alias = "rm")]

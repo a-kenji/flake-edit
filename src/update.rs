@@ -30,8 +30,9 @@ impl Updater {
     fn get_index(&self, id: &str) -> usize {
         self.inputs.iter().position(|n| n.input.id == id).unwrap()
     }
+
     /// Pin an input based on it's id to a specific rev.
-    pub fn pin_input_to_ref(&mut self, id: &str, rev: &str) {
+    pub fn pin_input_to_rev(&mut self, id: &str, rev: &str) {
         self.sort();
         let inputs = self.inputs.clone();
         if let Some(input) = inputs.get(self.get_index(id)) {
@@ -39,6 +40,21 @@ impl Updater {
             self.change_input_to_rev(input, rev);
         }
     }
+
+    /// Change a specific input to a flake_uri.
+    /// Does not do special formatting on the input.
+    /// TODO: proper error handling
+    pub fn change_input_to_uri(&mut self, id: &str, uri: &str) {
+        self.sort();
+        let inputs = self.inputs.clone();
+        if let Some(input) = inputs.get(self.get_index(id)) {
+            tracing::debug!("Changing input: {:?} to {}", input, uri);
+            self.update_input(input.clone(), uri);
+        } else {
+            tracing::error!("Could not find input with id: {} in {:?}", id, inputs);
+        }
+    }
+
     /// Update all inputs to a specific semver release,
     /// if a specific input is given, just update the single input.
     pub fn update_all_inputs_to_latest_semver(&mut self, id: Option<String>, init: bool) {

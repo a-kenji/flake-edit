@@ -99,7 +99,10 @@ fn main() -> eyre::Result<()> {
                 std::process::exit(0);
             }
         },
-        Command::Pin { .. } | Command::Update { .. } | Command::List { .. } => {}
+        Command::Change { .. }
+        | Command::Pin { .. }
+        | Command::Update { .. }
+        | Command::List { .. } => {}
     }
 
     if let Ok(Some(resulting_change)) = editor.apply_change(change.clone()) {
@@ -129,7 +132,7 @@ fn main() -> eyre::Result<()> {
         }
 
         app.apply_change_or_diff(&resulting_change, args.diff())?;
-    } else if !args.list() && !args.update() && !args.pin() {
+    } else if !args.list() && !args.update() && !args.pin() && !args.change() {
         if change.is_remove() {
             return Err(eyre::eyre!(
                 "The input with id: {} could not be removed.",
@@ -175,16 +178,33 @@ fn main() -> eyre::Result<()> {
         };
 
         let inputs = editor.list();
-        let mut buf = String::new();
-        for input in inputs.values() {
-            if !buf.is_empty() {
-                buf.push('\n');
-            }
-            buf.push_str(input.id());
-        }
         let mut updater = Updater::new(app.root().text().clone(), inputs.clone());
 
-        updater.pin_input_to_ref(id, &target_rev);
+        updater.pin_input_to_rev(id, &target_rev);
+        let change = updater.get_changes();
+        app.apply_change_or_diff(&change, args.diff())?;
+    }
+    if let Command::Change {
+        id,
+        uri,
+        owner,
+        repo,
+        _ref,
+        rev,
+        host,
+    } = args.subcommand()
+    {
+        let mut inputs = editor.list();
+        let mut updater = Updater::new(app.root().text().clone(), inputs.clone());
+        // If the uri is provided, it should be changed first, so that any additional
+        // flags will adjust the new uri, not the old one.
+        if let Some(uri) = uri {
+            updater.change_input_to_uri(id, uri)
+            inputs.
+        }
+        if let Some(rev) = rev  {
+        updater.pin_input_to_rev(id, rev);
+        }
         let change = updater.get_changes();
         app.apply_change_or_diff(&change, args.diff())?;
     }
