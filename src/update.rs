@@ -36,7 +36,7 @@ impl Updater {
         let inputs = self.inputs.clone();
         if let Some(input) = inputs.get(self.get_index(id)) {
             tracing::debug!("Input: {:?}", input);
-            self.change_input(input, rev);
+            self.change_input_to_rev(input, rev);
         }
     }
     /// Update all inputs to a specific semver release,
@@ -69,7 +69,7 @@ impl Updater {
 
     /// Change a specific input to a specific rev.
     /// TODO: proper error handling
-    pub fn change_input(&mut self, input: &UpdateInput, rev: &str) {
+    pub fn change_input_to_rev(&mut self, input: &UpdateInput, rev: &str) {
         let uri = self.get_input_text(input);
         match uri.parse::<FlakeRef>() {
             Ok(mut parsed) => {
