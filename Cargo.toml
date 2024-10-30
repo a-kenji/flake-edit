@@ -48,7 +48,7 @@ reqwest = { version = "0.12.8", features = ["blocking"] }
 rnix = "0.11.0"
 ropey = { version = "1.6.1", optional = true }
 semver = "1.0.23"
-serde = "1.0.210"
+serde = "1.0.213"
 serde_json = { version = "1.0.132", optional = true }
 thiserror = "1.0.64"
 tracing = "0.1.40"
