@@ -1,6 +1,9 @@
 _: {
   perSystem =
     { pkgs, self', ... }:
+    let
+      env = (import ./env.nix { inherit pkgs; });
+    in
     {
       devShells = {
         default = pkgs.mkShellNoCC {
@@ -14,6 +17,7 @@ _: {
             pkgs.rustc
             self'.formatter.outPath
           ];
+          inherit env;
         };
         full = pkgs.mkShellNoCC {
           inputsFrom = [ self'.devShells.default ];
@@ -24,6 +28,7 @@ _: {
             pkgs.mdsh
             pkgs.vhs
           ];
+          inherit env;
         };
       };
     };
