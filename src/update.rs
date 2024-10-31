@@ -98,6 +98,7 @@ impl Updater {
         match uri.parse::<FlakeRef>() {
             Ok(mut parsed) => {
                 let mut maybe_version = String::new();
+                let mut previous_version = String::new();
                 let is_params = &parsed.params.get_ref().is_some();
 
                 if let nix_uri::FlakeRefType::GitHub {
@@ -113,11 +114,17 @@ impl Updater {
                 }
 
                 if let Some(normalized_version) = maybe_version.strip_prefix('v') {
+                    previous_version = maybe_version.to_string();
                     maybe_version = normalized_version.to_string();
                 }
 
                 if let Some(normalized_version) = strip_until_char(&maybe_version, '-') {
+                    previous_version = maybe_version.to_string();
                     maybe_version = normalized_version.to_string();
+                }
+
+                if previous_version.is_empty() {
+                    previous_version = maybe_version.to_string();
                 }
 
                 // If we init the version specifier we don't care if there was already a
@@ -141,9 +148,31 @@ impl Updater {
 
                 tags.sort();
                 if let Some(change) = tags.get_latest_tag() {
+                    let is_up_to_date = previous_version == change;
+                    let initialized = previous_version.is_empty();
+                    let print_update_message = || {
+                        if initialized {
+                            println!("Initialized {} version pin at {change}.", input.input.id);
+                        } else {
+                            println!(
+                                "Updated {} from {previous_version} to {change}.",
+                                input.input.id
+                            );
+                        }
+                    };
+
+                    if is_up_to_date {
+                        println!(
+                            "{} is already on the latest version: {previous_version}.",
+                            input.input.id
+                        );
+                        return;
+                    }
                     if *is_params || init {
+                        print_update_message();
                         let _ = parsed.params.r#ref(Some(change.to_string()));
                     } else {
+                        print_update_message();
                         let _ = parsed.r#type.ref_or_rev(Some(change.to_string()));
                     }
                 } else {
