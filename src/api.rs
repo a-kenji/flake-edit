@@ -123,6 +123,13 @@ fn query_tags(repo: &str, owner: &str) -> Result<IntermediaryTags, ()> {
 
 impl From<IntermediaryTags> for Tags {
     fn from(value: IntermediaryTags) -> Self {
+        fn strip_until_char(s: &str, c: char) -> Option<(String, String)> {
+            s.find(c).map(|index| {
+                let prefix = s[..index].to_string();
+                let remaining = s[index + 1..].to_string();
+                (prefix, remaining)
+            })
+        }
         let mut versions = vec![];
         let mut prefix = String::new();
         for itag in value.0 {
@@ -131,6 +138,11 @@ impl From<IntermediaryTags> for Tags {
             if let Some(new_tag) = tag.strip_prefix('v') {
                 tag = new_tag.to_string();
                 prefix = "v".to_string();
+            }
+
+            if let Some((new_prefix, new_tag)) = strip_until_char(&tag, '-') {
+                tag = new_tag;
+                prefix = format!("{new_prefix}-").to_string();
             }
 
             match Version::parse(&tag) {

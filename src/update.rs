@@ -85,6 +85,9 @@ impl Updater {
     }
     /// Query a forge api for the latest release and update, if necessary.
     pub fn query_and_update_all_inputs(&mut self, input: &UpdateInput, init: bool) {
+        fn strip_until_char(s: &str, c: char) -> Option<String> {
+            s.find(c).map(|index| s[index + 1..].to_string())
+        }
         let uri = self
             .text
             .slice(
@@ -110,6 +113,10 @@ impl Updater {
                 }
 
                 if let Some(normalized_version) = maybe_version.strip_prefix('v') {
+                    maybe_version = normalized_version.to_string();
+                }
+
+                if let Some(normalized_version) = strip_until_char(&maybe_version, '-') {
                     maybe_version = normalized_version.to_string();
                 }
 
