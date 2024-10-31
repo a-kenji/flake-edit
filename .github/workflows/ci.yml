@@ -134,7 +134,7 @@ jobs:
         with:
           diagnostic-endpoint: ""
       - name: "build flake-edit"
-        run: nix build .#cargoClippy -Lvv --no-update-lock-file
+        run: nix build .#default -Lvv --no-update-lock-file
   devshells:
     runs-on: ubuntu-latest
     environment: cachix
