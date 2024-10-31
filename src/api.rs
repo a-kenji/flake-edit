@@ -94,8 +94,7 @@ fn query_tags(repo: &str, owner: &str) -> Result<IntermediaryTags, ()> {
         tracing::debug!("Found github token.");
         headers.insert(
             AUTHORIZATION,
-            HeaderValue::from_str(&token).unwrap(),
-            // HeaderValue::from_str(&token).unwrap(),
+            HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
         );
         tracing::debug!("Settings github token.");
     }
