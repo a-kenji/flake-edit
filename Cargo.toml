@@ -44,7 +44,7 @@ color-eyre = "0.6.3"
 diffy = { version = "0.4.0", optional = true }
 directories = "5.0.1"
 nix-uri = "0.1.8"
-reqwest = { version = "0.12.8", features = ["blocking"] }
+reqwest = { version = "0.12.9", features = ["blocking"] }
 rnix = "0.11.0"
 ropey = { version = "1.6.1", optional = true }
 semver = "1.0.23"
