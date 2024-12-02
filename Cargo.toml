@@ -51,7 +51,7 @@ semver = "1.0.23"
 serde = "1.0.214"
 serde_json = { version = "1.0.133", optional = true }
 thiserror = "1.0.65"
-tracing = "0.1.40"
+tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.18", features = [
   "time",
   "std",
