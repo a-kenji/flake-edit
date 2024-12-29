@@ -2,7 +2,6 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum FlakeEditError {
-    /// Io Error
     #[error("IoError: {0}")]
     Io(#[from] std::io::Error),
     #[error("The flake should be a root.")]
@@ -11,7 +10,4 @@ pub enum FlakeEditError {
     LockError(String),
     #[error("Deserialization Error: {0}")]
     Serde(#[from] serde_json::Error),
-    // Reqwest Error
-    // #[error("Incorrect Channel")]
-    // IncorrectChannel(String),
 }
