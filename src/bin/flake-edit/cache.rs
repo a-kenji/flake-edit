@@ -83,8 +83,16 @@ impl FeCache {
     }
 }
 
-pub const fn default_types() -> [&'static str; 2] {
-    ["github", "gitlab"]
+pub const fn default_types() -> [&'static str; 7] {
+    [
+        "github",
+        "gitlab",
+        "sourcehut",
+        "git+https",
+        "file",
+        "tarball",
+        "path",
+    ]
 }
 
 #[cfg(test)]
