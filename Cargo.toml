@@ -62,7 +62,7 @@ tracing-subscriber = { version = "0.3.19", features = [
 
 [build-dependencies]
 clap = { version = "4.5.29", features = ["derive"], optional = true }
-clap_complete = { version = "4.5.44", features = [], optional = true }
+clap_complete = { version = "4.5.45", features = [], optional = true }
 clap_complete_nushell = { version = "4.5.5", optional = true }
 clap_mangen = { version = "0.2.26", features = [], optional = true }
 roff = { version = "0.2.2", optional = true }
