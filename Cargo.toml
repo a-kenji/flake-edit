@@ -40,7 +40,7 @@ assets = ["clap_complete", "clap_complete_nushell", "roff", "clap_mangen"]
 [dependencies]
 anyhow = { version = "1.0.98", optional = true }
 clap = { version = "4.5.37", optional = true, features = ["derive"] }
-color-eyre = "0.6.3"
+color-eyre = "0.6.4"
 diffy = { version = "0.4.2", optional = true }
 directories = "6.0.0"
 nix-uri = "0.1.8"
