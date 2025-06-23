@@ -779,7 +779,9 @@ impl<'a> Walker {
                                                 }
                                                 let context =
                                                     Context::new(vec![next_sibling.to_string()]);
-                                                tracing::debug!("Walking inputs with: {attr}, context: {context:?}");
+                                                tracing::debug!(
+                                                    "Walking inputs with: {attr}, context: {context:?}"
+                                                );
                                                 if let Some(change) =
                                                     self.walk_input(&attr, &Some(context), change)
                                                 {
@@ -938,7 +940,9 @@ impl<'a> Walker {
                                                             .unwrap()
                                                             .next_sibling()
                                                             .unwrap();
-                                                        tracing::debug!("The following attribute follows: {id}:{follows} is nested inside the attr: {ctx:?}");
+                                                        tracing::debug!(
+                                                            "The following attribute follows: {id}:{follows} is nested inside the attr: {ctx:?}"
+                                                        );
                                                         let mut input = Input::new(id.to_string());
                                                         input.url = follows.to_string();
                                                         let text_range = follows.text_range();
@@ -975,7 +979,9 @@ impl<'a> Walker {
                     if attr.to_string() == "flake" {
                         if let Some(input_id) = attr.prev_sibling() {
                             if let Some(is_flake) = attr.parent().unwrap().next_sibling() {
-                                tracing::debug!("The following attribute is a flake: {input_id}:{is_flake} is nested inside the context: {ctx:?}");
+                                tracing::debug!(
+                                    "The following attribute is a flake: {input_id}:{is_flake} is nested inside the context: {ctx:?}"
+                                );
                                 let mut input = Input::new(input_id.to_string());
                                 input.flake = is_flake.to_string().parse().unwrap();
                                 let text_range = input_id.text_range();
@@ -1002,7 +1008,9 @@ impl<'a> Walker {
                         // - check for possible removal / change
                         let id = attr.prev_sibling().unwrap();
                         let follows = attr.parent().unwrap().next_sibling().unwrap();
-                        tracing::debug!("The following attribute follows: {id}:{follows} is nested inside the attr: {ctx:?}");
+                        tracing::debug!(
+                            "The following attribute follows: {id}:{follows} is nested inside the attr: {ctx:?}"
+                        );
                         // TODO: Construct follows attribute if not yet ready.
                         // For now assume that the url is the first attribute.
                         // This assumption doesn't generally hold true.
