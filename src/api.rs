@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::process::Command;
 
 use reqwest::blocking::Client;
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, USER_AGENT};
+use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue, USER_AGENT};
 use semver::Version;
 use serde::Deserialize;
 

@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf, sync::Mutex};
 
 use tracing::Level;
-use tracing_subscriber::{filter::EnvFilter, FmtSubscriber};
+use tracing_subscriber::{FmtSubscriber, filter::EnvFilter};
 
 const LOG_ENV: &str = "FE_LOG";
 

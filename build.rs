@@ -1,6 +1,6 @@
 use clap::CommandFactory;
 use clap::ValueEnum;
-use clap_complete::{generate_to, Shell};
+use clap_complete::{Shell, generate_to};
 use clap_complete_nushell::Nushell;
 use clap_mangen::Man;
 
