@@ -17,6 +17,9 @@ jobs:
         extra_nix_config: |
           access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
+    - uses: DeterminateSystems/magic-nix-cache-action@v11
+      with:
+        diagnostic-endpoint: ""
     - name: "install editorconfig-checker"
       run: nix shell --refresh --inputs-from .# nixpkgs#editorconfig-checker
     - name: Checking EditorConfig
