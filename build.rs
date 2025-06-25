@@ -16,49 +16,55 @@ include!("src/bin/flake-edit/cli.rs");
 fn main() {
     println!("cargo:rerun-if-env-changed=ASSET_DIR");
 
-    const NAME: &str = "flake-edit";
-    const COMPLETIONS_DIR: &str = "assets/completions";
-    const FISH_COMPLETIONS: &str = "fish/completions.fish";
-    let manifest_dir =
-        env::var_os("CARGO_MANIFEST_DIR").expect("Could not find env CARGO_MANIFEST_DIR");
+    // Only run asset generation when the assets feature is enabled
+    #[cfg(feature = "assets")]
+    {
+        const NAME: &str = "flake-edit";
+        const COMPLETIONS_DIR: &str = "assets/completions";
+        const FISH_COMPLETIONS: &str = "fish/completions.fish";
+        let manifest_dir =
+            env::var_os("CARGO_MANIFEST_DIR").expect("Could not find env CARGO_MANIFEST_DIR");
 
-    if let Some(dir) = env::var_os("ASSET_DIR") {
-        let out = &Path::new(&dir);
-        create_dir_all(out).unwrap();
-        let cmd = &mut CliArgs::command();
+        if let Some(dir) = env::var_os("ASSET_DIR") {
+            let out = &Path::new(&dir);
+            create_dir_all(out).unwrap();
+            let cmd = &mut CliArgs::command();
 
-        gen_man(NAME, out.to_path_buf());
+            gen_man(NAME, out.to_path_buf());
 
-        Shell::value_variants().iter().for_each(|shell| {
-            generate_to(*shell, cmd, NAME.to_string(), out).unwrap();
-            // claps completions generation mechanisms are very immature,
-            // include self adjusted ones
-            // Explicitly ignore patterns
-            #[allow(clippy::wildcard_in_or_patterns)]
-            match shell {
-                Shell::Fish => {
-                    let mut source = PathBuf::from(manifest_dir.clone());
-                    source.push(COMPLETIONS_DIR);
-                    source.push(FISH_COMPLETIONS);
-                    let source = fs::read_to_string(source).expect("Could not read source file");
-                    let path = out.join(format!("{NAME}.fish"));
-                    let mut file = OpenOptions::new()
-                        .append(true)
-                        .open(path)
-                        .expect("Could not create path.");
-                    let _ = file.write_all(source.as_bytes());
+            Shell::value_variants().iter().for_each(|shell| {
+                generate_to(*shell, cmd, NAME.to_string(), out).unwrap();
+                // claps completions generation mechanisms are very immature,
+                // include self adjusted ones
+                // Explicitly ignore patterns
+                #[allow(clippy::wildcard_in_or_patterns)]
+                match shell {
+                    Shell::Fish => {
+                        let mut source = PathBuf::from(manifest_dir.clone());
+                        source.push(COMPLETIONS_DIR);
+                        source.push(FISH_COMPLETIONS);
+                        let source =
+                            fs::read_to_string(source).expect("Could not read source file");
+                        let path = out.join(format!("{NAME}.fish"));
+                        let mut file = OpenOptions::new()
+                            .append(true)
+                            .open(path)
+                            .expect("Could not create path.");
+                        let _ = file.write_all(source.as_bytes());
+                    }
+                    Shell::Zsh | Shell::PowerShell | Shell::Bash | Shell::Elvish | _ => {}
                 }
-                Shell::Zsh | Shell::PowerShell | Shell::Bash | Shell::Elvish | _ => {}
-            }
-        });
-        generate_to(Nushell, cmd, NAME.to_string(), out).unwrap();
-    } else {
-        eprintln!("ASSET_DIR environment variable not set");
-        eprintln!("Not able to generate completion files");
-        eprintln!("Not able to generate manpage files");
+            });
+            generate_to(Nushell, cmd, NAME.to_string(), out).unwrap();
+        } else {
+            eprintln!("ASSET_DIR environment variable not set");
+            eprintln!("Not able to generate completion files");
+            eprintln!("Not able to generate manpage files");
+        }
     }
 }
 
+#[cfg(feature = "assets")]
 fn gen_man(name: &str, dir: PathBuf) {
     use roff::Roff;
     use std::fs::write;
