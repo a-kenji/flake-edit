@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
+use std::process::Command;
 
 use crate::cli::CliArgs;
 use crate::error::FeError;
@@ -46,15 +47,52 @@ impl FlakeEdit {
         }
         Ok(crate::edit::FlakeEdit::from_text(&text)?)
     }
+
+    fn run_nix_flake_lock(&self) -> io::Result<()> {
+        let flake_dir = PathBuf::from(&self.root.path)
+            .parent()
+            .unwrap_or(&PathBuf::from("."))
+            .to_path_buf();
+
+        let output = Command::new("nix")
+            .args(["flake", "lock"])
+            .current_dir(&flake_dir)
+            .output()?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            eprintln!("Warning: nix flake lock failed: {}", stderr);
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("nix flake lock failed: {}", stderr),
+            ));
+        }
+
+        println!("Updated flake.lock");
+        Ok(())
+    }
+
     /// Apply pending changes to the FlakeBuf,
     /// if specified only diff the changes and don't apply.
-    pub fn apply_change_or_diff(&self, change: &str, diff: bool) -> Result<(), FeError> {
+    pub fn apply_change_or_diff(
+        &self,
+        change: &str,
+        diff: bool,
+        no_lock: bool,
+    ) -> Result<(), FeError> {
         if diff {
             let old = self.text();
             let diff = Diff::new(&old, change);
             diff.compare();
         } else {
             self.root.apply(change)?;
+
+            if !no_lock {
+                if let Err(e) = self.run_nix_flake_lock() {
+                    // Make lock failures non-fatal warnings
+                    eprintln!("Warning: Failed to update lockfile: {}", e);
+                }
+            }
         }
         Ok(())
     }
@@ -69,13 +107,17 @@ pub struct FlakeBuf {
 impl FlakeBuf {
     fn from_path(path: PathBuf) -> io::Result<Self> {
         let text = Rope::from_reader(&mut io::BufReader::new(File::open(&path)?))?;
-        let path = path.display().to_string();
-        Ok(Self { text, path })
+        let path_str = path.display().to_string();
+        Ok(Self {
+            text,
+            path: path_str,
+        })
     }
 
     pub fn text(&self) -> &Rope {
         &self.text
     }
+
     pub fn apply(&self, change: &str) -> io::Result<()> {
         std::fs::write(&self.path, change)?;
         Ok(())

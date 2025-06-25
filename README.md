@@ -47,9 +47,9 @@ Options:
       --flake <FLAKE>
           Location of the `flake.nix` file, that will be used
       --diff
-          Print a diff of the changes, will set the apply flag to false
-      --apply
-          Whether to apply possible changes
+          Print a diff of the changes, will not write the changes to disk
+      --no-lock
+          Skip updating the lockfile after editing flake.nix
   -h, --help
           Print help
   -V, --version
