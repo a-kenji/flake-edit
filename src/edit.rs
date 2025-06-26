@@ -66,6 +66,19 @@ impl FlakeEdit {
             Change::None => Ok(None),
             //TODO: Add outputs, if needed.
             Change::Add { .. } => {
+                // Check for duplicate input before adding
+                if let Some(input_id) = change.id() {
+                    // First walk to populate the inputs map if it's empty
+                    if self.walker.inputs.is_empty() {
+                        self.walker.walk(&Change::None);
+                    }
+
+                    let input_id_string = input_id.to_string();
+                    if self.walker.inputs.contains_key(&input_id_string) {
+                        return Err(FlakeEditError::DuplicateInput(input_id_string));
+                    }
+                }
+
                 if let Some(maybe_changed_node) = self.walker.walk(&change.clone()) {
                     let outputs = self.walker.list_outputs();
                     match outputs {
