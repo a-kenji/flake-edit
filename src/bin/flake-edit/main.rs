@@ -102,44 +102,52 @@ fn main() -> eyre::Result<()> {
         Command::Pin { .. } | Command::Update { .. } | Command::List { .. } => {}
     }
 
-    if let Ok(Some(resulting_change)) = editor.apply_change(change.clone()) {
-        let root = rnix::Root::parse(&resulting_change.to_string());
-        let errors = root.errors();
-        if errors.is_empty() {
-            tracing::info!("No errors in the changes.");
-        } else {
-            tracing::error!("There are errors in the changes:");
-            eprintln!("There are errors in the changes:");
-            for e in errors {
-                tracing::error!("Error: {e}");
-                tracing::error!("The changes will not be applied.");
+    match editor.apply_change(change.clone()) {
+        Ok(Some(resulting_change)) => {
+            let root = rnix::Root::parse(&resulting_change.to_string());
+            let errors = root.errors();
+            if errors.is_empty() {
+                tracing::info!("No errors in the changes.");
+            } else {
+                tracing::error!("There are errors in the changes:");
+                eprintln!("There are errors in the changes:");
+                for e in errors {
+                    tracing::error!("Error: {e}");
+                    tracing::error!("The changes will not be applied.");
+                }
+                eprintln!("{}", resulting_change);
+                eprintln!("There were errors in the changes, the changes have not been applied.");
+                std::process::exit(1);
             }
-            eprintln!("{}", resulting_change);
-            eprintln!("There were errors in the changes, the changes have not been applied.");
-            std::process::exit(1);
-        }
 
-        // The changes are successful, so we can cache them
-        if let Change::Add { id, uri, flake: _ } = change {
-            let mut cache = cache::FeCache::default().get_or_init();
-            cache.add_entry(id.unwrap(), uri.unwrap());
-            cache
-                .commit()
-                .map_err(|e| eyre::eyre!("Could not write to cache file: {e}"))?;
-        }
+            // The changes are successful, so we can cache them
+            if let Change::Add { id, uri, flake: _ } = change {
+                let mut cache = cache::FeCache::default().get_or_init();
+                cache.add_entry(id.unwrap(), uri.unwrap());
+                cache
+                    .commit()
+                    .map_err(|e| eyre::eyre!("Could not write to cache file: {e}"))?;
+            }
 
-        app.apply_change_or_diff(&resulting_change, args.diff(), args.no_lock())?;
-    } else if !args.list() && !args.update() && !args.pin() {
-        if change.is_remove() {
-            return Err(eyre::eyre!(
+            app.apply_change_or_diff(&resulting_change, args.diff(), args.no_lock())?;
+        }
+        Err(e) => {
+            return Err(eyre::eyre!(e.to_string()));
+        }
+        Ok(None) => {
+            if !args.list() && !args.update() && !args.pin() {
+                if change.is_remove() {
+                    return Err(eyre::eyre!(
                 "The input with id: {} could not be removed.",
                 change.id().unwrap()
             )
             .suggestion("\nPlease check if an input with that [ID] exists in the flake.nix file.\nRun `flake-edit list --format simple` to see the current inputs by their id."));
+                }
+                println!("Nothing changed in the node.");
+                println!("The following change could not be applied: \n{:?}", change);
+                std::process::exit(1);
+            }
         }
-        println!("Nothing changed in the node.");
-        println!("The following change could not be applied: \n{:?}", change);
-        std::process::exit(1);
     }
 
     if let Command::List { format } = args.subcommand() {
