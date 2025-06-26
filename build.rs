@@ -81,7 +81,7 @@ fn gen_man(name: &str, dir: PathBuf) {
         .expect("Not able to render synopsis section.");
     let mut roff = Roff::new();
     roff.control("SH", ["DESCRIPTION"]);
-    roff.text(["Edit your flake inputs with ease.".into()]);
+    roff.text(vec!["Edit your flake inputs with ease.".into()]);
     roff.to_writer(&mut buf)
         .expect("Not able to write description.");
     // man.render_description_section(&mut buf)
@@ -93,6 +93,86 @@ fn gen_man(name: &str, dir: PathBuf) {
 
     // Examples
     roff.control("SH", ["EXAMPLES"]);
+
+    // Add a new flake input
+    roff.text(vec![format!("Add a new flake input:").into()]);
+    roff.control("RS", []);
+    roff.text(vec![
+        format!("{} add nixpkgs github:NixOS/nixpkgs", name).into(),
+    ]);
+    roff.control("RE", []);
+    roff.text(vec!["".into()]);
+
+    // Add with auto-inference
+    roff.text(vec![
+        format!("Add an input with automatic ID inference:").into(),
+    ]);
+    roff.control("RS", []);
+    roff.text(vec![
+        format!("{} add github:nix-community/home-manager", name).into(),
+    ]);
+    roff.control("RE", []);
+    roff.text(vec!["".into()]);
+
+    // Remove an input
+    roff.text(vec![format!("Remove a flake input:").into()]);
+    roff.control("RS", []);
+    roff.text(vec![format!("{} remove nixpkgs", name).into()]);
+    roff.control("RE", []);
+    roff.text(vec!["".into()]);
+
+    // List inputs
+    roff.text(vec![format!("List all current inputs:").into()]);
+    roff.control("RS", []);
+    roff.text(vec![format!("{} list", name).into()]);
+    roff.control("RE", []);
+    roff.text(vec!["".into()]);
+
+    // Update inputs
+    roff.text(vec![
+        format!("Update all inputs to latest versions:").into(),
+    ]);
+    roff.control("RS", []);
+    roff.text(vec![format!("{} update", name).into()]);
+    roff.control("RE", []);
+    roff.text(vec!["".into()]);
+
+    // Pin an input
+    roff.text(vec![
+        format!("Pin an input to its current revision:").into(),
+    ]);
+    roff.control("RS", []);
+    roff.text(vec![format!("{} pin nixpkgs", name).into()]);
+    roff.control("RE", []);
+    roff.text(vec!["".into()]);
+
+    // Show diff without applying changes
+    roff.text(vec![
+        format!("Preview changes without applying them:").into(),
+    ]);
+    roff.control("RS", []);
+    roff.text(vec![
+        format!(
+            "{} --diff add home-manager github:nix-community/home-manager",
+            name
+        )
+        .into(),
+    ]);
+    roff.control("RE", []);
+    roff.text(vec!["".into()]);
+
+    // Skip lockfile update
+    roff.text(vec![format!("Add input without updating lockfile:").into()]);
+    roff.control("RS", []);
+    roff.text(vec![
+        format!(
+            "{} --no-lock add nixos-hardware github:NixOS/nixos-hardware",
+            name
+        )
+        .into(),
+    ]);
+    roff.control("RE", []);
+
     roff.to_writer(&mut buf).expect("Not able to write roff.");
 
     // Footer
