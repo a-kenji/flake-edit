@@ -14,6 +14,9 @@ pub struct CliArgs {
     /// Print a diff of the changes, will not write the changes to disk.
     #[arg(long, default_value_t = false)]
     diff: bool,
+    /// Skip updating the lockfile after editing flake.nix.
+    #[arg(long, default_value_t = false)]
+    no_lock: bool,
 
     #[command(subcommand)]
     subcommand: Command,
@@ -49,6 +52,10 @@ impl CliArgs {
 
     pub fn diff(&self) -> bool {
         self.diff
+    }
+
+    pub fn no_lock(&self) -> bool {
+        self.no_lock
     }
 }
 

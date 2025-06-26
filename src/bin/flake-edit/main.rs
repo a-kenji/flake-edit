@@ -128,7 +128,7 @@ fn main() -> eyre::Result<()> {
                 .map_err(|e| eyre::eyre!("Could not write to cache file: {e}"))?;
         }
 
-        app.apply_change_or_diff(&resulting_change, args.diff())?;
+        app.apply_change_or_diff(&resulting_change, args.diff(), args.no_lock())?;
     } else if !args.list() && !args.update() && !args.pin() {
         if change.is_remove() {
             return Err(eyre::eyre!(
@@ -157,7 +157,7 @@ fn main() -> eyre::Result<()> {
         let mut updater = Updater::new(app.text().into(), inputs.clone());
         updater.update_all_inputs_to_latest_semver(id.clone(), *init);
         let change = updater.get_changes();
-        app.apply_change_or_diff(&change, args.diff())?;
+        app.apply_change_or_diff(&change, args.diff(), args.no_lock())?;
     }
     if let Command::Pin { id, rev } = args.subcommand() {
         let lock = FlakeLock::from_default_path().map_err(|_|
@@ -186,7 +186,7 @@ fn main() -> eyre::Result<()> {
 
         updater.pin_input_to_ref(id, &target_rev);
         let change = updater.get_changes();
-        app.apply_change_or_diff(&change, args.diff())?;
+        app.apply_change_or_diff(&change, args.diff(), args.no_lock())?;
     }
     Ok(())
 }
