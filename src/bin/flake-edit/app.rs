@@ -49,10 +49,11 @@ impl FlakeEdit {
     }
 
     fn run_nix_flake_lock(&self) -> io::Result<()> {
-        let flake_dir = PathBuf::from(&self.root.path)
-            .parent()
-            .unwrap_or(&PathBuf::from("."))
-            .to_path_buf();
+        let flake_path = PathBuf::from(&self.root.path);
+        let flake_dir = match flake_path.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
+            _ => PathBuf::from("."),
+        };
 
         let output = Command::new("nix")
             .args(["flake", "lock"])
