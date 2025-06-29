@@ -17,6 +17,9 @@ pub struct CliArgs {
     /// Skip updating the lockfile after editing flake.nix.
     #[arg(long, default_value_t = false)]
     no_lock: bool,
+    /// Run in non-interactive mode (errors instead of prompts for selections).
+    #[arg(long, default_value_t = false)]
+    non_interactive: bool,
 
     #[command(subcommand)]
     subcommand: Command,
@@ -56,6 +59,10 @@ impl CliArgs {
 
     pub fn no_lock(&self) -> bool {
         self.no_lock
+    }
+
+    pub fn non_interactive(&self) -> bool {
+        self.non_interactive
     }
 }
 
@@ -104,6 +111,13 @@ pub(crate) enum Command {
         id: String,
         /// Optionally specify a rev for the inputs attribute.
         rev: Option<String>,
+    },
+    /// Toggle between commented and uncommented versions of an input.
+    #[clap(alias = "t")]
+    Toggle {
+        /// The id of an input attribute to toggle.
+        /// If omitted, will auto-detect and toggle if only one toggleable input exists.
+        id: Option<String>,
     },
     #[clap(hide = true)]
     #[command(name = "completion")]

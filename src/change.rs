@@ -22,6 +22,13 @@ pub enum Change {
         uri: Option<String>,
         ref_or_rev: Option<String>,
     },
+    Toggle {
+        id: Option<String>,
+    },
+    ToggleToVersion {
+        id: String,
+        target_url: String,
+    },
 }
 
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -93,6 +100,8 @@ impl Change {
             Change::Remove { id } => Some(id.clone()),
             Change::Change { id, .. } => id.clone().map(|id| id.into()),
             Change::Pin { id } => Some(id.clone().into()),
+            Change::Toggle { id } => id.clone().map(|id| id.into()),
+            Change::ToggleToVersion { id, .. } => Some(id.clone().into()),
         }
     }
     pub fn is_remove(&self) -> bool {
@@ -103,5 +112,8 @@ impl Change {
     }
     pub fn is_add(&self) -> bool {
         matches!(self, Change::Add { .. })
+    }
+    pub fn is_toggle(&self) -> bool {
+        matches!(self, Change::Toggle { .. })
     }
 }

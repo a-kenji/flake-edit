@@ -51,9 +51,262 @@ impl<'a> Walker {
             // TODO: handle this as an error
             panic!("Should be a topevel node.")
         } else {
-            self.walk_toplevel(cst.clone(), None, change)
+            match change {
+                Change::Toggle { id } => self.handle_toggle(id.as_deref()),
+                Change::ToggleToVersion { id, target_url } => {
+                    self.handle_toggle_to_version(id, target_url)
+                }
+                _ => self.walk_toplevel(cst.clone(), None, change),
+            }
         }
     }
+
+    /// Handle toggle functionality for commenting/uncommenting inputs
+    fn handle_toggle(&mut self, id: Option<&str>) -> Option<SyntaxNode> {
+        let original_text = self.root.to_string();
+        let lines: Vec<&str> = original_text.lines().collect();
+
+        // If no id specified, auto-detect toggleable inputs
+        let target_id = if let Some(id) = id {
+            id.to_string()
+        } else {
+            match self.find_toggleable_inputs(&lines) {
+                Ok(auto_id) => auto_id,
+                Err(_) => return None, // Error will be handled at higher level
+            }
+        };
+
+        // Perform the toggle for the determined id
+        self.toggle_input(&lines, &target_id)
+    }
+
+    /// Find all toggleable inputs and return the single one if only one exists
+    fn find_toggleable_inputs(
+        &self,
+        lines: &[&str],
+    ) -> Result<String, crate::error::FlakeEditError> {
+        use std::collections::HashSet;
+        let mut toggleable_inputs = HashSet::new();
+
+        // Find all inputs that have both commented and uncommented versions
+        for line in lines {
+            let trimmed = line.trim();
+
+            // Check for active .url lines
+            if let Some(pos) = trimmed.find(".url") {
+                if !trimmed.starts_with('#') {
+                    let id = &trimmed[..pos];
+                    // Check if there's a commented version of this input
+                    let commented_pattern = format!("# {}.url", id);
+                    if lines
+                        .iter()
+                        .any(|l| l.trim().starts_with(&commented_pattern))
+                    {
+                        toggleable_inputs.insert(id.to_string());
+                    }
+                }
+            }
+
+            // Check for commented .url lines
+            if trimmed.starts_with("# ") {
+                let uncommented = trimmed.strip_prefix("# ").unwrap_or(trimmed);
+                if let Some(pos) = uncommented.find(".url") {
+                    let id = &uncommented[..pos];
+                    // Check if there's an active version of this input
+                    let active_pattern = format!("{}.url", id);
+                    if lines.iter().any(|l| {
+                        l.trim().starts_with(&active_pattern) && !l.trim().starts_with('#')
+                    }) {
+                        toggleable_inputs.insert(id.to_string());
+                    }
+                }
+            }
+        }
+
+        match toggleable_inputs.len() {
+            0 => Err(crate::error::FlakeEditError::NoToggleableInputs),
+            1 => Ok(toggleable_inputs.into_iter().next().unwrap()),
+            _ => {
+                let inputs_list = {
+                    let mut sorted: Vec<_> = toggleable_inputs.into_iter().collect();
+                    sorted.sort();
+                    sorted.join(", ")
+                };
+                Err(crate::error::FlakeEditError::MultipleToggleableInputs(
+                    inputs_list,
+                ))
+            }
+        }
+    }
+
+    /// Toggle a specific input between commented and uncommented states
+    fn toggle_input(&self, lines: &[&str], id: &str) -> Option<SyntaxNode> {
+        let mut active_versions = Vec::new();
+        let mut commented_versions = Vec::new();
+
+        // First pass: collect all versions of the input
+        for (line_idx, line) in lines.iter().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.starts_with(&format!("{}.url", id)) && !trimmed.starts_with('#') {
+                active_versions.push((line_idx, trimmed.to_string()));
+            } else if trimmed.starts_with(&format!("# {}.url", id)) {
+                let url_part = trimmed.strip_prefix("# ").unwrap_or(trimmed);
+                commented_versions.push((line_idx, url_part.to_string()));
+            }
+        }
+
+        // If we can't find any versions, return None
+        if active_versions.is_empty() && commented_versions.is_empty() {
+            return None;
+        }
+
+        // Handle different scenarios
+        if active_versions.len() == 1 && commented_versions.len() == 1 {
+            // Simple toggle case - swap the two versions
+            return self.simple_toggle(lines, id);
+        } else if active_versions.len() == 1 && commented_versions.len() > 1 {
+            // Multiple commented versions - need to ask user which to activate
+            return None; // This will trigger the selection prompt
+        } else if active_versions.is_empty() && commented_versions.len() > 1 {
+            // No active version, multiple commented - need selection
+            return None; // This will trigger the selection prompt
+        } else if active_versions.len() > 1 {
+            // Multiple active versions - shouldn't happen but handle gracefully
+            return self.simple_toggle(lines, id);
+        }
+
+        None
+    }
+
+    /// Simple toggle between one active and one commented version
+    fn simple_toggle(&self, lines: &[&str], id: &str) -> Option<SyntaxNode> {
+        let mut new_lines = Vec::new();
+
+        // Perform the simple toggle
+        for line in lines {
+            let trimmed = line.trim();
+
+            // Toggle active lines by commenting them out
+            if trimmed.starts_with(&format!("{}.url", id)) && !trimmed.starts_with('#') {
+                let indentation = line.len() - line.trim_start().len();
+                let spaces = " ".repeat(indentation);
+                new_lines.push(format!("{}# {}", spaces, trimmed));
+            }
+            // Toggle commented lines by uncommenting them
+            else if trimmed.starts_with(&format!("# {}.url", id)) {
+                let indentation = line.len() - line.trim_start().len();
+                let spaces = " ".repeat(indentation);
+                let uncommented = trimmed.strip_prefix("# ").unwrap_or(trimmed);
+                new_lines.push(format!("{}{}", spaces, uncommented));
+            }
+            // Also handle follows lines for the same input
+            else if trimmed.starts_with(&format!("{}.inputs", id)) && !trimmed.starts_with('#') {
+                let indentation = line.len() - line.trim_start().len();
+                let spaces = " ".repeat(indentation);
+                new_lines.push(format!("{}# {}", spaces, trimmed));
+            } else if trimmed.starts_with(&format!("# {}.inputs", id)) {
+                let indentation = line.len() - line.trim_start().len();
+                let spaces = " ".repeat(indentation);
+                let uncommented = trimmed.strip_prefix("# ").unwrap_or(trimmed);
+                new_lines.push(format!("{}{}", spaces, uncommented));
+            } else {
+                new_lines.push(line.to_string());
+            }
+        }
+
+        let new_text = new_lines.join("\n");
+        let original_text = lines.join("\n");
+        if new_text != original_text {
+            Some(Root::parse(&new_text).syntax())
+        } else {
+            None
+        }
+    }
+
+    /// Get version information for a specific input (for selection prompts)
+    pub fn get_input_versions(&self, lines: &[&str], id: &str) -> (Vec<String>, Vec<String>) {
+        let mut active_versions = Vec::new();
+        let mut commented_versions = Vec::new();
+
+        for line in lines {
+            let trimmed = line.trim();
+            if trimmed.starts_with(&format!("{}.url", id)) && !trimmed.starts_with('#') {
+                if let Some(url_start) = trimmed.find(" = \"") {
+                    let url_part = &trimmed[url_start + 4..]; // Skip ' = "'
+                    let url = url_part.trim_end_matches("\";").trim_end_matches('"');
+                    active_versions.push(url.to_string());
+                }
+            } else if trimmed.starts_with(&format!("# {}.url", id)) {
+                let url_part = trimmed.strip_prefix("# ").unwrap_or(trimmed);
+                if let Some(url_start) = url_part.find(" = \"") {
+                    let url_section = &url_part[url_start + 4..]; // Skip ' = "'
+                    let url = url_section.trim_end_matches("\";").trim_end_matches('"');
+                    commented_versions.push(url.to_string());
+                }
+            }
+        }
+
+        (active_versions, commented_versions)
+    }
+
+    /// Handle toggle to a specific version
+    fn handle_toggle_to_version(&mut self, id: &str, target_url: &str) -> Option<SyntaxNode> {
+        let original_text = self.root.to_string();
+        let lines: Vec<&str> = original_text.lines().collect();
+        let mut new_lines = Vec::new();
+
+        for line in lines {
+            let trimmed = line.trim();
+
+            // Comment out any active version of this input
+            if trimmed.starts_with(&format!("{}.url", id)) && !trimmed.starts_with('#') {
+                let indentation = line.len() - line.trim_start().len();
+                let spaces = " ".repeat(indentation);
+                new_lines.push(format!("{}# {}", spaces, trimmed));
+            }
+            // Comment out any active follows lines for this input
+            else if trimmed.starts_with(&format!("{}.inputs", id)) && !trimmed.starts_with('#') {
+                let indentation = line.len() - line.trim_start().len();
+                let spaces = " ".repeat(indentation);
+                new_lines.push(format!("{}# {}", spaces, trimmed));
+            }
+            // Uncomment the target version
+            else if trimmed.starts_with(&format!("# {}.url", id)) {
+                let url_part = trimmed.strip_prefix("# ").unwrap_or(trimmed);
+                if let Some(url_start) = url_part.find(" = \"") {
+                    let url_section = &url_part[url_start + 4..];
+                    let url = url_section.trim_end_matches("\";").trim_end_matches('"');
+                    if url == target_url {
+                        // This is the target version - uncomment it
+                        let indentation = line.len() - line.trim_start().len();
+                        let spaces = " ".repeat(indentation);
+                        new_lines.push(format!("{}{}", spaces, url_part));
+                    } else {
+                        // This is not the target - keep it commented
+                        new_lines.push(line.to_string());
+                    }
+                } else {
+                    new_lines.push(line.to_string());
+                }
+            }
+            // Uncomment follows lines only if they match the target (this is more complex - for now keep them commented)
+            else if trimmed.starts_with(&format!("# {}.inputs", id)) {
+                // For now, keep follows lines commented when switching versions
+                // TODO: Could implement logic to uncomment follows for the activated version
+                new_lines.push(line.to_string());
+            } else {
+                new_lines.push(line.to_string());
+            }
+        }
+
+        let new_text = new_lines.join("\n");
+        if new_text != original_text {
+            Some(Root::parse(&new_text).syntax())
+        } else {
+            None
+        }
+    }
+
     /// Insert a new Input node at the correct position
     /// or update it with new information.
     fn insert_with_ctx(&mut self, id: String, input: Input, ctx: &Option<Context>) {
