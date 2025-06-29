@@ -115,7 +115,8 @@ pub(crate) enum Command {
     /// Toggle between commented and uncommented versions of an input.
     #[clap(alias = "t")]
     Toggle {
-        /// The id of an input attribute to toggle. If omitted, will auto-detect and toggle if only one toggleable input exists.
+        /// The id of an input attribute to toggle.
+        /// If omitted, will auto-detect and toggle if only one toggleable input exists.
         id: Option<String>,
     },
     #[clap(hide = true)]
