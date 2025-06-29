@@ -36,20 +36,18 @@ fn prompt_version_selection(
 
     let mut options = Vec::new();
 
-    // Add commented versions (these can be activated)
     for (i, version) in commented_versions.iter().enumerate() {
         println!("  {}: {} (commented)", i + 1, version);
-        options.push((i + 1, version.clone(), false)); // false = commented
+        options.push((i + 1, version.clone(), false))
     }
 
-    // Add active version (this can be deactivated)
     if !active_versions.is_empty() {
         let active_idx = commented_versions.len() + 1;
         println!(
             "  {}: {} (currently active)",
             active_idx, active_versions[0]
         );
-        options.push((active_idx, active_versions[0].clone(), true)); // true = active
+        options.push((active_idx, active_versions[0].clone(), true));
     }
 
     println!();
@@ -70,8 +68,8 @@ fn prompt_version_selection(
             options.len()
         ));
     }
-
-    Ok(choice - 1) // Convert to 0-based index
+    // Convert to 0-based index
+    Ok(choice - 1)
 }
 
 fn handle_toggle_error(change: &Change, app: &FlakeEdit) -> eyre::Result<()> {
