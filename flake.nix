@@ -3,8 +3,10 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    # rust-overlay.url = "github:mic92/rust-overlay";
+    # rust-overlay.url = "github:a-kenji/rust-overlay";
     rust-overlay.url = "github:oxalica/rust-overlay";
-    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    # rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     flake-parts.url = "github:hercules-ci/flake-parts";
     crane.url = "github:ipetkov/crane?ref=v0.20.0";
     treefmt-nix.url = "github:numtide/treefmt-nix";

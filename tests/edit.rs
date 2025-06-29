@@ -584,6 +584,33 @@ fn first_nested_node_inputs() {
         insta::assert_yaml_snapshot!(walker.inputs);
     });
 }
+
+#[test]
+fn toggle_test_rust_overlay() {
+    let (flake, _lock) = load_fixtures("toggle_test");
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let change = Change::Toggle {
+        id: Some("rust-overlay".to_owned()),
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+
+#[test]
+fn toggle_test_auto_detect() {
+    let (flake, _lock) = load_fixtures("toggle_test");
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let change = Change::Toggle {
+        id: None, // Auto-detect
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+
 // #[test]
 // fn root_alt_add_toplevel_id_uri() {
 //     let (flake, _lock) = load_fixtures("root_alt");
