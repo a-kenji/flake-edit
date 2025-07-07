@@ -26,7 +26,7 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - uses: DeterminateSystems/magic-nix-cache-action@v11
+      - uses: DeterminateSystems/magic-nix-cache-action@v12
         with:
           diagnostic-endpoint: ""
       - name: "build dependencies"
@@ -46,7 +46,7 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - uses: DeterminateSystems/magic-nix-cache-action@v11
+      - uses: DeterminateSystems/magic-nix-cache-action@v12
         with:
           diagnostic-endpoint: ""
       - name: "check formatting"
@@ -67,7 +67,7 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - uses: DeterminateSystems/magic-nix-cache-action@v11
+      - uses: DeterminateSystems/magic-nix-cache-action@v12
         with:
           diagnostic-endpoint: ""
       - name: "run tests"
@@ -88,7 +88,7 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - uses: DeterminateSystems/magic-nix-cache-action@v11
+      - uses: DeterminateSystems/magic-nix-cache-action@v12
         with:
           diagnostic-endpoint: ""
       - name: "build cargo documentation"
@@ -109,7 +109,7 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - uses: DeterminateSystems/magic-nix-cache-action@v11
+      - uses: DeterminateSystems/magic-nix-cache-action@v12
         with:
           diagnostic-endpoint: ""
       - name: "run cargo clippy"
@@ -130,7 +130,7 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - uses: DeterminateSystems/magic-nix-cache-action@v11
+      - uses: DeterminateSystems/magic-nix-cache-action@v12
         with:
           diagnostic-endpoint: ""
       - name: "build flake-edit"
@@ -151,7 +151,7 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - uses: DeterminateSystems/magic-nix-cache-action@v11
+      - uses: DeterminateSystems/magic-nix-cache-action@v12
         with:
           diagnostic-endpoint: ""
       - name: "build devshells"
