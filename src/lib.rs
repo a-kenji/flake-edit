@@ -1,5 +1,6 @@
 pub mod api;
 pub mod change;
+#[cfg(feature = "diff")]
 pub mod diff;
 pub mod edit;
 pub mod error;

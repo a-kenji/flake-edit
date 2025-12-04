@@ -30,11 +30,11 @@ application = [
   "write",
   "assets",
   "anyhow",
-  "diffy",
+  "diff",
   "tracing-subscriber",
-  "serde_json",
 ]
-write = ["ropey"]
+write = []
+diff = ["diffy"]
 assets = ["clap_complete", "clap_complete_nushell", "roff", "clap_mangen"]
 
 [dependencies]
@@ -46,10 +46,10 @@ directories = "6.0.0"
 nix-uri = "0.1.8"
 reqwest = { version = "0.12.24", features = ["blocking"] }
 rnix = "0.12.0"
-ropey = { version = "1.6.1", optional = true }
+ropey = { version = "1.6.1" }
 semver = "1.0.27"
 serde = "1.0.228"
-serde_json = { version = "1.0.145", optional = true }
+serde_json = { version = "1.0.145" }
 thiserror = "2.0.17"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = [
