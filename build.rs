@@ -1,24 +1,21 @@
-use clap::CommandFactory;
-use clap::ValueEnum;
-use clap_complete::{Shell, generate_to};
-use clap_complete_nushell::Nushell;
-use clap_mangen::Man;
+#[cfg(feature = "assets")]
+mod asset_build {
+    use clap::CommandFactory;
+    use clap::ValueEnum;
+    use clap_complete::{Shell, generate_to};
+    use clap_complete_nushell::Nushell;
+    use clap_mangen::Man;
+    use std::fs;
+    use std::fs::OpenOptions;
+    use std::io::Write;
+    use std::path::PathBuf;
+    use std::{env, fs::create_dir_all, path::Path};
 
-use std::fs;
+    include!("src/bin/flake-edit/cli.rs");
 
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::path::PathBuf;
-use std::{env, fs::create_dir_all, path::Path};
+    pub fn run() {
+        println!("cargo:rerun-if-env-changed=ASSET_DIR");
 
-include!("src/bin/flake-edit/cli.rs");
-
-fn main() {
-    println!("cargo:rerun-if-env-changed=ASSET_DIR");
-
-    // Only run asset generation when the assets feature is enabled
-    #[cfg(feature = "assets")]
-    {
         const NAME: &str = "flake-edit";
         const COMPLETIONS_DIR: &str = "assets/completions";
         const FISH_COMPLETIONS: &str = "fish/completions.fish";
@@ -62,124 +59,133 @@ fn main() {
             eprintln!("Not able to generate manpage files");
         }
     }
+
+    fn gen_man(name: &str, dir: PathBuf) {
+        use roff::Roff;
+        use std::fs::write;
+
+        let path = dir.join(format!("{name}.1"));
+        let mut buf: Vec<u8> = Vec::new();
+        let man = Man::new(CliArgs::command());
+
+        man.render_title(&mut buf)
+            .expect("Not able to render title.");
+        man.render_name_section(&mut buf)
+            .expect("Not able to render name section.");
+        man.render_synopsis_section(&mut buf)
+            .expect("Not able to render synopsis section.");
+        let mut roff = Roff::new();
+        roff.control("SH", ["DESCRIPTION"]);
+        roff.text(vec!["Edit your flake inputs with ease.".into()]);
+        roff.to_writer(&mut buf)
+            .expect("Not able to write description.");
+        // man.render_description_section(&mut buf)
+        //     .expect("Not able to render description section.");
+        man.render_options_section(&mut buf)
+            .expect("Not able to render options section.");
+        man.render_subcommands_section(&mut buf)
+            .expect("Not able to render subcommands section.");
+
+        // Examples
+        roff.control("SH", ["EXAMPLES"]);
+
+        // Add a new flake input
+        roff.text(vec![format!("Add a new flake input:").into()]);
+        roff.control("RS", []);
+        roff.text(vec![
+            format!("{} add nixpkgs github:NixOS/nixpkgs", name).into(),
+        ]);
+        roff.control("RE", []);
+        roff.text(vec!["".into()]);
+
+        // Add with auto-inference
+        roff.text(vec![
+            format!("Add an input with automatic ID inference:").into(),
+        ]);
+        roff.control("RS", []);
+        roff.text(vec![
+            format!("{} add github:nix-community/home-manager", name).into(),
+        ]);
+        roff.control("RE", []);
+        roff.text(vec!["".into()]);
+
+        // Remove an input
+        roff.text(vec![format!("Remove a flake input:").into()]);
+        roff.control("RS", []);
+        roff.text(vec![format!("{} remove nixpkgs", name).into()]);
+        roff.control("RE", []);
+        roff.text(vec!["".into()]);
+
+        // List inputs
+        roff.text(vec![format!("List all current inputs:").into()]);
+        roff.control("RS", []);
+        roff.text(vec![format!("{} list", name).into()]);
+        roff.control("RE", []);
+        roff.text(vec!["".into()]);
+
+        // Update inputs
+        roff.text(vec![
+            format!("Update all inputs to latest versions:").into(),
+        ]);
+        roff.control("RS", []);
+        roff.text(vec![format!("{} update", name).into()]);
+        roff.control("RE", []);
+        roff.text(vec!["".into()]);
+
+        // Pin an input
+        roff.text(vec![
+            format!("Pin an input to its current revision:").into(),
+        ]);
+        roff.control("RS", []);
+        roff.text(vec![format!("{} pin nixpkgs", name).into()]);
+        roff.control("RE", []);
+        roff.text(vec!["".into()]);
+
+        // Show diff without applying changes
+        roff.text(vec![
+            format!("Preview changes without applying them:").into(),
+        ]);
+        roff.control("RS", []);
+        roff.text(vec![
+            format!(
+                "{} --diff add home-manager github:nix-community/home-manager",
+                name
+            )
+            .into(),
+        ]);
+        roff.control("RE", []);
+        roff.text(vec!["".into()]);
+
+        // Skip lockfile update
+        roff.text(vec![format!("Add input without updating lockfile:").into()]);
+        roff.control("RS", []);
+        roff.text(vec![
+            format!(
+                "{} --no-lock add nixos-hardware github:NixOS/nixos-hardware",
+                name
+            )
+            .into(),
+        ]);
+        roff.control("RE", []);
+
+        roff.to_writer(&mut buf).expect("Not able to write roff.");
+
+        // Footer
+        man.render_version_section(&mut buf)
+            .expect("Not able to render subcommands section.");
+        man.render_authors_section(&mut buf)
+            .expect("Not able to render subcommands section.");
+
+        write(path, buf).expect("Not able to write manpage");
+    }
 }
 
 #[cfg(feature = "assets")]
-fn gen_man(name: &str, dir: PathBuf) {
-    use roff::Roff;
-    use std::fs::write;
+fn main() {
+    asset_build::run();
+}
 
-    let path = dir.join(format!("{name}.1"));
-    let mut buf: Vec<u8> = Vec::new();
-    let man = Man::new(CliArgs::command());
-
-    man.render_title(&mut buf)
-        .expect("Not able to render title.");
-    man.render_name_section(&mut buf)
-        .expect("Not able to render name section.");
-    man.render_synopsis_section(&mut buf)
-        .expect("Not able to render synopsis section.");
-    let mut roff = Roff::new();
-    roff.control("SH", ["DESCRIPTION"]);
-    roff.text(vec!["Edit your flake inputs with ease.".into()]);
-    roff.to_writer(&mut buf)
-        .expect("Not able to write description.");
-    // man.render_description_section(&mut buf)
-    //     .expect("Not able to render description section.");
-    man.render_options_section(&mut buf)
-        .expect("Not able to render options section.");
-    man.render_subcommands_section(&mut buf)
-        .expect("Not able to render subcommands section.");
-
-    // Examples
-    roff.control("SH", ["EXAMPLES"]);
-
-    // Add a new flake input
-    roff.text(vec![format!("Add a new flake input:").into()]);
-    roff.control("RS", []);
-    roff.text(vec![
-        format!("{} add nixpkgs github:NixOS/nixpkgs", name).into(),
-    ]);
-    roff.control("RE", []);
-    roff.text(vec!["".into()]);
-
-    // Add with auto-inference
-    roff.text(vec![
-        format!("Add an input with automatic ID inference:").into(),
-    ]);
-    roff.control("RS", []);
-    roff.text(vec![
-        format!("{} add github:nix-community/home-manager", name).into(),
-    ]);
-    roff.control("RE", []);
-    roff.text(vec!["".into()]);
-
-    // Remove an input
-    roff.text(vec![format!("Remove a flake input:").into()]);
-    roff.control("RS", []);
-    roff.text(vec![format!("{} remove nixpkgs", name).into()]);
-    roff.control("RE", []);
-    roff.text(vec!["".into()]);
-
-    // List inputs
-    roff.text(vec![format!("List all current inputs:").into()]);
-    roff.control("RS", []);
-    roff.text(vec![format!("{} list", name).into()]);
-    roff.control("RE", []);
-    roff.text(vec!["".into()]);
-
-    // Update inputs
-    roff.text(vec![
-        format!("Update all inputs to latest versions:").into(),
-    ]);
-    roff.control("RS", []);
-    roff.text(vec![format!("{} update", name).into()]);
-    roff.control("RE", []);
-    roff.text(vec!["".into()]);
-
-    // Pin an input
-    roff.text(vec![
-        format!("Pin an input to its current revision:").into(),
-    ]);
-    roff.control("RS", []);
-    roff.text(vec![format!("{} pin nixpkgs", name).into()]);
-    roff.control("RE", []);
-    roff.text(vec!["".into()]);
-
-    // Show diff without applying changes
-    roff.text(vec![
-        format!("Preview changes without applying them:").into(),
-    ]);
-    roff.control("RS", []);
-    roff.text(vec![
-        format!(
-            "{} --diff add home-manager github:nix-community/home-manager",
-            name
-        )
-        .into(),
-    ]);
-    roff.control("RE", []);
-    roff.text(vec!["".into()]);
-
-    // Skip lockfile update
-    roff.text(vec![format!("Add input without updating lockfile:").into()]);
-    roff.control("RS", []);
-    roff.text(vec![
-        format!(
-            "{} --no-lock add nixos-hardware github:NixOS/nixos-hardware",
-            name
-        )
-        .into(),
-    ]);
-    roff.control("RE", []);
-
-    roff.to_writer(&mut buf).expect("Not able to write roff.");
-
-    // Footer
-    man.render_version_section(&mut buf)
-        .expect("Not able to render subcommands section.");
-    man.render_authors_section(&mut buf)
-        .expect("Not able to render subcommands section.");
-
-    write(path, buf).expect("Not able to write manpage");
+#[cfg(not(feature = "assets"))]
+fn main() {
+    // Keep build.rs compiling when the assets feature (and build deps) are disabled.
 }
