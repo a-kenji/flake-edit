@@ -12,6 +12,7 @@
     - [`$ flake-edit update`](#-flake-edit-update)
     - [`$ flake-edit list`](#-flake-edit-list)
     - [`$ flake-edit pin`](#-flake-edit-pin)
+    - [`$ flake-edit unpin`](#-flake-edit-unpin)
   - [As a library](#as-a-library)
   - [Status](#status)
   - [License](#license)
