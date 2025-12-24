@@ -6,6 +6,8 @@ result-*
 # rust support
 target/
 
+# documentation
+assets/tape/output/*
 
 # profiling / testing
 flamegraph.svg
