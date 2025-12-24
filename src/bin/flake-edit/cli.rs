@@ -45,6 +45,9 @@ impl CliArgs {
     pub(crate) fn pin(&self) -> bool {
         matches!(self.subcommand, Command::Pin { .. })
     }
+    pub(crate) fn unpin(&self) -> bool {
+        matches!(self.subcommand, Command::Unpin { .. })
+    }
 
     pub fn flake(&self) -> Option<&String> {
         self.flake.as_ref()
@@ -104,6 +107,12 @@ pub(crate) enum Command {
         id: String,
         /// Optionally specify a rev for the inputs attribute.
         rev: Option<String>,
+    },
+    /// Unpin an input so it tracks the upstream default again.
+    #[clap(alias = "up")]
+    Unpin {
+        /// The id of an input attribute.
+        id: String,
     },
     #[clap(hide = true)]
     #[command(name = "completion")]
