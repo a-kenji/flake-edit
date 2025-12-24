@@ -1,7 +1,6 @@
 # `$ flake-edit` - edit your flake inputs with ease
 
-[![Built with Nix](https://img.shields.io/static/v1?label=built%20with&message=nix&color=5277C3&logo=nixos&style=flat-square&logoColor=ffffff)](https://builtwithnix.org)
-[![Crates](https://img.shields.io/crates/v/flake-edit?style=flat-square)](https://crates.io/crates/flake-edit)
+[![Built with Nix](https://img.shields.io/static/v1?label=built%20with&message=nix&color=5277C3&logo=nixos&style=flat-square&logoColor=ffffff)](https://builtwithnix.org) [![Crates](https://img.shields.io/crates/v/flake-edit?style=flat-square)](https://crates.io/crates/flake-edit)
 [![Documentation](https://img.shields.io/badge/flake_edit-documentation-fc0060?style=flat-square)](https://docs.rs/flake-edit)
 [![Matrix Chat Room](https://img.shields.io/badge/chat-on%20matrix-1d7e64?logo=matrix&style=flat-square)](https://matrix.to/#/#flake-edit:matrix.org)
 
@@ -40,6 +39,8 @@ Commands:
           Update inputs to their latest specified release
   pin
           Pin inputs to their current or a specified rev
+  unpin
+          Unpin an input so it tracks the upstream default again
   help
           Print this message or the help of the given subcommand(s)
 
@@ -163,6 +164,24 @@ Options:
 ```
 ![flake-edit pin](https://vhs.charm.sh/vhs-629lX7LqP4MS1aHffb4Ufh.gif)
 Pin a specific input to it's current revision (rev).
+
+### `$ flake-edit unpin`
+<!-- `$ flake-edit help unpin` -->
+
+```
+Unpin an input so it tracks the upstream default again
+
+Usage: flake-edit unpin <ID>
+
+Arguments:
+  <ID>
+          The id of an input attribute
+
+Options:
+  -h, --help
+          Print help
+```
+![flake-edit unpin example](https://vhs.charm.sh/vhs-G8Eo84Ysjpt5c09Q9VD4u.gif)
 
 
 ## As a library
