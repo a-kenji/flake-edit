@@ -99,7 +99,10 @@ fn main() -> eyre::Result<()> {
                 std::process::exit(0);
             }
         },
-        Command::Pin { .. } | Command::Update { .. } | Command::List { .. } => {}
+        Command::Pin { .. }
+        | Command::Unpin { .. }
+        | Command::Update { .. }
+        | Command::List { .. } => {}
     }
 
     match editor.apply_change(change.clone()) {
@@ -135,7 +138,7 @@ fn main() -> eyre::Result<()> {
             return Err(eyre::eyre!(e.to_string()));
         }
         Ok(None) => {
-            if !args.list() && !args.update() && !args.pin() {
+            if !args.list() && !args.update() && !args.pin() && !args.unpin() {
                 if change.is_remove() {
                     return Err(eyre::eyre!(
                 "The input with id: {} could not be removed.",
@@ -193,6 +196,14 @@ fn main() -> eyre::Result<()> {
         let mut updater = Updater::new(app.root().text().clone(), inputs.clone());
 
         updater.pin_input_to_ref(id, &target_rev);
+        let change = updater.get_changes();
+        app.apply_change_or_diff(&change, args.diff(), args.no_lock())?;
+    }
+    if let Command::Unpin { id } = args.subcommand() {
+        let inputs = editor.list();
+        let mut updater = Updater::new(app.root().text().clone(), inputs.clone());
+
+        updater.unpin_input(id);
         let change = updater.get_changes();
         app.apply_change_or_diff(&change, args.diff(), args.no_lock())?;
     }

@@ -39,6 +39,15 @@ impl Updater {
             self.change_input_to_rev(input, rev);
         }
     }
+    /// Remove any ?ref= or ?rev= parameters from a specific input.
+    pub fn unpin_input(&mut self, id: &str) {
+        self.sort();
+        let inputs = self.inputs.clone();
+        if let Some(input) = inputs.get(self.get_index(id)) {
+            tracing::debug!("Input: {:?}", input);
+            self.remove_ref_and_rev(input);
+        }
+    }
     /// Update all inputs to a specific semver release,
     /// if a specific input is given, just update the single input.
     pub fn update_all_inputs_to_latest_semver(&mut self, id: Option<String>, init: bool) {
@@ -76,6 +85,24 @@ impl Updater {
                 parsed.params.rev(Some(rev.into()));
                 // TODO: check, if rev_or_ref is already set, then change that side.
                 // let _ = parsed.r#type.ref_or_rev(Some(rev.into()));
+                self.update_input(input.clone(), &parsed.to_string());
+            }
+            Err(e) => {
+                tracing::error!("Error while changing input: {}", e);
+            }
+        }
+    }
+    fn remove_ref_and_rev(&mut self, input: &UpdateInput) {
+        let uri = self.get_input_text(input);
+        match uri.parse::<FlakeRef>() {
+            Ok(mut parsed) => {
+                let has_ref = parsed.params.get_ref().is_some();
+                let has_rev = parsed.params.get_rev().is_some();
+                if !has_ref && !has_rev {
+                    return;
+                }
+                parsed.params.r#ref(None);
+                parsed.params.rev(None);
                 self.update_input(input.clone(), &parsed.to_string());
             }
             Err(e) => {
