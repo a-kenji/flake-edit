@@ -2,6 +2,7 @@
 /.direnv
 result
 result-*
+.nixos-test-history
 
 # rust support
 target/

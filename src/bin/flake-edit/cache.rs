@@ -11,7 +11,7 @@ fn cache_dir() -> &'static PathBuf {
     static CACHE_DIR: OnceLock<PathBuf> = OnceLock::new();
     CACHE_DIR.get_or_init(|| {
         let project_dir = ProjectDirs::from("com", "a-kenji", "flake-edit").unwrap();
-        return project_dir.data_dir().to_path_buf();
+        project_dir.data_dir().to_path_buf()
     })
 }
 

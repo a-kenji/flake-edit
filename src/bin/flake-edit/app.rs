@@ -63,10 +63,10 @@ impl FlakeEdit {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             eprintln!("Warning: nix flake lock failed: {}", stderr);
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("nix flake lock failed: {}", stderr),
-            ));
+            return Err(io::Error::other(format!(
+                "nix flake lock failed: {}",
+                stderr
+            )));
         }
 
         println!("Updated flake.lock");

@@ -33,23 +33,17 @@ mod asset_build {
                 generate_to(*shell, cmd, NAME.to_string(), out).unwrap();
                 // claps completions generation mechanisms are very immature,
                 // include self adjusted ones
-                // Explicitly ignore patterns
-                #[allow(clippy::wildcard_in_or_patterns)]
-                match shell {
-                    Shell::Fish => {
-                        let mut source = PathBuf::from(manifest_dir.clone());
-                        source.push(COMPLETIONS_DIR);
-                        source.push(FISH_COMPLETIONS);
-                        let source =
-                            fs::read_to_string(source).expect("Could not read source file");
-                        let path = out.join(format!("{NAME}.fish"));
-                        let mut file = OpenOptions::new()
-                            .append(true)
-                            .open(path)
-                            .expect("Could not create path.");
-                        let _ = file.write_all(source.as_bytes());
-                    }
-                    Shell::Zsh | Shell::PowerShell | Shell::Bash | Shell::Elvish | _ => {}
+                if *shell == Shell::Fish {
+                    let mut source = PathBuf::from(manifest_dir.clone());
+                    source.push(COMPLETIONS_DIR);
+                    source.push(FISH_COMPLETIONS);
+                    let source = fs::read_to_string(source).expect("Could not read source file");
+                    let path = out.join(format!("{NAME}.fish"));
+                    let mut file = OpenOptions::new()
+                        .append(true)
+                        .open(path)
+                        .expect("Could not create path.");
+                    let _ = file.write_all(source.as_bytes());
                 }
             });
             generate_to(Nushell, cmd, NAME.to_string(), out).unwrap();
@@ -90,7 +84,7 @@ mod asset_build {
         roff.control("SH", ["EXAMPLES"]);
 
         // Add a new flake input
-        roff.text(vec![format!("Add a new flake input:").into()]);
+        roff.text(vec!["Add a new flake input:".to_string().into()]);
         roff.control("RS", []);
         roff.text(vec![
             format!("{} add nixpkgs github:NixOS/nixpkgs", name).into(),
@@ -100,7 +94,9 @@ mod asset_build {
 
         // Add with auto-inference
         roff.text(vec![
-            format!("Add an input with automatic ID inference:").into(),
+            "Add an input with automatic ID inference:"
+                .to_string()
+                .into(),
         ]);
         roff.control("RS", []);
         roff.text(vec![
@@ -110,14 +106,14 @@ mod asset_build {
         roff.text(vec!["".into()]);
 
         // Remove an input
-        roff.text(vec![format!("Remove a flake input:").into()]);
+        roff.text(vec!["Remove a flake input:".to_string().into()]);
         roff.control("RS", []);
         roff.text(vec![format!("{} remove nixpkgs", name).into()]);
         roff.control("RE", []);
         roff.text(vec!["".into()]);
 
         // List inputs
-        roff.text(vec![format!("List all current inputs:").into()]);
+        roff.text(vec!["List all current inputs:".to_string().into()]);
         roff.control("RS", []);
         roff.text(vec![format!("{} list", name).into()]);
         roff.control("RE", []);
@@ -125,7 +121,7 @@ mod asset_build {
 
         // Update inputs
         roff.text(vec![
-            format!("Update all inputs to latest versions:").into(),
+            "Update all inputs to latest versions:".to_string().into(),
         ]);
         roff.control("RS", []);
         roff.text(vec![format!("{} update", name).into()]);
@@ -134,7 +130,7 @@ mod asset_build {
 
         // Pin an input
         roff.text(vec![
-            format!("Pin an input to its current revision:").into(),
+            "Pin an input to its current revision:".to_string().into(),
         ]);
         roff.control("RS", []);
         roff.text(vec![format!("{} pin nixpkgs", name).into()]);
@@ -143,7 +139,7 @@ mod asset_build {
 
         // Show diff without applying changes
         roff.text(vec![
-            format!("Preview changes without applying them:").into(),
+            "Preview changes without applying them:".to_string().into(),
         ]);
         roff.control("RS", []);
         roff.text(vec![
@@ -157,7 +153,9 @@ mod asset_build {
         roff.text(vec!["".into()]);
 
         // Skip lockfile update
-        roff.text(vec![format!("Add input without updating lockfile:").into()]);
+        roff.text(vec![
+            "Add input without updating lockfile:".to_string().into(),
+        ]);
         roff.control("RS", []);
         roff.text(vec![
             format!(

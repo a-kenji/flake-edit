@@ -135,6 +135,27 @@ jobs:
           diagnostic-endpoint: ""
       - name: "build flake-edit"
         run: nix build .#default -Lvv --no-update-lock-file
+  nixos-test:
+    runs-on: ubuntu-latest
+    environment: cachix
+    needs: ['flake-edit']
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+      - uses: cachix/cachix-action@v16
+        with:
+          name: kenji
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+      - uses: DeterminateSystems/magic-nix-cache-action@v13
+        with:
+          diagnostic-endpoint: ""
+      - name: "nixos-test"
+        run: nix build .#checks.x86_64-linux.forgejo-test -Lvv --no-update-lock-file
   devshells:
     runs-on: ubuntu-latest
     environment: cachix

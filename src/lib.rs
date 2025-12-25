@@ -8,4 +8,6 @@ pub mod input;
 pub mod lock;
 pub mod state;
 pub mod update;
+pub mod uri;
+pub mod version;
 pub mod walk;

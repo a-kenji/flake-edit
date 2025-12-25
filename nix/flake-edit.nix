@@ -17,13 +17,29 @@ let
   meta = import ./meta.nix { inherit lib; };
   # crane
   craneLib = self.inputs.crane.mkLib pkgs;
+  src = lib.fileset.toSource {
+    root = ../.;
+    fileset = lib.fileset.unions [
+      ../Cargo.toml
+      ../Cargo.lock
+      ../build.rs
+      ../src
+      ../benches
+      ../tests
+      ../assets
+    ];
+  };
   commonArgs = {
     nativeBuildInputs = [
       pkg-config
       openssl
     ];
-    inherit version name pname;
-    src = lib.cleanSourceWith { src = craneLib.path ../.; };
+    inherit
+      version
+      name
+      pname
+      src
+      ;
   };
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
   cargoClippy = craneLib.cargoClippy (commonArgs // { inherit cargoArtifacts; });

@@ -193,7 +193,7 @@ impl<'a> Walker {
                                             .children()
                                             .last()
                                             .and_then(|last| last.next_sibling_or_token())
-                                            .and_then(|last_token| Some(last_token.kind()))
+                                            .map(|last_token| last_token.kind())
                                         {
                                             Root::parse(&format!("{add},")).syntax()
                                         } else {

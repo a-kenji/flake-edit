@@ -1,4 +1,8 @@
 _: {
+  imports = [
+    ./forgejo-test.nix
+  ];
+
   perSystem =
     { self', ... }:
     {
