@@ -22,7 +22,7 @@ impl Root {
         P: AsRef<Path>,
     {
         if fs::metadata(path.as_ref()).is_ok() {
-            return Ok(Root(PathBuf::from(path.as_ref())));
+            Ok(Root(PathBuf::from(path.as_ref())))
         } else {
             Self::find_root(path)
         }

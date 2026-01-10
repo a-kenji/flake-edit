@@ -5,27 +5,170 @@ use reqwest::blocking::Client;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue, USER_AGENT};
 use semver::Version;
 use serde::Deserialize;
+use thiserror::Error;
+
+use crate::version::parse_ref;
+#[derive(Error, Debug)]
+pub enum ApiError {
+    #[error("HTTP request failed: {0}")]
+    HttpError(#[from] reqwest::Error),
+
+    #[error("JSON parsing failed: {0}")]
+    JsonError(#[from] serde_json::Error),
+
+    #[error("Invalid header value: {0}")]
+    InvalidHeader(#[from] reqwest::header::InvalidHeaderValue),
+
+    #[error("UTF-8 conversion failed: {0}")]
+    Utf8Error(#[from] std::string::FromUtf8Error),
+
+    #[error("Failed to execute command: {0}")]
+    CommandError(#[from] std::io::Error),
+
+    #[error("No tags found for repository")]
+    NoTagsFound,
+
+    #[error("Invalid domain or repository: {0}")]
+    InvalidInput(String),
+}
+
+#[derive(Default)]
+pub struct ForgeClient {
+    client: Client,
+}
+
+impl ForgeClient {
+    fn get(&self, url: &str, headers: HeaderMap) -> Result<String, ApiError> {
+        let response = self.client.get(url).headers(headers).send()?;
+        let text = response.text()?;
+        Ok(text)
+    }
+
+    fn make_headers() -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        if let Ok(user_agent) = HeaderValue::from_str("flake-edit") {
+            headers.insert(USER_AGENT, user_agent);
+        }
+        headers
+    }
+
+    pub fn detect_forge_type(&self, domain: &str) -> ForgeType {
+        if domain == "github.com" {
+            return ForgeType::GitHub;
+        }
+
+        tracing::debug!("Attempting to detect forge type for domain: {}", domain);
+        let headers = Self::make_headers();
+
+        // Try both HTTPS and HTTP for each endpoint
+        for scheme in ["https", "http"] {
+            // Try Forgejo version endpoint first
+            let forgejo_url = format!("{}://{}/api/forgejo/v1/version", scheme, domain);
+            tracing::debug!("Trying Forgejo endpoint: {}", forgejo_url);
+            if let Ok(text) = self.get(&forgejo_url, headers.clone()) {
+                tracing::debug!("Forgejo endpoint response body: {}", text);
+                if let Some(forge_type) = parse_forge_version(&text) {
+                    tracing::info!("Detected Forgejo/Gitea at {}", domain);
+                    return forge_type;
+                }
+            }
+
+            // Try Gitea version endpoint
+            let gitea_url = format!("{}://{}/api/v1/version", scheme, domain);
+            tracing::debug!("Trying Gitea endpoint: {}", gitea_url);
+            if let Ok(text) = self.get(&gitea_url, headers.clone()) {
+                tracing::debug!("Gitea endpoint response body: {}", text);
+                if let Some(forge_type) = parse_forge_version(&text) {
+                    tracing::info!("Detected Forgejo/Gitea at {}", domain);
+                    return forge_type;
+                }
+                // Plain Gitea just has a version number without +gitea or +forgejo
+                if serde_json::from_str::<ForgeVersion>(&text).is_ok() {
+                    tracing::info!("Detected Gitea at {}", domain);
+                    return ForgeType::Gitea;
+                }
+            }
+        }
+
+        tracing::warn!(
+            "Could not detect forge type for {}, will try GitHub API as fallback",
+            domain
+        );
+        ForgeType::Unknown
+    }
+
+    pub fn query_github_tags(&self, repo: &str, owner: &str) -> Result<IntermediaryTags, ApiError> {
+        let mut headers = Self::make_headers();
+        if let Some(token) = get_forge_token("github.com") {
+            tracing::debug!("Found github token.");
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {token}"))?,
+            );
+        }
+
+        let body = self.get(
+            &format!("https://api.github.com/repos/{}/{}/tags", owner, repo),
+            headers,
+        )?;
+
+        tracing::debug!("Body from api: {body}");
+        let tags = serde_json::from_str::<IntermediaryTags>(&body)?;
+        Ok(tags)
+    }
+
+    pub fn query_gitea_tags(
+        &self,
+        repo: &str,
+        owner: &str,
+        domain: &str,
+    ) -> Result<IntermediaryTags, ApiError> {
+        let mut headers = Self::make_headers();
+
+        if let Some(token) = get_forge_token(domain) {
+            tracing::debug!("Found token for {}", domain);
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {token}"))?,
+            );
+        }
+
+        // Try HTTPS first, then HTTP
+        for scheme in ["https", "http"] {
+            let url = format!(
+                "{}://{}/api/v1/repos/{}/{}/tags",
+                scheme, domain, owner, repo
+            );
+            tracing::debug!("Trying Gitea tags endpoint: {}", url);
+
+            if let Ok(body) = self.get(&url, headers.clone()) {
+                tracing::debug!("Body from Gitea API: {body}");
+                if let Ok(tags) = serde_json::from_str::<IntermediaryTags>(&body) {
+                    return Ok(tags);
+                }
+            }
+        }
+
+        Err(ApiError::NoTagsFound)
+    }
+}
 
 #[derive(Deserialize, Debug)]
 pub struct IntermediaryTags(Vec<IntermediaryTag>);
 
 #[derive(Debug)]
 pub struct Tags {
-    versions: Vec<Version>,
-    prefix: String,
+    versions: Vec<TagVersion>,
 }
 
 impl Tags {
     pub fn get_latest_tag(&mut self) -> Option<String> {
         self.sort();
-        let mut buf = String::new();
-        buf.push_str(&self.prefix);
-        let latest_version = &self.versions.iter().last()?;
-        buf.push_str(&latest_version.to_string());
-        Some(buf)
+        self.versions.last().map(|tag| tag.original.clone())
     }
     pub fn sort(&mut self) {
-        self.versions.sort_by(Version::cmp_precedence);
+        self.versions
+            .sort_by(|a, b| a.version.cmp_precedence(&b.version));
     }
 }
 
@@ -34,9 +177,62 @@ pub struct IntermediaryTag {
     name: String,
 }
 
-// TODO: actual error handling
-pub fn get_tags(repo: &str, owner: &str) -> Result<Tags, ()> {
-    let tags = query_tags(repo, owner).unwrap();
+#[derive(Debug)]
+struct TagVersion {
+    version: Version,
+    original: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct ForgeVersion {
+    version: String,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ForgeType {
+    GitHub,
+    Gitea, // Covers both Gitea and Forgejo
+    Unknown,
+}
+
+fn parse_forge_version(json: &str) -> Option<ForgeType> {
+    serde_json::from_str::<ForgeVersion>(json)
+        .ok()
+        .and_then(|v| {
+            if v.version.contains("+forgejo") || v.version.contains("+gitea") {
+                Some(ForgeType::Gitea)
+            } else {
+                None
+            }
+        })
+}
+
+// Test helpers are always available but not documented
+#[doc(hidden)]
+pub mod test_helpers {
+    use super::*;
+
+    pub fn parse_forge_version_test(json: &str) -> Option<ForgeType> {
+        parse_forge_version(json)
+    }
+}
+
+pub fn get_tags(repo: &str, owner: &str, domain: Option<&str>) -> Result<Tags, ApiError> {
+    let domain = domain.unwrap_or("github.com");
+    let client = ForgeClient::default();
+    let forge_type = client.detect_forge_type(domain);
+
+    tracing::debug!("Detected forge type for {}: {:?}", domain, forge_type);
+
+    let tags = match forge_type {
+        ForgeType::GitHub => client.query_github_tags(repo, owner)?,
+        ForgeType::Gitea => client.query_gitea_tags(repo, owner, domain)?,
+        ForgeType::Unknown => {
+            tracing::warn!("Unknown forge type for {}, trying Gitea API", domain);
+            client.query_gitea_tags(repo, owner, domain)?
+        }
+    };
+
     Ok(tags.into())
 }
 
@@ -47,13 +243,8 @@ struct NixConfig {
 }
 
 impl NixConfig {
-    fn gh_token(&self) -> Option<String> {
-        self.access_tokens
-            .clone()
-            .unwrap()
-            .value
-            .get("github.com")
-            .cloned()
+    fn forge_token(&self, domain: &str) -> Option<String> {
+        self.access_tokens.as_ref()?.value.get(domain).cloned()
     }
 }
 
@@ -62,97 +253,57 @@ struct AccessTokens {
     value: HashMap<String, String>,
 }
 
-// Try to query gh access tokens
-pub fn get_gh_token() -> Option<String> {
-    let command = Command::new("nix")
+fn get_forge_token(domain: &str) -> Option<String> {
+    // Try to get token from nix config
+    if let Ok(output) = Command::new("nix")
         .arg("config")
         .arg("show")
         .arg("--json")
         .output()
-        .unwrap();
-    let stdout = String::from_utf8(command.stdout).unwrap();
-    let output: NixConfig = serde_json::from_str(&stdout).unwrap();
+    {
+        if let Ok(stdout) = String::from_utf8(output.stdout) {
+            if let Ok(config) = serde_json::from_str::<NixConfig>(&stdout) {
+                if let Some(token) = config.forge_token(domain) {
+                    return Some(token);
+                }
+            }
+        }
+    }
 
-    if let Some(token) = output.gh_token() {
+    // Fallback to environment variables
+    if let Ok(token) = std::env::var("GITEA_TOKEN") {
         return Some(token);
-    };
-    if let Ok(token) = std::env::var("GITHUB_TOKEN") {
+    }
+    if let Ok(token) = std::env::var("FORGEJO_TOKEN") {
         return Some(token);
-    };
+    }
+    if domain == "github.com" {
+        if let Ok(token) = std::env::var("GITHUB_TOKEN") {
+            return Some(token);
+        }
+    }
 
     None
 }
 
-// https://api.github.com/repos/{OWNER}/{REPO}/tags
-// Query tags for github currently.
-// TODO: support other forges.
-fn query_tags(repo: &str, owner: &str) -> Result<IntermediaryTags, ()> {
-    let client = Client::new();
-    let mut headers = HeaderMap::new();
-    headers.insert(USER_AGENT, HeaderValue::from_str("flake-edit").unwrap());
-    if let Some(token) = get_gh_token() {
-        tracing::debug!("Found github token.");
-        headers.insert(
-            AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
-        );
-        tracing::debug!("Settings github token.");
-    }
-    let body = client
-        .get(format!(
-            "https://api.github.com/repos/{}/{}/tags",
-            repo, owner
-        ))
-        .headers(headers)
-        .send()
-        .unwrap()
-        .text()
-        .unwrap();
-
-    tracing::debug!("Body from api: {body}");
-
-    match serde_json::from_str::<IntermediaryTags>(&body) {
-        Ok(tags) => Ok(tags),
-        Err(e) => {
-            tracing::error!("Error from api: {e}");
-            Err(())
-        }
-    }
-}
-
 impl From<IntermediaryTags> for Tags {
     fn from(value: IntermediaryTags) -> Self {
-        fn strip_until_char(s: &str, c: char) -> Option<(String, String)> {
-            s.find(c).map(|index| {
-                let prefix = s[..index].to_string();
-                let remaining = s[index + 1..].to_string();
-                (prefix, remaining)
-            })
-        }
         let mut versions = vec![];
-        let mut prefix = String::new();
         for itag in value.0 {
-            let mut tag = itag.name;
-            // TODO: implement a generic way to find the version prefixes
-            if let Some(new_tag) = tag.strip_prefix('v') {
-                tag = new_tag.to_string();
-                prefix = "v".to_string();
-            }
-
-            if let Some((new_prefix, new_tag)) = strip_until_char(&tag, '-') {
-                tag = new_tag;
-                prefix = format!("{new_prefix}-").to_string();
-            }
-
-            match Version::parse(&tag) {
+            let parsed = parse_ref(&itag.name, false);
+            let normalized = parsed.normalized_for_semver;
+            match Version::parse(&normalized) {
                 Ok(semver) => {
-                    versions.push(semver);
+                    versions.push(TagVersion {
+                        version: semver,
+                        original: parsed.original_ref,
+                    });
                 }
                 Err(e) => {
                     tracing::error!("Could not parse version {:?}", e);
                 }
             }
         }
-        Tags { versions, prefix }
+        Tags { versions }
     }
 }

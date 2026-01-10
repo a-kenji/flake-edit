@@ -4,6 +4,8 @@ use std::cmp::Ordering;
 
 use crate::edit::InputMap;
 use crate::input::Input;
+use crate::uri::{extract_domain_owner_repo, is_git_url};
+use crate::version::parse_ref;
 
 #[derive(Default, Debug)]
 pub struct Updater {
@@ -13,7 +15,271 @@ pub struct Updater {
     offset: i32,
 }
 
+#[derive(Debug)]
+struct RefSource {
+    maybe_version: String,
+    is_params: bool,
+    is_github: bool,
+}
+
+enum UpdateTarget {
+    GitUrl {
+        uri: String,
+        owner: String,
+        repo: String,
+        domain: String,
+        parsed_ref: crate::version::ParsedRef,
+    },
+    ForgeRef {
+        parsed: Box<FlakeRef>,
+        owner: String,
+        repo: String,
+        ref_source: RefSource,
+        parsed_ref: crate::version::ParsedRef,
+    },
+}
+
 impl Updater {
+    fn print_update_status(id: &str, previous_version: &str, final_change: &str) -> bool {
+        let is_up_to_date = previous_version == final_change;
+        let initialized = previous_version.is_empty();
+
+        if is_up_to_date {
+            println!(
+                "{} is already on the latest version: {previous_version}.",
+                id
+            );
+            return false;
+        }
+
+        if initialized {
+            println!("Initialized {} version pin at {final_change}.", id);
+        } else {
+            println!("Updated {} from {previous_version} to {final_change}.", id);
+        }
+
+        true
+    }
+    fn ref_source_from_uri(uri: &str, parsed: Option<&FlakeRef>) -> RefSource {
+        if is_git_url(uri) {
+            let mut maybe_version = String::new();
+            let mut is_params = false;
+
+            if let Some(query) = uri.split('?').nth(1) {
+                for param in query.split('&') {
+                    if let Some(ref_value) = param.strip_prefix("ref=") {
+                        maybe_version = ref_value.to_string();
+                        is_params = true;
+                        break;
+                    }
+                }
+            }
+
+            return RefSource {
+                maybe_version,
+                is_params,
+                is_github: false,
+            };
+        }
+
+        let parsed = match parsed {
+            Some(parsed) => parsed,
+            None => {
+                return RefSource {
+                    maybe_version: String::new(),
+                    is_params: false,
+                    is_github: false,
+                };
+            }
+        };
+
+        let mut maybe_version = String::new();
+        let is_github = matches!(&parsed.r#type, nix_uri::FlakeRefType::GitHub { .. });
+
+        if let nix_uri::FlakeRefType::GitHub {
+            ref_or_rev: Some(ref_or_rev),
+            ..
+        } = &parsed.r#type
+        {
+            maybe_version = ref_or_rev.into();
+        }
+
+        let is_params = parsed.params.get_ref().is_some();
+        if let Some(r#ref) = &parsed.params.get_ref() {
+            maybe_version = r#ref.to_string();
+        }
+
+        RefSource {
+            maybe_version,
+            is_params,
+            is_github,
+        }
+    }
+
+    fn parse_update_target(&self, input: &UpdateInput, init: bool) -> Option<UpdateTarget> {
+        let uri = self.get_input_text(input);
+        let is_git_url = is_git_url(&uri);
+
+        if is_git_url {
+            // Extract the location part (before query parameters)
+            let location = uri
+                .strip_prefix("git+https://")
+                .or_else(|| uri.strip_prefix("git+http://"))?;
+            let location = location.split('?').next().unwrap_or(location);
+            let (domain, owner, repo) = extract_domain_owner_repo(location)?;
+
+            let ref_source = Self::ref_source_from_uri(&uri, None);
+            let parsed_ref = parse_ref(&ref_source.maybe_version, init);
+
+            if !init {
+                if let Err(e) = semver::Version::parse(&parsed_ref.normalized_for_semver) {
+                    tracing::debug!(
+                        "Skip non semver version: {}: {}",
+                        ref_source.maybe_version,
+                        e
+                    );
+                    return None;
+                }
+            }
+
+            return Some(UpdateTarget::GitUrl {
+                uri,
+                owner,
+                repo,
+                domain,
+                parsed_ref,
+            });
+        }
+
+        let parsed = match uri.parse::<FlakeRef>() {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                tracing::error!("{}", e);
+                return None;
+            }
+        };
+
+        let ref_source = Self::ref_source_from_uri(&uri, Some(&parsed));
+        let parsed_ref = parse_ref(&ref_source.maybe_version, false);
+
+        if !init {
+            if let Err(e) = semver::Version::parse(&parsed_ref.normalized_for_semver) {
+                tracing::debug!(
+                    "Skip non semver version: {}: {}",
+                    ref_source.maybe_version,
+                    e
+                );
+                return None;
+            }
+        }
+
+        let owner = match parsed.r#type.get_owner() {
+            Some(o) => o,
+            None => {
+                tracing::debug!("Skipping input without owner");
+                return None;
+            }
+        };
+
+        let repo = match parsed.r#type.get_repo() {
+            Some(r) => r,
+            None => {
+                tracing::debug!("Skipping input without repo");
+                return None;
+            }
+        };
+
+        Some(UpdateTarget::ForgeRef {
+            parsed: Box::new(parsed),
+            owner,
+            repo,
+            ref_source,
+            parsed_ref,
+        })
+    }
+
+    fn fetch_tags(&self, target: &UpdateTarget) -> Option<crate::api::Tags> {
+        match target {
+            UpdateTarget::GitUrl {
+                owner,
+                repo,
+                domain,
+                ..
+            } => match crate::api::get_tags(repo, owner, Some(domain)) {
+                Ok(tags) => Some(tags),
+                Err(_) => {
+                    tracing::error!("Failed to fetch tags for {}/{} on {}", owner, repo, domain);
+                    None
+                }
+            },
+            UpdateTarget::ForgeRef { owner, repo, .. } => {
+                match crate::api::get_tags(repo, owner, None) {
+                    Ok(tags) => Some(tags),
+                    Err(_) => {
+                        tracing::error!("Failed to fetch tags for {}/{}", owner, repo);
+                        None
+                    }
+                }
+            }
+        }
+    }
+
+    fn apply_update(
+        &mut self,
+        input: &UpdateInput,
+        target: &UpdateTarget,
+        mut tags: crate::api::Tags,
+        init: bool,
+    ) {
+        tags.sort();
+        if let Some(change) = tags.get_latest_tag() {
+            let (final_change, previous_ref, updated_uri) = match target {
+                UpdateTarget::GitUrl {
+                    uri, parsed_ref, ..
+                } => {
+                    let final_change = if parsed_ref.has_refs_tags_prefix {
+                        format!("refs/tags/{}", change)
+                    } else {
+                        change.clone()
+                    };
+                    let base_url = uri.split('?').next().unwrap_or(uri);
+                    let updated_uri = format!("{}?ref={}", base_url, final_change);
+                    (final_change, parsed_ref.previous_ref.as_str(), updated_uri)
+                }
+                UpdateTarget::ForgeRef {
+                    parsed,
+                    ref_source,
+                    parsed_ref,
+                    ..
+                } => {
+                    let final_change = if parsed_ref.has_refs_tags_prefix {
+                        format!("refs/tags/{}", change)
+                    } else {
+                        change.clone()
+                    };
+                    let mut parsed = parsed.clone();
+                    if ref_source.is_github && !ref_source.is_params && !init {
+                        let _ = parsed.r#type.ref_or_rev(Some(final_change.to_string()));
+                    } else {
+                        let _ = parsed.params.r#ref(Some(final_change.to_string()));
+                    }
+                    (
+                        final_change,
+                        parsed_ref.previous_ref.as_str(),
+                        parsed.to_string(),
+                    )
+                }
+            };
+
+            if !Self::print_update_status(&input.input.id, previous_ref, &final_change) {
+                return;
+            }
+
+            self.update_input(input.clone(), &updated_uri);
+        } else {
+            tracing::error!("Could not find latest version for Input: {:?}", input);
+        }
+    }
     pub fn new(text: Rope, map: InputMap) -> Self {
         let mut inputs = vec![];
         for (_id, input) in map {
@@ -112,106 +378,17 @@ impl Updater {
     }
     /// Query a forge api for the latest release and update, if necessary.
     pub fn query_and_update_all_inputs(&mut self, input: &UpdateInput, init: bool) {
-        fn strip_until_char(s: &str, c: char) -> Option<String> {
-            s.find(c).map(|index| s[index + 1..].to_string())
-        }
-        let uri = self
-            .text
-            .slice(
-                ((input.input.range.start as i32) + 1 + self.offset) as usize
-                    ..((input.input.range.end as i32) + self.offset - 1) as usize,
-            )
-            .to_string();
-        match uri.parse::<FlakeRef>() {
-            Ok(mut parsed) => {
-                let mut maybe_version = String::new();
-                let mut previous_version = String::new();
-                let is_params = &parsed.params.get_ref().is_some();
+        let target = match self.parse_update_target(input, init) {
+            Some(target) => target,
+            None => return,
+        };
 
-                if let nix_uri::FlakeRefType::GitHub {
-                    ref_or_rev: Some(ref_or_rev),
-                    ..
-                } = &parsed.r#type
-                {
-                    maybe_version = ref_or_rev.into();
-                }
+        let tags = match self.fetch_tags(&target) {
+            Some(tags) => tags,
+            None => return,
+        };
 
-                if let Some(r#ref) = &parsed.params.get_ref() {
-                    maybe_version = r#ref.to_string();
-                }
-
-                if let Some(normalized_version) = maybe_version.strip_prefix('v') {
-                    previous_version = maybe_version.to_string();
-                    maybe_version = normalized_version.to_string();
-                }
-
-                if let Some(normalized_version) = strip_until_char(&maybe_version, '-') {
-                    previous_version = maybe_version.to_string();
-                    maybe_version = normalized_version.to_string();
-                }
-
-                if previous_version.is_empty() {
-                    previous_version = maybe_version.to_string();
-                }
-
-                // If we init the version specifier we don't care if there was already a
-                // correct semver specified, we automatically pin to the latest semver.
-                if !init {
-                    let _version = match semver::Version::parse(&maybe_version) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            tracing::debug!("Skip non semver version: {maybe_version}: {e}");
-                            return;
-                        }
-                    };
-                }
-
-                let flake_type = &parsed.r#type;
-                let mut tags = crate::api::get_tags(
-                    &flake_type.get_owner().unwrap(),
-                    &flake_type.get_repo().unwrap(),
-                )
-                .unwrap();
-
-                tags.sort();
-                if let Some(change) = tags.get_latest_tag() {
-                    let is_up_to_date = previous_version == change;
-                    let initialized = previous_version.is_empty();
-                    let print_update_message = || {
-                        if initialized {
-                            println!("Initialized {} version pin at {change}.", input.input.id);
-                        } else {
-                            println!(
-                                "Updated {} from {previous_version} to {change}.",
-                                input.input.id
-                            );
-                        }
-                    };
-
-                    if is_up_to_date {
-                        println!(
-                            "{} is already on the latest version: {previous_version}.",
-                            input.input.id
-                        );
-                        return;
-                    }
-                    if *is_params || init {
-                        print_update_message();
-                        let _ = parsed.params.r#ref(Some(change.to_string()));
-                    } else {
-                        print_update_message();
-                        let _ = parsed.r#type.ref_or_rev(Some(change.to_string()));
-                    }
-                } else {
-                    tracing::error!("Could not find latest version for Input: {:?}", input);
-                }
-
-                self.update_input(input.clone(), &parsed.to_string());
-            }
-            Err(e) => {
-                tracing::error!("{}", e);
-            }
-        }
+        self.apply_update(input, &target, tags, init);
     }
 
     // Sort the entries, so that we can adjust multiple values together
