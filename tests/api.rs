@@ -1,6 +1,6 @@
 use flake_edit::api::test_helpers::*;
 use flake_edit::api::{ForgeType, IntermediaryTags, Tags};
-use flake_edit::uri::extract_domain_owner_repo_test;
+use nix_uri::FlakeRef;
 
 #[test]
 fn test_parse_forge_version_forgejo() {
@@ -37,111 +37,69 @@ fn test_parse_forge_version_malformed_json() {
     assert_eq!(result, None);
 }
 
+// URL parsing tests using nix-uri
 #[test]
 fn test_extract_domain_owner_repo_basic() {
-    let location = "codeberg.org/forgejo/forgejo";
-    let result = extract_domain_owner_repo_test(location);
-    assert_eq!(
-        result,
-        Some((
-            "codeberg.org".to_string(),
-            "forgejo".to_string(),
-            "forgejo".to_string()
-        ))
-    );
+    let url = "git+https://codeberg.org/forgejo/forgejo";
+    let parsed: FlakeRef = url.parse().unwrap();
+    assert_eq!(parsed.r#type.get_domain(), Some("codeberg.org".to_string()));
+    assert_eq!(parsed.r#type.get_owner(), Some("forgejo".to_string()));
+    assert_eq!(parsed.r#type.get_repo(), Some("forgejo".to_string()));
 }
 
 #[test]
 fn test_extract_domain_owner_repo_with_git_suffix() {
-    let location = "gitea.example.com/owner/repo.git";
-    let result = extract_domain_owner_repo_test(location);
+    let url = "git+https://gitea.example.com/owner/repo.git";
+    let parsed: FlakeRef = url.parse().unwrap();
     assert_eq!(
-        result,
-        Some((
-            "gitea.example.com".to_string(),
-            "owner".to_string(),
-            "repo".to_string()
-        ))
+        parsed.r#type.get_domain(),
+        Some("gitea.example.com".to_string())
     );
+    assert_eq!(parsed.r#type.get_owner(), Some("owner".to_string()));
+    assert_eq!(parsed.r#type.get_repo(), Some("repo".to_string()));
 }
 
 #[test]
 fn test_extract_domain_owner_repo_subdomain() {
-    let location = "git.example.com/myorg/myrepo";
-    let result = extract_domain_owner_repo_test(location);
+    let url = "git+https://git.example.com/myorg/myrepo";
+    let parsed: FlakeRef = url.parse().unwrap();
     assert_eq!(
-        result,
-        Some((
-            "git.example.com".to_string(),
-            "myorg".to_string(),
-            "myrepo".to_string()
-        ))
+        parsed.r#type.get_domain(),
+        Some("git.example.com".to_string())
     );
+    assert_eq!(parsed.r#type.get_owner(), Some("myorg".to_string()));
+    assert_eq!(parsed.r#type.get_repo(), Some("myrepo".to_string()));
 }
 
 #[test]
 fn test_extract_domain_owner_repo_invalid_too_short() {
-    let location = "example.com/owner";
-    let result = extract_domain_owner_repo_test(location);
-    assert_eq!(result, None);
-}
-
-#[test]
-fn test_extract_domain_owner_repo_invalid_one_part() {
-    let location = "invalid";
-    let result = extract_domain_owner_repo_test(location);
-    assert_eq!(result, None);
-}
-
-#[test]
-fn test_extract_domain_owner_repo_with_extra_path() {
-    // Should only extract first three parts
-    let location = "example.com/owner/repo/extra/path";
-    let result = extract_domain_owner_repo_test(location);
-    // The current implementation takes exactly 3 parts
-    assert_eq!(
-        result,
-        Some((
-            "example.com".to_string(),
-            "owner".to_string(),
-            "repo".to_string()
-        ))
-    );
+    let url = "git+https://example.com/owner";
+    let parsed: FlakeRef = url.parse().unwrap();
+    // Should have domain and owner but no repo
+    assert_eq!(parsed.r#type.get_domain(), Some("example.com".to_string()));
+    assert_eq!(parsed.r#type.get_owner(), Some("owner".to_string()));
+    assert_eq!(parsed.r#type.get_repo(), None);
 }
 
 #[test]
 fn test_extract_domain_owner_repo_localhost() {
-    let location = "localhost:3000/test/project";
-    let result = extract_domain_owner_repo_test(location);
+    let url = "git+https://localhost:3000/test/project";
+    let parsed: FlakeRef = url.parse().unwrap();
     assert_eq!(
-        result,
-        Some((
-            "localhost:3000".to_string(),
-            "test".to_string(),
-            "project".to_string()
-        ))
+        parsed.r#type.get_domain(),
+        Some("localhost:3000".to_string())
     );
+    assert_eq!(parsed.r#type.get_owner(), Some("test".to_string()));
+    assert_eq!(parsed.r#type.get_repo(), Some("project".to_string()));
 }
 
 #[test]
 fn test_extract_domain_owner_repo_ip_address() {
-    let location = "192.168.1.1/owner/repo";
-    let result = extract_domain_owner_repo_test(location);
-    assert_eq!(
-        result,
-        Some((
-            "192.168.1.1".to_string(),
-            "owner".to_string(),
-            "repo".to_string()
-        ))
-    );
-}
-
-#[test]
-fn test_extract_domain_owner_repo_empty_string() {
-    let location = "";
-    let result = extract_domain_owner_repo_test(location);
-    assert_eq!(result, None);
+    let url = "git+https://192.168.1.1/owner/repo";
+    let parsed: FlakeRef = url.parse().unwrap();
+    assert_eq!(parsed.r#type.get_domain(), Some("192.168.1.1".to_string()));
+    assert_eq!(parsed.r#type.get_owner(), Some("owner".to_string()));
+    assert_eq!(parsed.r#type.get_repo(), Some("repo".to_string()));
 }
 
 // Tag parsing tests
