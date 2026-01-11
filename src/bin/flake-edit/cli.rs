@@ -82,6 +82,9 @@ pub(crate) enum Command {
         /// The input itself is not a flake.
         #[arg(long, short)]
         no_flake: bool,
+        /// Use shallow clone for the input.
+        #[arg(long, short)]
+        shallow: bool,
     },
     /// Remove a specific flake reference based on its id.
     #[clap(alias = "rm")]
@@ -97,6 +100,9 @@ pub(crate) enum Command {
         #[arg(long)]
         /// Pin to a specific ref_or_rev
         ref_or_rev: Option<String>,
+        /// Use shallow clone for the input.
+        #[arg(long, short)]
+        shallow: bool,
     },
     /// List flake inputs
     #[clap(alias = "l")]

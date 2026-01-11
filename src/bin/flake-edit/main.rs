@@ -46,8 +46,9 @@ fn main() -> eyre::Result<()> {
             ref_or_rev,
             id,
             no_flake,
+            shallow,
         } => {
-            let apply_ref_or_rev = |mut flake_ref: FlakeRef| -> eyre::Result<FlakeRef> {
+            let apply_uri_options = |mut flake_ref: FlakeRef| -> eyre::Result<FlakeRef> {
                 if let Some(ror) = ref_or_rev {
                     flake_ref.r#type.ref_or_rev(Some(ror.clone())).map_err(|e| {
                         eyre::eyre!("Cannot apply --ref-or-rev: {}", e).suggestion(
@@ -55,16 +56,19 @@ fn main() -> eyre::Result<()> {
                         )
                     })?;
                 }
+                if *shallow {
+                    flake_ref.params.set_shallow(Some("1".to_string()));
+                }
                 Ok(flake_ref)
             };
 
             if id.is_some() && uri.is_some() {
                 let uri_str = uri.clone().unwrap();
-                let final_uri = if ref_or_rev.is_some() {
+                let final_uri = if ref_or_rev.is_some() || *shallow {
                     let flake_ref: FlakeRef = uri_str
                         .parse()
                         .map_err(|e| eyre::eyre!("Failed to parse URI: {}", e))?;
-                    apply_ref_or_rev(flake_ref)?.to_string()
+                    apply_uri_options(flake_ref)?.to_string()
                 } else {
                     uri_str
                 };
@@ -78,7 +82,7 @@ fn main() -> eyre::Result<()> {
                 let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(uri);
                 tracing::debug!("The parsed flake reference is: {flake_ref:?}");
                 if let Ok(flake_ref) = flake_ref {
-                    let flake_ref = apply_ref_or_rev(flake_ref)?;
+                    let flake_ref = apply_uri_options(flake_ref)?;
                     let uri = if flake_ref.to_string().is_empty() {
                         uri.clone()
                     } else {
@@ -116,8 +120,9 @@ fn main() -> eyre::Result<()> {
             uri,
             ref_or_rev,
             id,
+            shallow,
         } => {
-            let apply_ref_or_rev = |mut flake_ref: FlakeRef| -> eyre::Result<FlakeRef> {
+            let apply_uri_options = |mut flake_ref: FlakeRef| -> eyre::Result<FlakeRef> {
                 if let Some(ror) = ref_or_rev {
                     flake_ref.r#type.ref_or_rev(Some(ror.clone())).map_err(|e| {
                         eyre::eyre!("Cannot apply --ref-or-rev: {}", e).suggestion(
@@ -125,16 +130,19 @@ fn main() -> eyre::Result<()> {
                         )
                     })?;
                 }
+                if *shallow {
+                    flake_ref.params.set_shallow(Some("1".to_string()));
+                }
                 Ok(flake_ref)
             };
 
             if id.is_some() && uri.is_some() {
                 let uri_str = uri.clone().unwrap();
-                let final_uri = if ref_or_rev.is_some() {
+                let final_uri = if ref_or_rev.is_some() || *shallow {
                     let flake_ref: FlakeRef = uri_str
                         .parse()
                         .map_err(|e| eyre::eyre!("Failed to parse URI: {}", e))?;
-                    apply_ref_or_rev(flake_ref)?.to_string()
+                    apply_uri_options(flake_ref)?.to_string()
                 } else {
                     uri_str
                 };
@@ -148,7 +156,7 @@ fn main() -> eyre::Result<()> {
                 let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(uri);
                 tracing::debug!("The parsed flake reference is: {flake_ref:?}");
                 if let Ok(flake_ref) = flake_ref {
-                    let flake_ref = apply_ref_or_rev(flake_ref)?;
+                    let flake_ref = apply_uri_options(flake_ref)?;
                     let uri = if flake_ref.to_string().is_empty() {
                         uri.clone()
                     } else {
