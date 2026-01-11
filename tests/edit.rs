@@ -598,6 +598,140 @@ fn first_nested_node_inputs() {
         insta::assert_yaml_snapshot!(walker.inputs);
     });
 }
+
+#[test]
+fn root_change_nested_input_url() {
+    let (flake, _lock) = load_fixtures("root");
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let change = Change::Change {
+        id: Some("rust-overlay".to_owned()),
+        uri: Some("github:oxalica/rust-overlay/v1.0.0".to_owned()),
+        ref_or_rev: None,
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+
+#[test]
+fn root_change_flat_input_url() {
+    let (flake, _lock) = load_fixtures("root");
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let change = Change::Change {
+        id: Some("nixpkgs".to_owned()),
+        uri: Some("github:nixos/nixpkgs/nixos-24.05".to_owned()),
+        ref_or_rev: None,
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+
+#[test]
+fn root_change_nonexistent_input_error() {
+    let (flake, _lock) = load_fixtures("root");
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let change = Change::Change {
+        id: Some("nonexistent".to_owned()),
+        uri: Some("github:foo/bar".to_owned()),
+        ref_or_rev: None,
+    };
+    let result = flake_edit.apply_change(change);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("not found"));
+}
+
+#[test]
+fn completely_flat_toplevel_change_url() {
+    let (flake, _lock) = load_fixtures("completely_flat_toplevel");
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let change = Change::Change {
+        id: Some("nixpkgs".to_owned()),
+        uri: Some("github:nixos/nixpkgs/nixos-24.05".to_owned()),
+        ref_or_rev: None,
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+
+#[test]
+fn completely_flat_toplevel_change_rust_overlay_url() {
+    let (flake, _lock) = load_fixtures("completely_flat_toplevel");
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let change = Change::Change {
+        id: Some("rust-overlay".to_owned()),
+        uri: Some("github:oxalica/rust-overlay/v1.0.0".to_owned()),
+        ref_or_rev: None,
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+
+#[test]
+fn first_nested_node_change_url() {
+    let (flake, _lock) = load_fixtures("first_nested_node");
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let change = Change::Change {
+        id: Some("naersk".to_owned()),
+        uri: Some("github:nix-community/naersk/v1.0.0".to_owned()),
+        ref_or_rev: None,
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+
+#[test]
+fn first_nested_node_change_flat_input_url() {
+    let (flake, _lock) = load_fixtures("first_nested_node");
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let change = Change::Change {
+        id: Some("nixpkgs".to_owned()),
+        uri: Some("github:NixOS/nixpkgs/nixos-24.05".to_owned()),
+        ref_or_rev: None,
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+
+#[test]
+fn one_level_nesting_flat_change_url() {
+    let (flake, _lock) = load_fixtures("one_level_nesting_flat");
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let change = Change::Change {
+        id: Some("nixpkgs".to_owned()),
+        uri: Some("github:nixos/nixpkgs/nixos-24.05".to_owned()),
+        ref_or_rev: None,
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+
+#[test]
+fn flat_nested_flat_change_url() {
+    let (flake, _lock) = load_fixtures("flat_nested_flat");
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let change = Change::Change {
+        id: Some("nixpkgs".to_owned()),
+        uri: Some("github:nixos/nixpkgs/nixos-24.05".to_owned()),
+        ref_or_rev: None,
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
 // #[test]
 // fn root_alt_add_toplevel_id_uri() {
 //     let (flake, _lock) = load_fixtures("root_alt");

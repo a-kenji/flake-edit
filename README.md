@@ -10,9 +10,10 @@
     - [`$ flake-edit add`](#-flake-edit-add)
     - [`$ flake-edit remove`](#-flake-edit-remove)
     - [`$ flake-edit update`](#-flake-edit-update)
-    - [`$ flake-edit list`](#-flake-edit-list)
+    - [`$ flake-edit change`](#-flake-edit-change)
     - [`$ flake-edit pin`](#-flake-edit-pin)
     - [`$ flake-edit unpin`](#-flake-edit-unpin)
+    - [`$ flake-edit list`](#-flake-edit-list)
   - [As a library](#as-a-library)
   - [Status](#status)
   - [License](#license)
@@ -34,6 +35,8 @@ Commands:
           Add a new flake reference
   remove
           Remove a specific flake reference based on its id
+  change
+          Change an existing flake reference's URI
   list
           List flake inputs
   update
@@ -126,24 +129,27 @@ Options:
 
 ![flake-edit update example](https://vhs.charm.sh/vhs-289dZ9Y9cAYRkdSWtd4hT6.gif)
 
-### `$ flake-edit list`
-<!-- `$ flake-edit help list` -->
+### `$ flake-edit change`
+<!-- `$ flake-edit help change` -->
 
 ```
-List flake inputs
+Change an existing flake reference's URI
 
-Usage: flake-edit list [OPTIONS]
+Usage: flake-edit change [OPTIONS] [ID] [URI]
+
+Arguments:
+  [ID]
+          The name of an existing input attribute
+  [URI]
+          The new URI for the input
 
 Options:
-      --format <FORMAT>
-          [default: detailed]
+      --ref-or-rev <REF_OR_REV>
+          Pin to a specific ref_or_rev
   -h, --help
           Print help
 ```
-List the outputs, that are specified inside the inputs attribute.
-![flake-edit list example](https://vhs.charm.sh/vhs-2ZSgdhkzBe3eoxuYtM1JL6.gif)
-List the outputs, that are specified inside the inputs attribute, in json format.
-![flake-edit list example](https://vhs.charm.sh/vhs-35E6eiL63lFTSC70rQyE1Y.gif)
+![flake-edit change example](https://vhs.charm.sh/vhs-7C7FrGVs2mCNIvQmPiNQfL.gif)
 
 ### `$ flake-edit pin`
 <!-- `$ flake-edit help pin` -->
@@ -183,6 +189,25 @@ Options:
           Print help
 ```
 ![flake-edit unpin example](https://vhs.charm.sh/vhs-G8Eo84Ysjpt5c09Q9VD4u.gif)
+
+### `$ flake-edit list`
+<!-- `$ flake-edit help list` -->
+
+```
+List flake inputs
+
+Usage: flake-edit list [OPTIONS]
+
+Options:
+      --format <FORMAT>
+          [default: detailed]
+  -h, --help
+          Print help
+```
+List the outputs, that are specified inside the inputs attribute.
+![flake-edit list example](https://vhs.charm.sh/vhs-2ZSgdhkzBe3eoxuYtM1JL6.gif)
+List the outputs, that are specified inside the inputs attribute, in json format.
+![flake-edit list example](https://vhs.charm.sh/vhs-35E6eiL63lFTSC70rQyE1Y.gif)
 
 
 ## As a library
