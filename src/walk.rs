@@ -68,12 +68,24 @@ pub struct Context {
 }
 
 impl Context {
-    fn new(level: Vec<String>) -> Self {
-        Self { level }
+    /// Returns the first (top) level of context, if any.
+    pub fn first(&self) -> Option<&str> {
+        self.level.first().map(|s| s.as_str())
     }
 
-    pub fn level(&self) -> Vec<String> {
-        self.level.clone()
+    /// Returns true if the first level matches the given string.
+    pub fn first_matches(&self, s: &str) -> bool {
+        self.first() == Some(s)
+    }
+
+    pub fn level(&self) -> &[String] {
+        &self.level
+    }
+}
+
+impl From<String> for Context {
+    fn from(s: String) -> Self {
+        Self { level: vec![s] }
     }
 }
 
@@ -105,7 +117,7 @@ impl<'a> Walker {
 
         if let Some(ctx) = ctx {
             // TODO: add more nesting
-            if let Some(follows) = ctx.level.first() {
+            if let Some(follows) = ctx.first() {
                 if let Some(node) = self.inputs.get_mut(follows) {
                     // TODO: only indirect follows is handled
                     node.follows
@@ -543,8 +555,7 @@ impl<'a> Walker {
                                                 return Some(empty_node());
                                             }
                                             if let Some(ctx) = ctx
-                                                && *ctx.level.first().unwrap()
-                                                    == next_sibling.to_string()
+                                                && ctx.first_matches(&next_sibling.to_string())
                                             {
                                                 return Some(empty_node());
                                             }
@@ -579,8 +590,7 @@ impl<'a> Walker {
                                                 return Some(empty_node());
                                             }
                                             if let Some(ctx) = ctx
-                                                && *ctx.level.first().unwrap()
-                                                    == next_sibling.to_string()
+                                                && ctx.first_matches(&next_sibling.to_string())
                                             {
                                                 return Some(empty_node());
                                             }
@@ -631,7 +641,7 @@ impl<'a> Walker {
                                     }
                                     tracing::debug!("Nested input attr binding: {}", binding);
                                 }
-                                let context = Context::new(vec![next_sibling.to_string()]);
+                                let context = next_sibling.to_string().into();
                                 tracing::debug!(
                                     "Walking inputs with: {attr}, context: {context:?}"
                                 );
@@ -672,7 +682,7 @@ impl<'a> Walker {
         if child.to_string().starts_with("inputs") {
             let child_node = child.as_node().unwrap();
             let id = child_node.next_sibling().unwrap();
-            let context = Context::new(vec![id.to_string()]);
+            let context = id.to_string().into();
             tracing::debug!("Walking inputs with: {child}, context: {context:?}");
             if let Some(_replacement) = self.walk_inputs(child_node.clone(), &Some(context), change)
             {
@@ -720,7 +730,7 @@ impl<'a> Walker {
                     .find(|child| child.to_string() == "inputs")
                     .and_then(|input_child| input_child.prev_sibling())
             });
-            maybe_input_id.map(|id| Context::new(vec![id.to_string()]))
+            maybe_input_id.map(|id| id.to_string().into())
         } else {
             ctx.clone()
         };
@@ -801,9 +811,7 @@ impl<'a> Walker {
             .find(|child| child.to_string() == "inputs")
             .and_then(|input_child| input_child.next_sibling());
 
-        let ctx = maybe_input_id
-            .clone()
-            .map(|id| Context::new(vec![id.to_string()]));
+        let ctx = maybe_input_id.clone().map(|id| id.to_string().into());
 
         let mut input = Input::new(follows_id.to_string());
         input.url = node.next_sibling().unwrap().to_string();
@@ -1078,7 +1086,7 @@ impl<'a> Walker {
 
                 if leaf.to_string().starts_with("inputs") {
                     let id = child.prev_sibling().unwrap();
-                    let context = Context::new(vec![id.to_string()]);
+                    let context = id.to_string().into();
                     tracing::debug!("Walking inputs with: {attr}, context: {context:?}");
                     if let Some(replacement) =
                         self.walk_inputs(child.clone(), &Some(context), change)
