@@ -2,7 +2,7 @@
 name = "flake-edit"
 description = "Edit your flake inputs with ease."
 version = "0.3.0"
-edition = "2021"
+edition = "2024"
 keywords = ["nix", "flake", "terminal", "cli"]
 categories = ["command-line-utilities"]
 
@@ -19,7 +19,6 @@ include = ["src/**/*", "LICENSE", "README.md", "build.rs"]
 name = "flake-edit"
 
 [workspace]
-resolver = "2"
 members = ["."]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
