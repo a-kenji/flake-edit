@@ -104,4 +104,13 @@ impl Change {
     pub fn is_add(&self) -> bool {
         matches!(self, Change::Add { .. })
     }
+    pub fn is_change(&self) -> bool {
+        matches!(self, Change::Change { .. })
+    }
+    pub fn uri(&self) -> Option<&String> {
+        match self {
+            Change::Change { uri, .. } | Change::Add { uri, .. } => uri.as_ref(),
+            _ => None,
+        }
+    }
 }

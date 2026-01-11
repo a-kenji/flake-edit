@@ -58,7 +58,7 @@ Require echo
 
 Set Shell "fish"
 Set FontSize 32
-Set Width 1200
+Set Width 1300
 Set Height 600
 
 Hide

@@ -631,6 +631,25 @@ impl<'a> Walker {
                                                             return Some(replacement);
                                                         }
                                                     }
+                                                    if let Change::Change {
+                                                        id: Some(change_id),
+                                                        uri: Some(new_uri),
+                                                        ..
+                                                    } = change
+                                                        && *change_id == next_sibling.to_string()
+                                                    {
+                                                        tracing::debug!(
+                                                            "Changing URL for {change_id} to {new_uri} (toplevel flat style)"
+                                                        );
+                                                        // Return just the new URL - the caller will replace
+                                                        // the old URL value with this
+                                                        let new_url = Root::parse(&format!(
+                                                            "\"{}\"",
+                                                            new_uri
+                                                        ))
+                                                        .syntax();
+                                                        return Some(new_url);
+                                                    }
                                                 }
                                             } else if url_id.to_string() == "flake" {
                                                 if let Some(is_flake) = child
@@ -846,6 +865,21 @@ impl<'a> Walker {
                                 let empty = Root::parse("").syntax();
                                 return Some(empty);
                             }
+                            if let Change::Change { id, uri, .. } = change
+                                && let Some(id) = id
+                                && *id == prev_id.to_string()
+                                && let Some(uri) = uri
+                            {
+                                tracing::debug!("Changing URL for {id} to {uri}");
+                                if let Some(url_node) = child.next_sibling() {
+                                    let new_url = Root::parse(&format!("\"{}\"", uri)).syntax();
+                                    let green = node
+                                        .green()
+                                        .replace_child(url_node.index(), new_url.green().into());
+                                    let replacement = Root::parse(&green.to_string()).syntax();
+                                    return Some(replacement);
+                                }
+                            }
                             if let Some(sibling) = child.next_sibling() {
                                 tracing::debug!("This is an url from {} - {}", prev_id, sibling);
                                 let mut input = Input::new(prev_id.to_string());
@@ -987,6 +1021,32 @@ impl<'a> Walker {
                                 tracing::debug!("Removing: {id}");
                                 let empty = Root::parse("").syntax();
                                 return Some(empty);
+                            }
+                            if let Change::Change {
+                                id: Some(change_id),
+                                uri: Some(new_uri),
+                                ..
+                            } = change
+                                && *change_id == id.to_string()
+                            {
+                                tracing::debug!(
+                                    "Changing URL for {change_id} to {new_uri} (nested style)"
+                                );
+                                let new_url = Root::parse(&format!("\"{}\"", new_uri)).syntax();
+                                let green = attr.green().replace_child(
+                                    leaf.next_sibling().unwrap().index(),
+                                    new_url.green().into(),
+                                );
+                                let new_attr = Root::parse(&green.to_string()).syntax();
+                                let green = child
+                                    .green()
+                                    .replace_child(attr.index(), new_attr.green().into());
+                                let new_child = Root::parse(&green.to_string()).syntax();
+                                let green = node
+                                    .green()
+                                    .replace_child(child.index(), new_child.green().into());
+                                let replacement = Root::parse(&green.to_string()).syntax();
+                                return Some(replacement);
                             }
                         }
                         if leaf.to_string().starts_with("inputs") {

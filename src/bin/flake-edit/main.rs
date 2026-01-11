@@ -106,6 +106,69 @@ fn main() -> eyre::Result<()> {
                 };
             }
         }
+        cli::Command::Change {
+            uri,
+            ref_or_rev,
+            id,
+        } => {
+            let apply_ref_or_rev = |mut flake_ref: FlakeRef| -> eyre::Result<FlakeRef> {
+                if let Some(ror) = ref_or_rev {
+                    flake_ref.r#type.ref_or_rev(Some(ror.clone())).map_err(|e| {
+                        eyre::eyre!("Cannot apply --ref-or-rev: {}", e).suggestion(
+                            "The --ref-or-rev option only works with git forge types (github:, gitlab:, sourcehut:) and indirect types (flake:).\nFor other URI types, use ?ref= or ?rev= query parameters in the URI itself.",
+                        )
+                    })?;
+                }
+                Ok(flake_ref)
+            };
+
+            if id.is_some() && uri.is_some() {
+                let uri_str = uri.clone().unwrap();
+                let final_uri = if ref_or_rev.is_some() {
+                    let flake_ref: FlakeRef = uri_str
+                        .parse()
+                        .map_err(|e| eyre::eyre!("Failed to parse URI: {}", e))?;
+                    apply_ref_or_rev(flake_ref)?.to_string()
+                } else {
+                    uri_str
+                };
+                change = Change::Change {
+                    id: id.clone(),
+                    uri: Some(final_uri),
+                    ref_or_rev: None,
+                };
+            } else if let Some(uri) = id {
+                tracing::debug!("No [ID] provided trying to parse [uri] to infer [ID].");
+                let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(uri);
+                tracing::debug!("The parsed flake reference is: {flake_ref:?}");
+                if let Ok(flake_ref) = flake_ref {
+                    let flake_ref = apply_ref_or_rev(flake_ref)?;
+                    let uri = if flake_ref.to_string().is_empty() {
+                        uri.clone()
+                    } else {
+                        flake_ref.to_string()
+                    };
+                    if let Some(id) = flake_ref.id() {
+                        change = Change::Change {
+                            id: Some(id),
+                            uri: Some(uri),
+                            ref_or_rev: None,
+                        };
+                    } else {
+                        return Err(eyre::eyre!("Could not infer [ID] from flake reference.")
+                            .with_note(|| format!("The provided uri: {uri}")));
+                    }
+                } else {
+                    return Err(
+                        eyre::eyre!("Could not infer [ID] from flake reference.")
+                            .with_note(|| format!("The provided uri: {uri}"))
+                            .suggestion(
+                            "\nPlease specify an [ID] for this flake reference.\nIn the following form: `flake-edit change [ID] [uri]`\nIf you think the [ID] should have been able to be inferred, please open an issue.",
+                        ),
+                    );
+                }
+            }
+        }
         cli::Command::Completion { inputs: _, mode } => match mode {
             cli::CompletionMode::None => todo!(),
             cli::CompletionMode::Add => {
@@ -116,6 +179,13 @@ fn main() -> eyre::Result<()> {
                 let cached_uris = cache::FeCache::default().get_or_init().list();
                 for uri in cached_uris {
                     println!("{}", uri);
+                }
+                std::process::exit(0);
+            }
+            cli::CompletionMode::Change => {
+                let inputs = editor.list();
+                for id in inputs.keys() {
+                    println!("{}", id);
                 }
                 std::process::exit(0);
             }
@@ -159,7 +229,7 @@ fn main() -> eyre::Result<()> {
             return Err(eyre::eyre!(e.to_string()));
         }
         Ok(None) => {
-            if !args.list() && !args.update() && !args.pin() && !args.unpin() {
+            if !args.list() && !args.update() && !args.pin() && !args.unpin() && !args.change() {
                 if change.is_remove() {
                     return Err(eyre::eyre!(
                 "The input with id: {} could not be removed.",

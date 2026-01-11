@@ -48,6 +48,9 @@ impl CliArgs {
     pub(crate) fn unpin(&self) -> bool {
         matches!(self.subcommand, Command::Unpin { .. })
     }
+    pub(crate) fn change(&self) -> bool {
+        matches!(self.subcommand, Command::Change { .. })
+    }
 
     pub fn flake(&self) -> Option<&String> {
         self.flake.as_ref()
@@ -83,6 +86,18 @@ pub(crate) enum Command {
     /// Remove a specific flake reference based on its id.
     #[clap(alias = "rm")]
     Remove { id: Option<String> },
+    /// Change an existing flake reference's URI.
+    #[clap(alias = "c")]
+    #[command(arg_required_else_help = true)]
+    Change {
+        /// The name of an existing input attribute.
+        id: Option<String>,
+        /// The new URI for the input.
+        uri: Option<String>,
+        #[arg(long)]
+        /// Pin to a specific ref_or_rev
+        ref_or_rev: Option<String>,
+    },
     /// List flake inputs
     #[clap(alias = "l")]
     List {
@@ -130,6 +145,7 @@ pub(crate) enum CompletionMode {
     #[default]
     None,
     Add,
+    Change,
 }
 
 impl From<String> for CompletionMode {
@@ -137,6 +153,7 @@ impl From<String> for CompletionMode {
         use CompletionMode::*;
         match value.to_lowercase().as_str() {
             "add" => Add,
+            "change" => Change,
             _ => None,
         }
     }

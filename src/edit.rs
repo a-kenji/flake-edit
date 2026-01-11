@@ -133,10 +133,21 @@ impl FlakeEdit {
             }
             Change::Pin { .. } => todo!(),
             Change::Change { .. } => {
+                if let Some(input_id) = change.id() {
+                    if self.walker.inputs.is_empty() {
+                        self.walker.walk(&Change::None);
+                    }
+
+                    let input_id_string = input_id.to_string();
+                    if !self.walker.inputs.contains_key(&input_id_string) {
+                        return Err(FlakeEditError::InputNotFound(input_id_string));
+                    }
+                }
+
                 if let Some(maybe_changed_node) = self.walker.walk(&change) {
                     Ok(Some(maybe_changed_node.to_string()))
                 } else {
-                    panic!("No change");
+                    Ok(None)
                 }
             }
         }
