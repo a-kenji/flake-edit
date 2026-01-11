@@ -1,0 +1,38 @@
+---
+source: tests/cli.rs
+assertion_line: 70
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/completely_flat_toplevel.flake.nix
+    - "--diff"
+    - add
+    - vmsh
+    - "github:mic92/vmsh"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -1,4 +1,4 @@
+-{
++{ 
+   description = "Edit your flake inputs with ease";
+
+   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+@@ -10,6 +10,7 @@
+   inputs.crane.inputs.nixpkgs.follows = "nixpkgs";
+   inputs.crane.inputs.rust-overlay.follows = "rust-overlay";
+   inputs.crane.inputs.flake-utils.follows = "flake-utils";
++  inputs.vmsh.url = "github:mic92/vmsh";
+
+   outputs = _: { };
+-}
++}
+\ No newline at end of file
+
+----- stderr -----

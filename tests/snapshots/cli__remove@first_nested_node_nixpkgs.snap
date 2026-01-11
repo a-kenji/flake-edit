@@ -1,0 +1,42 @@
+---
+source: tests/cli.rs
+assertion_line: 127
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/first_nested_node.flake.nix
+    - "--diff"
+    - rm
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -6,7 +6,6 @@
+       url = "github:nix-community/naersk/master";
+       inputs.nixpkgs.follows = "nixpkgs";
+     };
+-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+     utils.url = "github:numtide/flake-utils";
+     flake-compat = {
+       url = "github:edolstra/flake-compat";
+@@ -17,10 +16,9 @@
+   outputs =
+     {
+       self,
+-      nixpkgs,
+       utils,
+       naersk,
+       flake-compat,
+     }:
+     { };
+-}
++}
+\ No newline at end of file
+
+----- stderr -----

@@ -1,0 +1,40 @@
+---
+source: tests/cli.rs
+assertion_line: 70
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/one_level_nesting_flat.flake.nix
+    - "--diff"
+    - add
+    - vmsh
+    - "github:mic92/vmsh"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -2,6 +2,7 @@
+   description = "Edit your flake inputs with ease";
+
+   inputs = {
++    vmsh.url = "github:mic92/vmsh";
+     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+     flake-utelinos.url = "github:numtide/flake-utils";
+     rust-overlay.url = "github:oxalica/rust-overlay";
+@@ -21,6 +22,7 @@
+       flake-utelinos,
+       rust-overlay,
+       crane,
++      vmsh,
+     }:
+     { };
+-}
++}
+\ No newline at end of file
+
+----- stderr -----

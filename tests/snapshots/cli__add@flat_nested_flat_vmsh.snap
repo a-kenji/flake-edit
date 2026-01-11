@@ -1,0 +1,43 @@
+---
+source: tests/cli.rs
+assertion_line: 61
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/flat_nested_flat.flake.nix
+    - "--diff"
+    - add
+    - vmsh
+    - "github:mic92/vmsh"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -1,4 +1,4 @@
+-{
++{ 
+   description = "flat nested flat test";
+
+   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+@@ -8,6 +8,7 @@
+     inputs.nixpkgs.follows = "nixpkgs";
+     url = "github:nix-community/poetry2nix/master";
+   };
++  inputs.vmsh.url = "github:mic92/vmsh";
+
+   outputs =
+     {
+@@ -17,4 +18,4 @@
+       poetry2nix,
+     }:
+     { };
+-}
++}
+\ No newline at end of file
+
+----- stderr -----

@@ -1,0 +1,30 @@
+---
+source: tests/cli.rs
+assertion_line: 61
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/root.flake.nix
+    - "--diff"
+    - add
+    - vmsh
+    - "github:mic92/vmsh"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -2,6 +2,7 @@
+   description = "Manage your flake inputs comfortably.";
+
+   inputs = {
++    vmsh.url = "github:mic92/vmsh";
+     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+     flake-utelinos.url = "github:numtide/flake-utils";
+
+----- stderr -----

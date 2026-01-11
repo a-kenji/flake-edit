@@ -1,0 +1,26 @@
+---
+source: tests/cli.rs
+assertion_line: 33
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/completely_flat_toplevel_alt.flake.nix
+    - list
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+· crane - "github:ipetkov/crane"
+     flake-utils => "flake-utils"
+     nixpkgs => "nixpkgs"
+     rust-overlay => "rust-overlay"
+· flake-utelinos - "github:numtide/flake-utils"
+· nixpkgs - "github:nixos/nixpkgs/nixos-unstable"
+· rust-overlay - "github:oxalica/rust-overlay"
+     flake-utils => "flake-utils"
+     nixpkgs => "nixpkgs"
+
+----- stderr -----

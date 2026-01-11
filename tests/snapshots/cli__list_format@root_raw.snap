@@ -1,0 +1,83 @@
+---
+source: tests/cli.rs
+assertion_line: 44
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/root.flake.nix
+    - list
+    - "--format"
+    - raw
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+{
+    "crane": Input {
+        id: "crane",
+        flake: true,
+        url: "\"github:ipetkov/crane\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+            Indirect(
+                "rust-overlay",
+                "\"rust-overlay\"",
+            ),
+        ],
+        range: Range {
+            start: 376,
+            end: 398,
+        },
+    },
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 156,
+            end: 184,
+        },
+    },
+    "nixpkgs": Input {
+        id: "nixpkgs",
+        flake: true,
+        url: "\"github:nixos/nixpkgs/nixos-unstable\"",
+        follows: [],
+        range: Range {
+            start: 91,
+            end: 128,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Range {
+            start: 220,
+            end: 249,
+        },
+    },
+}
+
+----- stderr -----

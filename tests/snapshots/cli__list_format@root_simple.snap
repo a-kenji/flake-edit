@@ -1,0 +1,28 @@
+---
+source: tests/cli.rs
+assertion_line: 44
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/root.flake.nix
+    - list
+    - "--format"
+    - simple
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+crane
+crane.flake-utils
+crane.nixpkgs
+crane.rust-overlay
+flake-utelinos
+nixpkgs
+rust-overlay
+rust-overlay.flake-utils
+rust-overlay.nixpkgs
+
+----- stderr -----
