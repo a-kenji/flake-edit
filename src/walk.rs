@@ -84,6 +84,25 @@ fn make_flake_false_attr(id: &str) -> Node {
     parse_node(&format!("{}.flake = false;", id))
 }
 
+/// Remove whitespace adjacent to a child element from a green node.
+/// Used after removing or replacing a child with an empty node.
+fn strip_whitespace_after_child(
+    green: rowan::GreenNode,
+    child: &rnix::SyntaxElement,
+) -> rowan::GreenNode {
+    let mut green = green;
+    if let Some(prev) = child.prev_sibling_or_token()
+        && prev.kind() == SyntaxKind::TOKEN_WHITESPACE
+    {
+        green = green.remove_child(prev.index());
+    } else if let Some(next) = child.next_sibling_or_token()
+        && next.kind() == SyntaxKind::TOKEN_WHITESPACE
+    {
+        green = green.remove_child(next.index());
+    }
+    green
+}
+
 /// Check if an input should be removed based on the change and context.
 fn should_remove_input(change: &Change, ctx: &Option<Context>, input_id: &str) -> bool {
     if !change.is_remove() {
@@ -202,16 +221,9 @@ impl<'a> Walker {
         node: &SyntaxNode,
         index: usize,
     ) -> SyntaxNode {
-        let mut green = parent.green().remove_child(index);
-        if let Some(prev) = node.prev_sibling_or_token() {
-            if let SyntaxKind::TOKEN_WHITESPACE = prev.kind() {
-                green = green.remove_child(prev.index());
-            }
-        } else if let Some(next) = node.next_sibling_or_token()
-            && let SyntaxKind::TOKEN_WHITESPACE = next.kind()
-        {
-            green = green.remove_child(next.index());
-        }
+        let green = parent.green().remove_child(index);
+        let element: rnix::SyntaxElement = node.clone().into();
+        let green = strip_whitespace_after_child(green, &element);
         parse_node(&green.to_string())
     }
 
@@ -760,15 +772,7 @@ impl<'a> Walker {
 
             // Remove adjacent whitespace if the replacement is empty
             if replacement.text().is_empty() {
-                if let Some(prev) = child.prev_sibling_or_token() {
-                    if let SyntaxKind::TOKEN_WHITESPACE = prev.kind() {
-                        green = green.remove_child(prev.index());
-                    }
-                } else if let Some(next) = child.next_sibling_or_token()
-                    && let SyntaxKind::TOKEN_WHITESPACE = next.kind()
-                {
-                    green = green.remove_child(next.index());
-                }
+                green = strip_whitespace_after_child(green, child);
             }
             return Some(parse_node(&green.to_string()));
         }
