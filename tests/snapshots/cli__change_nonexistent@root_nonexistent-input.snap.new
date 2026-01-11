@@ -1,0 +1,33 @@
+---
+source: tests/cli.rs
+assertion_line: 199
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/root.flake.nix
+    - "--diff"
+    - change
+    - nonexistent-input
+    - "github:foo/bar"
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+Error: 
+   0: [91mInput 'nonexistent-input' not found in the flake.
+
+      To add it:
+        flake-edit add nonexistent-input <flakeref>
+
+      To see all current inputs: flake-edit list[0m
+
+Location:
+   [35msrc/bin/flake-edit/main.rs[0m:[35m229[0m
+
+Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
+Run with RUST_BACKTRACE=full to include source snippets.

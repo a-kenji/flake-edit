@@ -1,0 +1,31 @@
+---
+source: tests/cli.rs
+assertion_line: 180
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/root.flake.nix
+    - "--diff"
+    - rm
+    - nonexistent-input
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+Error: 
+   0: [91mThe input with id: nonexistent-input could not be removed.[0m
+
+Location:
+   [35msrc/bin/flake-edit/main.rs[0m:[35m234[0m
+
+[96mSuggestion[0m: 
+Please check if an input with that [ID] exists in the flake.nix file.
+Run `flake-edit list --format simple` to see the current inputs by their id.
+
+Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
+Run with RUST_BACKTRACE=full to include source snippets.
