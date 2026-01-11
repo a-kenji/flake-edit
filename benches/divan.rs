@@ -22,7 +22,7 @@ const INPUTS: &str = r#"{
 #[divan::bench]
 fn collect_inputs() {
     let mut walker = Walker::new(INPUTS);
-    walker.walk(&Change::None);
+    let _ = walker.walk(&Change::None);
     // a simple sanity check
     assert!(!walker.inputs.is_empty())
 }
@@ -35,7 +35,7 @@ fn add_input() {
         uri: Some("github/nixos/nixpkgs".to_owned()),
         flake: true,
     };
-    walker.walk(&change);
+    let _ = walker.walk(&change);
     // a simple sanity check
     assert!(!walker.inputs.is_empty())
 }
@@ -46,7 +46,7 @@ fn remove_input() {
     let change = Change::Remove {
         id: "nixpkgs".to_owned().into(),
     };
-    walker.walk(&change);
+    let _ = walker.walk(&change);
     // a simple sanity check
     assert!(!walker.inputs.is_empty())
 }

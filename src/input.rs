@@ -53,6 +53,16 @@ impl Input {
         }
     }
 
+    /// Create an Input with id, url, and range set from a TextRange.
+    pub(crate) fn with_url(id: String, url: String, text_range: TextRange) -> Self {
+        Self {
+            id,
+            url,
+            range: Range::from_text_range(text_range),
+            ..Self::default()
+        }
+    }
+
     pub fn id(&self) -> &str {
         self.id.as_ref()
     }

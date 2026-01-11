@@ -93,7 +93,10 @@ impl FlakeLock {
     /// TODO: implement proper root resolving
     pub fn get_rev_by_id(&self, id: &str) -> Result<String, FlakeEditError> {
         let root = self.root();
-        let resolved_root = self.nodes.get(root).ok_or(FlakeEditError::NotARoot)?;
+        let resolved_root = self
+            .nodes
+            .get(root)
+            .ok_or(FlakeEditError::LockMissingRoot)?;
         let binding = resolved_root
             .inputs
             .clone()

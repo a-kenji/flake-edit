@@ -56,7 +56,8 @@ impl FlakeEdit {
     /// use `curr_list()`.
     pub fn list(&mut self) -> &InputMap {
         self.walker.inputs.clear();
-        assert!(self.walker.walk(&Change::None).is_none());
+        // Walk returns Ok(None) when no changes are made (expected for listing)
+        assert!(self.walker.walk(&Change::None).ok().flatten().is_none());
         &self.walker.inputs
     }
     /// Apply a specific change to a walker, on some inputs it will need to walk
@@ -70,7 +71,7 @@ impl FlakeEdit {
                 if let Some(input_id) = change.id() {
                     // First walk to populate the inputs map if it's empty
                     if self.walker.inputs.is_empty() {
-                        self.walker.walk(&Change::None);
+                        let _ = self.walker.walk(&Change::None)?;
                     }
 
                     let input_id_string = input_id.to_string();
@@ -79,15 +80,15 @@ impl FlakeEdit {
                     }
                 }
 
-                if let Some(maybe_changed_node) = self.walker.walk(&change.clone()) {
-                    let outputs = self.walker.list_outputs();
+                if let Some(maybe_changed_node) = self.walker.walk(&change.clone())? {
+                    let outputs = self.walker.list_outputs()?;
                     match outputs {
                         Outputs::Multiple(out) => {
                             let id = change.id().unwrap().to_string();
                             if !out.contains(&id) {
                                 self.walker.root = maybe_changed_node.clone();
                                 if let Some(maybe_changed_node) =
-                                    self.walker.change_outputs(OutputChange::Add(id))
+                                    self.walker.change_outputs(OutputChange::Add(id))?
                                 {
                                     return Ok(Some(maybe_changed_node.to_string()));
                                 }
@@ -98,7 +99,7 @@ impl FlakeEdit {
                     Ok(Some(maybe_changed_node.to_string()))
                 } else {
                     self.walker.add_toplevel = true;
-                    let maybe_changed_node = self.walker.walk(&change);
+                    let maybe_changed_node = self.walker.walk(&change)?;
                     Ok(maybe_changed_node.map(|n| n.to_string()))
                 }
             }
@@ -106,7 +107,7 @@ impl FlakeEdit {
                 // If we remove a node, it could be a flat structure,
                 // we want to remove all of the references to its toplevel.
                 let mut res = None;
-                while let Some(changed_node) = self.walker.walk(&change) {
+                while let Some(changed_node) = self.walker.walk(&change)? {
                     if res == Some(changed_node.clone()) {
                         // TODO: Sanity check, turn into proper error.
                         break;
@@ -115,13 +116,13 @@ impl FlakeEdit {
                     self.walker.root = changed_node.clone();
                 }
                 // Removed nodes should be removed from the outputs
-                let outputs = self.walker.list_outputs();
+                let outputs = self.walker.list_outputs()?;
                 match outputs {
                     Outputs::Multiple(out) | Outputs::Any(out) => {
                         let id = change.id().unwrap().to_string();
                         if out.contains(&id)
                             && let Some(changed_node) =
-                                self.walker.change_outputs(OutputChange::Remove(id))
+                                self.walker.change_outputs(OutputChange::Remove(id))?
                         {
                             res = Some(changed_node.clone());
                             self.walker.root = changed_node.clone();
@@ -135,7 +136,7 @@ impl FlakeEdit {
             Change::Change { .. } => {
                 if let Some(input_id) = change.id() {
                     if self.walker.inputs.is_empty() {
-                        self.walker.walk(&Change::None);
+                        let _ = self.walker.walk(&Change::None)?;
                     }
 
                     let input_id_string = input_id.to_string();
@@ -144,7 +145,7 @@ impl FlakeEdit {
                     }
                 }
 
-                if let Some(maybe_changed_node) = self.walker.walk(&change) {
+                if let Some(maybe_changed_node) = self.walker.walk(&change)? {
                     Ok(Some(maybe_changed_node.to_string()))
                 } else {
                     Ok(None)
