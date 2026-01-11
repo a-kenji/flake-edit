@@ -390,13 +390,13 @@ impl<'a> Walker {
                         // we need to create a toplevel inputs attribute set.
                         if child.to_string() == "outputs"
                             && self.add_toplevel
-                            && let Change::Add { id, uri, flake } = change
+                            && let Change::Add {
+                                id: Some(id),
+                                uri: Some(uri),
+                                flake,
+                            } = change
                         {
-                            let addition = parse_node(&format!(
-                                "inputs.{}.url = \"{}\";",
-                                id.clone().unwrap(),
-                                uri.clone().unwrap()
-                            ));
+                            let addition = parse_node(&format!("inputs.{}.url = \"{}\";", id, uri));
                             // TODO Guard against indices that would be out of range here.
                             if toplevel.index() > 0 {
                                 let mut node = root
@@ -412,10 +412,8 @@ impl<'a> Walker {
                                     );
                                 }
                                 if !flake {
-                                    let no_flake = parse_node(&format!(
-                                        "inputs.{}.flake = false;",
-                                        id.clone().unwrap(),
-                                    ));
+                                    let no_flake =
+                                        parse_node(&format!("inputs.{}.flake = false;", id,));
                                     node = node.insert_child(
                                         toplevel.index() + 1,
                                         no_flake.green().into(),
@@ -751,16 +749,14 @@ impl<'a> Walker {
         }
 
         // Handle Add change when no context exists
-        if change.is_some()
-            && change.id().is_some()
-            && ctx.is_none()
-            && let Change::Add { id, uri, flake } = change
+        if ctx.is_none()
+            && let Change::Add {
+                id: Some(id),
+                uri: Some(uri),
+                flake,
+            } = change
         {
-            let uri_node = parse_node(&format!(
-                "{}.url = \"{}\";",
-                id.clone().unwrap(),
-                uri.clone().unwrap(),
-            ));
+            let uri_node = parse_node(&format!("{}.url = \"{}\";", id, uri,));
             let mut green = parent
                 .green()
                 .insert_child(child.index(), uri_node.green().into());
@@ -774,7 +770,7 @@ impl<'a> Walker {
             tracing::debug!("node kind: {:?}", parent.kind());
 
             if !flake {
-                let no_flake = parse_node(&format!("{}.flake = false;", id.clone().unwrap()));
+                let no_flake = parse_node(&format!("{}.flake = false;", id));
                 green = green.insert_child(child.index() + 2, no_flake.green().into());
                 if let Some(whitespace) = get_sibling_whitespace(child_node) {
                     green = green.insert_child(child.index() + 3, whitespace.green().into());
