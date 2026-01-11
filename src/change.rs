@@ -1,4 +1,3 @@
-#![allow(clippy::option_map_unit_fn)]
 use crate::walk::Context;
 
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
