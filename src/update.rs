@@ -68,11 +68,9 @@ impl Updater {
         let maybe_version = parsed.get_ref_or_rev().unwrap_or_default();
         let parsed_ref = parse_ref(&maybe_version, init);
 
-        if !init {
-            if let Err(e) = semver::Version::parse(&parsed_ref.normalized_for_semver) {
-                tracing::debug!("Skip non semver version: {}: {}", maybe_version, e);
-                return None;
-            }
+        if !init && let Err(e) = semver::Version::parse(&parsed_ref.normalized_for_semver) {
+            tracing::debug!("Skip non semver version: {}: {}", maybe_version, e);
+            return None;
         }
 
         let owner = match parsed.r#type.get_owner() {

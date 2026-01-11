@@ -478,14 +478,11 @@ fn get_forge_token(domain: &str) -> Option<String> {
         .arg("show")
         .arg("--json")
         .output()
+        && let Ok(stdout) = String::from_utf8(output.stdout)
+        && let Ok(config) = serde_json::from_str::<NixConfig>(&stdout)
+        && let Some(token) = config.forge_token(domain)
     {
-        if let Ok(stdout) = String::from_utf8(output.stdout) {
-            if let Ok(config) = serde_json::from_str::<NixConfig>(&stdout) {
-                if let Some(token) = config.forge_token(domain) {
-                    return Some(token);
-                }
-            }
-        }
+        return Some(token);
     }
 
     // Fallback to environment variables
@@ -495,10 +492,10 @@ fn get_forge_token(domain: &str) -> Option<String> {
     if let Ok(token) = std::env::var("FORGEJO_TOKEN") {
         return Some(token);
     }
-    if domain == "github.com" {
-        if let Ok(token) = std::env::var("GITHUB_TOKEN") {
-            return Some(token);
-        }
+    if domain == "github.com"
+        && let Ok(token) = std::env::var("GITHUB_TOKEN")
+    {
+        return Some(token);
     }
 
     None
