@@ -1,0 +1,36 @@
+---
+source: tests/cli.rs
+assertion_line: 114
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/completely_flat_toplevel.flake.nix
+    - "--diff"
+    - rm
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -1,7 +1,5 @@
+ {
+   description = "Edit your flake inputs with ease";
+-
+-  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+   inputs.flake-utelinos.url = "github:numtide/flake-utils";
+   inputs.rust-overlay.url = "github:oxalica/rust-overlay";
+   inputs.rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+@@ -12,4 +10,4 @@
+   inputs.crane.inputs.flake-utils.follows = "flake-utils";
+
+   outputs = _: { };
+-}
++}
+\ No newline at end of file
+
+----- stderr -----

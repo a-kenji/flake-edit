@@ -1,0 +1,32 @@
+---
+source: tests/cli.rs
+assertion_line: 78
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/root.flake.nix
+    - "--diff"
+    - add
+    - "--no-flake"
+    - not_a_flake
+    - "github:a-kenji/not_a_flake"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -2,6 +2,8 @@
+   description = "Manage your flake inputs comfortably.";
+
+   inputs = {
++    not_a_flake.url = "github:a-kenji/not_a_flake";
++    not_a_flake.flake = false;
+     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+     flake-utelinos.url = "github:numtide/flake-utils";
+
+----- stderr -----

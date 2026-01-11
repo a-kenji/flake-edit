@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+assertion_line: 127
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/root_alt.flake.nix
+    - "--diff"
+    - rm
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -2,7 +2,6 @@
+   description = "Manage your flake inputs comfortably.";
+
+   inputs = {
+-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+     flake-utelinos.url = "github:numtide/flake-utils";
+
+
+----- stderr -----

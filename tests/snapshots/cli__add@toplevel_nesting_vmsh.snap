@@ -1,0 +1,38 @@
+---
+source: tests/cli.rs
+assertion_line: 70
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/toplevel_nesting.flake.nix
+    - "--diff"
+    - add
+    - vmsh
+    - "github:mic92/vmsh"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -1,4 +1,4 @@
+-{
++{ 
+   description = "toplevel nesting";
+
+   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+@@ -16,5 +16,7 @@
+     inputs.flake-utils.follows = "flake-utils";
+   };
+
++  inputs.vmsh.url = "github:mic92/vmsh";
++
+   outputs = _: { };
+-}
++}
+\ No newline at end of file
+
+----- stderr -----

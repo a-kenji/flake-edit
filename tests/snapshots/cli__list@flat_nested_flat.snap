@@ -1,0 +1,22 @@
+---
+source: tests/cli.rs
+assertion_line: 30
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/flat_nested_flat.flake.nix
+    - list
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+· flake-utils - "github:numtide/flake-utils/master"
+· nixpkgs - "github:NixOS/nixpkgs/nixos-unstable"
+· poetry2nix - "github:nix-community/poetry2nix/master"
+     flake-utils => "flake-utils"
+     nixpkgs => "nixpkgs"
+
+----- stderr -----

@@ -1,6 +1,7 @@
 use crate::cli::ListFormat;
 use crate::edit::InputMap;
 use flake_edit::input::Follows;
+use std::collections::BTreeMap;
 
 pub fn list_inputs(inputs: &InputMap, format: &ListFormat) {
     match format {
@@ -15,7 +16,10 @@ pub fn list_inputs(inputs: &InputMap, format: &ListFormat) {
 
 fn list_simple(inputs: &InputMap) {
     let mut buf = String::new();
-    for input in inputs.values() {
+    let mut keys: Vec<_> = inputs.keys().collect();
+    keys.sort();
+    for key in keys {
+        let input = &inputs[key];
         if !buf.is_empty() {
             buf.push('\n');
         }
@@ -33,28 +37,37 @@ fn list_simple(inputs: &InputMap) {
     println!("{buf}");
 }
 fn list_json(inputs: &InputMap) {
-    let json = serde_json::to_string(inputs).unwrap();
+    // Sort by key for deterministic output
+    let sorted: BTreeMap<_, _> = inputs.iter().collect();
+    let json = serde_json::to_string(&sorted).unwrap();
     println!("{json}");
 }
 
 fn list_toplevel(inputs: &InputMap) {
     let mut buf = String::new();
-    for input in inputs.keys() {
+    let mut keys: Vec<_> = inputs.keys().collect();
+    keys.sort();
+    for key in keys {
         if !buf.is_empty() {
             buf.push('\n');
         }
-        buf.push_str(&input.to_string());
+        buf.push_str(&key.to_string());
     }
     println!("{buf}");
 }
 
 fn list_raw(inputs: &InputMap) {
-    println!("{:#?}", inputs);
+    // Sort by key for deterministic output
+    let sorted: BTreeMap<_, _> = inputs.iter().collect();
+    println!("{:#?}", sorted);
 }
 
 fn list_detailed(inputs: &InputMap) {
     let mut buf = String::new();
-    for input in inputs.values() {
+    let mut keys: Vec<_> = inputs.keys().collect();
+    keys.sort();
+    for key in keys {
+        let input = &inputs[key];
         if !buf.is_empty() {
             buf.push('\n');
         }

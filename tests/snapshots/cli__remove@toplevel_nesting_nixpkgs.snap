@@ -1,0 +1,37 @@
+---
+source: tests/cli.rs
+assertion_line: 127
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/toplevel_nesting.flake.nix
+    - "--diff"
+    - rm
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -1,8 +1,6 @@
+ {
+   description = "toplevel nesting";
+
+-  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+-
+   inputs.rust-overlay = {
+     url = "github:oxalica/rust-overlay";
+     inputs.nixpkgs.follows = "nixpkgs";
+@@ -17,4 +15,4 @@
+   };
+
+   outputs = _: { };
+-}
++}
+\ No newline at end of file
+
+----- stderr -----

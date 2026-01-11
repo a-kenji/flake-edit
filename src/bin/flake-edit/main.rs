@@ -26,7 +26,13 @@ mod root;
 
 fn main() -> eyre::Result<()> {
     let args = CliArgs::parse();
-    color_eyre::install()?;
+    if std::env::var("NO_COLOR").is_err() {
+        color_eyre::install()?;
+    } else {
+        color_eyre::config::HookBuilder::new()
+            .theme(color_eyre::config::Theme::new())
+            .install()?;
+    }
     log::init().ok();
     tracing::debug!("Cli args: {args:?}");
 
@@ -218,9 +224,9 @@ fn main() -> eyre::Result<()> {
             if let Change::Add { id, uri, flake: _ } = change {
                 let mut cache = cache::FeCache::default().get_or_init();
                 cache.add_entry(id.unwrap(), uri.unwrap());
-                cache
-                    .commit()
-                    .map_err(|e| eyre::eyre!("Could not write to cache file: {e}"))?;
+                if let Err(e) = cache.commit() {
+                    tracing::info!("Could not write to cache file: {e}");
+                }
             }
 
             app.apply_change_or_diff(&resulting_change, args.diff(), args.no_lock())?;
