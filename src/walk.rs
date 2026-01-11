@@ -91,14 +91,12 @@ impl<'a> Walker {
     /// - description
     /// - inputs
     /// - outputs
-    pub fn walk(&mut self, change: &Change) -> Option<SyntaxNode> {
+    pub fn walk(&mut self, change: &Change) -> Result<Option<SyntaxNode>, WalkerError> {
         let cst = &self.root;
         if cst.kind() != SyntaxKind::NODE_ROOT {
-            // TODO: handle this as an error
-            panic!("Should be a topevel node.")
-        } else {
-            self.walk_toplevel(cst.clone(), None, change)
+            return Err(WalkerError::NotARoot(cst.kind()));
         }
+        self.walk_toplevel(cst.clone(), None, change)
     }
     /// Insert a new Input node at the correct position
     /// or update it with new information.
@@ -158,14 +156,13 @@ impl<'a> Walker {
     }
 
     /// Only walk the outputs attribute
-    pub(crate) fn list_outputs(&mut self) -> Outputs {
+    pub(crate) fn list_outputs(&mut self) -> Result<Outputs, WalkerError> {
         let mut outputs: Vec<String> = vec![];
         let mut any = false;
         tracing::debug!("Walking outputs.");
         let cst = &self.root;
         if cst.kind() != SyntaxKind::NODE_ROOT {
-            // TODO: handle this as an error
-            panic!("Should be a topevel node.")
+            return Err(WalkerError::NotARoot(cst.kind()));
         }
 
         for toplevel in cst.first_child().unwrap().children() {
@@ -200,20 +197,22 @@ impl<'a> Walker {
             }
         }
         if outputs.is_empty() {
-            Outputs::None
+            Ok(Outputs::None)
         } else if any {
-            Outputs::Any(outputs)
+            Ok(Outputs::Any(outputs))
         } else {
-            Outputs::Multiple(outputs)
+            Ok(Outputs::Multiple(outputs))
         }
     }
     /// Only change the outputs attribute
-    pub(crate) fn change_outputs(&mut self, change: OutputChange) -> Option<SyntaxNode> {
+    pub(crate) fn change_outputs(
+        &mut self,
+        change: OutputChange,
+    ) -> Result<Option<SyntaxNode>, WalkerError> {
         tracing::debug!("Changing outputs.");
         let cst = &self.root;
         if cst.kind() != SyntaxKind::NODE_ROOT {
-            // TODO: handle this as an error
-            panic!("Should be a toplevel node.")
+            return Err(WalkerError::NotARoot(cst.kind()));
         }
 
         for toplevel in cst.first_child().unwrap().children() {
@@ -273,7 +272,7 @@ impl<'a> Walker {
                                                 toplevel.index(),
                                                 changed_toplevel.into(),
                                             );
-                                        return Some(parse_node(&result.to_string()));
+                                        return Ok(Some(parse_node(&result.to_string())));
                                     }
 
                                     for child in output.children() {
@@ -305,7 +304,7 @@ impl<'a> Walker {
                                                     toplevel.index(),
                                                     changed_toplevel.into(),
                                                 );
-                                            return Some(parse_node(&result.to_string()));
+                                            return Ok(Some(parse_node(&result.to_string())));
                                         }
                                     }
                                 }
@@ -315,7 +314,7 @@ impl<'a> Walker {
                 }
             }
         }
-        None
+        Ok(None)
     }
     /// Traverse the toplevel `flake.nix` file.
     /// It should consist of three attribute keys:
@@ -328,7 +327,7 @@ impl<'a> Walker {
         node: SyntaxNode,
         ctx: Option<Context>,
         change: &Change,
-    ) -> Option<SyntaxNode> {
+    ) -> Result<Option<SyntaxNode>, WalkerError> {
         for root in node.children() {
             // Because it is the node root this is the toplevel attribute
             for toplevel in root.children() {
@@ -360,7 +359,7 @@ impl<'a> Walker {
                                     replacement.green().into(),
                                 );
                                 let green = toplevel.replace_with(green);
-                                return Some(parse_node(&green.to_string()));
+                                return Ok(Some(parse_node(&green.to_string())));
                             }
                         } else if child.to_string().starts_with("inputs") {
                             // This is a toplevel node, of the form:
@@ -375,7 +374,7 @@ impl<'a> Walker {
                                         &toplevel,
                                         toplevel.index(),
                                     );
-                                    return Some(node);
+                                    return Ok(Some(node));
                                 } else {
                                     tracing::debug!("Replacement Node: {replacement}");
                                     let green = toplevel.green().replace_child(
@@ -383,7 +382,7 @@ impl<'a> Walker {
                                         replacement.green().into(),
                                     );
                                     let green = toplevel.replace_with(green);
-                                    return Some(parse_node(&green.to_string()));
+                                    return Ok(Some(parse_node(&green.to_string())));
                                 }
                             }
                         };
@@ -439,17 +438,19 @@ impl<'a> Walker {
                                     node = node
                                         .insert_child(child.index() + 1, whitespace.green().into());
                                 }
-                                return Some(parse_node(&node.to_string()));
+                                return Ok(Some(parse_node(&node.to_string())));
                             }
                         }
                     }
                 } else {
-                    // TODO: proper error handling.
-                    panic!("Should be a NODE_ATTRPATH_VALUE");
+                    return Err(WalkerError::UnexpectedNodeKind {
+                        expected: SyntaxKind::NODE_ATTRPATH_VALUE,
+                        found: toplevel.kind(),
+                    });
                 }
             }
         }
-        None
+        Ok(None)
     }
     fn walk_inputs(
         &mut self,
@@ -677,7 +678,11 @@ impl<'a> Walker {
             tracing::debug!("Walking inputs with: {child}, context: {context:?}");
             if let Some(_replacement) = self.walk_inputs(child_node.clone(), &Some(context), change)
             {
-                panic!("Not yet implemented");
+                // TODO: Handle flat tree attribute replacement
+                tracing::warn!(
+                    "Flat tree attribute replacement not yet implemented for: {}",
+                    child
+                );
             }
         }
 
