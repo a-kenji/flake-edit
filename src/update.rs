@@ -1,10 +1,10 @@
-use nix_uri::FlakeRef;
+use nix_uri::{FlakeRef, RefLocation};
 use ropey::Rope;
 use std::cmp::Ordering;
 
 use crate::edit::InputMap;
 use crate::input::Input;
-use crate::uri::{extract_domain_owner_repo, is_git_url};
+use crate::uri::is_git_url;
 use crate::version::parse_ref;
 
 #[derive(Default, Debug)]
@@ -15,16 +15,9 @@ pub struct Updater {
     offset: i32,
 }
 
-#[derive(Debug)]
-struct RefSource {
-    maybe_version: String,
-    is_params: bool,
-    is_github: bool,
-}
-
 enum UpdateTarget {
     GitUrl {
-        uri: String,
+        parsed: Box<FlakeRef>,
         owner: String,
         repo: String,
         domain: String,
@@ -34,7 +27,6 @@ enum UpdateTarget {
         parsed: Box<FlakeRef>,
         owner: String,
         repo: String,
-        ref_source: RefSource,
         parsed_ref: crate::version::ParsedRef,
     },
 }
@@ -60,115 +52,24 @@ impl Updater {
 
         true
     }
-    fn ref_source_from_uri(uri: &str, parsed: Option<&FlakeRef>) -> RefSource {
-        if is_git_url(uri) {
-            let mut maybe_version = String::new();
-            let mut is_params = false;
-
-            if let Some(query) = uri.split('?').nth(1) {
-                for param in query.split('&') {
-                    if let Some(ref_value) = param.strip_prefix("ref=") {
-                        maybe_version = ref_value.to_string();
-                        is_params = true;
-                        break;
-                    }
-                }
-            }
-
-            return RefSource {
-                maybe_version,
-                is_params,
-                is_github: false,
-            };
-        }
-
-        let parsed = match parsed {
-            Some(parsed) => parsed,
-            None => {
-                return RefSource {
-                    maybe_version: String::new(),
-                    is_params: false,
-                    is_github: false,
-                };
-            }
-        };
-
-        let mut maybe_version = String::new();
-        let is_github = matches!(&parsed.r#type, nix_uri::FlakeRefType::GitHub { .. });
-
-        if let nix_uri::FlakeRefType::GitHub {
-            ref_or_rev: Some(ref_or_rev),
-            ..
-        } = &parsed.r#type
-        {
-            maybe_version = ref_or_rev.into();
-        }
-
-        let is_params = parsed.params.get_ref().is_some();
-        if let Some(r#ref) = &parsed.params.get_ref() {
-            maybe_version = r#ref.to_string();
-        }
-
-        RefSource {
-            maybe_version,
-            is_params,
-            is_github,
-        }
-    }
-
     fn parse_update_target(&self, input: &UpdateInput, init: bool) -> Option<UpdateTarget> {
         let uri = self.get_input_text(input);
         let is_git_url = is_git_url(&uri);
 
-        if is_git_url {
-            // Extract the location part (before query parameters)
-            let location = uri
-                .strip_prefix("git+https://")
-                .or_else(|| uri.strip_prefix("git+http://"))?;
-            let location = location.split('?').next().unwrap_or(location);
-            let (domain, owner, repo) = extract_domain_owner_repo(location)?;
-
-            let ref_source = Self::ref_source_from_uri(&uri, None);
-            let parsed_ref = parse_ref(&ref_source.maybe_version, init);
-
-            if !init {
-                if let Err(e) = semver::Version::parse(&parsed_ref.normalized_for_semver) {
-                    tracing::debug!(
-                        "Skip non semver version: {}: {}",
-                        ref_source.maybe_version,
-                        e
-                    );
-                    return None;
-                }
-            }
-
-            return Some(UpdateTarget::GitUrl {
-                uri,
-                owner,
-                repo,
-                domain,
-                parsed_ref,
-            });
-        }
-
         let parsed = match uri.parse::<FlakeRef>() {
             Ok(parsed) => parsed,
             Err(e) => {
-                tracing::error!("{}", e);
+                tracing::error!("Failed to parse URI: {}", e);
                 return None;
             }
         };
 
-        let ref_source = Self::ref_source_from_uri(&uri, Some(&parsed));
-        let parsed_ref = parse_ref(&ref_source.maybe_version, false);
+        let maybe_version = parsed.get_ref_or_rev().unwrap_or_default();
+        let parsed_ref = parse_ref(&maybe_version, init);
 
         if !init {
             if let Err(e) = semver::Version::parse(&parsed_ref.normalized_for_semver) {
-                tracing::debug!(
-                    "Skip non semver version: {}: {}",
-                    ref_source.maybe_version,
-                    e
-                );
+                tracing::debug!("Skip non semver version: {}: {}", maybe_version, e);
                 return None;
             }
         }
@@ -189,11 +90,21 @@ impl Updater {
             }
         };
 
+        if is_git_url {
+            let domain = parsed.r#type.get_domain()?;
+            return Some(UpdateTarget::GitUrl {
+                parsed: Box::new(parsed),
+                owner,
+                repo,
+                domain,
+                parsed_ref,
+            });
+        }
+
         Some(UpdateTarget::ForgeRef {
             parsed: Box::new(parsed),
             owner,
             repo,
-            ref_source,
             parsed_ref,
         })
     }
@@ -229,49 +140,32 @@ impl Updater {
         input: &UpdateInput,
         target: &UpdateTarget,
         mut tags: crate::api::Tags,
-        init: bool,
+        _init: bool,
     ) {
         tags.sort();
         if let Some(change) = tags.get_latest_tag() {
-            let (final_change, previous_ref, updated_uri) = match target {
+            let (parsed, parsed_ref) = match target {
                 UpdateTarget::GitUrl {
-                    uri, parsed_ref, ..
-                } => {
-                    let final_change = if parsed_ref.has_refs_tags_prefix {
-                        format!("refs/tags/{}", change)
-                    } else {
-                        change.clone()
-                    };
-                    let base_url = uri.split('?').next().unwrap_or(uri);
-                    let updated_uri = format!("{}?ref={}", base_url, final_change);
-                    (final_change, parsed_ref.previous_ref.as_str(), updated_uri)
-                }
+                    parsed, parsed_ref, ..
+                } => (parsed, parsed_ref),
                 UpdateTarget::ForgeRef {
-                    parsed,
-                    ref_source,
-                    parsed_ref,
-                    ..
-                } => {
-                    let final_change = if parsed_ref.has_refs_tags_prefix {
-                        format!("refs/tags/{}", change)
-                    } else {
-                        change.clone()
-                    };
-                    let mut parsed = parsed.clone();
-                    if ref_source.is_github && !ref_source.is_params && !init {
-                        let _ = parsed.r#type.ref_or_rev(Some(final_change.to_string()));
-                    } else {
-                        let _ = parsed.params.r#ref(Some(final_change.to_string()));
-                    }
-                    (
-                        final_change,
-                        parsed_ref.previous_ref.as_str(),
-                        parsed.to_string(),
-                    )
-                }
+                    parsed, parsed_ref, ..
+                } => (parsed, parsed_ref),
             };
 
-            if !Self::print_update_status(&input.input.id, previous_ref, &final_change) {
+            let final_change = if parsed_ref.has_refs_tags_prefix {
+                format!("refs/tags/{}", change)
+            } else {
+                change.clone()
+            };
+
+            // set_ref() preserves storage location (path vs query param)
+            let mut parsed = parsed.clone();
+            let _ = parsed.set_ref(Some(final_change.clone()));
+            let updated_uri = parsed.to_string();
+
+            if !Self::print_update_status(&input.input.id, &parsed_ref.previous_ref, &final_change)
+            {
                 return;
             }
 
@@ -343,14 +237,12 @@ impl Updater {
     }
 
     /// Change a specific input to a specific rev.
-    /// TODO: proper error handling
     pub fn change_input_to_rev(&mut self, input: &UpdateInput, rev: &str) {
         let uri = self.get_input_text(input);
         match uri.parse::<FlakeRef>() {
             Ok(mut parsed) => {
-                parsed.params.rev(Some(rev.into()));
-                // TODO: check, if rev_or_ref is already set, then change that side.
-                // let _ = parsed.r#type.ref_or_rev(Some(rev.into()));
+                // set_rev() preserves storage location (path vs query param)
+                let _ = parsed.set_rev(Some(rev.into()));
                 self.update_input(input.clone(), &parsed.to_string());
             }
             Err(e) => {
@@ -362,13 +254,12 @@ impl Updater {
         let uri = self.get_input_text(input);
         match uri.parse::<FlakeRef>() {
             Ok(mut parsed) => {
-                let has_ref = parsed.params.get_ref().is_some();
-                let has_rev = parsed.params.get_rev().is_some();
-                if !has_ref && !has_rev {
+                if parsed.ref_source_location() == RefLocation::None {
                     return;
                 }
-                parsed.params.r#ref(None);
-                parsed.params.rev(None);
+                // set_ref/set_rev handle both path-based and query param storage
+                let _ = parsed.set_ref(None);
+                let _ = parsed.set_rev(None);
                 self.update_input(input.clone(), &parsed.to_string());
             }
             Err(e) => {

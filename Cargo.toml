@@ -43,7 +43,7 @@ clap = { version = "4.5.54", optional = true, features = ["derive"] }
 color-eyre = "0.6.5"
 diffy = { version = "0.4.2", optional = true }
 directories = "6.0.0"
-nix-uri = "0.1.8"
+nix-uri = "0.1.10"
 reqwest = { version = "0.13.1", features = ["blocking"] }
 rnix = "0.12.0"
 ropey = { version = "1.6.1" }
