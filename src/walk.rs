@@ -599,11 +599,11 @@ impl<'a> Walker {
                                             next_sibling,
                                             url
                                         );
-                                        let mut input = Input::new(next_sibling.to_string());
-                                        input.url = url.to_string();
-                                        let text_range = url.text_range();
-                                        input.range =
-                                            crate::input::Range::from_text_range(text_range);
+                                        let input = Input::with_url(
+                                            next_sibling.to_string(),
+                                            url.to_string(),
+                                            url.text_range(),
+                                        );
                                         self.insert_with_ctx(next_sibling.to_string(), input, ctx);
                                         if should_remove_input(
                                             change,
@@ -671,11 +671,11 @@ impl<'a> Walker {
                                             next_sibling,
                                             url
                                         );
-                                        let mut input = Input::new(next_sibling.to_string());
-                                        input.url = url.to_string();
-                                        let text_range = next_sibling.text_range();
-                                        input.range =
-                                            crate::input::Range::from_text_range(text_range);
+                                        let input = Input::with_url(
+                                            next_sibling.to_string(),
+                                            url.to_string(),
+                                            next_sibling.text_range(),
+                                        );
                                         self.insert_with_ctx(next_sibling.to_string(), input, ctx);
                                     }
                                     if should_remove_input(change, ctx, &next_sibling.to_string()) {
@@ -832,10 +832,12 @@ impl<'a> Walker {
 
         let ctx = maybe_input_id.clone().map(|id| id.to_string().into());
 
-        let mut input = Input::new(follows_id.to_string());
-        input.url = node.next_sibling().unwrap().to_string();
-        let text_range = node.next_sibling().unwrap().text_range();
-        input.range = crate::input::Range::from_text_range(text_range);
+        let url_node = node.next_sibling().unwrap();
+        let input = Input::with_url(
+            follows_id.to_string(),
+            url_node.to_string(),
+            url_node.text_range(),
+        );
         self.insert_with_ctx(follows_id.to_string(), input, &ctx);
 
         // Remove a toplevel follows node
@@ -884,10 +886,11 @@ impl<'a> Walker {
             }
             if let Some(sibling) = child.next_sibling() {
                 tracing::debug!("This is an url from {} - {}", prev_id, sibling);
-                let mut input = Input::new(prev_id.to_string());
-                input.url = sibling.to_string();
-                let text_range = sibling.text_range();
-                input.range = crate::input::Range::from_text_range(text_range);
+                let input = Input::with_url(
+                    prev_id.to_string(),
+                    sibling.to_string(),
+                    sibling.text_range(),
+                );
                 self.insert_with_ctx(prev_id.to_string(), input, ctx);
             }
         }
@@ -925,10 +928,11 @@ impl<'a> Walker {
                         tracing::debug!(
                             "The following attribute follows: {id}:{follows} is nested inside the attr: {ctx:?}"
                         );
-                        let mut input = Input::new(id.to_string());
-                        input.url = follows.to_string();
-                        let text_range = follows.text_range();
-                        input.range = crate::input::Range::from_text_range(text_range);
+                        let input = Input::with_url(
+                            id.to_string(),
+                            follows.to_string(),
+                            follows.text_range(),
+                        );
                         self.insert_with_ctx(id.to_string(), input, ctx);
                         if change.is_remove()
                             && let Some(id) = change.id()
@@ -993,10 +997,7 @@ impl<'a> Walker {
         // TODO: Construct follows attribute if not yet ready.
         // For now assume that the url is the first attribute.
         // This assumption doesn't generally hold true.
-        let mut input = Input::new(id.to_string());
-        input.url = follows.to_string();
-        let text_range = follows.text_range();
-        input.range = crate::input::Range::from_text_range(text_range);
+        let input = Input::with_url(id.to_string(), follows.to_string(), follows.text_range());
         self.insert_with_ctx(id.to_string(), input.clone(), ctx);
         if let Some(id) = change.id()
             && let Some(ctx) = ctx
@@ -1064,10 +1065,7 @@ impl<'a> Walker {
                     let id = child.prev_sibling().unwrap();
                     let uri = leaf.next_sibling().unwrap();
                     tracing::debug!("This is an url from {} - {}", id, uri);
-                    let mut input = Input::new(id.to_string());
-                    input.url = uri.to_string();
-                    let text_range = uri.text_range();
-                    input.range = crate::input::Range::from_text_range(text_range);
+                    let input = Input::with_url(id.to_string(), uri.to_string(), uri.text_range());
                     self.insert_with_ctx(id.to_string(), input, ctx);
 
                     // Remove matched node.
