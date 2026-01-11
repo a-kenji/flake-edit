@@ -1,11 +1,15 @@
 use thiserror::Error;
 
+use crate::walk::WalkerError;
+
 #[derive(Debug, Error)]
 pub enum FlakeEditError {
     #[error("IoError: {0}")]
     Io(#[from] std::io::Error),
-    #[error("The flake should be a root.")]
-    NotARoot,
+    #[error(transparent)]
+    Walker(#[from] WalkerError),
+    #[error("Lock file missing root node")]
+    LockMissingRoot,
     #[error("There is an error in the Lockfile: {0}")]
     LockError(String),
     #[error("Deserialization Error: {0}")]
