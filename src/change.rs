@@ -27,47 +27,38 @@ pub enum Change {
 pub struct ChangeId(String);
 
 impl ChangeId {
-    pub fn follows(&self) -> Option<String> {
-        let id = &self.0;
-        let follows = id.split_once('.');
-        follows.map(|(_pre, post)| post.into())
+    /// Get the part after the dot (e.g., "nixpkgs" from "poetry2nix.nixpkgs").
+    pub fn follows(&self) -> Option<&str> {
+        self.0.split_once('.').map(|(_, post)| post)
     }
-    pub fn input(&self) -> Option<String> {
-        let id = &self.0;
-        let follows = id.split_once('.');
-        if let Some((pre, _post)) = follows {
-            Some(pre.into())
-        } else {
-            Some(id.clone())
-        }
-    }
-    pub fn matches_with_follows(&self, input: &str, follows: Option<String>) -> bool {
-        if let Some(input_id) = self.input() {
-            if self.follows().is_some() {
-                (self.follows() == follows) && (input_id == input)
-            } else {
-                input_id == input
-            }
-        } else {
-            false
-        }
-    }
-    // The context carries the input attribute
-    pub fn matches_with_ctx(&self, follows: &str, ctx: Option<Context>) -> bool {
-        let ctx = ctx.and_then(|f| f.level().first().cloned());
 
-        if let Some(input_id) = self.input() {
-            if let Some(ctx) = ctx {
-                if self.follows().is_some() {
-                    (input_id == ctx) && (self.follows() == Some(follows.into()))
-                } else {
-                    input_id == ctx
-                }
-            } else {
-                input_id == follows
-            }
-        } else {
-            false
+    /// Get the input part (before the dot, or the whole thing if no dot).
+    pub fn input(&self) -> &str {
+        self.0.split_once('.').map_or(&self.0, |(pre, _)| pre)
+    }
+
+    /// Check if this ChangeId matches the given input and optional follows.
+    fn matches(&self, input: &str, follows: Option<&str>) -> bool {
+        if self.input() != input {
+            return false;
+        }
+        match (self.follows(), follows) {
+            (Some(self_follows), Some(f)) => self_follows == f,
+            (Some(_), None) => false,
+            (None, _) => true,
+        }
+    }
+
+    pub fn matches_with_follows(&self, input: &str, follows: Option<String>) -> bool {
+        self.matches(input, follows.as_deref())
+    }
+
+    /// Match against context. The context carries the input attribute.
+    pub fn matches_with_ctx(&self, follows: &str, ctx: Option<Context>) -> bool {
+        let ctx_input = ctx.and_then(|f| f.level().first().cloned());
+        match ctx_input {
+            Some(input) => self.matches(&input, Some(follows)),
+            None => self.input() == follows,
         }
     }
 }

@@ -121,6 +121,18 @@ fn should_remove_input(change: &Change, ctx: &Option<Context>, input_id: &str) -
     false
 }
 
+/// Check if a nested input should be removed using context-aware matching.
+/// Handles nested input IDs like "poetry2nix.nixpkgs".
+fn should_remove_nested_input(change: &Change, ctx: &Option<Context>, input_id: &str) -> bool {
+    if !change.is_remove() {
+        return false;
+    }
+    if let Some(id) = change.id() {
+        return id.matches_with_ctx(input_id, ctx.clone());
+    }
+    false
+}
+
 #[derive(Debug, Clone)]
 pub struct Walker {
     pub root: SyntaxNode,
@@ -305,7 +317,7 @@ impl<'a> Walker {
                                         let count = output.children().count();
                                         let last_node = token_count - 2;
 
-                                        // Adjust the addition for trailing slasheks
+                                        // Adjust the addition for trailing slashes
                                         let addition = if let Some(SyntaxKind::TOKEN_COMMA) = output
                                             .children()
                                             .last()
@@ -936,10 +948,7 @@ impl<'a> Walker {
                             follows.text_range(),
                         );
                         self.insert_with_ctx(id.to_string(), input, ctx);
-                        if change.is_remove()
-                            && let Some(id) = change.id()
-                            && id.matches_with_ctx(&follows.to_string(), ctx.clone())
-                        {
+                        if should_remove_nested_input(change, ctx, &follows.to_string()) {
                             return Some(empty_node());
                         }
                     }
@@ -966,10 +975,7 @@ impl<'a> Walker {
                 let text_range = input_id.text_range();
                 input.range = crate::input::Range::from_text_range(text_range);
                 self.insert_with_ctx(input_id.to_string(), input, ctx);
-                if change.is_remove()
-                    && let Some(id) = change.id()
-                    && id.matches_with_ctx(&input_id.to_string(), ctx.clone())
-                {
+                if should_remove_nested_input(change, ctx, &input_id.to_string()) {
                     return Some(empty_node());
                 }
             }
@@ -1001,11 +1007,7 @@ impl<'a> Walker {
         // This assumption doesn't generally hold true.
         let input = Input::with_url(id.to_string(), follows.to_string(), follows.text_range());
         self.insert_with_ctx(id.to_string(), input.clone(), ctx);
-        if let Some(id) = change.id()
-            && let Some(ctx) = ctx
-            && id.matches_with_ctx(input.id(), Some(ctx.clone()))
-            && change.is_remove()
-        {
+        if ctx.is_some() && should_remove_nested_input(change, ctx, input.id()) {
             return Some(empty_node());
         }
         None
