@@ -242,3 +242,58 @@ fn test_tags_sorting_order() {
     // Should correctly sort by semver, not lexicographically
     assert_eq!(tags.get_latest_tag(), Some("v10.0.0".to_string()));
 }
+
+#[test]
+fn test_ref_or_rev_github() {
+    let uri = "github:nix-community/home-manager";
+    let ref_or_rev = "release-24.05";
+
+    let mut flake_ref: FlakeRef = uri.parse().unwrap();
+    flake_ref
+        .r#type
+        .ref_or_rev(Some(ref_or_rev.to_string()))
+        .unwrap();
+
+    assert_eq!(
+        flake_ref.to_string(),
+        "github:nix-community/home-manager/release-24.05"
+    );
+}
+
+#[test]
+fn test_ref_or_rev_gitlab() {
+    let uri = "gitlab:owner/repo";
+    let ref_or_rev = "main";
+
+    let mut flake_ref: FlakeRef = uri.parse().unwrap();
+    flake_ref
+        .r#type
+        .ref_or_rev(Some(ref_or_rev.to_string()))
+        .unwrap();
+
+    assert_eq!(flake_ref.to_string(), "gitlab:owner/repo/main");
+}
+
+#[test]
+fn test_ref_or_rev_sourcehut() {
+    let uri = "sourcehut:~user/repo";
+    let ref_or_rev = "v1.0.0";
+
+    let mut flake_ref: FlakeRef = uri.parse().unwrap();
+    flake_ref
+        .r#type
+        .ref_or_rev(Some(ref_or_rev.to_string()))
+        .unwrap();
+
+    assert_eq!(flake_ref.to_string(), "sourcehut:~user/repo/v1.0.0");
+}
+
+#[test]
+fn test_ref_or_rev_unsupported_type() {
+    let uri = "git+https://github.com/example/repo";
+
+    let mut flake_ref: FlakeRef = uri.parse().unwrap();
+    let result = flake_ref.r#type.ref_or_rev(Some("main".to_string()));
+
+    assert!(result.is_err());
+}

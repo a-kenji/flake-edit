@@ -103,10 +103,10 @@ impl<'a> Walker {
             if let SyntaxKind::TOKEN_WHITESPACE = prev.kind() {
                 green = green.remove_child(prev.index());
             }
-        } else if let Some(next) = node.next_sibling_or_token() {
-            if let SyntaxKind::TOKEN_WHITESPACE = next.kind() {
-                green = green.remove_child(next.index());
-            }
+        } else if let Some(next) = node.next_sibling_or_token()
+            && let SyntaxKind::TOKEN_WHITESPACE = next.kind()
+        {
+            green = green.remove_child(next.index());
         }
         Root::parse(green.to_string().as_str()).syntax()
     }
@@ -208,17 +208,14 @@ impl<'a> Walker {
                                             .nth(count - 1)
                                             .unwrap()
                                             .prev_sibling_or_token()
+                                            && let SyntaxKind::TOKEN_WHITESPACE = prev.kind()
                                         {
-                                            if let SyntaxKind::TOKEN_WHITESPACE = prev.kind() {
-                                                let whitespace = Root::parse(
-                                                    prev.as_token().unwrap().green().text(),
-                                                )
-                                                .syntax();
-                                                green = green.insert_child(
-                                                    last_node,
-                                                    whitespace.green().into(),
-                                                );
-                                            }
+                                            let whitespace = Root::parse(
+                                                prev.as_token().unwrap().green().text(),
+                                            )
+                                            .syntax();
+                                            green = green
+                                                .insert_child(last_node, whitespace.green().into());
                                         }
                                         let changed_outputs_lambda = outputs_lambda
                                             .green()
@@ -236,55 +233,35 @@ impl<'a> Walker {
                                     }
 
                                     for child in output.children() {
-                                        if child.kind() == SyntaxKind::NODE_PAT_ENTRY {
-                                            if let OutputChange::Remove(ref id) = change {
-                                                if child.to_string() == *id {
-                                                    let mut green =
-                                                        output.green().remove_child(child.index());
-                                                    if let Some(prev) =
-                                                        child.prev_sibling_or_token()
-                                                    {
-                                                        if let SyntaxKind::TOKEN_WHITESPACE =
-                                                            prev.kind()
-                                                        {
-                                                            green =
-                                                                green.remove_child(prev.index());
-                                                            green = green
-                                                                .remove_child(prev.index() - 1);
-                                                        }
-                                                    } else if let Some(next) =
-                                                        child.next_sibling_or_token()
-                                                    {
-                                                        if let SyntaxKind::TOKEN_WHITESPACE =
-                                                            next.kind()
-                                                        {
-                                                            green =
-                                                                green.remove_child(next.index());
-                                                        }
-                                                    }
-                                                    let changed_outputs_lambda =
-                                                        outputs_lambda.green().replace_child(
-                                                            output.index(),
-                                                            green.into(),
-                                                        );
-                                                    let changed_toplevel =
-                                                        toplevel.green().replace_child(
-                                                            outputs_lambda.index(),
-                                                            changed_outputs_lambda.into(),
-                                                        );
-                                                    let result = cst
-                                                        .first_child()
-                                                        .unwrap()
-                                                        .green()
-                                                        .replace_child(
-                                                            toplevel.index(),
-                                                            changed_toplevel.into(),
-                                                        );
-                                                    return Some(
-                                                        Root::parse(&result.to_string()).syntax(),
-                                                    );
+                                        if child.kind() == SyntaxKind::NODE_PAT_ENTRY
+                                            && let OutputChange::Remove(ref id) = change
+                                            && child.to_string() == *id
+                                        {
+                                            let mut green =
+                                                output.green().remove_child(child.index());
+                                            if let Some(prev) = child.prev_sibling_or_token() {
+                                                if let SyntaxKind::TOKEN_WHITESPACE = prev.kind() {
+                                                    green = green.remove_child(prev.index());
+                                                    green = green.remove_child(prev.index() - 1);
                                                 }
+                                            } else if let Some(next) = child.next_sibling_or_token()
+                                                && let SyntaxKind::TOKEN_WHITESPACE = next.kind()
+                                            {
+                                                green = green.remove_child(next.index());
                                             }
+                                            let changed_outputs_lambda = outputs_lambda
+                                                .green()
+                                                .replace_child(output.index(), green.into());
+                                            let changed_toplevel = toplevel.green().replace_child(
+                                                outputs_lambda.index(),
+                                                changed_outputs_lambda.into(),
+                                            );
+                                            let result =
+                                                cst.first_child().unwrap().green().replace_child(
+                                                    toplevel.index(),
+                                                    changed_toplevel.into(),
+                                                );
+                                            return Some(Root::parse(&result.to_string()).syntax());
                                         }
                                     }
                                 }
@@ -370,19 +347,57 @@ impl<'a> Walker {
                         };
                         // If we already see outputs, but have no inputs
                         // we need to create a toplevel inputs attribute set.
-                        if child.to_string() == "outputs" && self.add_toplevel {
-                            if let Change::Add { id, uri, flake } = change {
-                                let addition = Root::parse(&format!(
-                                    "inputs.{}.url = \"{}\";",
-                                    id.clone().unwrap(),
-                                    uri.clone().unwrap()
-                                ))
-                                .syntax();
-                                // TODO Guard against indices that would be out of range here.
-                                if toplevel.index() > 0 {
-                                    let mut node = root.green().insert_child(
-                                        toplevel.index() - 1,
-                                        addition.green().into(),
+                        if child.to_string() == "outputs"
+                            && self.add_toplevel
+                            && let Change::Add { id, uri, flake } = change
+                        {
+                            let addition = Root::parse(&format!(
+                                "inputs.{}.url = \"{}\";",
+                                id.clone().unwrap(),
+                                uri.clone().unwrap()
+                            ))
+                            .syntax();
+                            // TODO Guard against indices that would be out of range here.
+                            if toplevel.index() > 0 {
+                                let mut node = root
+                                    .green()
+                                    .insert_child(toplevel.index() - 1, addition.green().into());
+                                root.children()
+                                    .find(|c| c.index() == toplevel.index() - 2)
+                                    .map(|c| {
+                                        if let Some(prev) = c.prev_sibling_or_token() {
+                                            if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
+                                                let whitespace = Root::parse(
+                                                    prev.as_token().unwrap().green().text(),
+                                                )
+                                                .syntax();
+                                                node = node.insert_child(
+                                                    toplevel.index() - 1,
+                                                    whitespace.green().into(),
+                                                );
+                                            }
+                                        } else if let Some(next) = c.next_sibling_or_token()
+                                            && next.kind() == SyntaxKind::TOKEN_WHITESPACE
+                                        {
+                                            let whitespace = Root::parse(
+                                                next.as_token().unwrap().green().text(),
+                                            )
+                                            .syntax();
+                                            node = node.insert_child(
+                                                toplevel.index() - 1,
+                                                whitespace.green().into(),
+                                            );
+                                        }
+                                    });
+                                if !flake {
+                                    let no_flake = Root::parse(&format!(
+                                        "inputs.{}.flake = false;",
+                                        id.clone().unwrap(),
+                                    ))
+                                    .syntax();
+                                    node = node.insert_child(
+                                        toplevel.index() + 1,
+                                        no_flake.green().into(),
                                     );
                                     root.children()
                                         .find(|c| c.index() == toplevel.index() - 2)
@@ -394,76 +409,34 @@ impl<'a> Walker {
                                                     )
                                                     .syntax();
                                                     node = node.insert_child(
-                                                        toplevel.index() - 1,
+                                                        toplevel.index() + 1,
                                                         whitespace.green().into(),
                                                     );
                                                 }
-                                            } else if let Some(next) = c.next_sibling_or_token() {
-                                                if next.kind() == SyntaxKind::TOKEN_WHITESPACE {
-                                                    let whitespace = Root::parse(
-                                                        next.as_token().unwrap().green().text(),
-                                                    )
-                                                    .syntax();
-                                                    node = node.insert_child(
-                                                        toplevel.index() - 1,
-                                                        whitespace.green().into(),
-                                                    );
-                                                }
+                                            } else if let Some(next) = c.next_sibling_or_token()
+                                                && next.kind() == SyntaxKind::TOKEN_WHITESPACE
+                                            {
+                                                let whitespace = Root::parse(
+                                                    next.as_token().unwrap().green().text(),
+                                                )
+                                                .syntax();
+                                                node = node.insert_child(
+                                                    toplevel.index() + 1,
+                                                    whitespace.green().into(),
+                                                );
                                             }
                                         });
-                                    if !flake {
-                                        let no_flake = Root::parse(&format!(
-                                            "inputs.{}.flake = false;",
-                                            id.clone().unwrap(),
-                                        ))
-                                        .syntax();
-                                        node = node.insert_child(
-                                            toplevel.index() + 1,
-                                            no_flake.green().into(),
-                                        );
-                                        root.children()
-                                            .find(|c| c.index() == toplevel.index() - 2)
-                                            .map(|c| {
-                                                if let Some(prev) = c.prev_sibling_or_token() {
-                                                    if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
-                                                        let whitespace = Root::parse(
-                                                            prev.as_token().unwrap().green().text(),
-                                                        )
-                                                        .syntax();
-                                                        node = node.insert_child(
-                                                            toplevel.index() + 1,
-                                                            whitespace.green().into(),
-                                                        );
-                                                    }
-                                                } else if let Some(next) = c.next_sibling_or_token()
-                                                {
-                                                    if next.kind() == SyntaxKind::TOKEN_WHITESPACE {
-                                                        let whitespace = Root::parse(
-                                                            next.as_token().unwrap().green().text(),
-                                                        )
-                                                        .syntax();
-                                                        node = node.insert_child(
-                                                            toplevel.index() + 1,
-                                                            whitespace.green().into(),
-                                                        );
-                                                    }
-                                                }
-                                            });
-                                    }
-                                    if let Some(prev) = child.next_sibling_or_token() {
-                                        if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
-                                            let whitespace = Root::parse(
-                                                prev.as_token().unwrap().green().text(),
-                                            )
-                                            .syntax();
-                                            node = node.insert_child(
-                                                child.index() + 1,
-                                                whitespace.green().into(),
-                                            );
-                                        }
-                                    }
-                                    return Some(Root::parse(&node.to_string()).syntax());
                                 }
+                                if let Some(prev) = child.next_sibling_or_token()
+                                    && prev.kind() == SyntaxKind::TOKEN_WHITESPACE
+                                {
+                                    let whitespace =
+                                        Root::parse(prev.as_token().unwrap().green().text())
+                                            .syntax();
+                                    node = node
+                                        .insert_child(child.index() + 1, whitespace.green().into());
+                                }
+                                return Some(Root::parse(&node.to_string()).syntax());
                             }
                         }
                     }
@@ -507,15 +480,14 @@ impl<'a> Walker {
                     self.insert_with_ctx(follows_id.to_string(), input, &ctx);
 
                     // Remove a toplevel follows node
-                    if let Some(input_id) = maybe_input_id {
-                        if change.is_remove() {
-                            if let Some(id) = change.id() {
-                                let maybe_follows = maybe_follows_id.map(|id| id.to_string());
-                                if id.matches_with_follows(&input_id.to_string(), maybe_follows) {
-                                    let replacement = Root::parse("").syntax();
-                                    return Some(replacement);
-                                }
-                            }
+                    if let Some(input_id) = maybe_input_id
+                        && change.is_remove()
+                        && let Some(id) = change.id()
+                    {
+                        let maybe_follows = maybe_follows_id.map(|id| id.to_string());
+                        if id.matches_with_follows(&input_id.to_string(), maybe_follows) {
+                            let replacement = Root::parse("").syntax();
+                            return Some(replacement);
                         }
                     }
                 }
@@ -553,277 +525,254 @@ impl<'a> Walker {
                                 if let SyntaxKind::TOKEN_WHITESPACE = prev.kind() {
                                     green = green.remove_child(prev.index());
                                 }
-                            } else if let Some(next) = child.next_sibling_or_token() {
-                                if let SyntaxKind::TOKEN_WHITESPACE = next.kind() {
-                                    green = green.remove_child(next.index());
-                                }
+                            } else if let Some(next) = child.next_sibling_or_token()
+                                && let SyntaxKind::TOKEN_WHITESPACE = next.kind()
+                            {
+                                green = green.remove_child(next.index());
                             }
                         }
                         let node = Root::parse(green.to_string().as_str()).syntax();
                         return Some(node);
-                    } else if change.is_some() && change.id().is_some() && ctx.is_none() {
-                        if let Change::Add { id, uri, flake } = change {
-                            let uri = Root::parse(&format!(
-                                "{}.url = \"{}\";",
-                                id.clone().unwrap(),
-                                uri.clone().unwrap(),
-                            ))
-                            .syntax();
-                            let mut green =
-                                node.green().insert_child(child.index(), uri.green().into());
-                            let prev = child.prev_sibling_or_token().unwrap();
-                            tracing::debug!("Token:{}", prev);
-                            tracing::debug!("Token Kind: {:?}", prev.kind());
+                    } else if change.is_some()
+                        && change.id().is_some()
+                        && ctx.is_none()
+                        && let Change::Add { id, uri, flake } = change
+                    {
+                        let uri = Root::parse(&format!(
+                            "{}.url = \"{}\";",
+                            id.clone().unwrap(),
+                            uri.clone().unwrap(),
+                        ))
+                        .syntax();
+                        let mut green =
+                            node.green().insert_child(child.index(), uri.green().into());
+                        let prev = child.prev_sibling_or_token().unwrap();
+                        tracing::debug!("Token:{}", prev);
+                        tracing::debug!("Token Kind: {:?}", prev.kind());
+                        if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
+                            let whitespace =
+                                Root::parse(prev.as_token().unwrap().green().text()).syntax();
+                            green =
+                                green.insert_child(child.index() + 1, whitespace.green().into());
+                        }
+                        tracing::debug!("green: {}", green);
+                        tracing::debug!("node: {}", node);
+                        tracing::debug!("node kind: {:?}", node.kind());
+                        if !flake {
+                            let no_flake =
+                                Root::parse(&format!("{}.flake = false;", id.clone().unwrap(),))
+                                    .syntax();
+                            green = green.insert_child(child.index() + 2, no_flake.green().into());
                             if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
                                 let whitespace =
                                     Root::parse(prev.as_token().unwrap().green().text()).syntax();
                                 green = green
-                                    .insert_child(child.index() + 1, whitespace.green().into());
+                                    .insert_child(child.index() + 3, whitespace.green().into());
                             }
-                            tracing::debug!("green: {}", green);
-                            tracing::debug!("node: {}", node);
-                            tracing::debug!("node kind: {:?}", node.kind());
-                            if !flake {
-                                let no_flake = Root::parse(&format!(
-                                    "{}.flake = false;",
-                                    id.clone().unwrap(),
-                                ))
-                                .syntax();
-                                green =
-                                    green.insert_child(child.index() + 2, no_flake.green().into());
-                                if prev.kind() == SyntaxKind::TOKEN_WHITESPACE {
-                                    let whitespace =
-                                        Root::parse(prev.as_token().unwrap().green().text())
-                                            .syntax();
-                                    green = green
-                                        .insert_child(child.index() + 3, whitespace.green().into());
-                                }
-                            }
-                            let node = Root::parse(green.to_string().as_str()).syntax();
-                            return Some(node);
                         }
+                        let node = Root::parse(green.to_string().as_str()).syntax();
+                        return Some(node);
                     }
                 }
                 SyntaxKind::NODE_IDENT => {
                     tracing::debug!("Node PATH: {}", child);
-                    if child.to_string() == "inputs" {
-                        if let Some(next_sibling) = child.as_node().unwrap().next_sibling() {
-                            match next_sibling.kind() {
-                                SyntaxKind::NODE_IDENT => {
-                                    tracing::debug!("NODE_IDENT input: {}", next_sibling);
-                                    tracing::debug!("NODE_IDENT input: {}", next_sibling);
-                                    if let Some(url_id) = next_sibling.next_sibling() {
-                                        match url_id.kind() {
-                                            SyntaxKind::NODE_IDENT => {
-                                                if url_id.to_string() == "url" {
-                                                    if let Some(url) = child
-                                                        .as_node()
-                                                        .unwrap()
-                                                        .parent()
-                                                        .unwrap()
-                                                        .next_sibling()
-                                                    {
-                                                        tracing::debug!(
-                                                            "This is an url from {} - {}",
-                                                            next_sibling,
-                                                            url
-                                                        );
-                                                        let mut input =
-                                                            Input::new(next_sibling.to_string());
-                                                        input.url = url.to_string();
-                                                        let text_range = url.text_range();
-                                                        input.range =
-                                                            crate::input::Range::from_text_range(
-                                                                text_range,
-                                                            );
-                                                        self.insert_with_ctx(
-                                                            next_sibling.to_string(),
-                                                            input,
-                                                            ctx,
-                                                        );
-                                                        if change.is_some() && change.is_remove() {
-                                                            if let Some(id) = change.id() {
-                                                                if id.to_string()
-                                                                    == next_sibling.to_string()
-                                                                {
-                                                                    let replacement =
-                                                                        Root::parse("").syntax();
-                                                                    tracing::debug!("Node: {node}");
-                                                                    return Some(replacement);
-                                                                }
-                                                            }
-                                                            if let Some(ctx) = ctx {
-                                                                if *ctx.level.first().unwrap()
-                                                                    == next_sibling.to_string()
-                                                                {
-                                                                    let replacement =
-                                                                        Root::parse("").syntax();
-                                                                    return Some(replacement);
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                } else if url_id.to_string() == "flake" {
-                                                    if let Some(is_flake) = child
-                                                        .as_node()
-                                                        .unwrap()
-                                                        .parent()
-                                                        .unwrap()
-                                                        .next_sibling()
-                                                    {
-                                                        tracing::debug!(
-                                                            "This id {} is a flake: {}",
-                                                            next_sibling,
-                                                            is_flake
-                                                        );
-                                                        // let mut input =
-                                                        //     Input::new(next_sibling.to_string());
-                                                        // input.flake =
-                                                        //     is_flake.to_string().parse().unwrap();
-                                                        // self.insert_with_ctx(
-                                                        //     next_sibling.to_string(),
-                                                        //     input,
-                                                        //     ctx,
-                                                        // );
-                                                        if change.is_some() && change.is_remove() {
-                                                            if let Some(id) = change.id() {
-                                                                if id.to_string()
-                                                                    == next_sibling.to_string()
-                                                                {
-                                                                    let replacement =
-                                                                        Root::parse("").syntax();
-                                                                    tracing::debug!("Node: {node}");
-                                                                    return Some(replacement);
-                                                                }
-                                                            }
-                                                            if let Some(ctx) = ctx {
-                                                                if *ctx.level.first().unwrap()
-                                                                    == next_sibling.to_string()
-                                                                {
-                                                                    let replacement =
-                                                                        Root::parse("").syntax();
-                                                                    return Some(replacement);
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                } else {
+                    if child.to_string() == "inputs"
+                        && let Some(next_sibling) = child.as_node().unwrap().next_sibling()
+                    {
+                        match next_sibling.kind() {
+                            SyntaxKind::NODE_IDENT => {
+                                tracing::debug!("NODE_IDENT input: {}", next_sibling);
+                                tracing::debug!("NODE_IDENT input: {}", next_sibling);
+                                if let Some(url_id) = next_sibling.next_sibling() {
+                                    match url_id.kind() {
+                                        SyntaxKind::NODE_IDENT => {
+                                            if url_id.to_string() == "url" {
+                                                if let Some(url) = child
+                                                    .as_node()
+                                                    .unwrap()
+                                                    .parent()
+                                                    .unwrap()
+                                                    .next_sibling()
+                                                {
                                                     tracing::debug!(
-                                                        "Unhandled input: {}",
-                                                        next_sibling
+                                                        "This is an url from {} - {}",
+                                                        next_sibling,
+                                                        url
                                                     );
+                                                    let mut input =
+                                                        Input::new(next_sibling.to_string());
+                                                    input.url = url.to_string();
+                                                    let text_range = url.text_range();
+                                                    input.range =
+                                                        crate::input::Range::from_text_range(
+                                                            text_range,
+                                                        );
+                                                    self.insert_with_ctx(
+                                                        next_sibling.to_string(),
+                                                        input,
+                                                        ctx,
+                                                    );
+                                                    if change.is_some() && change.is_remove() {
+                                                        if let Some(id) = change.id()
+                                                            && id.to_string()
+                                                                == next_sibling.to_string()
+                                                        {
+                                                            let replacement =
+                                                                Root::parse("").syntax();
+                                                            tracing::debug!("Node: {node}");
+                                                            return Some(replacement);
+                                                        }
+                                                        if let Some(ctx) = ctx
+                                                            && *ctx.level.first().unwrap()
+                                                                == next_sibling.to_string()
+                                                        {
+                                                            let replacement =
+                                                                Root::parse("").syntax();
+                                                            return Some(replacement);
+                                                        }
+                                                    }
                                                 }
-                                            }
-                                            _ => {
+                                            } else if url_id.to_string() == "flake" {
+                                                if let Some(is_flake) = child
+                                                    .as_node()
+                                                    .unwrap()
+                                                    .parent()
+                                                    .unwrap()
+                                                    .next_sibling()
+                                                {
+                                                    tracing::debug!(
+                                                        "This id {} is a flake: {}",
+                                                        next_sibling,
+                                                        is_flake
+                                                    );
+                                                    // let mut input =
+                                                    //     Input::new(next_sibling.to_string());
+                                                    // input.flake =
+                                                    //     is_flake.to_string().parse().unwrap();
+                                                    // self.insert_with_ctx(
+                                                    //     next_sibling.to_string(),
+                                                    //     input,
+                                                    //     ctx,
+                                                    // );
+                                                    if change.is_some() && change.is_remove() {
+                                                        if let Some(id) = change.id()
+                                                            && id.to_string()
+                                                                == next_sibling.to_string()
+                                                        {
+                                                            let replacement =
+                                                                Root::parse("").syntax();
+                                                            tracing::debug!("Node: {node}");
+                                                            return Some(replacement);
+                                                        }
+                                                        if let Some(ctx) = ctx
+                                                            && *ctx.level.first().unwrap()
+                                                                == next_sibling.to_string()
+                                                        {
+                                                            let replacement =
+                                                                Root::parse("").syntax();
+                                                            return Some(replacement);
+                                                        }
+                                                    }
+                                                }
+                                            } else {
                                                 tracing::debug!(
                                                     "Unhandled input: {}",
                                                     next_sibling
                                                 );
                                             }
                                         }
-                                    } else {
-                                        tracing::debug!("Unhandled input: {}", next_sibling);
-                                        if let Some(nested_attr) = child
-                                            .as_node()
-                                            .unwrap()
-                                            .parent()
-                                            .unwrap()
-                                            .next_sibling()
-                                        {
-                                            tracing::debug!("Nested input: {}", nested_attr);
-                                            for attr in nested_attr.children() {
-                                                tracing::debug!(
-                                                    "Nested input attr: {}, from: {}",
-                                                    attr,
-                                                    next_sibling
-                                                );
+                                        _ => {
+                                            tracing::debug!("Unhandled input: {}", next_sibling);
+                                        }
+                                    }
+                                } else {
+                                    tracing::debug!("Unhandled input: {}", next_sibling);
+                                    if let Some(nested_attr) =
+                                        child.as_node().unwrap().parent().unwrap().next_sibling()
+                                    {
+                                        tracing::debug!("Nested input: {}", nested_attr);
+                                        for attr in nested_attr.children() {
+                                            tracing::debug!(
+                                                "Nested input attr: {}, from: {}",
+                                                attr,
+                                                next_sibling
+                                            );
 
-                                                for binding in attr.children() {
-                                                    if binding.to_string() == "url" {
-                                                        let url = binding.next_sibling().unwrap();
-                                                        tracing::debug!(
-                                                            "This is an url: {} - {}",
-                                                            next_sibling,
-                                                            url
-                                                        );
-                                                        let mut input =
-                                                            Input::new(next_sibling.to_string());
-                                                        input.url = url.to_string();
-                                                        let text_range = next_sibling.text_range();
-                                                        input.range =
-                                                            crate::input::Range::from_text_range(
-                                                                text_range,
-                                                            );
-                                                        self.insert_with_ctx(
-                                                            next_sibling.to_string(),
-                                                            input,
-                                                            ctx,
-                                                        );
-                                                    }
-                                                    if change.is_remove() {
-                                                        if let Some(id) = change.id() {
-                                                            if id.to_string()
-                                                                == next_sibling.to_string()
-                                                            {
-                                                                let replacement =
-                                                                    Root::parse("").syntax();
-                                                                tracing::debug!("Node: {node}");
-                                                                return Some(replacement);
-                                                            }
-                                                        }
-                                                    }
+                                            for binding in attr.children() {
+                                                if binding.to_string() == "url" {
+                                                    let url = binding.next_sibling().unwrap();
                                                     tracing::debug!(
-                                                        "Nested input attr binding: {}",
-                                                        binding
+                                                        "This is an url: {} - {}",
+                                                        next_sibling,
+                                                        url
+                                                    );
+                                                    let mut input =
+                                                        Input::new(next_sibling.to_string());
+                                                    input.url = url.to_string();
+                                                    let text_range = next_sibling.text_range();
+                                                    input.range =
+                                                        crate::input::Range::from_text_range(
+                                                            text_range,
+                                                        );
+                                                    self.insert_with_ctx(
+                                                        next_sibling.to_string(),
+                                                        input,
+                                                        ctx,
                                                     );
                                                 }
-                                                let context =
-                                                    Context::new(vec![next_sibling.to_string()]);
-                                                tracing::debug!(
-                                                    "Walking inputs with: {attr}, context: {context:?}"
-                                                );
-                                                if let Some(change) =
-                                                    self.walk_input(&attr, &Some(context), change)
+                                                if change.is_remove()
+                                                    && let Some(id) = change.id()
+                                                    && id.to_string() == next_sibling.to_string()
                                                 {
-                                                    tracing::debug!("Adjusted change: {change}");
-                                                    tracing::debug!(
-                                                        "Adjusted change is_empty: {}",
-                                                        change.to_string().is_empty()
-                                                    );
-                                                    tracing::debug!(
-                                                        "Child index: {}",
-                                                        child.index()
-                                                    );
-                                                    tracing::debug!(
-                                                        "Child node: {}",
-                                                        child.as_node().unwrap()
-                                                    );
-                                                    tracing::debug!("Nested Attr: {}", nested_attr);
-                                                    tracing::debug!("Node: {}", node);
-                                                    tracing::debug!("Attr: {}", attr);
-                                                    // TODO: adjust node correctly if the change is
-                                                    // not empty
-                                                    let replacement =
-                                                        Self::remove_child_with_whitespace(
-                                                            &nested_attr,
-                                                            &attr,
-                                                            attr.index(),
-                                                        );
-                                                    tracing::debug!("Replacement: {}", replacement);
+                                                    let replacement = Root::parse("").syntax();
+                                                    tracing::debug!("Node: {node}");
                                                     return Some(replacement);
                                                 }
+                                                tracing::debug!(
+                                                    "Nested input attr binding: {}",
+                                                    binding
+                                                );
+                                            }
+                                            let context =
+                                                Context::new(vec![next_sibling.to_string()]);
+                                            tracing::debug!(
+                                                "Walking inputs with: {attr}, context: {context:?}"
+                                            );
+                                            if let Some(change) =
+                                                self.walk_input(&attr, &Some(context), change)
+                                            {
+                                                tracing::debug!("Adjusted change: {change}");
+                                                tracing::debug!(
+                                                    "Adjusted change is_empty: {}",
+                                                    change.to_string().is_empty()
+                                                );
+                                                tracing::debug!("Child index: {}", child.index());
+                                                tracing::debug!(
+                                                    "Child node: {}",
+                                                    child.as_node().unwrap()
+                                                );
+                                                tracing::debug!("Nested Attr: {}", nested_attr);
+                                                tracing::debug!("Node: {}", node);
+                                                tracing::debug!("Attr: {}", attr);
+                                                // TODO: adjust node correctly if the change is
+                                                // not empty
+                                                let replacement =
+                                                    Self::remove_child_with_whitespace(
+                                                        &nested_attr,
+                                                        &attr,
+                                                        attr.index(),
+                                                    );
+                                                tracing::debug!("Replacement: {}", replacement);
+                                                return Some(replacement);
                                             }
                                         }
                                     }
                                 }
-                                SyntaxKind::NODE_ATTR_SET => {}
-                                _ => {
-                                    tracing::debug!(
-                                        "Unhandled input kind: {:?}",
-                                        next_sibling.kind()
-                                    );
-                                    tracing::debug!("Unhandled input: {}", next_sibling);
-                                }
+                            }
+                            SyntaxKind::NODE_ATTR_SET => {}
+                            _ => {
+                                tracing::debug!("Unhandled input kind: {:?}", next_sibling.kind());
+                                tracing::debug!("Unhandled input: {}", next_sibling);
                             }
                         }
                     }
@@ -890,12 +839,12 @@ impl<'a> Walker {
                     tracing::debug!("Child of ATTR #:{i} {}", attr);
                     if attr.to_string() == "url" {
                         if let Some(prev_id) = attr.prev_sibling() {
-                            if let Change::Remove { id } = change {
-                                if id.to_string() == prev_id.to_string() {
-                                    tracing::debug!("Removing: {id}");
-                                    let empty = Root::parse("").syntax();
-                                    return Some(empty);
-                                }
+                            if let Change::Remove { id } = change
+                                && id.to_string() == prev_id.to_string()
+                            {
+                                tracing::debug!("Removing: {id}");
+                                let empty = Root::parse("").syntax();
+                                return Some(empty);
                             }
                             if let Some(sibling) = child.next_sibling() {
                                 tracing::debug!("This is an url from {} - {}", prev_id, sibling);
@@ -911,65 +860,50 @@ impl<'a> Walker {
                             "This is the next_sibling: {}",
                             child.next_sibling().unwrap()
                         );
-                        if let Some(parent) = child.parent() {
-                            if let Some(sibling) = parent.next_sibling() {
-                                //TODO: this is only matched, when url is the first child
-                                // TODO: Is this correct?
-                                tracing::debug!(
-                                    "This is a possible follows attribute:{} {}",
-                                    attr,
-                                    sibling
-                                );
-                                if let Some(child) = sibling.first_child() {
-                                    if child.to_string() == "inputs" {
-                                        if let Some(attr_set) = child.next_sibling() {
-                                            if SyntaxKind::NODE_ATTR_SET == attr_set.kind() {
-                                                for attr in attr_set.children() {
-                                                    let is_follows = attr
-                                                        .first_child()
-                                                        .unwrap()
-                                                        .first_child()
-                                                        .unwrap()
-                                                        .next_sibling()
-                                                        .unwrap();
+                        if let Some(parent) = child.parent()
+                            && let Some(sibling) = parent.next_sibling()
+                        {
+                            //TODO: this is only matched, when url is the first child
+                            // TODO: Is this correct?
+                            tracing::debug!(
+                                "This is a possible follows attribute:{} {}",
+                                attr,
+                                sibling
+                            );
+                            if let Some(child) = sibling.first_child()
+                                && child.to_string() == "inputs"
+                                && let Some(attr_set) = child.next_sibling()
+                                && SyntaxKind::NODE_ATTR_SET == attr_set.kind()
+                            {
+                                for attr in attr_set.children() {
+                                    let is_follows = attr
+                                        .first_child()
+                                        .unwrap()
+                                        .first_child()
+                                        .unwrap()
+                                        .next_sibling()
+                                        .unwrap();
 
-                                                    if is_follows.to_string() == "follows" {
-                                                        let id = is_follows.prev_sibling().unwrap();
-                                                        let follows = attr
-                                                            .first_child()
-                                                            .unwrap()
-                                                            .next_sibling()
-                                                            .unwrap();
-                                                        tracing::debug!(
-                                                            "The following attribute follows: {id}:{follows} is nested inside the attr: {ctx:?}"
-                                                        );
-                                                        let mut input = Input::new(id.to_string());
-                                                        input.url = follows.to_string();
-                                                        let text_range = follows.text_range();
-                                                        input.range =
-                                                            crate::input::Range::from_text_range(
-                                                                text_range,
-                                                            );
-                                                        self.insert_with_ctx(
-                                                            id.to_string(),
-                                                            input,
-                                                            ctx,
-                                                        );
-                                                        if change.is_remove() {
-                                                            if let Some(id) = change.id() {
-                                                                if id.matches_with_ctx(
-                                                                    &follows.to_string(),
-                                                                    ctx.clone(),
-                                                                ) {
-                                                                    let replacement =
-                                                                        Root::parse("").syntax();
-                                                                    return Some(replacement);
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
+                                    if is_follows.to_string() == "follows" {
+                                        let id = is_follows.prev_sibling().unwrap();
+                                        let follows =
+                                            attr.first_child().unwrap().next_sibling().unwrap();
+                                        tracing::debug!(
+                                            "The following attribute follows: {id}:{follows} is nested inside the attr: {ctx:?}"
+                                        );
+                                        let mut input = Input::new(id.to_string());
+                                        input.url = follows.to_string();
+                                        let text_range = follows.text_range();
+                                        input.range =
+                                            crate::input::Range::from_text_range(text_range);
+                                        self.insert_with_ctx(id.to_string(), input, ctx);
+                                        if change.is_remove()
+                                            && let Some(id) = change.id()
+                                            && id
+                                                .matches_with_ctx(&follows.to_string(), ctx.clone())
+                                        {
+                                            let replacement = Root::parse("").syntax();
+                                            return Some(replacement);
                                         }
                                     }
                                 }
@@ -987,13 +921,12 @@ impl<'a> Walker {
                                 let text_range = input_id.text_range();
                                 input.range = crate::input::Range::from_text_range(text_range);
                                 self.insert_with_ctx(input_id.to_string(), input, ctx);
-                                if change.is_remove() {
-                                    if let Some(id) = change.id() {
-                                        if id.matches_with_ctx(&input_id.to_string(), ctx.clone()) {
-                                            let replacement = Root::parse("").syntax();
-                                            return Some(replacement);
-                                        }
-                                    }
+                                if change.is_remove()
+                                    && let Some(id) = change.id()
+                                    && id.matches_with_ctx(&input_id.to_string(), ctx.clone())
+                                {
+                                    let replacement = Root::parse("").syntax();
+                                    return Some(replacement);
                                 }
                             }
                         } else {
@@ -1019,15 +952,13 @@ impl<'a> Walker {
                         let text_range = follows.text_range();
                         input.range = crate::input::Range::from_text_range(text_range);
                         self.insert_with_ctx(id.to_string(), input.clone(), ctx);
-                        if let Some(id) = change.id() {
-                            if let Some(ctx) = ctx {
-                                if id.matches_with_ctx(input.id(), Some(ctx.clone()))
-                                    && change.is_remove()
-                                {
-                                    let replacement = Root::parse("").syntax();
-                                    return Some(replacement);
-                                }
-                            }
+                        if let Some(id) = change.id()
+                            && let Some(ctx) = ctx
+                            && id.matches_with_ctx(input.id(), Some(ctx.clone()))
+                            && change.is_remove()
+                        {
+                            let replacement = Root::parse("").syntax();
+                            return Some(replacement);
                         }
                     }
                 }
@@ -1050,12 +981,12 @@ impl<'a> Walker {
                             self.insert_with_ctx(id.to_string(), input, ctx);
 
                             // Remove matched node.
-                            if let Change::Remove { id: candidate } = change {
-                                if candidate.to_string() == id.to_string() {
-                                    tracing::debug!("Removing: {id}");
-                                    let empty = Root::parse("").syntax();
-                                    return Some(empty);
-                                }
+                            if let Change::Remove { id: candidate } = change
+                                && candidate.to_string() == id.to_string()
+                            {
+                                tracing::debug!("Removing: {id}");
+                                let empty = Root::parse("").syntax();
+                                return Some(empty);
                             }
                         }
                         if leaf.to_string().starts_with("inputs") {

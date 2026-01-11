@@ -119,13 +119,12 @@ impl FlakeEdit {
                 match outputs {
                     Outputs::Multiple(out) | Outputs::Any(out) => {
                         let id = change.id().unwrap().to_string();
-                        if out.contains(&id) {
-                            if let Some(changed_node) =
+                        if out.contains(&id)
+                            && let Some(changed_node) =
                                 self.walker.change_outputs(OutputChange::Remove(id))
-                            {
-                                res = Some(changed_node.clone());
-                                self.walker.root = changed_node.clone();
-                            }
+                        {
+                            res = Some(changed_node.clone());
+                            self.walker.root = changed_node.clone();
                         }
                     }
                     Outputs::None => {}

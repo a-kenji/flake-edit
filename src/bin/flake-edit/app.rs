@@ -88,11 +88,9 @@ impl FlakeEdit {
         } else {
             self.root.apply(change)?;
 
-            if !no_lock {
-                if let Err(e) = self.run_nix_flake_lock() {
-                    // Make lock failures non-fatal warnings
-                    eprintln!("Warning: Failed to update lockfile: {}", e);
-                }
+            if !no_lock && let Err(e) = self.run_nix_flake_lock() {
+                // Make lock failures non-fatal warnings
+                eprintln!("Warning: Failed to update lockfile: {}", e);
             }
         }
         Ok(())

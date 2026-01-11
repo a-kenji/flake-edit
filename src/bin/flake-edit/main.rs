@@ -37,14 +37,34 @@ fn main() -> eyre::Result<()> {
     match args.subcommand() {
         cli::Command::Add {
             uri,
-            ref_or_rev: _,
+            ref_or_rev,
             id,
             no_flake,
         } => {
+            let apply_ref_or_rev = |mut flake_ref: FlakeRef| -> eyre::Result<FlakeRef> {
+                if let Some(ror) = ref_or_rev {
+                    flake_ref.r#type.ref_or_rev(Some(ror.clone())).map_err(|e| {
+                        eyre::eyre!("Cannot apply --ref-or-rev: {}", e).suggestion(
+                            "The --ref-or-rev option only works with git forge types (github:, gitlab:, sourcehut:) and indirect types (flake:).\nFor other URI types, use ?ref= or ?rev= query parameters in the URI itself.",
+                        )
+                    })?;
+                }
+                Ok(flake_ref)
+            };
+
             if id.is_some() && uri.is_some() {
+                let uri_str = uri.clone().unwrap();
+                let final_uri = if ref_or_rev.is_some() {
+                    let flake_ref: FlakeRef = uri_str
+                        .parse()
+                        .map_err(|e| eyre::eyre!("Failed to parse URI: {}", e))?;
+                    apply_ref_or_rev(flake_ref)?.to_string()
+                } else {
+                    uri_str
+                };
                 change = Change::Add {
                     id: id.clone(),
-                    uri: uri.clone(),
+                    uri: Some(final_uri),
                     flake: !no_flake,
                 };
             } else if let Some(uri) = id {
@@ -52,6 +72,7 @@ fn main() -> eyre::Result<()> {
                 let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(uri);
                 tracing::debug!("The parsed flake reference is: {flake_ref:?}");
                 if let Ok(flake_ref) = flake_ref {
+                    let flake_ref = apply_ref_or_rev(flake_ref)?;
                     let uri = if flake_ref.to_string().is_empty() {
                         uri.clone()
                     } else {

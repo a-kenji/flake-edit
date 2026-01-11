@@ -93,28 +93,28 @@ pub fn parse_channel_ref(ref_str: &str) -> ChannelType {
         return ChannelType::Unstable;
     }
 
-    if let Some(version) = ref_str.strip_prefix("nixos-") {
-        if let Some((year, month)) = parse_version(version) {
-            return ChannelType::NixosStable { year, month };
-        }
+    if let Some(version) = ref_str.strip_prefix("nixos-")
+        && let Some((year, month)) = parse_version(version)
+    {
+        return ChannelType::NixosStable { year, month };
     }
 
-    if let Some(version) = ref_str.strip_prefix("nixpkgs-") {
-        if let Some((year, month)) = parse_version(version) {
-            return ChannelType::NixpkgsStable { year, month };
-        }
+    if let Some(version) = ref_str.strip_prefix("nixpkgs-")
+        && let Some((year, month)) = parse_version(version)
+    {
+        return ChannelType::NixpkgsStable { year, month };
     }
 
-    if let Some(version) = ref_str.strip_prefix("release-") {
-        if let Some((year, month)) = parse_version(version) {
-            return ChannelType::HomeManagerRelease { year, month };
-        }
+    if let Some(version) = ref_str.strip_prefix("release-")
+        && let Some((year, month)) = parse_version(version)
+    {
+        return ChannelType::HomeManagerRelease { year, month };
     }
 
-    if let Some(version) = ref_str.strip_prefix("nix-darwin-") {
-        if let Some((year, month)) = parse_version(version) {
-            return ChannelType::NixDarwinStable { year, month };
-        }
+    if let Some(version) = ref_str.strip_prefix("nix-darwin-")
+        && let Some((year, month)) = parse_version(version)
+    {
+        return ChannelType::NixDarwinStable { year, month };
     }
 
     // Try bare version YY.MM
@@ -187,11 +187,11 @@ pub fn find_latest_channel(
     // Find all channels matching the same prefix and pick the latest
     let latest = find_latest_matching_branch(&branches, prefix, current_version);
 
-    if let Some(ref latest_branch) = latest {
-        if latest_branch == current_ref {
-            tracing::debug!("{} is already on the latest channel", current_ref);
-            return None;
-        }
+    if let Some(ref latest_branch) = latest
+        && latest_branch == current_ref
+    {
+        tracing::debug!("{} is already on the latest channel", current_ref);
+        return None;
     }
 
     latest

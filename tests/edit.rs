@@ -66,6 +66,20 @@ fn root_add_toplevel_id_uri_no_flake() {
     });
 }
 #[test]
+fn root_add_toplevel_id_uri_ref_or_rev() {
+    let (flake, _lock) = load_fixtures("root");
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let change = Change::Add {
+        id: Some("home-manager".to_owned()),
+        uri: Some("github:nix-community/home-manager/release-24.05".to_owned()),
+        flake: true,
+    };
+    let info = Info::new("".into(), vec![change.clone()]);
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+#[test]
 fn root_remove_toplevel_uri() {
     let (flake, _lock) = load_fixtures("root");
     let mut walker = Walker::new(&flake);
