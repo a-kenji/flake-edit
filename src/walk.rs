@@ -677,27 +677,28 @@ impl<'a> Walker {
     ) -> Option<SyntaxNode> {
         tracing::debug!("Node PATH: {}", child);
 
+        let child_node = child.as_node()?;
+        let parent_sibling = child_node.parent().and_then(|p| p.next_sibling());
+
         // Handle "inputs" identifier with next sibling
         if child.to_string() == "inputs"
-            && let Some(next_sibling) = child.as_node().unwrap().next_sibling()
+            && let Some(next_sibling) = child_node.next_sibling()
         {
             match next_sibling.kind() {
                 SyntaxKind::NODE_IDENT => {
                     tracing::debug!("NODE_IDENT input: {}", next_sibling);
                     if let Some(url_id) = next_sibling.next_sibling() {
                         if url_id.kind() == SyntaxKind::NODE_IDENT {
-                            if let Some(value) =
-                                child.as_node().unwrap().parent().unwrap().next_sibling()
-                            {
+                            if let Some(value) = &parent_sibling {
                                 if url_id.to_string() == "url" {
                                     if let Some(result) =
-                                        self.handle_flat_url(&next_sibling, &value, ctx, change)
+                                        self.handle_flat_url(&next_sibling, value, ctx, change)
                                     {
                                         return Some(result);
                                     }
                                 } else if url_id.to_string() == "flake" {
                                     if let Some(result) =
-                                        self.handle_flat_flake(&next_sibling, &value, ctx, change)
+                                        self.handle_flat_flake(&next_sibling, value, ctx, change)
                                     {
                                         return Some(result);
                                     }
@@ -708,10 +709,9 @@ impl<'a> Walker {
                         } else {
                             tracing::debug!("Unhandled input: {}", next_sibling);
                         }
-                    } else if let Some(nested_attr) =
-                        child.as_node().unwrap().parent().unwrap().next_sibling()
+                    } else if let Some(nested_attr) = &parent_sibling
                         && let Some(result) =
-                            self.handle_nested_input(&next_sibling, &nested_attr, ctx, change)
+                            self.handle_nested_input(&next_sibling, nested_attr, ctx, change)
                     {
                         return Some(result);
                     }
@@ -726,8 +726,7 @@ impl<'a> Walker {
 
         // Handle flat tree attributes like "inputs.X.Y"
         if child.to_string().starts_with("inputs") {
-            let child_node = child.as_node().unwrap();
-            let id = child_node.next_sibling().unwrap();
+            let id = child_node.next_sibling()?;
             let context = id.to_string().into();
             tracing::debug!("Walking inputs with: {child}, context: {context:?}");
             if let Some(_replacement) = self.walk_inputs(child_node.clone(), &Some(context), change)
