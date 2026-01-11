@@ -2,6 +2,7 @@ use nix_uri::{FlakeRef, RefLocation};
 use ropey::Rope;
 use std::cmp::Ordering;
 
+use crate::channel::{UpdateStrategy, detect_strategy, find_latest_channel};
 use crate::edit::InputMap;
 use crate::input::Input;
 use crate::uri::is_git_url;
@@ -269,6 +270,85 @@ impl Updater {
     }
     /// Query a forge api for the latest release and update, if necessary.
     pub fn query_and_update_all_inputs(&mut self, input: &UpdateInput, init: bool) {
+        let uri = self.get_input_text(input);
+
+        let parsed = match uri.parse::<FlakeRef>() {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                tracing::error!("Failed to parse URI: {}", e);
+                return;
+            }
+        };
+
+        let owner = match parsed.r#type.get_owner() {
+            Some(o) => o,
+            None => {
+                tracing::debug!("Skipping input without owner");
+                return;
+            }
+        };
+
+        let repo = match parsed.r#type.get_repo() {
+            Some(r) => r,
+            None => {
+                tracing::debug!("Skipping input without repo");
+                return;
+            }
+        };
+
+        let strategy = detect_strategy(&owner, &repo);
+        tracing::debug!("Update strategy for {}/{}: {:?}", owner, repo, strategy);
+
+        match strategy {
+            UpdateStrategy::NixpkgsChannel
+            | UpdateStrategy::HomeManagerChannel
+            | UpdateStrategy::NixDarwinChannel => {
+                self.update_channel_input(input, &parsed);
+            }
+            UpdateStrategy::SemverTags => {
+                self.update_semver_input(input, init);
+            }
+        }
+    }
+
+    /// Update an input using channel-based versioning (nixpkgs, home-manager, nix-darwin).
+    fn update_channel_input(&mut self, input: &UpdateInput, parsed: &FlakeRef) {
+        let owner = parsed.r#type.get_owner().unwrap();
+        let repo = parsed.r#type.get_repo().unwrap();
+        let domain = parsed.r#type.get_domain();
+
+        let current_ref = parsed.get_ref_or_rev().unwrap_or_default();
+
+        if current_ref.is_empty() {
+            tracing::debug!("Skipping unpinned channel input: {}", input.input.id);
+            return;
+        }
+
+        let has_refs_heads_prefix = current_ref.starts_with("refs/heads/");
+
+        let latest = match find_latest_channel(&current_ref, &owner, &repo, domain.as_deref()) {
+            Some(latest) => latest,
+            // Either already on latest, unstable, or not a recognized channel
+            None => return,
+        };
+
+        let final_ref = if has_refs_heads_prefix {
+            format!("refs/heads/{}", latest)
+        } else {
+            latest.clone()
+        };
+
+        let mut parsed = parsed.clone();
+        let _ = parsed.set_ref(Some(final_ref.clone()));
+        let updated_uri = parsed.to_string();
+
+        if Self::print_update_status(&input.input.id, &current_ref, &final_ref) {
+            self.update_input(input.clone(), &updated_uri);
+        }
+    }
+
+    /// Update an input using semver tag-based versioning (standard behavior).
+    fn update_semver_input(&mut self, input: &UpdateInput, init: bool) {
         let target = match self.parse_update_target(input, init) {
             Some(target) => target,
             None => return,

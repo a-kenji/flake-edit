@@ -44,6 +44,14 @@ impl ForgeClient {
         Ok(text)
     }
 
+    /// Check if a URL returns a successful (2xx) response
+    fn head_ok(&self, url: &str, headers: HeaderMap) -> bool {
+        match self.client.get(url).headers(headers).send() {
+            Ok(response) => response.status().is_success(),
+            Err(_) => false,
+        }
+    }
+
     fn make_headers() -> HeaderMap {
         let mut headers = HeaderMap::new();
         if let Ok(user_agent) = HeaderValue::from_str("flake-edit") {
@@ -117,6 +125,46 @@ impl ForgeClient {
         Ok(tags)
     }
 
+    /// Check if a specific branch exists (returns true/false, no error on 404)
+    pub fn branch_exists_github(&self, repo: &str, owner: &str, branch: &str) -> bool {
+        let mut headers = Self::make_headers();
+        if let Some(token) = get_forge_token("github.com") {
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+            );
+        }
+
+        let url = format!(
+            "https://api.github.com/repos/{}/{}/branches/{}",
+            owner, repo, branch
+        );
+
+        self.head_ok(&url, headers)
+    }
+
+    /// Check if a specific branch exists on Gitea/Forgejo
+    pub fn branch_exists_gitea(&self, repo: &str, owner: &str, domain: &str, branch: &str) -> bool {
+        let mut headers = Self::make_headers();
+        if let Some(token) = get_forge_token(domain) {
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+            );
+        }
+
+        for scheme in ["https", "http"] {
+            let url = format!(
+                "{}://{}/api/v1/repos/{}/{}/branches/{}",
+                scheme, domain, owner, repo, branch
+            );
+            if self.head_ok(&url, headers.clone()) {
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn query_gitea_tags(
         &self,
         repo: &str,
@@ -151,10 +199,126 @@ impl ForgeClient {
 
         Err(ApiError::NoTagsFound)
     }
+
+    pub fn query_github_branches(
+        &self,
+        repo: &str,
+        owner: &str,
+    ) -> Result<IntermediaryBranches, ApiError> {
+        let mut headers = Self::make_headers();
+        if let Some(token) = get_forge_token("github.com") {
+            tracing::debug!("Found github token.");
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {token}"))?,
+            );
+        }
+
+        let mut all_branches = Vec::new();
+        let mut page = 1;
+        const MAX_PAGES: u32 = 20; // Safety limit to avoid infinite loops
+
+        loop {
+            let url = format!(
+                "https://api.github.com/repos/{}/{}/branches?per_page=100&page={}",
+                owner, repo, page
+            );
+            tracing::debug!("Fetching branches page {}: {}", page, url);
+
+            let body = self.get(&url, headers.clone())?;
+            let page_branches = serde_json::from_str::<IntermediaryBranches>(&body)?;
+
+            let count = page_branches.0.len();
+            tracing::debug!("Got {} branches on page {}", count, page);
+
+            all_branches.extend(page_branches.0);
+
+            // Stop if we got fewer than 100 (last page) or hit max pages
+            if count < 100 || page >= MAX_PAGES {
+                break;
+            }
+
+            page += 1;
+        }
+
+        tracing::debug!("Total branches fetched: {}", all_branches.len());
+        Ok(IntermediaryBranches(all_branches))
+    }
+
+    pub fn query_gitea_branches(
+        &self,
+        repo: &str,
+        owner: &str,
+        domain: &str,
+    ) -> Result<IntermediaryBranches, ApiError> {
+        let mut headers = Self::make_headers();
+
+        if let Some(token) = get_forge_token(domain) {
+            tracing::debug!("Found token for {}", domain);
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {token}"))?,
+            );
+        }
+
+        let mut all_branches = Vec::new();
+        let mut page = 1;
+        const MAX_PAGES: u32 = 20;
+
+        // Try HTTPS first, then HTTP
+        for scheme in ["https", "http"] {
+            loop {
+                let url = format!(
+                    "{}://{}/api/v1/repos/{}/{}/branches?limit=50&page={}",
+                    scheme, domain, owner, repo, page
+                );
+                tracing::debug!("Trying Gitea branches endpoint: {}", url);
+
+                match self.get(&url, headers.clone()) {
+                    Ok(body) => {
+                        tracing::debug!("Body from Gitea API: {body}");
+                        match serde_json::from_str::<IntermediaryBranches>(&body) {
+                            Ok(page_branches) => {
+                                let count = page_branches.0.len();
+                                all_branches.extend(page_branches.0);
+
+                                if count < 50 || page >= MAX_PAGES {
+                                    return Ok(IntermediaryBranches(all_branches));
+                                }
+                                page += 1;
+                            }
+                            Err(_) => break, // Try next scheme
+                        }
+                    }
+                    Err(_) => break, // Try next scheme
+                }
+            }
+
+            if !all_branches.is_empty() {
+                return Ok(IntermediaryBranches(all_branches));
+            }
+            page = 1; // Reset for next scheme
+        }
+
+        Err(ApiError::InvalidInput("Could not fetch branches".into()))
+    }
 }
 
 #[derive(Deserialize, Debug)]
 pub struct IntermediaryTags(Vec<IntermediaryTag>);
+
+#[derive(Deserialize, Debug)]
+pub struct IntermediaryBranches(Vec<IntermediaryBranch>);
+
+#[derive(Deserialize, Debug)]
+pub struct IntermediaryBranch {
+    name: String,
+}
+
+#[derive(Debug, Default)]
+pub struct Branches {
+    pub names: Vec<String>,
+}
 
 #[derive(Debug)]
 pub struct Tags {
@@ -236,6 +400,60 @@ pub fn get_tags(repo: &str, owner: &str, domain: Option<&str>) -> Result<Tags, A
     Ok(tags.into())
 }
 
+pub fn get_branches(repo: &str, owner: &str, domain: Option<&str>) -> Result<Branches, ApiError> {
+    let domain = domain.unwrap_or("github.com");
+    let client = ForgeClient::default();
+    let forge_type = client.detect_forge_type(domain);
+
+    tracing::debug!(
+        "Fetching branches for {}/{} on {} ({:?})",
+        owner,
+        repo,
+        domain,
+        forge_type
+    );
+
+    let branches = match forge_type {
+        ForgeType::GitHub => client.query_github_branches(repo, owner)?,
+        ForgeType::Gitea => client.query_gitea_branches(repo, owner, domain)?,
+        ForgeType::Unknown => {
+            tracing::warn!("Unknown forge type for {}, trying Gitea API", domain);
+            client.query_gitea_branches(repo, owner, domain)?
+        }
+    };
+
+    Ok(branches.into())
+}
+
+/// Check if a specific branch exists without listing all branches.
+/// Much more efficient for repos with many branches (like nixpkgs).
+pub fn branch_exists(repo: &str, owner: &str, branch: &str, domain: Option<&str>) -> bool {
+    let domain = domain.unwrap_or("github.com");
+    let client = ForgeClient::default();
+    let forge_type = client.detect_forge_type(domain);
+
+    match forge_type {
+        ForgeType::GitHub => client.branch_exists_github(repo, owner, branch),
+        ForgeType::Gitea => client.branch_exists_gitea(repo, owner, domain, branch),
+        ForgeType::Unknown => client.branch_exists_gitea(repo, owner, domain, branch),
+    }
+}
+
+/// Check multiple branches and return which ones exist.
+/// More efficient than get_branches for known candidate branches.
+pub fn filter_existing_branches(
+    repo: &str,
+    owner: &str,
+    candidates: &[String],
+    domain: Option<&str>,
+) -> Vec<String> {
+    candidates
+        .iter()
+        .filter(|branch| branch_exists(repo, owner, branch, domain))
+        .cloned()
+        .collect()
+}
+
 #[derive(Deserialize, Debug, Clone)]
 struct NixConfig {
     #[serde(rename = "access-tokens")]
@@ -305,5 +523,13 @@ impl From<IntermediaryTags> for Tags {
             }
         }
         Tags { versions }
+    }
+}
+
+impl From<IntermediaryBranches> for Branches {
+    fn from(value: IntermediaryBranches) -> Self {
+        Branches {
+            names: value.0.into_iter().map(|b| b.name).collect(),
+        }
     }
 }
