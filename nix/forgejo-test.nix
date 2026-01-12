@@ -65,7 +65,7 @@
         testScript =
           { nodes, ... }:
           let
-            forgejoExe = "${nodes.forge.config.services.forgejo.package}/bin/forgejo";
+            forgejoExe = "${nodes.forge.services.forgejo.package}/bin/forgejo";
           in
           ''
             EMPTY_FLAKE = "{ inputs = { }; outputs = { ... }: { }; }"
