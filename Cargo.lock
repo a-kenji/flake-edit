@@ -632,7 +632,6 @@ dependencies = [
  "rnix",
  "roff",
  "ropey",
- "rowan",
  "rstest",
  "semver",
  "serde",
