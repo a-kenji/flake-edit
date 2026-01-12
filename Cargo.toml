@@ -49,7 +49,7 @@ rowan = "0.16.1"
 ropey = { version = "1.6.1" }
 semver = "1.0.27"
 serde = "1.0.228"
-serde_json = { version = "1.0.148" }
+serde_json = { version = "1.0.149" }
 thiserror = "2.0.17"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.20", features = [
