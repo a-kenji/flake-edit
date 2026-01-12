@@ -4,7 +4,7 @@ info:
   program: flake-edit
   args:
     - "--flake"
-    - /home/kenji/dev/flake-edit/tests/fixtures/root.flake.nix
+    - /tmp/too/flake-edit/tests/fixtures/root.flake.nix
     - "--diff"
     - rm
     - rust-overlay
@@ -16,7 +16,7 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -5,12 +5,6 @@
+@@ -5,16 +5,9 @@
      nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
      flake-utelinos.url = "github:numtide/flake-utils";
@@ -29,5 +29,9 @@ exit_code: 0
      crane = {
        url = "github:ipetkov/crane";
        inputs.nixpkgs.follows = "nixpkgs";
+-      inputs.rust-overlay.follows = "rust-overlay";
+       inputs.flake-utils.follows = "flake-utils";
+     };
+   };
 
 ----- stderr -----

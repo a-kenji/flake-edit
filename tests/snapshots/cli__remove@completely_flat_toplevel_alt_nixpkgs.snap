@@ -1,11 +1,10 @@
 ---
 source: tests/cli.rs
-assertion_line: 127
 info:
   program: flake-edit
   args:
     - "--flake"
-    - /home/kenji/dev/flake-edit/tests/fixtures/completely_flat_toplevel_alt.flake.nix
+    - /tmp/too/flake-edit/tests/fixtures/completely_flat_toplevel_alt.flake.nix
     - "--diff"
     - rm
     - nixpkgs
@@ -17,13 +16,18 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -2,7 +2,6 @@
+@@ -2,12 +2,9 @@
    description = "Edit your flake inputs with ease";
 
    inputs = {
 -    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
      flake-utelinos.url = "github:numtide/flake-utils";
-     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+-    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
      rust-overlay.url = "github:oxalica/rust-overlay";
+     rust-overlay.inputs.flake-utils.follows = "flake-utils";
+-    crane.inputs.nixpkgs.follows = "nixpkgs";
+     crane.inputs.rust-overlay.follows = "rust-overlay";
+     crane.url = "github:ipetkov/crane";
+     crane.inputs.flake-utils.follows = "flake-utils";
 
 ----- stderr -----

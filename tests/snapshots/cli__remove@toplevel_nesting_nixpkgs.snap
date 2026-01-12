@@ -1,11 +1,10 @@
 ---
 source: tests/cli.rs
-assertion_line: 127
 info:
   program: flake-edit
   args:
     - "--flake"
-    - /home/kenji/dev/flake-edit/tests/fixtures/toplevel_nesting.flake.nix
+    - /tmp/too/flake-edit/tests/fixtures/toplevel_nesting.flake.nix
     - "--diff"
     - rm
     - nixpkgs
@@ -17,7 +16,7 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -1,8 +1,6 @@
+@@ -1,20 +1,16 @@
  {
    description = "toplevel nesting";
 
@@ -25,8 +24,15 @@ exit_code: 0
 -
    inputs.rust-overlay = {
      url = "github:oxalica/rust-overlay";
-     inputs.nixpkgs.follows = "nixpkgs";
-@@ -17,4 +15,4 @@
+-    inputs.nixpkgs.follows = "nixpkgs";
+     inputs.flake-utils.follows = "flake-utils";
+   };
+
+   inputs.crane = {
+     url = "github:ipetkov/crane";
+-    inputs.nixpkgs.follows = "nixpkgs";
+     inputs.rust-overlay.follows = "rust-overlay";
+     inputs.flake-utils.follows = "flake-utils";
    };
 
    outputs = _: { };
