@@ -84,23 +84,20 @@ fn make_flake_false_attr(id: &str) -> Node {
     parse_node(&format!("{}.flake = false;", id))
 }
 
-/// Remove whitespace adjacent to a child element from a green node.
-/// Used after removing or replacing a child with an empty node.
-fn strip_whitespace_after_child(
-    green: rowan::GreenNode,
-    child: &rnix::SyntaxElement,
-) -> rowan::GreenNode {
-    let mut green = green;
+/// Find the index of adjacent whitespace to strip after removing/replacing a child.
+/// Returns the index of whitespace before the child if present, otherwise after.
+fn adjacent_whitespace_index(child: &rnix::SyntaxElement) -> Option<usize> {
     if let Some(prev) = child.prev_sibling_or_token()
         && prev.kind() == SyntaxKind::TOKEN_WHITESPACE
     {
-        green = green.remove_child(prev.index());
+        Some(prev.index())
     } else if let Some(next) = child.next_sibling_or_token()
         && next.kind() == SyntaxKind::TOKEN_WHITESPACE
     {
-        green = green.remove_child(next.index());
+        Some(next.index())
+    } else {
+        None
     }
-    green
 }
 
 /// Check if an input should be removed based on the change and context.
@@ -233,9 +230,11 @@ impl<'a> Walker {
         node: &SyntaxNode,
         index: usize,
     ) -> SyntaxNode {
-        let green = parent.green().remove_child(index);
+        let mut green = parent.green().remove_child(index);
         let element: rnix::SyntaxElement = node.clone().into();
-        let green = strip_whitespace_after_child(green, &element);
+        if let Some(ws_index) = adjacent_whitespace_index(&element) {
+            green = green.remove_child(ws_index);
+        }
         parse_node(&green.to_string())
     }
 
@@ -785,8 +784,10 @@ impl<'a> Walker {
                 .replace_child(child.index(), replacement.green().into());
 
             // Remove adjacent whitespace if the replacement is empty
-            if replacement.text().is_empty() {
-                green = strip_whitespace_after_child(green, child);
+            if replacement.text().is_empty()
+                && let Some(ws_index) = adjacent_whitespace_index(child)
+            {
+                green = green.remove_child(ws_index);
             }
             return Some(parse_node(&green.to_string()));
         }
