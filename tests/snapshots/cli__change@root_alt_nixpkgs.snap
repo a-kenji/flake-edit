@@ -1,11 +1,10 @@
 ---
 source: tests/cli.rs
-assertion_line: 150
 info:
   program: flake-edit
   args:
     - "--flake"
-    - /home/kenji/dev/flake-edit/tests/fixtures/root_alt.flake.nix
+    - "[FIXTURES]/root_alt.flake.nix"
     - "--diff"
     - change
     - nixpkgs

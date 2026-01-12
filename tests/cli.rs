@@ -1,3 +1,4 @@
+use insta::internals::Content;
 use insta_cmd::{assert_cmd_snapshot, get_cargo_bin};
 use rstest::rstest;
 use std::process::Command;
@@ -11,6 +12,21 @@ fn cli() -> Command {
 fn fixture_path(name: &str) -> String {
     let dir = env!("CARGO_MANIFEST_DIR");
     format!("{dir}/tests/fixtures/{name}.flake.nix")
+}
+
+const FIXTURE_MARKER: &str = "/tests/fixtures/";
+
+/// Add redaction to filter environment-dependent fixture paths in args metadata.
+fn path_redactions(settings: &mut insta::Settings) {
+    settings.add_dynamic_redaction(".args[]", |value, _path| {
+        if let Some(s) = value.as_str() {
+            if let Some(idx) = s.find(FIXTURE_MARKER) {
+                let rest = &s[idx + FIXTURE_MARKER.len()..];
+                return Content::from(format!("[FIXTURES]/{rest}"));
+            }
+        }
+        value
+    });
 }
 
 fn error_filters(settings: &mut insta::Settings) {
@@ -27,9 +43,10 @@ fn error_filters(settings: &mut insta::Settings) {
 #[case("flat_nested_flat")]
 #[case("first_nested_node")]
 fn test_list(#[case] fixture: &str) {
-    insta::with_settings!({
-        snapshot_suffix => fixture
-    }, {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    settings.set_snapshot_suffix(fixture);
+    settings.bind(|| {
         assert_cmd_snapshot!(cli().arg("--flake").arg(fixture_path(fixture)).arg("list"));
     });
 }
@@ -40,16 +57,19 @@ fn test_list(#[case] fixture: &str) {
 #[case("root", "json")]
 #[case("root", "raw")]
 fn test_list_format(#[case] fixture: &str, #[case] format: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
     let suffix = format!("{fixture}_{format}");
-    insta::with_settings!({
-        snapshot_suffix => suffix
-    }, {
-        assert_cmd_snapshot!(cli()
-            .arg("--flake")
-            .arg(fixture_path(fixture))
-            .arg("list")
-            .arg("--format")
-            .arg(format));
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("list")
+                .arg("--format")
+                .arg(format)
+        );
     });
 }
 
@@ -63,53 +83,62 @@ fn test_list_format(#[case] fixture: &str, #[case] format: &str) {
 #[case("flat_nested_flat", "vmsh", "github:mic92/vmsh")]
 #[case("first_nested_node", "vmsh", "github:mic92/vmsh")]
 fn test_add(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
     let suffix = format!("{fixture}_{id}");
-    insta::with_settings!({
-        snapshot_suffix => suffix
-    }, {
-        assert_cmd_snapshot!(cli()
-            .arg("--flake")
-            .arg(fixture_path(fixture))
-            .arg("--diff")
-            .arg("add")
-            .arg(id)
-            .arg(uri));
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .arg("add")
+                .arg(id)
+                .arg(uri)
+        );
     });
 }
 
 #[rstest]
 #[case("root", "not_a_flake", "github:a-kenji/not_a_flake")]
 fn test_add_no_flake(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
     let suffix = format!("{fixture}_{id}");
-    insta::with_settings!({
-        snapshot_suffix => suffix
-    }, {
-        assert_cmd_snapshot!(cli()
-            .arg("--flake")
-            .arg(fixture_path(fixture))
-            .arg("--diff")
-            .arg("add")
-            .arg("--no-flake")
-            .arg(id)
-            .arg(uri));
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .arg("add")
+                .arg("--no-flake")
+                .arg(id)
+                .arg(uri)
+        );
     });
 }
 
 #[rstest]
 #[case("root", "shallow_input", "github:foo/bar")]
 fn test_add_shallow(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
     let suffix = format!("{fixture}_{id}");
-    insta::with_settings!({
-        snapshot_suffix => suffix
-    }, {
-        assert_cmd_snapshot!(cli()
-            .arg("--flake")
-            .arg(fixture_path(fixture))
-            .arg("--diff")
-            .arg("add")
-            .arg("--shallow")
-            .arg(id)
-            .arg(uri));
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .arg("add")
+                .arg("--shallow")
+                .arg(id)
+                .arg(uri)
+        );
     });
 }
 
@@ -121,35 +150,41 @@ fn test_add_shallow_with_ref(
     #[case] uri: &str,
     #[case] ref_or_rev: &str,
 ) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
     let suffix = format!("{fixture}_{id}");
-    insta::with_settings!({
-        snapshot_suffix => suffix
-    }, {
-        assert_cmd_snapshot!(cli()
-            .arg("--flake")
-            .arg(fixture_path(fixture))
-            .arg("--diff")
-            .arg("add")
-            .arg("--shallow")
-            .arg("--ref-or-rev")
-            .arg(ref_or_rev)
-            .arg(id)
-            .arg(uri));
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .arg("add")
+                .arg("--shallow")
+                .arg("--ref-or-rev")
+                .arg(ref_or_rev)
+                .arg(id)
+                .arg(uri)
+        );
     });
 }
 
 #[rstest]
 #[case("root")]
 fn test_add_infer_id(#[case] fixture: &str) {
-    insta::with_settings!({
-        snapshot_suffix => fixture
-    }, {
-        assert_cmd_snapshot!(cli()
-            .arg("--flake")
-            .arg(fixture_path(fixture))
-            .arg("--diff")
-            .arg("add")
-            .arg("github:mic92/vmsh"));
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    settings.set_snapshot_suffix(fixture);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .arg("add")
+                .arg("github:mic92/vmsh")
+        );
     });
 }
 
@@ -164,16 +199,19 @@ fn test_add_infer_id(#[case] fixture: &str) {
 #[case("first_nested_node", "nixpkgs")]
 #[case("root", "rust-overlay")]
 fn test_remove(#[case] fixture: &str, #[case] id: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
     let suffix = format!("{fixture}_{id}");
-    insta::with_settings!({
-        snapshot_suffix => suffix
-    }, {
-        assert_cmd_snapshot!(cli()
-            .arg("--flake")
-            .arg(fixture_path(fixture))
-            .arg("--diff")
-            .arg("rm")
-            .arg(id));
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .arg("rm")
+                .arg(id)
+        );
     });
 }
 
@@ -199,35 +237,41 @@ fn test_remove(#[case] fixture: &str, #[case] id: &str) {
 #[case("flat_nested_flat", "nixpkgs", "github:nixos/nixpkgs/nixos-24.05")]
 #[case("first_nested_node", "nixpkgs", "github:nixos/nixpkgs/nixos-24.05")]
 fn test_change(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
     let suffix = format!("{fixture}_{id}");
-    insta::with_settings!({
-        snapshot_suffix => suffix
-    }, {
-        assert_cmd_snapshot!(cli()
-            .arg("--flake")
-            .arg(fixture_path(fixture))
-            .arg("--diff")
-            .arg("change")
-            .arg(id)
-            .arg(uri));
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .arg("change")
+                .arg(id)
+                .arg(uri)
+        );
     });
 }
 
 #[rstest]
 #[case("root", "nixpkgs", "github:nixos/nixpkgs/nixos-24.05")]
 fn test_change_shallow(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
     let suffix = format!("{fixture}_{id}");
-    insta::with_settings!({
-        snapshot_suffix => suffix
-    }, {
-        assert_cmd_snapshot!(cli()
-            .arg("--flake")
-            .arg(fixture_path(fixture))
-            .arg("--diff")
-            .arg("change")
-            .arg("--shallow")
-            .arg(id)
-            .arg(uri));
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .arg("change")
+                .arg("--shallow")
+                .arg(id)
+                .arg(uri)
+        );
     });
 }
 
@@ -235,6 +279,7 @@ fn test_change_shallow(#[case] fixture: &str, #[case] id: &str, #[case] uri: &st
 #[case("root", "nonexistent-input")]
 fn test_remove_nonexistent(#[case] fixture: &str, #[case] id: &str) {
     let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
     error_filters(&mut settings);
     let suffix = format!("{fixture}_{id}");
     settings.set_snapshot_suffix(suffix);
@@ -254,6 +299,7 @@ fn test_remove_nonexistent(#[case] fixture: &str, #[case] id: &str) {
 #[case("root", "nonexistent-input", "github:foo/bar")]
 fn test_change_nonexistent(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
     let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
     error_filters(&mut settings);
     let suffix = format!("{fixture}_{id}");
     settings.set_snapshot_suffix(suffix);

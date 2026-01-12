@@ -1,11 +1,10 @@
 ---
 source: tests/cli.rs
-assertion_line: 61
 info:
   program: flake-edit
   args:
     - "--flake"
-    - /home/kenji/dev/flake-edit/tests/fixtures/flat_nested_flat.flake.nix
+    - "[FIXTURES]/flat_nested_flat.flake.nix"
     - "--diff"
     - add
     - vmsh

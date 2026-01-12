@@ -1,11 +1,10 @@
 ---
 source: tests/cli.rs
-assertion_line: 70
 info:
   program: flake-edit
   args:
     - "--flake"
-    - /home/kenji/dev/flake-edit/tests/fixtures/toplevel_nesting.flake.nix
+    - "[FIXTURES]/toplevel_nesting.flake.nix"
     - "--diff"
     - add
     - vmsh

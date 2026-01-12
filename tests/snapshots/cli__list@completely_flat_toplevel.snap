@@ -1,11 +1,10 @@
 ---
 source: tests/cli.rs
-assertion_line: 30
 info:
   program: flake-edit
   args:
     - "--flake"
-    - /home/kenji/dev/flake-edit/tests/fixtures/completely_flat_toplevel.flake.nix
+    - "[FIXTURES]/completely_flat_toplevel.flake.nix"
     - list
   env:
     NO_COLOR: "1"

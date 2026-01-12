@@ -4,7 +4,7 @@ info:
   program: flake-edit
   args:
     - "--flake"
-    - /tmp/too/flake-edit/tests/fixtures/root.flake.nix
+    - "[FIXTURES]/root.flake.nix"
     - "--diff"
     - rm
     - rust-overlay
