@@ -1,11 +1,10 @@
 ---
 source: tests/cli.rs
-assertion_line: 127
 info:
   program: flake-edit
   args:
     - "--flake"
-    - /home/kenji/dev/flake-edit/tests/fixtures/flat_nested_flat.flake.nix
+    - /tmp/too/flake-edit/tests/fixtures/flat_nested_flat.flake.nix
     - "--diff"
     - rm
     - nixpkgs
@@ -17,7 +16,7 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -1,7 +1,5 @@
+@@ -1,11 +1,8 @@
  {
    description = "flat nested flat test";
 -
@@ -25,7 +24,11 @@ exit_code: 0
    inputs.flake-utils.url = "github:numtide/flake-utils/master";
    inputs.poetry2nix = {
      inputs.flake-utils.follows = "flake-utils";
-@@ -12,9 +10,8 @@
+-    inputs.nixpkgs.follows = "nixpkgs";
+     url = "github:nix-community/poetry2nix/master";
+   };
+
+@@ -12,9 +9,8 @@
    outputs =
      {
        self,

@@ -1,11 +1,10 @@
 ---
 source: tests/cli.rs
-assertion_line: 114
 info:
   program: flake-edit
   args:
     - "--flake"
-    - /home/kenji/dev/flake-edit/tests/fixtures/one_level_nesting_flat.flake.nix
+    - /tmp/too/flake-edit/tests/fixtures/one_level_nesting_flat.flake.nix
     - "--diff"
     - rm
     - nixpkgs
@@ -17,15 +16,21 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -2,7 +2,6 @@
+@@ -2,13 +2,10 @@
    description = "Edit your flake inputs with ease";
 
    inputs = {
 -    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
      flake-utelinos.url = "github:numtide/flake-utils";
      rust-overlay.url = "github:oxalica/rust-overlay";
-     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
-@@ -16,7 +15,6 @@
+-    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+     rust-overlay.inputs.flake-utils.follows = "flake-utils";
+     crane.url = "github:ipetkov/crane";
+-    crane.inputs.nixpkgs.follows = "nixpkgs";
+     crane.inputs.rust-overlay.follows = "rust-overlay";
+     crane.inputs.flake-utils.follows = "flake-utils";
+   };
+@@ -16,7 +13,6 @@
    outputs =
      {
        self,
@@ -33,7 +38,7 @@ exit_code: 0
        flake-utils,
        flake-utelinos,
        rust-overlay,
-@@ -23,4 +21,4 @@
+@@ -23,4 +19,4 @@
        crane,
      }:
      { };

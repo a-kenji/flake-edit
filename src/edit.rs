@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::change::Change;
 use crate::error::FlakeEditError;
-use crate::input::Input;
+use crate::input::{Follows, Input};
 use crate::walk::Walker;
 
 pub struct FlakeEdit {
@@ -104,6 +104,13 @@ impl FlakeEdit {
                 }
             }
             Change::Remove { .. } => {
+                // Ensure inputs are populated first so we can find orphaned follows
+                if self.walker.inputs.is_empty() {
+                    let _ = self.walker.walk(&Change::None)?;
+                }
+
+                let removed_id = change.id().unwrap().to_string();
+
                 // If we remove a node, it could be a flat structure,
                 // we want to remove all of the references to its toplevel.
                 let mut res = None;
@@ -119,10 +126,10 @@ impl FlakeEdit {
                 let outputs = self.walker.list_outputs()?;
                 match outputs {
                     Outputs::Multiple(out) | Outputs::Any(out) => {
-                        let id = change.id().unwrap().to_string();
-                        if out.contains(&id)
-                            && let Some(changed_node) =
-                                self.walker.change_outputs(OutputChange::Remove(id))?
+                        if out.contains(&removed_id)
+                            && let Some(changed_node) = self
+                                .walker
+                                .change_outputs(OutputChange::Remove(removed_id.clone()))?
                         {
                             res = Some(changed_node.clone());
                             self.walker.root = changed_node.clone();
@@ -130,6 +137,19 @@ impl FlakeEdit {
                     }
                     Outputs::None => {}
                 }
+
+                // Remove orphaned follows references that point to the removed input
+                let orphaned_follows = self.collect_orphaned_follows(&removed_id);
+                for orphan_change in orphaned_follows {
+                    while let Some(changed_node) = self.walker.walk(&orphan_change)? {
+                        if res == Some(changed_node.clone()) {
+                            break;
+                        }
+                        res = Some(changed_node.clone());
+                        self.walker.root = changed_node.clone();
+                    }
+                }
+
                 Ok(res.map(|n| n.to_string()))
             }
             Change::Pin { .. } => todo!(),
@@ -156,5 +176,25 @@ impl FlakeEdit {
 
     pub fn walker(&self) -> &Walker {
         &self.walker
+    }
+
+    /// Collect follows references that point to a removed input.
+    /// Returns a list of Change::Remove for orphaned follows.
+    fn collect_orphaned_follows(&self, removed_id: &str) -> Vec<Change> {
+        let mut orphaned = Vec::new();
+        for (input_id, input) in &self.walker.inputs {
+            for follows in input.follows() {
+                if let Follows::Indirect(follows_name, target) = follows {
+                    // target is the RHS of `follows = "target"`
+                    if target.trim_matches('"') == removed_id {
+                        let nested_id = format!("{}.{}", input_id, follows_name);
+                        orphaned.push(Change::Remove {
+                            id: nested_id.into(),
+                        });
+                    }
+                }
+            }
+        }
+        orphaned
     }
 }

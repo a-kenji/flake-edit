@@ -15,7 +15,6 @@ info:
     flake-utelinos.url = "github:numtide/flake-utils";
     crane.url = "github:ipetkov/crane";
     crane.inputs.nixpkgs.follows = "nixpkgs";
-    crane.inputs.rust-overlay.follows = "rust-overlay";
     crane.inputs.flake-utils.follows = "flake-utils";
   };
 

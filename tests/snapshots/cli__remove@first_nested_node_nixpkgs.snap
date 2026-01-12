@@ -1,11 +1,10 @@
 ---
 source: tests/cli.rs
-assertion_line: 127
 info:
   program: flake-edit
   args:
     - "--flake"
-    - /home/kenji/dev/flake-edit/tests/fixtures/first_nested_node.flake.nix
+    - /tmp/too/flake-edit/tests/fixtures/first_nested_node.flake.nix
     - "--diff"
     - rm
     - nixpkgs
@@ -17,15 +16,17 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -6,7 +6,6 @@
+@@ -4,9 +4,7 @@
+   inputs = {
+     naersk = {
        url = "github:nix-community/naersk/master";
-       inputs.nixpkgs.follows = "nixpkgs";
+-      inputs.nixpkgs.follows = "nixpkgs";
      };
 -    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
      utils.url = "github:numtide/flake-utils";
      flake-compat = {
        url = "github:edolstra/flake-compat";
-@@ -17,10 +16,9 @@
+@@ -17,10 +15,9 @@
    outputs =
      {
        self,
