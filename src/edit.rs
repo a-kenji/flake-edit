@@ -14,9 +14,7 @@ pub struct FlakeEdit {
 pub enum Outputs {
     #[default]
     None,
-    // needs strict inputs to output mapping
     Multiple(Vec<String>),
-    // contains ...
     Any(Vec<String>),
 }
 
@@ -65,7 +63,6 @@ impl FlakeEdit {
     pub fn apply_change(&mut self, change: Change) -> Result<Option<String>, FlakeEditError> {
         match change {
             Change::None => Ok(None),
-            //TODO: Add outputs, if needed.
             Change::Add { .. } => {
                 // Check for duplicate input before adding
                 if let Some(input_id) = change.id() {
@@ -116,7 +113,6 @@ impl FlakeEdit {
                 let mut res = None;
                 while let Some(changed_node) = self.walker.walk(&change)? {
                     if res == Some(changed_node.clone()) {
-                        // TODO: Sanity check, turn into proper error.
                         break;
                     }
                     res = Some(changed_node.clone());
@@ -189,7 +185,7 @@ impl FlakeEdit {
                     if target.trim_matches('"') == removed_id {
                         let nested_id = format!("{}.{}", input_id, follows_name);
                         orphaned.push(Change::Remove {
-                            id: nested_id.into(),
+                            ids: vec![nested_id.into()],
                         });
                     }
                 }

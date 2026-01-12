@@ -1,0 +1,32 @@
+---
+source: tests/tui.rs
+expression: "snapshot(&mut terminal, &app)"
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 80, height: 7 },
+    content: [
+        "────────────────────────────────────────────────────────────────────────────────",
+        "   [x] crane                                                                    ",
+        "   [x] flake-utelinos                                                           ",
+        ">> [ ] nixpkgs                                                                  ",
+        "   [ ] rust-overlay                                                             ",
+        "────────────────────────────────────────────────────────────────────────────────",
+        " Update  Space select, U all, ^D diff (2                 Diff: Off   flake-edit ",
+    ],
+    styles: [
+        x: 0, y: 0, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 1, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 3, y: 1, fg: Cyan, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 7, y: 1, fg: Cyan, bg: Reset, underline: Reset, modifier: NONE,
+        x: 12, y: 1, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 3, y: 2, fg: Cyan, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 7, y: 2, fg: Cyan, bg: Reset, underline: Reset, modifier: NONE,
+        x: 21, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 5, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 6, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 8, y: 6, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 56, y: 6, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 67, y: 6, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 68, y: 6, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+    ]
+}

@@ -1,0 +1,27 @@
+---
+source: tests/tui.rs
+expression: "snapshot(&mut terminal, &app)"
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 80, height: 7 },
+    content: [
+        "────────────────────────────────────────────────────────────────────────────────",
+        ">> crane                                                                        ",
+        "   flake-utelinos                                                               ",
+        "   nixpkgs                                                                      ",
+        "   rust-overlay                                                                 ",
+        "────────────────────────────────────────────────────────────────────────────────",
+        " Pin  Select input to pin                                Diff: Off   flake-edit ",
+    ],
+    styles: [
+        x: 0, y: 0, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 1, fg: Cyan, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 0, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 5, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 6, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 5, y: 6, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 56, y: 6, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 67, y: 6, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 68, y: 6, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+    ]
+}

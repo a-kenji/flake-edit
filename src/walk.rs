@@ -192,13 +192,10 @@ impl<'a> Walker {
         tracing::debug!("Inserting id: {id}, input: {input:?} with: ctx: {ctx:?}");
 
         if let Some(ctx) = ctx {
-            // TODO: add more nesting
             if let Some(follows) = ctx.first() {
                 if let Some(node) = self.inputs.get_mut(follows) {
-                    // TODO: only indirect follows is handled
                     node.follows
                         .push(crate::input::Follows::Indirect(id, input.url));
-                    // TODO: this should not be necessary
                     node.follows.sort();
                     node.follows.dedup();
                 } else {
@@ -665,7 +662,6 @@ impl<'a> Walker {
                     "Adjusted change is_empty: {}",
                     result.to_string().is_empty()
                 );
-                // TODO: adjust node correctly if the change is not empty
                 let replacement =
                     Self::remove_child_with_whitespace(nested_attr, &attr, attr.index());
                 tracing::debug!("Replacement: {}", replacement);
@@ -741,7 +737,6 @@ impl<'a> Walker {
             tracing::debug!("Walking inputs with: {child}, context: {context:?}");
             if let Some(_replacement) = self.walk_inputs(child_node.clone(), &Some(context), change)
             {
-                // TODO: Handle flat tree attribute replacement
                 tracing::warn!(
                     "Flat tree attribute replacement not yet implemented for: {}",
                     child
@@ -879,10 +874,10 @@ impl<'a> Walker {
         change: &Change,
     ) -> Option<SyntaxNode> {
         if let Some(prev_id) = attr.prev_sibling() {
-            if let Change::Remove { id } = change
-                && id.to_string() == prev_id.to_string()
+            if let Change::Remove { ids } = change
+                && ids.iter().any(|id| id.to_string() == prev_id.to_string())
             {
-                tracing::debug!("Removing: {id}");
+                tracing::debug!("Removing: {}", prev_id);
                 return Some(empty_node());
             }
             if let Change::Change { id, uri, .. } = change
@@ -920,8 +915,6 @@ impl<'a> Walker {
         if let Some(parent) = child.parent()
             && let Some(sibling) = parent.next_sibling()
         {
-            // TODO: this is only matched, when url is the first child
-            // TODO: Is this correct?
             tracing::debug!("This is a possible follows attribute:{} {}", attr, sibling);
             if let Some(nested_child) = sibling.first_child()
                 && nested_child.to_string() == "inputs"
@@ -981,9 +974,7 @@ impl<'a> Walker {
                 }
             }
         } else {
-            // TODO: handle this.
-            // This happens, when there is a nested node.
-            tracing::info!("Nested: This is not handled yet.");
+            tracing::info!("Nested node not handled yet");
         }
         None
     }
@@ -995,17 +986,11 @@ impl<'a> Walker {
         ctx: &Option<Context>,
         change: &Change,
     ) -> Option<SyntaxNode> {
-        // Construct the follows attribute
-        // TODO:
-        // - check for possible removal / change
         let id = attr.prev_sibling().unwrap();
         let follows = attr.parent().unwrap().next_sibling().unwrap();
         tracing::debug!(
             "The following attribute follows: {id}:{follows} is nested inside the attr: {ctx:?}"
         );
-        // TODO: Construct follows attribute if not yet ready.
-        // For now assume that the url is the first attribute.
-        // This assumption doesn't generally hold true.
         let input = Input::with_url(id.to_string(), follows.to_string(), follows.text_range());
         self.insert_with_ctx(id.to_string(), input.clone(), ctx);
         if ctx.is_some() && should_remove_nested_input(change, ctx, input.id()) {
@@ -1074,8 +1059,10 @@ impl<'a> Walker {
                     self.insert_with_ctx(id.to_string(), input, ctx);
 
                     // Remove matched node.
-                    if let Change::Remove { id: candidate } = change
-                        && candidate.to_string() == id.to_string()
+                    if let Change::Remove { ids } = change
+                        && ids
+                            .iter()
+                            .any(|candidate| candidate.to_string() == id.to_string())
                     {
                         tracing::debug!("Removing: {id}");
                         return Some(empty_node());
@@ -1113,8 +1100,6 @@ impl<'a> Walker {
                     if let Some(replacement) =
                         self.walk_inputs(child.clone(), &Some(context), change)
                     {
-                        // TODO: adjustment of whitespace, if node is empty
-                        // TODO: if it leaves an empty attr, then remove whole?
                         let tree = node
                             .green()
                             .replace_child(child.index(), replacement.green().into());

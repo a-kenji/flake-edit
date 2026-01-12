@@ -1,0 +1,16 @@
+---
+source: tests/tui.rs
+description: "change → Enter → Ctrl+u → type 'github:nixos/nixpkgs/nixos-unstable' → Enter"
+expression: session.app().pending_diff()
+---
+--- original
++++ modified
+@@ -12,7 +12,7 @@
+       inputs.flake-utils.follows = "flake-utils";
+     };
+     crane = {
+-      url = "github:ipetkov/crane";
++      url = "github:nixos/nixpkgs/nixos-unstable";
+       inputs.nixpkgs.follows = "nixpkgs";
+       inputs.rust-overlay.follows = "rust-overlay";
+       inputs.flake-utils.follows = "flake-utils";

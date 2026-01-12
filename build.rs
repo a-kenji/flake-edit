@@ -11,7 +11,7 @@ mod asset_build {
     use std::path::PathBuf;
     use std::{env, fs::create_dir_all, path::Path};
 
-    include!("src/bin/flake-edit/cli.rs");
+    include!("src/cli.rs");
 
     pub fn run() {
         println!("cargo:rerun-if-env-changed=ASSET_DIR");

@@ -1,0 +1,37 @@
+---
+source: tests/tui.rs
+expression: "snapshot(&mut terminal, &app)"
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 80, height: 10 },
+    content: [
+        "────────────────────────────────────────────────────────────────────────────────",
+        "--- original                                                                    ",
+        "+++ modified                                                                    ",
+        "@@ -2,6 +2,7 @@                                                                 ",
+        "   description = "Manage your flake inputs comfortably.";                       ",
+        "                                                                                ",
+        "   inputs = {                                                                   ",
+        "+    new-input.url = "github:user/new-input";                                   ",
+        "────────────────────────────────────────────────────────────────────────────────",
+        " Add  Apply?  y es  n o  b ack                                       flake-edit ",
+    ],
+    styles: [
+        x: 0, y: 0, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 1, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 3, fg: Cyan, bg: Reset, underline: Reset, modifier: NONE,
+        x: 15, y: 3, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 7, fg: Green, bg: Reset, underline: Reset, modifier: NONE,
+        x: 45, y: 7, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 8, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 9, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 5, y: 9, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 13, y: 9, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: BOLD,
+        x: 16, y: 9, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 19, y: 9, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: BOLD,
+        x: 22, y: 9, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 24, y: 9, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: BOLD,
+        x: 27, y: 9, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 68, y: 9, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+    ]
+}

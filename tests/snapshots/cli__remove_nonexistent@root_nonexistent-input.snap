@@ -17,14 +17,11 @@ exit_code: 1
 
 ----- stderr -----
 Error: 
-   0: The input with id: nonexistent-input could not be removed.
+   0: The input could not be removed: nonexistent-input
+   1: The input could not be removed: nonexistent-input
 
 Location:
    src/bin/flake-edit/main.rs:<LINE>
-
-Suggestion: 
-Please check if an input with that [ID] exists in the flake.nix file.
-Run `flake-edit list --format simple` to see the current inputs by their id.
 
 Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
 Run with RUST_BACKTRACE=full to include source snippets.

@@ -1,0 +1,12 @@
+---
+source: src/tui/components/list/view.rs
+expression: output
+---
+────────────────────────────────────────────────────────────────────────────────
+   [x] nixpkgs
+>> [ ] home-manager
+   [ ] flake-utils
+
+
+────────────────────────────────────────────────────────────────────────────────
+ Update  Select inputs (1 selected)                      Diff: Off   flake-edit

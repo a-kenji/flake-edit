@@ -1,0 +1,47 @@
+---
+source: tests/tui.rs
+description: "add → type 'github:user/my-new-input' → Enter → Ctrl+u → type 'my-new-input' → Ctrl+d"
+expression: "snapshot(&mut terminal, session.app())"
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 80, height: 17 },
+    content: [
+        "────────────────────────────────────────────────────────────────────────────────",
+        "❯ my-new-input                                                                  ",
+        "────────────────────────────────────────────────────────────────────────────────",
+        " Add   ID  for github:user/my-new-input                   Diff: On   flake-edit ",
+        "                                                                                ",
+        "────────────────────────────────────────────────────────────────────────────────",
+        "--- original                                                                    ",
+        "+++ modified                                                                    ",
+        "@@ -2,6 +2,7 @@                                                                 ",
+        "   description = "Manage your flake inputs comfortably.";                       ",
+        "                                                                                ",
+        "   inputs = {                                                                   ",
+        "+    my-new-input.url = "github:user/my-new-input";                             ",
+        "     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";                       ",
+        "                                                                                ",
+        "     flake-utelinos.url = "github:numtide/flake-utils";                         ",
+        "────────────────────────────────────────────────────────────────────────────────",
+    ],
+    styles: [
+        x: 0, y: 0, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 1, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 2, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 5, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 6, y: 3, fg: DarkGray, bg: White, underline: Reset, modifier: BOLD,
+        x: 10, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 57, y: 3, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: BOLD,
+        x: 67, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 68, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 0, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 5, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 8, fg: Cyan, bg: Reset, underline: Reset, modifier: NONE,
+        x: 15, y: 8, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 12, fg: Green, bg: Reset, underline: Reset, modifier: NONE,
+        x: 51, y: 12, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 16, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+    ]
+}

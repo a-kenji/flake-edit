@@ -116,7 +116,7 @@ fn test_remove_input(#[case] fixture: &str, #[case] input_id: &str) {
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Remove {
-        id: input_id.to_owned().into(),
+        ids: vec![input_id.to_owned().into()],
     };
     let info = Info::with_change(change.clone());
     let result = flake_edit.apply_change(change).unwrap().unwrap();
@@ -139,7 +139,7 @@ fn test_remove_input_walker(#[case] fixture: &str, #[case] input_id: &str) {
     let content = load_flake(fixture);
     let mut walker = Walker::new(&content);
     let change = Change::Remove {
-        id: input_id.to_owned().into(),
+        ids: vec![input_id.to_owned().into()],
     };
     let info = Info::with_change(change.clone());
     let result = walker.walk(&change).unwrap().unwrap();
@@ -161,7 +161,7 @@ fn test_remove_nested_input(#[case] fixture: &str, #[case] input_id: &str) {
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Remove {
-        id: input_id.to_owned().into(),
+        ids: vec![input_id.to_owned().into()],
     };
     let info = Info::with_change(change.clone());
     let result = flake_edit.apply_change(change).unwrap().unwrap();
@@ -183,7 +183,7 @@ fn test_remove_not_a_flake_input(#[case] fixture: &str, #[case] input_id: &str) 
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Remove {
-        id: input_id.to_owned().into(),
+        ids: vec![input_id.to_owned().into()],
     };
     let info = Info::with_change(change.clone());
     let result = flake_edit.apply_change(change).unwrap().unwrap();
@@ -203,7 +203,7 @@ fn test_first_nested_node_remove_with_list(#[case] input_id: &str) {
     let content = load_flake("first_nested_node");
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Remove {
-        id: input_id.to_owned().into(),
+        ids: vec![input_id.to_owned().into()],
     };
     let info = Info::with_change(change.clone());
     insta::with_settings!({
@@ -285,7 +285,7 @@ fn test_remove_nonexistent_input_panics() {
     let content = load_flake("completely_flat_toplevel_not_a_flake");
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Remove {
-        id: "not-an-input-at-all".to_owned().into(),
+        ids: vec!["not-an-input-at-all".to_owned().into()],
     };
     flake_edit.apply_change(change).unwrap().unwrap();
 }

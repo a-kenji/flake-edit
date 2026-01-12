@@ -72,7 +72,6 @@ pub struct Original {
 impl FlakeLock {
     const LOCK: &'static str = "flake.lock";
 
-    // TODO: implement root path traversal
     pub fn from_default_path() -> Result<Self, FlakeEditError> {
         let path = PathBuf::from(Self::LOCK);
         Self::from_file(path)
@@ -90,7 +89,6 @@ impl FlakeLock {
         &self.root
     }
     /// Query the lock file for a specific rev.
-    /// TODO: implement proper root resolving
     pub fn get_rev_by_id(&self, id: &str) -> Result<String, FlakeEditError> {
         let root = self.root();
         let resolved_root = self

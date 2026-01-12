@@ -19,12 +19,20 @@ impl<'a> Diff<'a> {
         Self { old, new }
     }
     pub fn compare(&self) {
+        print!("{}", self.to_string_colored(use_color()));
+    }
+    /// Return the diff as a string, optionally with ANSI colors
+    pub fn to_string_colored(&self, color: bool) -> String {
         let patch = diffy::create_patch(self.old, self.new);
-        let f = if use_color() {
+        let f = if color {
             diffy::PatchFormatter::new().with_color()
         } else {
             diffy::PatchFormatter::new()
         };
-        print!("{}", f.fmt_patch(&patch));
+        f.fmt_patch(&patch).to_string()
+    }
+    /// Return the diff as a plain string without colors
+    pub fn to_string_plain(&self) -> String {
+        self.to_string_colored(false)
     }
 }

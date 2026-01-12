@@ -1,6 +1,10 @@
 pub mod api;
+#[cfg(feature = "tui")]
+pub mod app;
+pub mod cache;
 pub mod change;
 pub mod channel;
+pub mod cli;
 #[cfg(feature = "diff")]
 pub mod diff;
 pub mod edit;
@@ -8,6 +12,8 @@ pub mod error;
 pub mod input;
 pub mod lock;
 pub mod state;
+#[cfg(feature = "tui")]
+pub mod tui;
 pub mod update;
 pub mod uri;
 pub mod version;

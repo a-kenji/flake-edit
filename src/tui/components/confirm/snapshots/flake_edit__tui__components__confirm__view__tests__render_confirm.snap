@@ -1,0 +1,14 @@
+---
+source: src/bin/flake-edit/tui/components/confirm/view.rs
+expression: output
+---
+────────────────────────────────────────────────────────────────────────────────
+@@ -1,3 +1,3 @@
+ inputs = {
+-  nixpkgs.url = "github:nixos/nixpkgs";
++  nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+ };
+
+
+────────────────────────────────────────────────────────────────────────────────
+ Change  Apply?  y es  n o  b ack                                    flake-edit

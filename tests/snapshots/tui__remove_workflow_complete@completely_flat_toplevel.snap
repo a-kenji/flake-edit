@@ -1,0 +1,20 @@
+---
+source: tests/tui.rs
+description: rm → Space → Space → Enter
+expression: session.app().pending_diff()
+---
+--- original
++++ modified
+@@ -6,10 +6,6 @@
+   inputs.rust-overlay.url = "github:oxalica/rust-overlay";
+   inputs.rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+   inputs.rust-overlay.inputs.flake-utils.follows = "flake-utils";
+-  inputs.crane.url = "github:ipetkov/crane";
+-  inputs.crane.inputs.nixpkgs.follows = "nixpkgs";
+-  inputs.crane.inputs.rust-overlay.follows = "rust-overlay";
+-  inputs.crane.inputs.flake-utils.follows = "flake-utils";
+
+   outputs = _: { };
+-}
++}
+\ No newline at end of file
