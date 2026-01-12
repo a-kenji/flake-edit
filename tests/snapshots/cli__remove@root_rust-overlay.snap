@@ -1,0 +1,33 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/root.flake.nix
+    - "--diff"
+    - rm
+    - rust-overlay
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -5,12 +5,6 @@
+     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+     flake-utelinos.url = "github:numtide/flake-utils";
+-
+-    rust-overlay = {
+-      url = "github:oxalica/rust-overlay";
+-      inputs.nixpkgs.follows = "nixpkgs";
+-      inputs.flake-utils.follows = "flake-utils";
+-    };
+     crane = {
+       url = "github:ipetkov/crane";
+       inputs.nixpkgs.follows = "nixpkgs";
+
+----- stderr -----
