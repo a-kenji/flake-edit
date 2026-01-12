@@ -1,11 +1,10 @@
 ---
 source: tests/cli.rs
-assertion_line: 30
 info:
   program: flake-edit
   args:
     - "--flake"
-    - /home/kenji/dev/flake-edit/tests/fixtures/first_nested_node.flake.nix
+    - "[FIXTURES]/first_nested_node.flake.nix"
     - list
   env:
     NO_COLOR: "1"

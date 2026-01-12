@@ -1,11 +1,10 @@
 ---
 source: tests/cli.rs
-assertion_line: 150
 info:
   program: flake-edit
   args:
     - "--flake"
-    - /home/kenji/dev/flake-edit/tests/fixtures/root.flake.nix
+    - "[FIXTURES]/root.flake.nix"
     - "--diff"
     - rm
     - nonexistent-input

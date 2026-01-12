@@ -1,11 +1,10 @@
 ---
 source: tests/cli.rs
-assertion_line: 70
 info:
   program: flake-edit
   args:
     - "--flake"
-    - /home/kenji/dev/flake-edit/tests/fixtures/one_level_nesting_flat.flake.nix
+    - "[FIXTURES]/one_level_nesting_flat.flake.nix"
     - "--diff"
     - add
     - vmsh

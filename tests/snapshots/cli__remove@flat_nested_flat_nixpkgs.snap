@@ -4,7 +4,7 @@ info:
   program: flake-edit
   args:
     - "--flake"
-    - /tmp/too/flake-edit/tests/fixtures/flat_nested_flat.flake.nix
+    - "[FIXTURES]/flat_nested_flat.flake.nix"
     - "--diff"
     - rm
     - nixpkgs
