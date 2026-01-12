@@ -1,0 +1,23 @@
+---
+source: tests/edit.rs
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        id: crane.rust-overlay
+---
+{
+  description = "Edit your flake inputs with ease";
+
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+  inputs.flake-utelinos.url = "github:numtide/flake-utils";
+  inputs.rust-overlay.url = "github:oxalica/rust-overlay";
+  inputs.rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+  inputs.rust-overlay.inputs.flake-utils.follows = "flake-utils";
+  inputs.crane.url = "github:ipetkov/crane";
+  inputs.crane.inputs.nixpkgs.follows = "nixpkgs";
+  inputs.crane.inputs.flake-utils.follows = "flake-utils";
+
+  outputs = _: { };
+}

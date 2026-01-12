@@ -1,0 +1,24 @@
+---
+source: tests/walker.rs
+expression: result.to_string()
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        id: poetry2nix
+---
+{
+  description = "flat nested flat test";
+
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.flake-utils.url = "github:numtide/flake-utils/master";
+
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      poetry2nix,
+    }:
+    { };
+}

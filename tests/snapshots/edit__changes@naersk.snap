@@ -1,0 +1,30 @@
+---
+source: tests/edit.rs
+expression: flake_edit.apply_change(change).unwrap().unwrap()
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        id: naersk
+---
+{
+  description = "test file";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    utils.url = "github:numtide/flake-utils";
+    flake-compat = {
+      url = "github:edolstra/flake-compat";
+      flake = false;
+    };
+  };
+
+  outputs =
+    {
+      self,
+      nixpkgs,
+      utils,
+      flake-compat,
+    }:
+    { };
+}

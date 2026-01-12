@@ -1,0 +1,26 @@
+---
+source: tests/edit.rs
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        id: nixpkgs
+---
+{
+  description = "flat nested flat test";
+  inputs.flake-utils.url = "github:numtide/flake-utils/master";
+  inputs.poetry2nix = {
+    inputs.flake-utils.follows = "flake-utils";
+    inputs.nixpkgs.follows = "nixpkgs";
+    url = "github:nix-community/poetry2nix/master";
+  };
+
+  outputs =
+    {
+      self,
+      flake-utils,
+      poetry2nix,
+    }:
+    { };
+}
