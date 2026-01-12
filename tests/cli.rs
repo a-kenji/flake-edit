@@ -119,6 +119,7 @@ fn test_add_infer_id(#[case] fixture: &str) {
 #[case("one_level_nesting_flat", "nixpkgs")]
 #[case("flat_nested_flat", "nixpkgs")]
 #[case("first_nested_node", "nixpkgs")]
+#[case("root", "rust-overlay")]
 fn test_remove(#[case] fixture: &str, #[case] id: &str) {
     let suffix = format!("{fixture}_{id}");
     insta::with_settings!({
