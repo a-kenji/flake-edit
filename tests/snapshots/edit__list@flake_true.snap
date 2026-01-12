@@ -1,0 +1,42 @@
+---
+source: tests/edit.rs
+expression: flake_edit.curr_list()
+info:
+  flake_nix: ""
+  changes: []
+---
+flake-compat:
+  id: flake-compat
+  flake: true
+  url: "\"github:edolstra/flake-compat\""
+  follows: []
+  range:
+    start: 297
+    end: 327
+naersk:
+  id: naersk
+  flake: true
+  url: "\"github:nix-community/naersk/master\""
+  follows:
+    - Indirect:
+        - nixpkgs
+        - "\"nixpkgs\""
+  range:
+    start: 72
+    end: 108
+nixpkgs:
+  id: nixpkgs
+  flake: true
+  url: "\"github:NixOS/nixpkgs/nixpkgs-unstable\""
+  follows: []
+  range:
+    start: 177
+    end: 216
+utils:
+  id: utils
+  flake: true
+  url: "\"github:numtide/flake-utils\""
+  follows: []
+  range:
+    start: 234
+    end: 262

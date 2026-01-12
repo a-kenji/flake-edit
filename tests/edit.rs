@@ -1,640 +1,276 @@
+mod common;
+
+use common::{Info, load_flake};
 use flake_edit::change::Change;
 use flake_edit::edit::FlakeEdit;
 use flake_edit::walk::Walker;
+use rstest::rstest;
 
-fn load_fixtures(name: &str) -> (String, String) {
-    let dir = env!("CARGO_MANIFEST_DIR");
-    let flake_nix =
-        std::fs::read_to_string(format!("{dir}/tests/fixtures/{name}.flake.nix")).unwrap();
-    let flake_lock =
-        std::fs::read_to_string(format!("{dir}/tests/fixtures/{name}.flake.lock")).unwrap();
-    (flake_nix, flake_lock)
-}
-
-#[derive(serde::Serialize)]
-struct Info {
-    flake_nix: String,
-    changes: Vec<Change>,
-}
-
-impl Info {
-    fn new(flake_nix: String, changes: Vec<Change>) -> Self {
-        Self { flake_nix, changes }
-    }
-}
-
-#[test]
-fn root_load() {
-    let (_flake, _lock) = load_fixtures("root");
-}
-
-#[test]
-fn root_edit_list() {
-    let (flake, _lock) = load_fixtures("root");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let info = Info::new("".into(), vec![]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
+#[rstest]
+#[case("root")]
+#[case("root_alt")]
+#[case("toplevel_nesting")]
+#[case("completely_flat_toplevel")]
+#[case("completely_flat_toplevel_alt")]
+#[case("completely_flat_toplevel_not_a_flake")]
+#[case("completely_flat_toplevel_not_a_flake_nested")]
+#[case("one_level_nesting_flat_not_a_flake")]
+fn test_flake_edit_list(#[case] fixture: &str) {
+    let content = load_flake(fixture);
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let info = Info::empty();
+    insta::with_settings!({
+        sort_maps => true,
+        info => &info,
+        snapshot_suffix => fixture
+    }, {
         insta::assert_yaml_snapshot!(flake_edit.list());
     });
 }
-#[test]
-fn root_add_toplevel_id_uri() {
-    let (flake, _lock) = load_fixtures("root");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+
+#[rstest]
+#[case("root", true, "github:mic92/vmsh")]
+#[case("root", false, "github:a-kenji/not_a_flake")]
+#[case("completely_flat_toplevel", true, "mic92/vmsh")]
+#[case("completely_flat_toplevel", false, "github:a-kenji/not_a_flake")]
+#[case("flat_nested_flat", true, "mic92/vmsh")]
+#[case("flat_nested_flat", false, "github:a-kenji/not_a_flake")]
+fn test_add_input(#[case] fixture: &str, #[case] is_flake: bool, #[case] uri: &str) {
+    let content = load_flake(fixture);
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let id = if is_flake { "vmsh" } else { "not_a_flake" };
     let change = Change::Add {
-        id: Some("vmsh".to_owned()),
-        uri: Some("github:mic92/vmsh".to_owned()),
-        flake: true,
+        id: Some(id.to_owned()),
+        uri: Some(uri.to_owned()),
+        flake: is_flake,
     };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    let info = Info::with_change(change.clone());
+    let result = flake_edit.apply_change(change).unwrap().unwrap();
+    let suffix = format!("{}_flake_{}", fixture, is_flake);
+    insta::with_settings!({
+        sort_maps => true,
+        info => &info,
+        snapshot_suffix => suffix
+    }, {
+        insta::assert_snapshot!(result);
     });
 }
+
 #[test]
-fn root_add_toplevel_id_uri_no_flake() {
-    let (flake, _lock) = load_fixtures("root");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Add {
-        id: Some("not_a_flake".to_owned()),
-        uri: Some("github:a-kenji/not_a_flake".to_owned()),
-        flake: false,
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-#[test]
-fn root_add_toplevel_id_uri_ref_or_rev() {
-    let (flake, _lock) = load_fixtures("root");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+fn test_add_with_ref_or_rev() {
+    let content = load_flake("root");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Add {
         id: Some("home-manager".to_owned()),
         uri: Some("github:nix-community/home-manager/release-24.05".to_owned()),
         flake: true,
     };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-#[test]
-fn root_remove_toplevel_uri() {
-    let (flake, _lock) = load_fixtures("root");
-    let mut walker = Walker::new(&flake);
-    let change = Change::Remove {
-        id: "nixpkgs".to_owned().into(),
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    let change = walker.walk(&change).unwrap().unwrap();
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(change.to_string());
-    });
-}
-#[test]
-fn root_remove_toplevel_input_multiple() {
-    let (flake, _lock) = load_fixtures("root");
-    let mut walker = Walker::new(&flake);
-    let change = Change::Remove {
-        id: "crane".to_owned().into(),
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    let change = walker.walk(&change).unwrap().unwrap();
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(change.to_string());
-    });
-}
-#[test]
-fn root_remove_toplevel_input_single_nested() {
-    let (flake, _lock) = load_fixtures("root");
-    let mut walker = Walker::new(&flake);
-    let change = Change::Remove {
-        id: "rust-overlay.flake-utils".to_owned().into(),
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    let change = walker.walk(&change).unwrap().unwrap();
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(change.to_string());
-    });
-}
-#[test]
-fn root_alt_list() {
-    let (flake, _lock) = load_fixtures("root_alt");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let info = Info::new("".into(), vec![]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_yaml_snapshot!(flake_edit.list());
-    });
-}
-#[test]
-fn root_alt_add_toplevel_id_uri() {
-    let (flake, _lock) = load_fixtures("root_alt");
-    let mut walker = Walker::new(&flake);
-    let change = Change::Add {
-        id: Some("vmsh".to_owned()),
-        uri: Some("github:mic92/vmsh".to_owned()),
-        flake: true,
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    let change = walker.walk(&change).unwrap().unwrap();
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(change.to_string());
-    });
-}
-#[test]
-fn root_alt_add_toplevel_id_uri_no_flake() {
-    let (flake, _lock) = load_fixtures("root_alt");
-    let mut walker = Walker::new(&flake);
-    let change = Change::Add {
-        id: Some("not_a_flake".to_owned()),
-        uri: Some("github:a-kenji/not_a_flake".to_owned()),
-        flake: false,
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    let change = walker.walk(&change).unwrap().unwrap();
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(change.to_string());
-    });
-}
-#[test]
-fn root_alt_remove_toplevel_uri() {
-    let (flake, _lock) = load_fixtures("root_alt");
-    let mut walker = Walker::new(&flake);
-    let change = Change::Remove {
-        id: "nixpkgs".to_string().into(),
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    let change = walker.walk(&change).unwrap().unwrap();
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(change.to_string());
-    });
-}
-#[test]
-fn root_alt_remove_toplevel_input_multiple() {
-    let (flake, _lock) = load_fixtures("root_alt");
-    let mut walker = Walker::new(&flake);
-    let change = Change::Remove {
-        id: "crane".to_owned().into(),
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    let change = walker.walk(&change).unwrap().unwrap();
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(change.to_string());
-    });
-}
-
-#[test]
-fn root_toplevel_nesting_list() {
-    let (flake, _lock) = load_fixtures("toplevel_nesting");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let info = Info::new("".into(), vec![]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_yaml_snapshot!(flake_edit.list());
-    });
-}
-// #[test]
-// fn root_alt_add_toplevel_id_uri() {
-//     let (flake, _lock) = load_fixtures("root_alt");
-//     let mut walker = Walker::new(&flake).unwrap();
-//     let change = Change::Add {
-//         id: Some("vmsh".to_owned()),
-//         uri: Some("github:mic92/vmsh".to_owned()),
-//     };
-//     walker.changes.push(change.clone());
-//     let info = Info::new("".into(), vec![change]);
-//     let change = walker.walk().unwrap();
-//     insta::with_settings!({sort_maps => true, info => &info}, {
-//         insta::assert_snapshot!(change.to_string());
-//     });
-// }
-// #[test]
-// fn root_alt_remove_toplevel_uri() {
-//     let (flake, _lock) = load_fixtures("root_alt");
-//     let mut walker = Walker::new(&flake).unwrap();
-//     let change = Change::Remove {
-//         id: "nixpkgs".to_owned(),
-//     };
-//     walker.changes.push(change.clone());
-//     let info = Info::new("".into(), vec![change]);
-//     let change = walker.walk().unwrap();
-//     insta::with_settings!({sort_maps => true, info => &info}, {
-//         insta::assert_snapshot!(change.to_string());
-//     });
-// }
-// #[test]
-// fn root_alt_remove_toplevel_input_multiple() {
-//     let (flake, _lock) = load_fixtures("root_alt");
-//     let mut walker = Walker::new(&flake).unwrap();
-//     let change = Change::Remove {
-//         id: "crane".to_owned(),
-//     };
-//     walker.changes.push(change.clone());
-//     let info = Info::new("".into(), vec![change]);
-//     let change = walker.walk().unwrap();
-//     insta::with_settings!({sort_maps => true, info => &info}, {
-//         insta::assert_snapshot!(change.to_string());
-//     });
-// }
-
-#[test]
-fn completely_flat_toplevel_list() {
-    let (flake, _lock) = load_fixtures("completely_flat_toplevel");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let info = Info::new("".into(), vec![]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_yaml_snapshot!(flake_edit.list());
-    });
-}
-
-#[test]
-fn completely_flat_toplevel_alt_list() {
-    let (flake, _lock) = load_fixtures("completely_flat_toplevel_alt");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let info = Info::new("".into(), vec![]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_yaml_snapshot!(flake_edit.list());
-    });
-}
-#[test]
-fn completely_flat_toplevel_add_id_uri() {
-    let (flake, _lock) = load_fixtures("completely_flat_toplevel");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Add {
-        id: Some("vmsh".to_owned()),
-        uri: Some("mic92/vmsh".to_owned()),
-        flake: true,
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-#[test]
-fn completely_flat_toplevel_add_id_uri_no_flake() {
-    let (flake, _lock) = load_fixtures("completely_flat_toplevel");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Add {
-        id: Some("not_a_flake".to_owned()),
-        uri: Some("github:a-kenji/not_a_flake".to_owned()),
-        flake: false,
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-#[test]
-fn completely_flat_toplevel_rm_toplevel() {
-    let (flake, _lock) = load_fixtures("completely_flat_toplevel");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Remove {
-        id: "nixpkgs".to_owned().into(),
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-#[test]
-fn completely_flat_toplevel_rm_toplevel_multiple() {
-    let (flake, _lock) = load_fixtures("completely_flat_toplevel");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Remove {
-        id: "crane".to_owned().into(),
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-#[test]
-fn completely_flat_toplevel_rm_follows_single() {
-    let (flake, _lock) = load_fixtures("completely_flat_toplevel");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Remove {
-        id: "crane.rust-overlay".to_owned().into(),
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-#[test]
-fn completely_flat_toplevel_no_flake_rm_single_no_flake() {
-    let (flake, _lock) = load_fixtures("completely_flat_toplevel_not_a_flake");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Remove {
-        id: "not-a-flake".to_owned().into(),
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-#[test]
-#[should_panic]
-fn completely_flat_toplevel_no_flake_rm_single_no_flake_rm_nonexistent() {
-    let (flake, _lock) = load_fixtures("completely_flat_toplevel_not_a_flake");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Remove {
-        id: "not-an-input-at-all".to_owned().into(),
-    };
-    flake_edit.apply_change(change).unwrap().unwrap();
-}
-#[test]
-fn completely_flat_toplevel_no_flake_list() {
-    let (flake, _lock) = load_fixtures("completely_flat_toplevel_not_a_flake");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::None;
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_yaml_snapshot!(flake_edit.list());
-    });
-}
-#[test]
-fn completely_flat_toplevel_no_flake_rm_single_no_flake_nested() {
-    let (flake, _lock) = load_fixtures("completely_flat_toplevel_not_a_flake_nested");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Remove {
-        id: "not-a-flake".to_owned().into(),
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-#[test]
-fn completely_flat_toplevel_no_flake_nested_list() {
-    let (flake, _lock) = load_fixtures("completely_flat_toplevel_not_a_flake_nested");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::None;
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_yaml_snapshot!(flake_edit.list());
-    });
-}
-#[test]
-fn one_level_nesting_flat_no_flake_rm_single_no_flake_nested() {
-    let (flake, _lock) = load_fixtures("one_level_nesting_flat_not_a_flake");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Remove {
-        id: "not-a-flake".to_owned().into(),
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-#[test]
-fn one_level_nesting_flat_no_flake_nested_list() {
-    let (flake, _lock) = load_fixtures("one_level_nesting_flat_not_a_flake");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::None;
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_yaml_snapshot!(flake_edit.list());
-    });
-}
-// #[test]
-// fn root_alt_remove_toplevel_uri() {
-//     let (flake, _lock) = load_fixtures("root_alt");
-//     let mut walker = Walker::new(&flake).unwrap();
-//     let change = Change::Remove {
-//         id: "nixpkgs".to_owned(),
-//     };
-//     walker.changes.push(change.clone());
-//     let info = Info::new("".into(), vec![change]);
-//     let change = walker.walk().unwrap();
-//     insta::with_settings!({sort_maps => true, info => &info}, {
-//         insta::assert_snapshot!(change.to_string());
-//     });
-// }
-// #[test]
-// fn root_alt_remove_toplevel_input_multiple() {
-//     let (flake, _lock) = load_fixtures("root_alt");
-//     let mut walker = Walker::new(&flake).unwrap();
-//     let change = Change::Remove {
-//         id: "crane".to_owned(),
-//     };
-//     walker.changes.push(change.clone());
-//     let info = Info::new("".into(), vec![change]);
-//     let change = walker.walk().unwrap();
-//     insta::with_settings!({sort_maps => true, info => &info}, {
-//         insta::assert_snapshot!(change.to_string());
-//     });
-// }
-
-#[test]
-fn one_level_nesting_flat() {
-    let (flake, _lock) = load_fixtures("one_level_nesting_flat");
-    let mut walker = Walker::new(&flake);
-    let _ = walker.walk(&Change::None);
-    let info = Info::new("".into(), vec![]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_yaml_snapshot!(walker.inputs);
-    });
-}
-#[test]
-fn one_level_nesting_flat_remove_single() {
-    let (flake, _lock) = load_fixtures("one_level_nesting_flat");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Remove {
-        id: "nixpkgs".to_owned().into(),
-    };
-    let info = Info::new("".into(), vec![]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-#[test]
-fn one_level_nesting_flat_remove_multiple() {
-    let (flake, _lock) = load_fixtures("one_level_nesting_flat");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Remove {
-        id: "rust-overlay".to_owned().into(),
-    };
-    let info = Info::new("".into(), vec![]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-#[test]
-fn one_level_nesting_flat_remove_single_nested() {
-    let (flake, _lock) = load_fixtures("one_level_nesting_flat");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Remove {
-        id: "rust-overlay.flake-utils".to_owned().into(),
-    };
-    let info = Info::new("".into(), vec![]);
+    let info = Info::with_change(change.clone());
     insta::with_settings!({sort_maps => true, info => &info}, {
         insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
     });
 }
 
-#[test]
-fn flat_nested_flat_remove_single() {
-    let (flake, _lock) = load_fixtures("flat_nested_flat");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Remove {
-        id: "nixpkgs".to_owned().into(),
+#[rstest]
+#[case(true)]
+#[case(false)]
+fn test_first_nested_node_add_with_list(#[case] is_flake: bool) {
+    let content = load_flake("first_nested_node");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let (id, uri) = if is_flake {
+        ("vmsh", "mic92/vmsh")
+    } else {
+        ("not_a_flake", "github:a-kenji/not_a_flake")
     };
-    let info = Info::new("".into(), vec![]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-#[test]
-fn flat_nested_flat_remove_multiple() {
-    let (flake, _lock) = load_fixtures("flat_nested_flat");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Remove {
-        id: "poetry2nix".to_owned().into(),
-    };
-    let info = Info::new("".into(), vec![]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-#[test]
-fn flat_nested_flat_add_single() {
-    let (flake, _lock) = load_fixtures("flat_nested_flat");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
     let change = Change::Add {
-        id: Some("vmsh".to_owned()),
-        uri: Some("mic92/vmsh".to_owned()),
-        flake: true,
+        id: Some(id.to_owned()),
+        uri: Some(uri.to_owned()),
+        flake: is_flake,
     };
-    let info = Info::new("".into(), vec![]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    let info = Info::empty();
+    let suffix = format!("flake_{}", is_flake);
+    insta::with_settings!({
+        sort_maps => true,
+        info => &info,
+        snapshot_suffix => suffix.clone()
+    }, {
+        insta::assert_snapshot!("changes", flake_edit.apply_change(change).unwrap().unwrap());
     });
-}
-#[test]
-fn flat_nested_flat_add_single_no_flake() {
-    let (flake, _lock) = load_fixtures("flat_nested_flat");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Add {
-        id: Some("not_a_flake".to_owned()),
-        uri: Some("github:a-kenji/not_a_flake".to_owned()),
-        flake: false,
-    };
-    let info = Info::new("".into(), vec![]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-#[test]
-fn first_nested_node_add_single() {
-    let (flake, _lock) = load_fixtures("first_nested_node");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Add {
-        id: Some("vmsh".to_owned()),
-        uri: Some("mic92/vmsh".to_owned()),
-        flake: true,
-    };
-    let info = Info::new("".into(), vec![]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!("changes", flake_edit.apply_change(change.clone()).unwrap().unwrap());
-    });
-    insta::with_settings!({sort_maps => true, info => &info}, {
+    insta::with_settings!({
+        sort_maps => true,
+        info => &info,
+        snapshot_suffix => suffix
+    }, {
         insta::assert_yaml_snapshot!("list", flake_edit.curr_list());
     });
 }
-#[test]
-fn first_nested_node_add_single_no_flake() {
-    let (flake, _lock) = load_fixtures("first_nested_node");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Add {
-        id: Some("vmsh".to_owned()),
-        uri: Some("mic92/vmsh".to_owned()),
-        flake: true,
-    };
-    let info = Info::new("".into(), vec![]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!("changes", flake_edit.apply_change(change.clone()).unwrap().unwrap());
-    });
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_yaml_snapshot!("list", flake_edit.curr_list());
-    });
-}
-#[test]
-fn first_nested_node_remove_single() {
-    let (flake, _lock) = load_fixtures("first_nested_node");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+
+#[rstest]
+#[case("completely_flat_toplevel", "nixpkgs")]
+#[case("completely_flat_toplevel", "crane")]
+#[case("one_level_nesting_flat", "nixpkgs")]
+#[case("one_level_nesting_flat", "rust-overlay")]
+#[case("flat_nested_flat", "nixpkgs")]
+#[case("flat_nested_flat", "poetry2nix")]
+fn test_remove_input(#[case] fixture: &str, #[case] input_id: &str) {
+    let content = load_flake(fixture);
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Remove {
-        id: "utils".to_string().into(),
+        id: input_id.to_owned().into(),
     };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change.clone()).unwrap().unwrap());
-    });
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_yaml_snapshot!(flake_edit.list());
-    });
-}
-#[test]
-fn first_nested_node_remove_multiple() {
-    let (flake, _lock) = load_fixtures("first_nested_node");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Remove {
-        id: "naersk".to_string().into(),
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change.clone()).unwrap().unwrap());
-    });
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_yaml_snapshot!(flake_edit.list());
-    });
-}
-#[test]
-fn first_nested_node_inputs() {
-    let (flake, _lock) = load_fixtures("first_nested_node");
-    let mut walker = Walker::new(&flake);
-    let _ = walker.walk(&Change::None);
-    let info = Info::new("".into(), vec![]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_yaml_snapshot!(walker.inputs);
+    let info = Info::with_change(change.clone());
+    let result = flake_edit.apply_change(change).unwrap().unwrap();
+    let suffix = format!("{}_{}", fixture, input_id.replace('.', "_"));
+    insta::with_settings!({
+        sort_maps => true,
+        info => &info,
+        snapshot_suffix => suffix
+    }, {
+        insta::assert_snapshot!(result);
     });
 }
 
-#[test]
-fn root_change_nested_input_url() {
-    let (flake, _lock) = load_fixtures("root");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+#[rstest]
+#[case("root", "nixpkgs")]
+#[case("root", "crane")]
+#[case("root_alt", "nixpkgs")]
+#[case("root_alt", "crane")]
+fn test_remove_input_walker(#[case] fixture: &str, #[case] input_id: &str) {
+    let content = load_flake(fixture);
+    let mut walker = Walker::new(&content);
+    let change = Change::Remove {
+        id: input_id.to_owned().into(),
+    };
+    let info = Info::with_change(change.clone());
+    let result = walker.walk(&change).unwrap().unwrap();
+    let suffix = format!("{}_{}", fixture, input_id);
+    insta::with_settings!({
+        sort_maps => true,
+        info => &info,
+        snapshot_suffix => suffix
+    }, {
+        insta::assert_snapshot!(result.to_string());
+    });
+}
+
+#[rstest]
+#[case("root", "rust-overlay.flake-utils")]
+#[case("completely_flat_toplevel", "crane.rust-overlay")]
+#[case("one_level_nesting_flat", "rust-overlay.flake-utils")]
+fn test_remove_nested_input(#[case] fixture: &str, #[case] input_id: &str) {
+    let content = load_flake(fixture);
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let change = Change::Remove {
+        id: input_id.to_owned().into(),
+    };
+    let info = Info::with_change(change.clone());
+    let result = flake_edit.apply_change(change).unwrap().unwrap();
+    let suffix = format!("{}_{}", fixture, input_id.replace('.', "_"));
+    insta::with_settings!({
+        sort_maps => true,
+        info => &info,
+        snapshot_suffix => suffix
+    }, {
+        insta::assert_snapshot!(result);
+    });
+}
+
+#[rstest]
+#[case("completely_flat_toplevel_not_a_flake", "not-a-flake")]
+#[case("completely_flat_toplevel_not_a_flake_nested", "not-a-flake")]
+#[case("one_level_nesting_flat_not_a_flake", "not-a-flake")]
+fn test_remove_not_a_flake_input(#[case] fixture: &str, #[case] input_id: &str) {
+    let content = load_flake(fixture);
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let change = Change::Remove {
+        id: input_id.to_owned().into(),
+    };
+    let info = Info::with_change(change.clone());
+    let result = flake_edit.apply_change(change).unwrap().unwrap();
+    insta::with_settings!({
+        sort_maps => true,
+        info => &info,
+        snapshot_suffix => fixture
+    }, {
+        insta::assert_snapshot!(result);
+    });
+}
+
+#[rstest]
+#[case("utils")]
+#[case("naersk")]
+fn test_first_nested_node_remove_with_list(#[case] input_id: &str) {
+    let content = load_flake("first_nested_node");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let change = Change::Remove {
+        id: input_id.to_owned().into(),
+    };
+    let info = Info::with_change(change.clone());
+    insta::with_settings!({
+        sort_maps => true,
+        info => &info,
+        snapshot_suffix => input_id
+    }, {
+        insta::assert_snapshot!("changes", flake_edit.apply_change(change).unwrap().unwrap());
+    });
+    insta::with_settings!({
+        sort_maps => true,
+        info => &info,
+        snapshot_suffix => input_id
+    }, {
+        insta::assert_yaml_snapshot!("list", flake_edit.list());
+    });
+}
+
+#[rstest]
+#[case("root", "nixpkgs", "github:nixos/nixpkgs/nixos-24.05")]
+#[case("root", "rust-overlay", "github:oxalica/rust-overlay/v1.0.0")]
+#[case(
+    "completely_flat_toplevel",
+    "nixpkgs",
+    "github:nixos/nixpkgs/nixos-24.05"
+)]
+#[case(
+    "completely_flat_toplevel",
+    "rust-overlay",
+    "github:oxalica/rust-overlay/v1.0.0"
+)]
+#[case(
+    "one_level_nesting_flat",
+    "nixpkgs",
+    "github:nixos/nixpkgs/nixos-24.05"
+)]
+#[case("flat_nested_flat", "nixpkgs", "github:nixos/nixpkgs/nixos-24.05")]
+#[case("first_nested_node", "nixpkgs", "github:NixOS/nixpkgs/nixos-24.05")]
+#[case("first_nested_node", "naersk", "github:nix-community/naersk/v1.0.0")]
+fn test_change_url(#[case] fixture: &str, #[case] input_id: &str, #[case] new_url: &str) {
+    let content = load_flake(fixture);
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Change {
-        id: Some("rust-overlay".to_owned()),
-        uri: Some("github:oxalica/rust-overlay/v1.0.0".to_owned()),
+        id: Some(input_id.to_owned()),
+        uri: Some(new_url.to_owned()),
         ref_or_rev: None,
     };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    let info = Info::with_change(change.clone());
+    let result = flake_edit.apply_change(change).unwrap().unwrap();
+    let suffix = format!("{}_{}", fixture, input_id.replace('.', "_"));
+    insta::with_settings!({
+        sort_maps => true,
+        info => &info,
+        snapshot_suffix => suffix
+    }, {
+        insta::assert_snapshot!(result);
     });
 }
 
-#[test]
-fn root_change_flat_input_url() {
-    let (flake, _lock) = load_fixtures("root");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+#[rstest]
+#[case("root", "nonexistent")]
+#[case("completely_flat_toplevel", "nonexistent")]
+fn test_change_nonexistent_input_error(#[case] fixture: &str, #[case] input_id: &str) {
+    let content = load_flake(fixture);
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Change {
-        id: Some("nixpkgs".to_owned()),
-        uri: Some("github:nixos/nixpkgs/nixos-24.05".to_owned()),
-        ref_or_rev: None,
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-
-#[test]
-fn root_change_nonexistent_input_error() {
-    let (flake, _lock) = load_fixtures("root");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Change {
-        id: Some("nonexistent".to_owned()),
+        id: Some(input_id.to_owned()),
         uri: Some("github:foo/bar".to_owned()),
         ref_or_rev: None,
     };
@@ -644,134 +280,29 @@ fn root_change_nonexistent_input_error() {
 }
 
 #[test]
-fn completely_flat_toplevel_change_url() {
-    let (flake, _lock) = load_fixtures("completely_flat_toplevel");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Change {
-        id: Some("nixpkgs".to_owned()),
-        uri: Some("github:nixos/nixpkgs/nixos-24.05".to_owned()),
-        ref_or_rev: None,
+#[should_panic]
+fn test_remove_nonexistent_input_panics() {
+    let content = load_flake("completely_flat_toplevel_not_a_flake");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let change = Change::Remove {
+        id: "not-an-input-at-all".to_owned().into(),
     };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
+    flake_edit.apply_change(change).unwrap().unwrap();
 }
 
-#[test]
-fn completely_flat_toplevel_change_rust_overlay_url() {
-    let (flake, _lock) = load_fixtures("completely_flat_toplevel");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Change {
-        id: Some("rust-overlay".to_owned()),
-        uri: Some("github:oxalica/rust-overlay/v1.0.0".to_owned()),
-        ref_or_rev: None,
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+#[rstest]
+#[case("one_level_nesting_flat")]
+#[case("first_nested_node")]
+fn test_walker_inputs(#[case] fixture: &str) {
+    let content = load_flake(fixture);
+    let mut walker = Walker::new(&content);
+    let _ = walker.walk(&Change::None);
+    let info = Info::empty();
+    insta::with_settings!({
+        sort_maps => true,
+        info => &info,
+        snapshot_suffix => fixture
+    }, {
+        insta::assert_yaml_snapshot!(walker.inputs);
     });
 }
-
-#[test]
-fn first_nested_node_change_url() {
-    let (flake, _lock) = load_fixtures("first_nested_node");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Change {
-        id: Some("naersk".to_owned()),
-        uri: Some("github:nix-community/naersk/v1.0.0".to_owned()),
-        ref_or_rev: None,
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-
-#[test]
-fn first_nested_node_change_flat_input_url() {
-    let (flake, _lock) = load_fixtures("first_nested_node");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Change {
-        id: Some("nixpkgs".to_owned()),
-        uri: Some("github:NixOS/nixpkgs/nixos-24.05".to_owned()),
-        ref_or_rev: None,
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-
-#[test]
-fn one_level_nesting_flat_change_url() {
-    let (flake, _lock) = load_fixtures("one_level_nesting_flat");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Change {
-        id: Some("nixpkgs".to_owned()),
-        uri: Some("github:nixos/nixpkgs/nixos-24.05".to_owned()),
-        ref_or_rev: None,
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-
-#[test]
-fn flat_nested_flat_change_url() {
-    let (flake, _lock) = load_fixtures("flat_nested_flat");
-    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
-    let change = Change::Change {
-        id: Some("nixpkgs".to_owned()),
-        uri: Some("github:nixos/nixpkgs/nixos-24.05".to_owned()),
-        ref_or_rev: None,
-    };
-    let info = Info::new("".into(), vec![change.clone()]);
-    insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
-    });
-}
-// #[test]
-// fn root_alt_add_toplevel_id_uri() {
-//     let (flake, _lock) = load_fixtures("root_alt");
-//     let mut walker = Walker::new(&flake).unwrap();
-//     let change = Change::Add {
-//         id: Some("vmsh".to_owned()),
-//         uri: Some("github:mic92/vmsh".to_owned()),
-//     };
-//     walker.changes.push(change.clone());
-//     let info = Info::new("".into(), vec![change]);
-//     let change = walker.walk().unwrap();
-//     insta::with_settings!({sort_maps => true, info => &info}, {
-//         insta::assert_snapshot!(change.to_string());
-//     });
-// }
-// #[test]
-// fn root_alt_remove_toplevel_uri() {
-//     let (flake, _lock) = load_fixtures("root_alt");
-//     let mut walker = Walker::new(&flake).unwrap();
-//     let change = Change::Remove {
-//         id: "nixpkgs".to_owned(),
-//     };
-//     walker.changes.push(change.clone());
-//     let info = Info::new("".into(), vec![change]);
-//     let change = walker.walk().unwrap();
-//     insta::with_settings!({sort_maps => true, info => &info}, {
-//         insta::assert_snapshot!(change.to_string());
-//     });
-// }
-// #[test]
-// fn root_alt_remove_toplevel_input_multiple() {
-//     let (flake, _lock) = load_fixtures("root_alt");
-//     let mut walker = Walker::new(&flake).unwrap();
-//     let change = Change::Remove {
-//         id: "crane".to_owned(),
-//     };
-//     walker.changes.push(change.clone());
-//     let info = Info::new("".into(), vec![change]);
-//     let change = walker.walk().unwrap();
-//     insta::with_settings!({sort_maps => true, info => &info}, {
-//         insta::assert_snapshot!(change.to_string());
-//     });
-// }
