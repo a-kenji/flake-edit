@@ -96,6 +96,49 @@ fn test_add_no_flake(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str)
 }
 
 #[rstest]
+#[case("root", "shallow_input", "github:foo/bar")]
+fn test_add_shallow(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
+    let suffix = format!("{fixture}_{id}");
+    insta::with_settings!({
+        snapshot_suffix => suffix
+    }, {
+        assert_cmd_snapshot!(cli()
+            .arg("--flake")
+            .arg(fixture_path(fixture))
+            .arg("--diff")
+            .arg("add")
+            .arg("--shallow")
+            .arg(id)
+            .arg(uri));
+    });
+}
+
+#[rstest]
+#[case("root", "shallow_ref_input", "github:foo/bar", "main")]
+fn test_add_shallow_with_ref(
+    #[case] fixture: &str,
+    #[case] id: &str,
+    #[case] uri: &str,
+    #[case] ref_or_rev: &str,
+) {
+    let suffix = format!("{fixture}_{id}");
+    insta::with_settings!({
+        snapshot_suffix => suffix
+    }, {
+        assert_cmd_snapshot!(cli()
+            .arg("--flake")
+            .arg(fixture_path(fixture))
+            .arg("--diff")
+            .arg("add")
+            .arg("--shallow")
+            .arg("--ref-or-rev")
+            .arg(ref_or_rev)
+            .arg(id)
+            .arg(uri));
+    });
+}
+
+#[rstest]
 #[case("root")]
 fn test_add_infer_id(#[case] fixture: &str) {
     insta::with_settings!({
@@ -165,6 +208,24 @@ fn test_change(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
             .arg(fixture_path(fixture))
             .arg("--diff")
             .arg("change")
+            .arg(id)
+            .arg(uri));
+    });
+}
+
+#[rstest]
+#[case("root", "nixpkgs", "github:nixos/nixpkgs/nixos-24.05")]
+fn test_change_shallow(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
+    let suffix = format!("{fixture}_{id}");
+    insta::with_settings!({
+        snapshot_suffix => suffix
+    }, {
+        assert_cmd_snapshot!(cli()
+            .arg("--flake")
+            .arg(fixture_path(fixture))
+            .arg("--diff")
+            .arg("change")
+            .arg("--shallow")
             .arg(id)
             .arg(uri));
     });

@@ -1,0 +1,31 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - /home/kenji/dev/flake-edit/tests/fixtures/root.flake.nix
+    - "--diff"
+    - change
+    - "--shallow"
+    - nixpkgs
+    - "github:nixos/nixpkgs/nixos-24.05"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -2,7 +2,7 @@
+   description = "Manage your flake inputs comfortably.";
+
+   inputs = {
+-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
++    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05?shallow=1";
+
+     flake-utelinos.url = "github:numtide/flake-utils";
+
+
+----- stderr -----
