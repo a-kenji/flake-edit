@@ -21,6 +21,15 @@ pub enum Change {
         uri: Option<String>,
         ref_or_rev: Option<String>,
     },
+    /// Add a follows relationship to an input.
+    /// Example: `flake-edit follows rust-overlay.nixpkgs nixpkgs`
+    /// Creates: `rust-overlay.inputs.nixpkgs.follows = "nixpkgs";`
+    Follows {
+        /// The input path (e.g., "rust-overlay.nixpkgs" for rust-overlay's nixpkgs input)
+        input: ChangeId,
+        /// The target input to follow (e.g., "nixpkgs")
+        target: String,
+    },
 }
 
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -83,6 +92,7 @@ impl Change {
             Change::Remove { id } => Some(id.clone()),
             Change::Change { id, .. } => id.clone().map(|id| id.into()),
             Change::Pin { id } => Some(id.clone().into()),
+            Change::Follows { input, .. } => Some(input.clone()),
         }
     }
     pub fn is_remove(&self) -> bool {
@@ -97,9 +107,18 @@ impl Change {
     pub fn is_change(&self) -> bool {
         matches!(self, Change::Change { .. })
     }
+    pub fn is_follows(&self) -> bool {
+        matches!(self, Change::Follows { .. })
+    }
     pub fn uri(&self) -> Option<&String> {
         match self {
             Change::Change { uri, .. } | Change::Add { uri, .. } => uri.as_ref(),
+            _ => None,
+        }
+    }
+    pub fn follows_target(&self) -> Option<&String> {
+        match self {
+            Change::Follows { target, .. } => Some(target),
             _ => None,
         }
     }

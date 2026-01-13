@@ -203,11 +203,26 @@ fn main() -> eyre::Result<()> {
                 }
                 std::process::exit(0);
             }
+            cli::CompletionMode::Follow => {
+                // Get nested input paths from lockfile for follow completions
+                if let Ok(lock) = flake_edit::lock::FlakeLock::from_default_path() {
+                    for path in lock.get_nested_input_paths() {
+                        println!("{}", path);
+                    }
+                }
+                std::process::exit(0);
+            }
         },
         Command::Pin { .. }
         | Command::Unpin { .. }
         | Command::Update { .. }
         | Command::List { .. } => {}
+        Command::Follow { input, target } => {
+            change = Change::Follows {
+                input: input.clone().into(),
+                target: target.clone(),
+            };
+        }
     }
 
     match editor.apply_change(change.clone()) {
@@ -250,6 +265,13 @@ fn main() -> eyre::Result<()> {
                 change.id().unwrap()
             )
             .suggestion("\nPlease check if an input with that [ID] exists in the flake.nix file.\nRun `flake-edit list --format simple` to see the current inputs by their id."));
+                }
+                if change.is_follows() {
+                    return Err(eyre::eyre!(
+                        "The follows relationship for {} could not be created.",
+                        change.id().unwrap()
+                    )
+                    .suggestion("\nPlease check that the input exists in the flake.nix file.\nUse dot notation: `flake-edit follows <input>.<nested-input> <target>`\nExample: `flake-edit follows rust-overlay.nixpkgs nixpkgs`"));
                 }
                 println!("Nothing changed in the node.");
                 println!("The following change could not be applied: \n{:?}", change);

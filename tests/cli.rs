@@ -315,3 +315,68 @@ fn test_change_nonexistent(#[case] fixture: &str, #[case] id: &str, #[case] uri:
         );
     });
 }
+
+/// Test the follow command for nested-style inputs
+#[rstest]
+#[case("first_nested_node", "naersk.flake-utils", "flake-utils")]
+#[case("root", "crane.flake-compat", "flake-compat")]
+fn test_follow(#[case] fixture: &str, #[case] input: &str, #[case] target: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    let suffix = format!("{fixture}_{}", input.replace('.', "_"));
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .arg("follow")
+                .arg(input)
+                .arg(target)
+        );
+    });
+}
+
+/// Test the follow command for flat-style inputs
+#[rstest]
+#[case("one_level_nesting_flat", "rust-overlay.flake-compat", "flake-compat")]
+fn test_follow_flat(#[case] fixture: &str, #[case] input: &str, #[case] target: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    let suffix = format!("{fixture}_{}", input.replace('.', "_"));
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .arg("follow")
+                .arg(input)
+                .arg(target)
+        );
+    });
+}
+
+/// Test the follow command with non-existent parent input
+#[rstest]
+#[case("root", "nonexistent.nixpkgs", "nixpkgs")]
+fn test_follow_nonexistent(#[case] fixture: &str, #[case] input: &str, #[case] target: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    error_filters(&mut settings);
+    let suffix = format!("{fixture}_{}", input.replace('.', "_"));
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .arg("follow")
+                .arg(input)
+                .arg(target)
+        );
+    });
+}

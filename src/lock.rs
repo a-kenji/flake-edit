@@ -111,6 +111,47 @@ impl FlakeLock {
             .ok_or_else(|| FlakeEditError::LockError("Could not find node with id.".into()))?;
         Ok(node.get_rev())
     }
+
+    /// Get all nested input paths for shell completions.
+    /// Returns paths like "naersk.nixpkgs", "naersk.flake-utils", etc.
+    pub fn get_nested_input_paths(&self) -> Vec<String> {
+        let mut paths = Vec::new();
+
+        // Get the root node
+        let Some(root_node) = self.nodes.get(&self.root) else {
+            return paths;
+        };
+
+        // Get top-level inputs from root
+        let Some(root_inputs) = &root_node.inputs else {
+            return paths;
+        };
+
+        // For each top-level input, find its nested inputs
+        for (top_level_name, top_level_ref) in root_inputs {
+            // Resolve the node name (could be different from input name)
+            let node_name = match top_level_ref {
+                Input::Direct(name) => name.clone(),
+                Input::Indirect(_) => {
+                    // For indirect inputs (follows), skip - they don't have their own inputs
+                    continue;
+                }
+            };
+
+            // Get the node for this input
+            if let Some(node) = self.nodes.get(&node_name) {
+                // Get nested inputs of this node
+                if let Some(nested_inputs) = &node.inputs {
+                    for nested_name in nested_inputs.keys() {
+                        paths.push(format!("{}.{}", top_level_name, nested_name));
+                    }
+                }
+            }
+        }
+
+        paths.sort();
+        paths
+    }
 }
 #[cfg(test)]
 mod tests {

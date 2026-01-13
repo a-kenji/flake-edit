@@ -1,0 +1,1761 @@
+[2m2026-01-13T13:58:46.974206Z[0m [34mDEBUG[0m [2mflake_edit[0m[2m:[0m [2m39:[0m Cli args: CliArgs { flake: Some("/home/kenji/dev/flake-edit/tests/fixtures/root.flake.nix"), diff: true, no_lock: false, non_interactive: false, subcommand: Remove { id: Some("nonexistent-in[2m2[2m2[2m2026-01-13T13:58:46.974893Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m417:[0m Toplevel: description = "Manage your flake inputs comfortably.";
+[2m2026-01-13T13:58:46.974906Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m418:[0m Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.974911Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m421:[0m Toplevel Child: description
+[2m2026-01-13T13:58:46.974916Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m422:[0m Toplevel Child Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.974920Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m423:[0m Toplevel Child Index: 0
+[2m2026-01-13T13:58:46.974923Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m424:[0m Toplevel Index: 2
+[2m2026-01-13T13:58:46.974927Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m426:[0m Toplevel Child Parent: description = "Manage your flake inputs comfortably.";
+[2m2026-01-13T13:58:46.974935Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m427:[0m Toplevel Child Parent Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.974939Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m428:[0m Toplevel Child Parent Index: 2
+[2m2026-01-13T13:58:46.974945Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m417:[0m Toplevel: inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+    flake-utelinos.url = "github:numtide/flake-utils";
+
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+  };
+[2m2026-01-13T13:58:46.974999Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m418:[0m Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.975004Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m421:[0m Toplevel Child: inputs
+[2m2026-01-13T13:58:46.975008Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m422:[0m Toplevel Child Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.975012Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m423:[0m Toplevel Child Index: 0
+[2m2026-01-13T13:58:46.975016Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m424:[0m Toplevel Index: 4
+[2m2026-01-13T13:58:46.975020Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m426:[0m Toplevel Child Parent: inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+    flake-utelinos.url = "github:numtide/flake-utils";
+
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+  };
+[2m2026-01-13T13:58:46.975070Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m427:[0m Toplevel Child Parent Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.975074Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m428:[0m Toplevel Child Parent Index: 4
+[2m2026-01-13T13:58:46.975080Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m540:[0m WalkInputs: 
+{
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+    flake-utelinos.url = "github:numtide/flake-utils";
+
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+  }
+ with ctx: None
+[2m2026-01-13T13:58:46.975133Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m541:[0m WalkInputsKind: NODE_ATTR_SET
+[2m2026-01-13T13:58:46.975137Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_L_BRACE
+[2m2026-01-13T13:58:46.975141Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: {
+[2m2026-01-13T13:58:46.975145Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 1
+[2m2026-01-13T13:58:46.975150Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_L_BRACE
+[2m2026-01-13T13:58:46.975153Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: {
+[2m2026-01-13T13:58:46.975157Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.975161Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+    
+[2m2026-01-13T13:58:46.975165Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 5
+[2m2026-01-13T13:58:46.975169Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.975172Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+    
+[2m2026-01-13T13:58:46.975176Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.975180Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+[2m2026-01-13T13:58:46.975192Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 52
+[2m2026-01-13T13:58:46.975201Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+ with ctx: None
+[2m2026-01-13T13:58:46.975209Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.975213Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: nixpkgs.url
+[2m2026-01-13T13:58:46.975219Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: nixpkgs.url
+[2m2026-01-13T13:58:46.975224Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: nixpkgs
+[2m2026-01-13T13:58:46.975229Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: nixpkgs.url
+[2m2026-01-13T13:58:46.975236Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: url
+[2m2026-01-13T13:58:46.975251Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m903:[0m This is an url from nixpkgs - "github:nixos/nixpkgs/nixos-unstable"
+[2m2026-01-13T13:58:46.975260Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: nixpkgs, input: Input { id: "nixpkgs", flake: true, url: "\"github:nixos/nixpkgs/nixos-unstable\"", follows: [], range: Range { start: 91, end: 128 } } with: ctx: None
+[2m2026-01-13T13:58:46.975280Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "nixpkgs": Input {
+        id: "nixpkgs",
+        flake: true,
+        url: "\"github:nixos/nixpkgs/nixos-unstable\"",
+        follows: [],
+        range: Range {
+            start: 91,
+            end: 128,
+        },
+    },
+}
+[2m2026-01-13T13:58:46.975292Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m913:[0m This is the parent: nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+[2m2026-01-13T13:58:46.975301Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m914:[0m This is the next_sibling: "github:nixos/nixpkgs/nixos-unstable"
+[2m2026-01-13T13:58:46.975307Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m925:[0m This is a possible follows attribute:url flake-utelinos.url = "github:numtide/flake-utils";
+[2m2026-01-13T13:58:46.975319Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: nixpkgs.url
+[2m2026-01-13T13:58:46.975328Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:58:46.975331Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: "github:nixos/nixpkgs/nixos-unstable"
+[2m2026-01-13T13:58:46.975336Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: "github:nixos/nixpkgs/nixos-unstable"
+[2m2026-01-13T13:58:46.975342Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.975345Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+
+    
+[2m2026-01-13T13:58:46.975349Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 6
+[2m2026-01-13T13:58:46.975353Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.975357Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+
+    
+[2m2026-01-13T13:58:46.975361Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPAT[2m2026-01-13T13:58:46.975333Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m417:[0m Toplevel: inputs = {
+    flake-utelinos.url = "github:numtide/flake-utils";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    rust-overlay.inputs.flake-utils.follows = "flake-utils";
+    crane.url = "github:ipetkov/crane";
+    crane.inputs.nixpkgs.follows = "nixpkgs";
+    crane.inputs.rust-overlay.follows = "rust-overlay";
+    crane.inputs.flake-utils.follows = "flake-utils";
+  };
+[2m2026-01-13T13:58:46.975405Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m418:[0m Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.975410Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m421:[0m Toplevel Child: inputs
+[2m2026-01-13T13:58:46.975415Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m422:[0m Toplevel Child Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.975419Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m423:[0m Toplevel Child Index: 0
+[2m2026-01-13T13:58:46.975422Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m424:[0m Toplevel Index: 4
+[2m2026-01-13T13:58:46.975427Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m426:[0m Toplevel Child Parent: inputs = {
+    flake-utelinos.url = "github:numtide/flake-utils";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    rust-overlay.inputs.flake-utils.follows = "flake-utils";
+    crane.url = "github:ipetkov/crane";
+    crane.inputs.nixpkgs.follows = "nixpkgs";
+    crane.inputs.rust-overlay.follows = "rust-overlay";
+    crane.inputs.flake-utils.follows = "flake-utils";
+  };
+[2m2026-01-13T13:58:46.975472Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m427:[0m Toplevel Child Parent Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.975477Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m428:[0m Toplevel Child Parent Index: 4
+[2m2026-01-13T13:58:46.975484Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m540:[0m WalkInputs: 
+{
+    flake-utelinos.url = "github:numtide/flake-utils";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    rust-overlay.inputs.flake-utils.follows = "flake-utils";
+    crane.url = "github:ipetkov/crane";
+    crane.inputs.nixpkgs.follows = "nixpkgs";
+    crane.inputs.rust-overlay.follows = "rust-overlay";
+    crane.inputs.flake-utils.follows = "flake-utils";
+  }
+ with ctx: None
+[2m2026-01-13T13:58:46.975527Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m541:[0m WalkInputsKind: NODE_ATTR_SET
+[2m2026-01-13T13:58:46.975532Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_L_BRACE
+[2m2026-01-13T13:58:46.975537Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: {
+[2m2026-01-13T13:58:46.975544Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 1
+[2m2026-01-13T13:58:46.975548Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_L_BRACE
+[2m2026-01-13T13:58:46.975552Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: {
+[2m2026-01-13T13:58:46.975557Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.975561Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+    
+[2m2026-01-13T13:58:46.975565Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 5
+[2m2026-01-13T13:58:46.975569Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.975572Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+    
+[2m2026-01-13T13:58:46.975578Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.975584Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: flake-utelinos.url = "github:numtide/flake-utils";
+[2m2026-01-13T13:58:46.975596Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 50
+[2m2026-01-13T13:58:46.975603Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: flake-utelinos.url = "github:numtide/flake-utils";
+ with ctx: None
+[2m2026-01-13T13:58:46.975612Z[0m [34mDEBUG[0m[2m2026-01-13T13:58:46.975602Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follo[2m2026-01-13T13:58:46.975621Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: flake-utelinos.url
+[2m2026-01-13T13:58:46.975627Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: flake-utelinos
+[2m2026-01-13T13:58:46.975632Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: flake-utelinos.url
+[2m2026-01-13T13:58:46.975639Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: url
+[2m2026-01-13T13:58:46.975649Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m903:[0m This is an url from flake-utelinos - "github:numtide/flake-utils"
+[2m2026-01-13T13:58:46.975658Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: flake-utelinos, input: In[2m2026-01-13T13:58:46.975651Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: {
+      url = "github:oxalica/rust-overlay"[2m2026-01-13T13:58:46.975685Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 93,
+            end: 121,
+        },
+    },
+}
+[2m2026-01-13T13:58:46.975698Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m913:[0m This is the parent: flake-utelinos.url = "github:numtide/flake-utils";
+[2m2026-01-13T13:58:46.975707Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m914:[0m This is the next_sibling: "github:numtide/flake-utils"
+[2m2026-01-13T13:58:46.975716Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m925:[0m This is a possible follows attribute:url rust-overlay.url = "github:oxalica/rust-overlay";
+[2m2026-01-13T13:58:46.975727Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: flake-utelinos.url
+[2m2026-01-13T13:58:46.975735Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:58:46.975746Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: "github:numtide/flake-utils"
+[2m2026-01-13T13:58:46.975751Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: "github:numtide/flake-utils"
+[2m2026-01-13T13:58:46.975756Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.975761Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+    
+[2m2026-01-13T13:58:46.975766Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 5
+[2m2026-01-13T13:58:46.975770Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.975773Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+    
+[2m2026-01-13T13:58:46.975781Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.975785Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: rust-overlay.url = "github:oxalica/rust-overlay";
+[2m2026-01-13T13:58:46.975798Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 49
+[2m2026-01-13T13:58:46.975805Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: rust-overlay.url = "github:oxalica/rust-overlay";
+ with ctx: None
+[2m2026-01-13T13:58:46.975813Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.975816Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: rust-overlay.url
+[2m2026-01-13T13:58:46.975822Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: rust-overlay.url
+[2m2026-01-13T13:58:46.975828Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: rust-overlay
+[2m2026-01-13T13:58:46.975839Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: rust-overlay.url
+[2m2026-01-13T13:58:46.975846Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: url
+[2m2026-01-13T13:58:46.975853Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m903:[0m This is an url from rust-overlay - "github:oxalica/rust-overlay"
+[2m2026-01-13T13:58:46.975863Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: rust-overlay, input: Input { id: "rust-overlay", flake: true, url: "\"github:oxalica/rust-overlay\"", follows: [], range: Range { start: 146, end: 175 } } with: ctx: None
+[2m2026-01-13T13:58:46.975873Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 93,
+            end: 121,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [],
+        range: Range {
+            start: 146,
+            end: 175,
+        },
+    },
+}
+[2m2026-01-13T13:58:46.975890Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m913:[0m This is the parent: rust-overlay.url = "github:oxalica/rust-overlay";
+[2m2026-01-13T13:58:46.975898Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m914:[0m This is the next_sibling: "github:oxalica/rust-overlay"
+[2m2026-01-13T13:58:46.975905Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m925:[0m This is a possible follows attribute:url rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+[2m2026-01-13T13:58:46.975918Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: rust-overlay.url
+[2m2026-01-13T13:58:46.975923Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:58:46.975927Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: "github:oxalica/rust-overlay"
+[2m2026-01-13T13:58:46.975933Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: "github:oxalica/rust-overlay"
+[2m2026-01-13T13:58:46.975940Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.975944Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+    
+[2m2026-01-13T13:58:46.975949Z[0m [34mDEBUG[0m [2mfl[2m2026-01-13T13:58:46.975948Z[0m [34mDEBUG[0m [2mflake_[2m2026-01-13T13:58:46.975952Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[2m2026-01-13T13:58:46.975958Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m914:[0m This is the next_sibling: "github:oxalica/rust-overlay"
+[2m2026-01-13T13:58:46.975966Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m925:[0m This is a possible follows attribute:url i[2m2026-01-13T13:58:46.975968Z[0m[2m2026-01-13T13:58:46.975978Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: url
+[2m2026-01-13T13:58:46.975983Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:[2m2026-01-13T13:58:46.975991Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+ with ctx: Some(Context { level: ["rust-overlay"] })
+[2m2026-01-13T13:58:46.976006Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.976009Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: rust-overlay.inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.976016Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: rust-overlay.inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.976023Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: rust-overlay
+[2m2026-01-13T13:58:46.976029Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: rust-overlay.inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.976037Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.976043Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: rust-overlay.inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.976049Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Chil[2m2026-01-13T13:5[2m2026-01-13T13:58:46.976055Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: rust-overlay.inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.976061Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.976071Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: nixpkgs:"nixpkgs[2m2026-01-13T13:58:46.976077Z[0m [34mDEBUG[0m [2mflake_edit::walk[2m2026-01-13T13:58:46.976080Z[0m [34mDEBUG[0m [2mflake_edit::wal[2m2026-01-13T13:58:46.976085Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.976093Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m [2m2026-01-13T13:58:46.976100Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 93,
+            end: 121,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+  [2m2026-01-13T13:58:46.976115Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: nixpkgs:"nixpkgs" is nested inside the attr: Some(Context { level: ["rust-overlay"] })
+[2m2026-01-13T13:58:46.976124Z[0m [34m[2m2026-01-13T13:58:46.976131Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: rust-overlay.inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.976141Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NO[2m2026-01-13T13:58:46.976146Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 156,
+            end: 184,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        rang[2m2026-01-13T13:58:46.976171Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.976176Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+    
+[2m2026-01-13T13:58:46.976179Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.976183Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: rust-overlay.inputs.flake-utils.follows = "flake-utils";
+[2m2026-01-13T13:58:46.976197Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 56
+[2m2026-01-13T13:58:46.976204Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: rust-overlay.inputs.flake-utils.follows = "flake-utils";
+ with ctx: Some(Context { level: ["rust-overlay"] })
+[2m2026-01-13T13:58:46.976214Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.976219Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: rust-overlay.inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.976226Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: rust-overlay.inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.976236Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: rust-overlay
+[2m2026-01-13T13:58:46.976241Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: rust-overlay.inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.976247Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.976252Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: rust-overlay.inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.976259Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: flake-utils
+[2m2026-01-13T13:58:46.976265Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: rust-overlay.inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.976272Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.976277Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: flake-utils:"flake-utils" is nested inside the attr: Some(Context { level: ["rust-overlay"] })
+[2m2026-01-13T13:58:46.976290Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: flake-utils, input: Input { id: "flake-utils", flake: true, url: "\"flake-utils\"", follows: [], range: Range { start: 276, end: 289 } } with: ctx: Some(Context { level: ["rust-overlay"] })
+[2m2026-01-13T13:58:46.976300Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 93,
+            end: 121,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Range {
+            start: 146,
+            end: 175,
+        },
+    },
+}
+[2m2[2m2026-01-13T13:58:46.976325Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 156,
+            end: 184,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Range {
+            start: 220,
+[2m2026-01-13T13:58:46.976352Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 5
+[2m2026-01-13T13:58:46.976356Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.976359Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+    
+[2m2026-01-13T13:58:46.976363Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.976369Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: crane.url = "github:ipetkov/crane";
+[2m2026-01-13T13:58:46.976380Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 35
+[2m2026-01-13T13:58:46.976389Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: crane.url = "github:ipetkov/crane";
+ with ctx: None
+[2m2026-01-13T13:58:46.976396Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.976402Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: crane.url
+[2m2026-01-13T13:58:46.976409Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: crane.url
+[2m2026-01-13T13:58:46.976414Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: crane
+[2m2026-01-13T13:58:46.976419Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: crane.url
+[2m2026-01-13T13:58:46.976425Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: url
+[2m2026-01-13T13:58:46.976433Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m903:[0m This is an url from crane - "github:ipetkov/crane"
+[2m2026-01-13T13:58:46.976441Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: crane, input: Input { id: "crane", flake: true, url: "\"github:ipetkov/crane\"", follows: [], range: Range { start: 307, end: 329 } } with: ctx: None
+[2m2026-01-13T13:58:46.976450Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 93,
+            end: 121,
+        },
+    },
+    "crane": Input {
+        id: "crane",
+        flake: true,
+        url: "\"github:ipetkov/crane\"",
+        follows: [],
+        range: Range {
+            start: 307,
+            end: 329,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+          [2m2026-01-13T13:58:46.976475Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1067:[0m LEAF o[2m2026-01-13T1[2m2026-01-13T13:58:4[2m2026-01-13T13:58:46.976487Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1112[2m2026-01-13T13:58:46.976521Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m295:[0m Changing outputs.
+[2m2026-01-13T13:58:46.976945Z[0m [32m INFO[0m [2mflake_edit[0m[2m:[0m [2m443:[0m No errors in the changes.
+  url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    }
+ with ctx: Some(Context { level: ["rust-overlay"] })
+[2m2026-01-13T13:58:46.976516Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m541:[0m WalkInputsKind: NODE_ATTR_SET
+[2m2026-01-13T13:58:46.976521Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_L_BRACE
+[2m2026-01-13T13:58:46.976525Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: {
+[2m2026-01-13T13:58:46.976531Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 1
+[2m2026-01-13T13:58:46.976537Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_L_BRACE
+[2m2026-01-13T13:58:46.976544Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: {
+[2m2026-01-13T13:58:46.976549Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.976553Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+      
+[2m2026-01-13T13:58:46.976557Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 7
+[2m2026-01-13T13:58:46.976560Z[0m [34mDEBUG[0m [2mflake_edit::w[2m2026-01-13T13:58:46.976560Z[0m [34mDEBUG[0m [2mflake_ed[2m2026-01-13T13:58:46.976566Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m57[2m2026-01-13T13:58:46.976574Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 41
+[2m2026-01-13T13:58:46.976580Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: crane.inputs.nixpkgs.follows = "nixpkgs";
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.976590Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.976593Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: crane.inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.976601Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: crane.inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.976608Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: crane
+[2m2026-01-13T13:58:46.976614Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: crane.inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.976622Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.976628Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: crane.inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.976635Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: nixpkgs
+[2m2026-01-13T13:58:46.976640Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: crane.inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.976653Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.976662Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: nixpkgs:"nixpkgs" is nested inside the attr: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.976671Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: nixpkgs, input: Input { id: "nixpkgs", flake: true, url: "\"nixpkgs\"", follows: [], range: Range { start: 366, end: 375 } } with: ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.976683Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 93,
+            end: 121,
+        },
+    },
+    "crane": Input {
+        id: "crane",
+        flake: true,
+        url: "\"github:ipetkov/crane\"",
+        follows: [
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Range {
+            start: 307,
+            end: 329,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "[2m2026-01-13T13:58:46.976710Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: inputs.nixpkgs.follows[2m2026-01-13T13:58:46.976719Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: crane.inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.976727Z[0m [34mDEBUG[0m [2m2026-01-13T13:58:46.976726Z[0m [34mDEBUG[0m [2mflake_edit:[2m2026-01-13T13:58:46.976731Z[0m [34mDEBUG[0m [2mflake_e[2m2026-01-13T13:58:46.976733Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.976747Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.976753Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.976759Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: nixpkgs
+[2m2026-01-13T13:58:46.976765Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.976770Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.976776Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: nixpkgs:"nixpkgs" is nested inside the attr: Some(Context { level: ["rust-overlay"] })
+[2m2026-01-13T13:58:46.976785Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: nixpkgs, input: Input { id: "nixpkgs", flake: true, url: "\"nixpkgs\"", follows: [], range:[2m2026-01-13T13:58:46.976789Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [[2m2026-01-13T13:58:46.976793Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 156,
+            end: 184,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+             [2m2026-01-13T13:58:46.976821Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: crane
+[2m2026-01-13T13:58:46.976827Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: crane.inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.976835Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.976840Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: crane.inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.976847Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: rust-overlay
+[2m2026-01-13T13:58:46.976853Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: crane.inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.976860Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.976865Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: rust-overlay:"rust-overlay" is nested inside the attr: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.976875Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: rust-overlay, input: Input { id: "rust-overlay", flake: true, url: "\"rust-overlay\"", follows: [], range: Range { start: 417, end: 431 } } with: ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.976883Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 93,
+            end: 121,
+        },
+    },
+    "crane": Input {
+        id: "crane",
+        flake: true,
+        url: "\"github:ipetkov/crane\"",
+        follows: [
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+            Indirect(
+                "rust-overlay",
+                "\"rust-overlay\"",
+            ),
+        ],
+        range: Range {
+            start: 307,
+            end: 329,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Rang[2m2026-01-13T13:58:46.976914Z[0m [34mDEBUG[0m [2mflake_edit::wal[2m2026-01-13T13:58:46.976917Z[0m [34mDEBUG[0m [2m2026-01-13T13:58:46.976920Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m[2m2026-01-13T13:58:46.976924Z[0m [34mDEBUG[0m [2mf[2m2026-01-13T13:58:46.976927Z[0m [34mDEBUG[0m [2mflake_[2m2026-01-13T13:58:46.976928Z[0m [34mDEBUG[0m [2mflake_edit[2m2026-01-13T13:58:46.976932Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.976939Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.976944Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: flake-utils:"flake-utils" is nested inside the attr: Some(Context { level: ["rust-overlay"] })
+[2m2026-01-13T13:58:46.976953Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: flake-utils, input: Input { id: "flake-utils", flake: true, url: "\"flake-utils\"", follows: [], range: Range { start: 328, end: 341 } } with: ctx: Some(Context { level: ["rust-overlay"] })
+[2m2026-01-13T13:58:46.976962Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 156,
+            end: 184,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake:[2m2026-01-13T13:58:46.976985Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: crane.inputs.flake-utils.follows = "flake-utils";
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.976996Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.976999Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: crane.inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.977006Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: crane.inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.977014Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: crane
+[2m2026-01-13T13:58:46.977020Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: crane.inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.977028Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.977033Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: crane.inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.977041Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: flake-utils
+[2m2026-01-13T13:58:46.977046Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: crane.inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.977052Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.977058Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: flake-utils:"flake-utils" is nested inside the attr: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.977066Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: flake-utils, input: Input { id: "flake-utils", flake: true, url: "\"flake-utils\"", follows: [], range: Range { start: 472, end: 485 } } with: ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.977074Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 93,
+            end: 121,
+        },
+    },
+    "crane": Input {
+        id: "crane",
+        flake: true,
+        url: "\"github:ipetkov/crane\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+            Indirect(
+                "rust-overlay",
+                "\"rust-overlay\"",
+            ),
+        ],
+        range: Range {
+            start: 307,
+            end: 329,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+           [2m2026-01-13T13:58:46.977108Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.977112Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+    
+[2m2026-01-13T13:58:46.977116Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 5
+[2m2026-01-13T13:58:46.977120Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.977124Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+    
+[2m2026-01-13T13:58:46.977128Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.977131Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+[2m2026-01-13T13:58:46.977175Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 196
+[2m2026-01-13T13:58:46.977198Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+ with ctx: None
+[2m2026-01-13T13:58:46.977223Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.977227Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: crane
+[2m2026-01-13T13:58:46.977231Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: crane
+[2m2026-01-13T13:58:46.977236Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: crane
+[2m2026-01-13T13:58:46.977242Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: crane
+[2m2026-01-13T13:58:46.977246Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTR_SET
+[2m2026-01-13T13:58:46.977250Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.flake-utils.follows = "flake-utils";
+    }
+[2m2026-01-13T13:58:46.977273Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1063:[0m Child of ATTRSET KIND: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.977276Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1064:[0m Child of ATTRSET: url = "github:ipetkov/crane";
+[2m2026-01-13T13:58:46.977283Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1066:[0m L[2m2026-01-13T13:58:46.977251Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m426:[0m Toplevel Child Parent: inputs = {
+    flake-utelinos.url = "github:numtide/flake-utils";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    rust-overlay.inputs.flake-utils.follows = "flake-utils";
+    crane.url = "github:ipetkov/crane";
+    crane.inputs.nixpkgs.follows = "nixpkgs";
+    crane.inputs.rust-overlay.follows = "rust-overlay";
+    crane.inputs.flake-utils.follows = "flake-utils";
+  };
+[2m2026-01[2m2026-01-13T13:58:46.977310Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "nixpkgs": Input {
+        id: "nixpkgs",
+        flake: true,
+        url: "\"github:nixos/nixpkgs/nixos-unstable\"",
+        follows: [],
+       [2m2026-01-13T13:58:46.977544Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m417:[0m Toplevel: outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      flake-utelinos,
+      rust-overlay,
+      crane,
+    }:
+    { };
+[2m2026-01-13T13:58:46.977572Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m418:[0m Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.977577Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m421:[0m Toplevel Child: outputs
+[2m2026-01-13T13:58:46.977587Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m422:[0m Toplevel Child Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.977592Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m423:[0m Toplevel Child Index: 0
+[2m2026-01-13T13:58:46.977597Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m424:[0m Toplevel Index: 6
+[2m2026-01-13T13:58:46.977601Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m426:[0m Toplevel Child Parent: outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      flake-utelinos,
+      rust-overlay,
+      crane,
+    }:
+    { };
+[2m2026-01-13T13:58:46.977623Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m427:[0m Toplevel Child Parent Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.977629Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m428:[0m Toplevel Child Parent Index: 6
+[2m2026-01-13T13:58:46.977639Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m421:[0m Toplevel Child: {
+      self,
+      nixpkgs,
+      flake-utils,
+      flake-utelinos,
+      rust-overlay,
+      crane,
+    }:
+    { }
+[2m2026-01-13T13:58:46.977659Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m422:[0m Toplevel Child Kind: NODE_LAMBDA
+[2m2026-01-13T13:58:46.977663Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m423:[0m Toplevel Child Index: 4
+[2m2026-01-13T13:58:46.977666Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m424:[0m Toplevel Index: 6
+[2m2026-01-13T13:58:46.977670Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m426:[0m Toplevel Child Parent: outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      flake-utelinos,
+      rust-overlay,
+      crane,
+    }:
+    { };
+[2m2026-01-13T13:58:46.977694Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m427:[0m Toplevel Child Parent Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.977699Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m428:[0m Toplevel Child Parent Index: 6
+[2m2026-01-13T13:58:46.977773Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m245:[0m Walking outputs.
+[2m2026-01-13T13:58:46.977847Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m295:[0m Changing outputs.
+[2m2026-01-13T13:58:46.978617Z[0m [32m INFO[0m [2mflake_edit[0m[2m:[0m [2m443:[0m No errors in the changes.
+],
+        range: Range {
+            start: 319,
+            end: 341,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            I[2m2026-01-13T13:58:46.977843Z[0m [32m INFO[0m [2mflake_edit[0m[2m:[0m [2m443:[0m No errors in the changes.
+          "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Range {
+       [2m2026-01-13T13:58:46.977449Z[0m [34mDEBUG[0m [2mflak[2m2026-01-13T13:58:46.977456Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1066:[0m LEAF of ATTRSET KIND: NODE_STRING
+[2m2026-01-13T13:58:46.977462Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1067:[0m LEAF of ATTRSET: "github:ipetkov/crane"
+[2m2026-01-13T13:58:46.977473Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1063:[0m Child of ATTRSET KIND: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.977479Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1064:[0m Child of ATTRSET: inputs.nixpkgs.follows = "nixpkgs";
+[2m2026-01-13T13:58:46.977491Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1066:[0m LEAF of ATTRSET KIND: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.977496Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1067:[0m LEAF of ATTRSET: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.977514Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1112:[0m Walking inputs with: inputs.nixpkgs.follows = "nixpkgs";, context: Context { level: ["crane"] }
+[2m2026-01-13T13:58:46.977528Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m540:[0m WalkInputs: 
+{
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.flake-utils.follows = "flake-utils";
+    }
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.977562Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m541:[0m WalkInputsKind: NODE_ATTR_SET
+[2m2026-01-13T13:58:46.977568Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_L_BRACE
+[2m2026-01-13T13:58:46.977573Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: {
+[2m2026-01-13T13:58:46.977577Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 1
+[2m2026-01-13T13:58:46.977582Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_L_BRACE
+[2m2026-01-13T13:58:46.977587Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: {
+[2m2026-01-13T13:58:46.977593Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.977598Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+      
+[2m2026-01-13T13:58:46.977603Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 7
+[2m2026-01-13T13:58:46.977609Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.977612Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+      
+[2m2026-01-13T13:58:46.977616Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.977622Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: url = "github:ipetkov/crane";
+[2m2026-01-13T13:58:46.977637Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 29
+[2m2026-01-13T13:58:46.977643Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: url = "github:ipetkov/crane";
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.977655Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.977661Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: url
+[2m2026-01-13T13:58:46.977668Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: url
+[2m2026-01-13T13:58:46.977675Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: url
+[2m2026-01-13T13:58:46.977682Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m913:[0m This is the parent: url = "github:ipetkov/crane";
+[2m2026-01-13T13:58:46.977694Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m914:[0m This is the next_sibling: "github:ipetkov/crane"
+[2m2026-01-13T13:58:46.977702Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m925:[0m This is a possible follows attribute:url inputs.nixpkgs.follows = "nixpkgs";
+[2m2026-01-13T13:58:46.977720Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: url
+[2m2026-01-13T13:58:46.977726Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:58:46.977731Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: "github:ipetkov/crane"
+[2m2026-01-13T13:58:46.977737Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: "github:ipetkov/crane"
+[2m2026-01-13T13:58:46.977752Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.977757Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+      
+[2m2026-01-13T13:58:46.977763Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 7
+[2m2026-01-13T13:58:46.977768Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.977772Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+      
+[2m2026-01-13T13:58:46.977777Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.977782Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: inputs.nixpkgs.follows = "nixpkgs";
+[2m2026-01-13T13:58:46.977802Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 35
+[2m2026-01-13T13:58:46.977807Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: inputs.nixpkgs.follows = "nixpkgs";
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.977816Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.977821Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.977826Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.977833Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.977837Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.977843Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: nixpkgs
+[2m2026-01-13T13:58:46.977848Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.977854Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.977859Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: nixpkgs:"nixpkgs" is nested inside the attr: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.977869Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: nixpkgs, input: Input { id: "nixpkgs", flake: true, url: "\"nixpkgs\"", follows: [], range: Range { start: 374, end: 383 } } with: ctx: Some(Context { level: ["crane"] })
+[2m202[2m2026-01-13T13:58:46.977979Z[0m [32m INFO[0m [2mflake_edit[0m[2m:[0m [2m443:[0m No errors in the changes.
+telinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 99,
+            end: 127,
+        },
+    },
+    "crane": Input {
+        id: "crane",
+        flake: true,
+        url: "\"github:ipetkov/crane\"",
+        follows: [
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Range {
+            start: 319,
+            end: 341,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Range {
+            start: 163,
+            end: 192,
+        },
+    },
+}
+[2m2026-01-13T13:58:46.977929Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.977939Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:58:46.977945Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: "nixpkgs"
+[2m2026-01-13T13:58:46.977952Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: "nixpkgs"
+[2m2026-01-13T13:58:46.977959Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.977965Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+      
+[2m2026-01-13T13:58:46.977970Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 7
+[2m2026-01-13T13:58:46.977975Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.977980Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+      
+[2m2026-01-13T13:58:46.977986Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.977991Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: inputs.rust-overlay.follows = "rust-overlay";
+[2m2026-01-13T13:58:46.978010Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 45
+[2m2026-01-13T13:58:46.978013Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: inputs.rust-overlay.follows = "rust-overlay";
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978023Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.978027Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.978033Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.978039Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.978046Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.978052Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: rust-overlay
+[2m2026-01-13T13:58:46.978058Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.978064Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.978069Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: rust-overlay:"rust-overlay" is nested inside the attr: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978079Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: rust-overlay, input: Input { id: "rust-overlay", flake: true, url: "\"rust-overlay\"", follows: [], range: Range { start: 421, end: 435 } } with: ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978087Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 99,
+            end: 127,
+        },
+    },
+    "crane": Input {
+        id: "crane",
+        flake: true,
+        url: "\"github:ipetkov/crane\"",
+        follows: [
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+            Indirect(
+                "rust-overlay",
+                "\"rust-overlay\"",
+            ),
+        ],
+        range: Range {
+            start: 319,
+            end: 341,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Range {
+            start: 163,
+            end: 192,
+        },
+    },
+}
+[2m2026-01-13T13:58:46.978121Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.978127Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:58:46.978131Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: "rust-overlay"
+[2m2026-01-13T13:58:46.978135Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: "rust-overlay"
+[2m2026-01-13T13:58:46.978140Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.978144Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+      
+[2m2026-01-13T13:58:46.978147Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 7
+[2m2026-01-13T13:58:46.978150Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.978154Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+      
+[2m2026-01-13T13:58:46.978157Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.978161Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: inputs.flake-utils.follows = "flake-utils";
+[2m2026-01-13T13:58:46.978174Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 43
+[2m2026-01-13T13:58:46.978178Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: inputs.flake-utils.follows = "flake-utils";
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978189Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.978193Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.978199Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.978205Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.978210Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.978216Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: flake-utils
+[2m2026-01-13T13:58:46.978221Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.978227Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.978232Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: flake-utils:"flake-utils" is nested inside the attr: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978240Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: flake-utils, input: Input { id: "flake-utils", flake: true, url: "\"flake-utils\"", follows: [], range: Range { start: 472, end: 485 } } with: ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978249Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 99,
+            end: 127,
+        },
+    },
+    "crane": Input {
+        id: "crane",
+        flake: true,
+        url: "\"github:ipetkov/crane\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+            Indirect(
+                "rust-overlay",
+                "\"rust-overlay\"",
+            ),
+        ],
+        range: Range {
+            start: 319,
+            end: 341,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Range {
+            start: 163,
+            end: 192,
+        },
+    },
+}
+[2m2026-01-13T13:58:46.978284Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.978290Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:58:46.978293Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: "flake-utils"
+[2m2026-01-13T13:58:46.978298Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: "flake-utils"
+[2m2026-01-13T13:58:46.978302Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.978306Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+    
+[2m2026-01-13T13:58:46.978309Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 5
+[2m2026-01-13T13:58:46.978313Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.978317Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+    
+[2m2026-01-13T13:58:46.978320Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_R_BRACE
+[2m2026-01-13T13:58:46.978324Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: }
+[2m2026-01-13T13:58:46.978327Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 1
+[2m2026-01-13T13:58:46.978330Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_R_BRACE
+[2m2026-01-13T13:58:46.978334Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: }
+[2m2026-01-13T13:58:46.978337Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1123:[0m Child of ATTRSET KIND: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.978341Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1124:[0m Child of ATTRSET CHILD: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.978347Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1066:[0m LEAF of ATTRSET KIND: NODE_STRING
+[2m2026-01-13T13:58:46.978351Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1067:[0m LEAF of ATTRSET: "nixpkgs"
+[2m2026-01-13T13:58:46.978359Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1063:[0m Child of ATTRSET KIND: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.978362Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1064:[0m Child of ATTRSET: inputs.rust-overlay.follows = "rust-overlay";
+[2m2026-01-13T13:58:46.978371Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1066:[0m LEAF of ATTRSET KIND: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.978374Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1067:[0m LEAF of ATTRSET: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.978386Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1112:[0m Walking inputs with: inputs.rust-overlay.follows = "rust-overlay";, context: Context { level: ["crane"] }
+[2m2026-01-13T13:58:46.978396Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m540:[0m WalkInputs: 
+{
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.flake-utils.follows = "flake-utils";
+    }
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978419Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m541:[0m WalkInputsKind: NODE_ATTR_SET
+[2m2026-01-13T13:58:46.978422Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_L_BRACE
+[2m2026-01-13T13:58:46.978426Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: {
+[2m2026-01-13T13:58:46.978429Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 1
+[2m2026-01-13T13:58:46.978432Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_L_BRACE
+[2m2026-01-13T13:58:46.978436Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: {
+[2m2026-01-13T13:58:46.978439Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.978443Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+      
+[2m2026-01-13T13:58:46.978446Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 7
+[2m2026-01-13T13:58:46.978449Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.978453Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+      
+[2m2026-01-13T13:58:46.978456Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.978460Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: url = "github:ipetkov/crane";
+[2m2026-01-13T13:58:46.978471Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 29
+[2m2026-01-13T13:58:46.978475Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: url = "github:ipetkov/crane";
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978482Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.978486Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: url
+[2m2026-01-13T13:58:46.978491Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: url
+[2m2026-01-13T13:58:46.978495Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: url
+[2m2026-01-13T13:58:46.978500Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m913:[0m This is the parent: url = "github:ipetkov/crane";
+[2m2026-01-13T13:58:46.978507Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m914:[0m This is the next_sibling: "github:ipetkov/crane"
+[2m2026-01-13T13:58:46.978515Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m925:[0m This is a possible follows attribute:url inputs.nixpkgs.follows = "nixpkgs";
+[2m2026-01-13T13:58:46.978526Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: url
+[2m2026-01-13T13:58:46.978531Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:58:46.978534Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: "github:ipetkov/crane"
+[2m2026-01-13T13:58:46.978539Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: "github:ipetkov/crane"
+[2m2026-01-13T13:58:46.978544Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.978548Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+      
+[2m2026-01-13T13:58:46.978551Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 7
+[2m2026-01-13T13:58:46.978555Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.978558Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+      
+[2m2026-01-13T13:58:46.978562Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.978566Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: inputs.nixpkgs.follows = "nixpkgs";
+[2m2026-01-13T13:58:46.978579Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 35
+[2m2026-01-13T13:58:46.978582Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: inputs.nixpkgs.follows = "nixpkgs";
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978591Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.978594Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.978600Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.978605Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.978610Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.978616Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: nixpkgs
+[2m2026-01-13T13:58:46.978621Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.978626Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.978632Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: nixpkgs:"nixpkgs" is nested inside the attr: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978640Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: nixpkgs, input: Input { id: "nixpkgs", flake: true, url: "\"nixpkgs\"", follows: [], range: Range { start: 374, end: 383 } } with: ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978648Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 99,
+            end: 127,
+        },
+    },
+    "crane": Input {
+        id: "crane",
+        flake: true,
+        url: "\"github:ipetkov/crane\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+            Indirect(
+                "rust-overlay",
+                "\"rust-overlay\"",
+            ),
+        ],
+        range: Range {
+            start: 319,
+            end: 341,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Range {
+            start: 163,
+            end: 192,
+        },
+    },
+}
+[2m2026-01-13T13:58:46.978683Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.978689Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:58:46.978692Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: "nixpkgs"
+[2m2026-01-13T13:58:46.978697Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: "nixpkgs"
+[2m2026-01-13T13:58:46.978702Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.978706Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+      
+[2m2026-01-13T13:58:46.978709Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 7
+[2m2026-01-13T13:58:46.978713Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.978716Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+      
+[2m2026-01-13T13:58:46.978720Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.978724Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: inputs.rust-overlay.follows = "rust-overlay";
+[2m2026-01-13T13:58:46.978736Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 45
+[2m2026-01-13T13:58:46.978745Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: inputs.rust-overlay.follows = "rust-overlay";
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978755Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.978758Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.978765Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.978771Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.978776Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.978782Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: rust-overlay
+[2m2026-01-13T13:58:46.978786Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.978792Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.978797Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: rust-overlay:"rust-overlay" is nested inside the attr: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978806Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: rust-overlay, input: Input { id: "rust-overlay", flake: true, url: "\"rust-overlay\"", follows: [], range: Range { start: 421, end: 435 } } with: ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978814Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 99,
+            end: 127,
+        },
+    },
+    "crane": Input {
+        id: "crane",
+        flake: true,
+        url: "\"github:ipetkov/crane\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+            Indirect(
+                "rust-overlay",
+                "\"rust-overlay\"",
+            ),
+        ],
+        range: Range {
+            start: 319,
+            end: 341,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Range {
+            start: 163,
+            end: 192,
+        },
+    },
+}
+[2m2026-01-13T13:58:46.978849Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.978855Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:58:46.978859Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: "rust-overlay"
+[2m2026-01-13T13:58:46.978863Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: "rust-overlay"
+[2m2026-01-13T13:58:46.978868Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.978871Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+      
+[2m2026-01-13T13:58:46.978875Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 7
+[2m2026-01-13T13:58:46.978878Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.978881Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+      
+[2m2026-01-13T13:58:46.978885Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.978889Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: inputs.flake-utils.follows = "flake-utils";
+[2m2026-01-13T13:58:46.978901Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 43
+[2m2026-01-13T13:58:46.978904Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: inputs.flake-utils.follows = "flake-utils";
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978913Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.978917Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.978924Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.978929Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.978934Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.978940Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: flake-utils
+[2m2026-01-13T13:58:46.978946Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.978952Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.978957Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: flake-utils:"flake-utils" is nested inside the attr: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978966Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: flake-utils, input: Input { id: "flake-utils", flake: true, url: "\"flake-utils\"", follows: [], range: Range { start: 472, end: 485 } } with: ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.978974Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 99,
+            end: 127,
+        },
+    },
+    "crane": Input {
+        id: "crane",
+        flake: true,
+        url: "\"github:ipetkov/crane\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+            Indirect(
+                "rust-overlay",
+                "\"rust-overlay\"",
+            ),
+        ],
+        range: Range {
+            start: 319,
+            end: 341,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Range {
+            start: 163,
+            end: 192,
+        },
+    },
+}
+[2m2026-01-13T13:58:46.979009Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.979015Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:58:46.979019Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: "flake-utils"
+[2m2026-01-13T13:58:46.979023Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: "flake-utils"
+[2m2026-01-13T13:58:46.979028Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.979031Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+    
+[2m2026-01-13T13:58:46.979034Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 5
+[2m2026-01-13T13:58:46.979037Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.979041Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+    
+[2m2026-01-13T13:58:46.979044Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_R_BRACE
+[2m2026-01-13T13:58:46.979048Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: }
+[2m2026-01-13T13:58:46.979051Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 1
+[2m2026-01-13T13:58:46.979054Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_R_BRACE
+[2m2026-01-13T13:58:46.979057Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: }
+[2m2026-01-13T13:58:46.979061Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1123:[0m Child of ATTRSET KIND: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.979064Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1124:[0m Child of ATTRSET CHILD: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.979071Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1066:[0m LEAF of ATTRSET KIND: NODE_STRING
+[2m2026-01-13T13:58:46.979074Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1067:[0m LEAF of ATTRSET: "rust-overlay"
+[2m2026-01-13T13:58:46.979081Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1063:[0m Child of ATTRSET KIND: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.979085Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1064:[0m Child of ATTRSET: inputs.flake-utils.follows = "flake-utils";
+[2m2026-01-13T13:58:46.979093Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1066:[0m LEAF of ATTRSET KIND: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.979097Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1067:[0m LEAF of ATTRSET: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.979108Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1112:[0m Walking inputs with: inputs.flake-utils.follows = "flake-utils";, context: Context { level: ["crane"] }
+[2m2026-01-13T13:58:46.979117Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m540:[0m WalkInputs: 
+{
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.flake-utils.follows = "flake-utils";
+    }
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.979139Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m541:[0m WalkInputsKind: NODE_ATTR_SET
+[2m2026-01-13T13:58:46.979143Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_L_BRACE
+[2m2026-01-13T13:58:46.979146Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: {
+[2m2026-01-13T13:58:46.979149Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 1
+[2m2026-01-13T13:58:46.979152Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_L_BRACE
+[2m2026-01-13T13:58:46.979156Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: {
+[2m2026-01-13T13:58:46.979159Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.979162Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+      
+[2m2026-01-13T13:58:46.979166Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 7
+[2m2026-01-13T13:58:46.979169Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.979172Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+      
+[2m2026-01-13T13:58:46.979176Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.979179Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: url = "github:ipetkov/crane";
+[2m2026-01-13T13:58:46.979189Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 29
+[2m2026-01-13T13:58:46.979192Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: url = "github:ipetkov/crane";
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.979200Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.979204Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: url
+[2m2026-01-13T13:58:46.979208Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: url
+[2m2026-01-13T13:58:46.979212Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: url
+[2m2026-01-13T13:58:46.979216Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m913:[0m This is the parent: url = "github:ipetkov/crane";
+[2m2026-01-13T13:58:46.979223Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m914:[0m This is the next_sibling: "github:ipetkov/crane"
+[2m2026-01-13T13:58:46.979228Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m925:[0m This is a possible follows attribute:url inputs.nixpkgs.follows = "nixpkgs";
+[2m2026-01-13T13:58:46.979240Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: url
+[2m2026-01-13T13:58:46.979244Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:58:46.979247Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: "github:ipetkov/crane"
+[2m2026-01-13T13:58:46.979251Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: "github:ipetkov/crane"
+[2m2026-01-13T13:58:46.979256Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.979260Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+      
+[2m2026-01-13T13:58:46.979263Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 7
+[2m2026-01-13T13:58:46.979267Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.979270Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+      
+[2m2026-01-13T13:58:46.979274Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.979277Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: inputs.nixpkgs.follows = "nixpkgs";
+[2m2026-01-13T13:58:46.979289Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 35
+[2m2026-01-13T13:58:46.979293Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: inputs.nixpkgs.follows = "nixpkgs";
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.979302Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.979305Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.979311Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.979317Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.979321Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.979327Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: nixpkgs
+[2m2026-01-13T13:58:46.979332Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.979337Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.979342Z[0m [34mDEBUG[0m [2mflake_e[2m2026-01-13T13:58:46.979596Z[0m [32m INFO[0m [2mflake_edit[0m[2m:[0m [2m443:[0m No errors in the changes.
+e(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.979351Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: nixpkgs, input: Input { id: "nixpkgs", flake: true, url: "\"nixpkgs\"", follows: [], range: Range { start: 374, end: 383 } } with: ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.979358Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 99,
+            end: 127,
+        },
+    },
+    "crane": Input {
+        id: "crane",
+        flake: true,
+        url: "\"github:ipetkov/crane\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+            Indirect(
+                "rust-overlay",
+                "\"rust-overlay\"",
+            ),
+        ],
+        range: Range {
+            start: 319,
+            end: 341,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Range {
+            start: 163,
+            end: 192,
+        },
+    },
+}
+[2m2026-01-13T13:58:46.979393Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: inputs.nixpkgs.follows
+[2m2026-01-13T13:58:46.979399Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:58:46.979402Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: "nixpkgs"
+[2m2026-01-13T13:58:46.979407Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: "nixpkgs"
+[2m2026-01-13T13:58:46.979411Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.979415Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+      
+[2m2026-01-13T13:58:46.979418Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 7
+[2m2026-01-13T13:58:46.979422Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.979425Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+      
+[2m2026-01-13T13:58:46.979429Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.979432Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: inputs.rust-overlay.follows = "rust-overlay";
+[2m2026-01-13T13:58:46.979445Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 45
+[2m2026-01-13T13:58:46.979448Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: inputs.rust-overlay.follows = "rust-overlay";
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.979457Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.979461Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.979467Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.979472Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.979477Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.979483Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: rust-overlay
+[2m2026-01-13T13:58:46.979487Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.979493Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.979498Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: rust-overlay:"rust-overlay" is nested inside the attr: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.979507Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: rust-overlay, input: Input { id: "rust-overlay", flake: true, url: "\"rust-overlay\"", follows: [], range: Range { start: 421, end: 435 } } with: ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.979514Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 99,
+            end: 127,
+        },
+    },
+    "crane": Input {
+        id: "crane",
+        flake: true,
+        url: "\"github:ipetkov/crane\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+            Indirect(
+                "rust-overlay",
+                "\"rust-overlay\"",
+            ),
+        ],
+        range: Range {
+            start: 319,
+            end: 341,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Range {
+            start: 163,
+            end: 192,
+        },
+    },
+}
+[2m2026-01-13T13:58:46.979549Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: inputs.rust-overlay.follows
+[2m2026-01-13T13:58:46.979555Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:58:46.979558Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: "rust-overlay"
+[2m2026-01-13T13:58:46.979563Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: "rust-overlay"
+[2m2026-01-13T13:58:46.979568Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.979571Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+      
+[2m2026-01-13T13:58:46.979574Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 7
+[2m2026-01-13T13:58:46.979578Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.979581Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+      
+[2m2026-01-13T13:58:46.979585Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.979588Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: inputs.flake-utils.follows = "flake-utils";
+[2m2026-01-13T13:58:46.979600Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 43
+[2m2026-01-13T13:58:46.979603Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1150:[0m 
+Input: inputs.flake-utils.follows = "flake-utils";
+ with ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.979613Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.979619Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.979625Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.979631Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: inputs
+[2m2026-01-13T13:58:46.979635Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.979641Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: flake-utils
+[2m2026-01-13T13:58:46.979646Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1027:[0m Child of ATTRPATH: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.979652Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1028:[0m Child of ATTR: follows
+[2m2026-01-13T13:58:46.979657Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1003:[0m The following attribute follows: flake-utils:"flake-utils" is nested inside the attr: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.979666Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m192:[0m Inserting id: flake-utils, input: Input { id: "flake-utils", flake: true, url: "\"flake-utils\"", follows: [], range: Range { start: 472, end: 485 } } with: ctx: Some(Context { level: ["crane"] })
+[2m2026-01-13T13:58:46.979673Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m225:[0m Self Inputs: {
+    "flake-utelinos": Input {
+        id: "flake-utelinos",
+        flake: true,
+        url: "\"github:numtide/flake-utils\"",
+        follows: [],
+        range: Range {
+            start: 99,
+            end: 127,
+        },
+    },
+    "crane": Input {
+        id: "crane",
+        flake: true,
+        url: "\"github:ipetkov/crane\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+            Indirect(
+                "rust-overlay",
+                "\"rust-overlay\"",
+            ),
+        ],
+        range: Range {
+            start: 319,
+            end: 341,
+        },
+    },
+    "rust-overlay": Input {
+        id: "rust-overlay",
+        flake: true,
+        url: "\"github:oxalica/rust-overlay\"",
+        follows: [
+            Indirect(
+                "flake-utils",
+                "\"flake-utils\"",
+            ),
+            Indirect(
+                "nixpkgs",
+                "\"nixpkgs\"",
+            ),
+        ],
+        range: Range {
+            start: 163,
+            end: 192,
+        },
+    },
+}
+[2m2026-01-13T13:58:46.979708Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.979714Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1152:[0m Kind: NODE_STRING
+[2m2026-01-13T13:58:46.979717Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1153:[0m Kind: "flake-utils"
+[2m2026-01-13T13:58:46.979721Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: "flake-utils"
+[2m2026-01-13T13:58:46.979726Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.979729Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+    
+[2m2026-01-13T13:58:46.979732Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 5
+[2m2026-01-13T13:58:46.979736Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.979744Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+    
+[2m2026-01-13T13:58:46.979748Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_R_BRACE
+[2m2026-01-13T13:58:46.979752Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: }
+[2m2026-01-13T13:58:46.979755Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 1
+[2m2026-01-13T13:58:46.979758Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_R_BRACE
+[2m2026-01-13T13:58:46.979762Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: }
+[2m2026-01-13T13:58:46.979765Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1123:[0m Child of ATTRSET KIND: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.979769Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1124:[0m Child of ATTRSET CHILD: inputs.flake-utils.follows
+[2m2026-01-13T13:58:46.979775Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1066:[0m LEAF of ATTRSET KIND: NODE_STRING
+[2m2026-01-13T13:58:46.979779Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1067:[0m LEAF of ATTRSET: "flake-utils"
+[2m2026-01-13T13:58:46.979785Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m1167:[0m Child: {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.flake-utils.follows = "flake-utils";
+    }
+[2m2026-01-13T13:58:46.979808Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.979811Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: 
+  
+[2m2026-01-13T13:58:46.979814Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 3
+[2m2026-01-13T13:58:46.979818Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_WHITESPACE
+[2m2026-01-13T13:58:46.979821Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: 
+  
+[2m2026-01-13T13:58:46.979824Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m555:[0m Inputs Child Kind: TOKEN_R_BRACE
+[2m2026-01-13T13:58:46.979828Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m556:[0m Inputs Child: }
+[2m2026-01-13T13:58:46.979831Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m557:[0m Inputs Child Len: 1
+[2m2026-01-13T13:58:46.979834Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m572:[0m UNMATCHED KIND: TOKEN_R_BRACE
+[2m2026-01-13T13:58:46.979838Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m573:[0m UNMATCHED PATH: }
+[2m2026-01-13T13:58:46.979842Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m421:[0m Toplevel Child: {
+
+    flake-utelinos.url = "github:numtide/flake-utils";
+
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+  }
+[2m2026-01-13T13:58:46.979887Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m422:[0m Toplevel Child Kind: NODE_ATTR_SET
+[2m2026-01-13T13:58:46.979890Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m423:[0m Toplevel Child Index: 4
+[2m2026-01-13T13:58:46.979894Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m424:[0m Toplevel Index: 4
+[2m2026-01-13T13:58:46.979897Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m426:[0m Toplevel Child Parent: inputs = {
+
+    flake-utelinos.url = "github:numtide/flake-utils";
+
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+  };
+[2m2026-01-13T13:58:46.979943Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m427:[0m Toplevel Child Parent Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.979947Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m428:[0m Toplevel Child Parent Index: 4
+[2m2026-01-13T13:58:46.980103Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m417:[0m Toplevel: outputs = _: { };
+[2m2026-01-13T13:58:46.980111Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m418:[0m Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.980115Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m421:[0m Toplevel Child: outputs
+[2m2026-01-13T13:58:46.980119Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m422:[0m Toplevel Child Kind: NODE_ATTRPATH
+[2m2026-01-13T13:58:46.980123Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m423:[0m Toplevel Child Index: 0
+[2m2026-01-13T13:58:46.980126Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m424:[0m Toplevel Index: 6
+[2m2026-01-13T13:58:46.980129Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m426:[0m Toplevel Child Parent: outputs = _: { };
+[2m2026-01-13T13:58:46.980137Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m427:[0m Toplevel Child Parent Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.980140Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m428:[0m Toplevel Child Parent Index: 6
+[2m2026-01-13T13:58:46.980147Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m421:[0m Toplevel Child: _: { }
+[2m2026-01-13T13:58:46.980153Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m422:[0m Toplevel Child Kind: NODE_LAMBDA
+[2m2026-01-13T13:58:46.980156Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m423:[0m Toplevel Child Index: 4
+[2m2026-01-13T13:58:46.980159Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m424:[0m Toplevel Index: 6
+[2m2026-01-13T13:58:46.980163Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m426:[0m Toplevel Child Parent: outputs = _: { };
+[2m2026-01-13T13:58:46.980170Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m427:[0m Toplevel Child Parent Kind: NODE_ATTRPATH_VALUE
+[2m2026-01-13T13:58:46.980174Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m428:[0m Toplevel Child Parent Index: 6
+[2m2026-01-13T13:58:46.980189Z[0m [34mDEBUG[0m [2mflake_edit::walk[0m[2m:[0m [2m245:[0m Walking outputs.
+[2m2026-01-13T13:58:46.980519Z[0m [32m INFO[0m [2mflake_edit[0m[2m:[0m [2m443:[0m No errors in the changes.

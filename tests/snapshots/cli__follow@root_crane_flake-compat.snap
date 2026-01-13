@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/root.flake.nix"
+    - "--diff"
+    - follow
+    - crane.flake-compat
+    - flake-compat
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -16,6 +16,7 @@
+       inputs.nixpkgs.follows = "nixpkgs";
+       inputs.rust-overlay.follows = "rust-overlay";
+       inputs.flake-utils.follows = "flake-utils";
++      inputs.flake-compat.follows = "flake-compat";
+     };
+   };
+
+
+----- stderr -----

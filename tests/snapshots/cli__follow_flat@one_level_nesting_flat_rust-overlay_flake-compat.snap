@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/one_level_nesting_flat.flake.nix"
+    - "--diff"
+    - follow
+    - rust-overlay.flake-compat
+    - flake-compat
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -11,6 +11,7 @@
+     crane.inputs.nixpkgs.follows = "nixpkgs";
+     crane.inputs.rust-overlay.follows = "rust-overlay";
+     crane.inputs.flake-utils.follows = "flake-utils";
++    rust-overlay.inputs.flake-compat.follows = "flake-compat";
+   };
+
+   outputs =
+
+----- stderr -----
