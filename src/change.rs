@@ -11,7 +11,7 @@ pub enum Change {
         flake: bool,
     },
     Remove {
-        id: ChangeId,
+        ids: Vec<ChangeId>,
     },
     Pin {
         id: String,
@@ -80,9 +80,16 @@ impl Change {
         match self {
             Change::None => None,
             Change::Add { id, .. } => id.clone().map(|id| id.into()),
-            Change::Remove { id } => Some(id.clone()),
+            Change::Remove { ids } => ids.first().cloned(),
             Change::Change { id, .. } => id.clone().map(|id| id.into()),
             Change::Pin { id } => Some(id.clone().into()),
+        }
+    }
+
+    pub fn ids(&self) -> Vec<ChangeId> {
+        match self {
+            Change::Remove { ids } => ids.clone(),
+            _ => self.id().into_iter().collect(),
         }
     }
     pub fn is_remove(&self) -> bool {

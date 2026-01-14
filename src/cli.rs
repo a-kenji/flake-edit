@@ -17,6 +17,9 @@ pub struct CliArgs {
     /// Skip updating the lockfile after editing flake.nix.
     #[arg(long, default_value_t = false)]
     no_lock: bool,
+    /// Disable interactive prompts.
+    #[arg(long, default_value_t = false)]
+    non_interactive: bool,
 
     #[command(subcommand)]
     subcommand: Command,
@@ -33,22 +36,22 @@ impl CliArgs {
         Box::leak(format!("{VERSION} - {date} - {rev}").into_boxed_str())
     }
 
-    pub(crate) fn subcommand(&self) -> &Command {
+    pub fn subcommand(&self) -> &Command {
         &self.subcommand
     }
-    pub(crate) fn list(&self) -> bool {
+    pub fn list(&self) -> bool {
         matches!(self.subcommand, Command::List { .. })
     }
-    pub(crate) fn update(&self) -> bool {
+    pub fn update(&self) -> bool {
         matches!(self.subcommand, Command::Update { .. })
     }
-    pub(crate) fn pin(&self) -> bool {
+    pub fn pin(&self) -> bool {
         matches!(self.subcommand, Command::Pin { .. })
     }
-    pub(crate) fn unpin(&self) -> bool {
+    pub fn unpin(&self) -> bool {
         matches!(self.subcommand, Command::Unpin { .. })
     }
-    pub(crate) fn change(&self) -> bool {
+    pub fn change(&self) -> bool {
         matches!(self.subcommand, Command::Change { .. })
     }
 
@@ -63,18 +66,20 @@ impl CliArgs {
     pub fn no_lock(&self) -> bool {
         self.no_lock
     }
+
+    pub fn non_interactive(&self) -> bool {
+        self.non_interactive
+    }
 }
 
 #[derive(Subcommand, Debug)]
-pub(crate) enum Command {
+pub enum Command {
     /// Add a new flake reference.
     #[clap(alias = "a")]
-    #[command(arg_required_else_help = true)]
     Add {
         /// The name of an input attribute.
         id: Option<String>,
         /// The uri that should be added to the input.
-        // #[arg(last = true)]
         uri: Option<String>,
         #[arg(long)]
         /// Pin to a specific ref_or_rev
@@ -91,7 +96,6 @@ pub(crate) enum Command {
     Remove { id: Option<String> },
     /// Change an existing flake reference's URI.
     #[clap(alias = "c")]
-    #[command(arg_required_else_help = true)]
     Change {
         /// The name of an existing input attribute.
         id: Option<String>,
@@ -125,7 +129,7 @@ pub(crate) enum Command {
     #[clap(alias = "p")]
     Pin {
         /// The id of an input attribute.
-        id: String,
+        id: Option<String>,
         /// Optionally specify a rev for the inputs attribute.
         rev: Option<String>,
     },
@@ -133,7 +137,7 @@ pub(crate) enum Command {
     #[clap(alias = "up")]
     Unpin {
         /// The id of an input attribute.
-        id: String,
+        id: Option<String>,
     },
     #[clap(hide = true)]
     #[command(name = "completion")]
@@ -147,7 +151,7 @@ pub(crate) enum Command {
 
 #[derive(Debug, Clone, Default)]
 /// Which command should be completed
-pub(crate) enum CompletionMode {
+pub enum CompletionMode {
     #[default]
     None,
     Add,
@@ -166,7 +170,7 @@ impl From<String> for CompletionMode {
 }
 
 #[derive(Debug, Clone, Default)]
-pub(crate) enum ListFormat {
+pub enum ListFormat {
     None,
     Simple,
     Toplevel,

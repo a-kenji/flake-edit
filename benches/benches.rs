@@ -38,7 +38,7 @@ fn add_input() {
 fn remove_input() {
     let mut walker = Walker::new(INPUTS);
     let change = Change::Remove {
-        id: "nixpkgs".to_owned().into(),
+        ids: vec!["nixpkgs".to_owned().into()],
     };
     let _ = walker.walk(&change);
     // a simple sanity check

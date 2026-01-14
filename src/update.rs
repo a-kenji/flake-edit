@@ -184,8 +184,6 @@ impl Updater {
             offset: 0,
         }
     }
-    /// TODO:
-    /// Get an input based on it's id.
     fn get_index(&self, id: &str) -> usize {
         self.inputs.iter().position(|n| n.input.id == id).unwrap()
     }

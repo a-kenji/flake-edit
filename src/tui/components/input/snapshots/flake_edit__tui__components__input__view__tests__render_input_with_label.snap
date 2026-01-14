@@ -1,0 +1,8 @@
+---
+source: src/bin/flake-edit/tui/components/input/view.rs
+expression: output
+---
+────────────────────────────────────────────────────────────────────────────────
+❯ nixpkgs
+────────────────────────────────────────────────────────────────────────────────
+ Add   ID  for github:nixos/nixpkgs                      Diff: Off   flake-edit

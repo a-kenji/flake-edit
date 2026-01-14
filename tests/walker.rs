@@ -64,7 +64,7 @@ fn test_walker_remove_input(#[case] fixture: &str, #[case] input_id: &str) {
     let content = load_flake(fixture);
     let mut walker = Walker::new(&content);
     let change = Change::Remove {
-        id: input_id.to_owned().into(),
+        ids: vec![input_id.to_owned().into()],
     };
     let info = Info::with_change(change.clone());
     let result = walker.walk(&change).unwrap().unwrap();

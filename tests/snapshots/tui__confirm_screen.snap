@@ -1,0 +1,38 @@
+---
+source: tests/tui.rs
+expression: "snapshot(&mut terminal, &app)"
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 80, height: 10 },
+    content: [
+        "────────────────────────────────────────────────────────────────────────────────",
+        "@@ -1,3 +1,3 @@                                                                 ",
+        " inputs = {                                                                     ",
+        "-  nixpkgs.url = "github:nixos/nixpkgs";                                        ",
+        "+  nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";                         ",
+        " };                                                                             ",
+        "                                                                                ",
+        "                                                                                ",
+        "────────────────────────────────────────────────────────────────────────────────",
+        " Change  Apply?  y es  n o  b ack                                    flake-edit ",
+    ],
+    styles: [
+        x: 0, y: 0, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 1, fg: Cyan, bg: Reset, underline: Reset, modifier: NONE,
+        x: 15, y: 1, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 3, fg: Red, bg: Reset, underline: Reset, modifier: NONE,
+        x: 40, y: 3, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 4, fg: Green, bg: Reset, underline: Reset, modifier: NONE,
+        x: 55, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 8, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 9, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 8, y: 9, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 16, y: 9, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: BOLD,
+        x: 19, y: 9, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 22, y: 9, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: BOLD,
+        x: 25, y: 9, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 27, y: 9, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: BOLD,
+        x: 30, y: 9, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 68, y: 9, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+    ]
+}

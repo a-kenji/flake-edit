@@ -1,0 +1,15 @@
+---
+source: tests/tui.rs
+description: "change nixpkgs → Ctrl+u → type 'github:nixos/nixpkgs/nixos-24.11' → Enter"
+expression: session.app().pending_diff()
+---
+--- original
++++ modified
+@@ -2,7 +2,7 @@
+   description = "Manage your flake inputs comfortably.";
+
+   inputs = {
+-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
++    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
+
+     flake-utelinos.url = "github:numtide/flake-utils";

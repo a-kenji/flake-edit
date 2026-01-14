@@ -1,0 +1,15 @@
+---
+source: tests/tui.rs
+description: "add → type 'github:user/repo' → Enter → Ctrl+u → type 'my-input' → Enter"
+expression: session.app().pending_diff()
+---
+--- original
++++ modified
+@@ -2,6 +2,7 @@
+   description = "Manage your flake inputs comfortably.";
+
+   inputs = {
++    my-input.url = "github:user/repo";
+     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+     flake-utelinos.url = "github:numtide/flake-utils";
