@@ -13,6 +13,7 @@ use nix_uri::urls::UrlWrapper;
 use crate::change::Change;
 use crate::diff::Diff;
 use crate::edit::FlakeEdit;
+use crate::lock::NestedInput;
 
 /// Result from single-select including selected item and whether diff preview is enabled
 #[derive(Debug, Clone)]
@@ -41,6 +42,15 @@ pub enum ConfirmResultAction {
 pub enum AddPhase {
     Uri,
     Id,
+}
+
+/// Phase within the Follow workflow
+#[derive(Debug, Clone, PartialEq)]
+pub enum FollowPhase {
+    /// Select the nested input path (e.g., "crane.nixpkgs")
+    SelectInput,
+    /// Select the target to follow (e.g., "nixpkgs")
+    SelectTarget,
 }
 
 /// Result of calling update()
@@ -94,6 +104,17 @@ pub enum WorkflowData {
     ConfirmOnly {
         action: Option<ConfirmResultAction>,
     },
+    Follow {
+        phase: FollowPhase,
+        /// The selected nested input path (e.g., "crane.nixpkgs")
+        selected_input: Option<String>,
+        /// The selected target to follow (e.g., "nixpkgs")
+        selected_target: Option<String>,
+        /// All available nested inputs with their follows info
+        nested_inputs: Vec<NestedInput>,
+        /// All available top-level inputs (possible targets)
+        top_level_inputs: Vec<String>,
+    },
 }
 
 impl WorkflowData {
@@ -129,6 +150,20 @@ impl WorkflowData {
             WorkflowData::SelectOne { .. }
             | WorkflowData::SelectMany { .. }
             | WorkflowData::ConfirmOnly { .. } => Change::None,
+            WorkflowData::Follow {
+                selected_input,
+                selected_target,
+                ..
+            } => {
+                if let (Some(input), Some(target)) = (selected_input, selected_target) {
+                    Change::Follows {
+                        input: input.clone().into(),
+                        target: target.clone(),
+                    }
+                } else {
+                    Change::None
+                }
+            }
         }
     }
 }
@@ -154,6 +189,11 @@ pub fn parse_uri_and_infer_id(uri: &str) -> (Option<String>, String) {
 
 /// Compute a unified diff between the original flake text and the result of applying a change.
 pub fn compute_diff(flake_text: &str, change: &Change) -> String {
+    // Return empty string for None change (no preview possible)
+    if matches!(change, Change::None) {
+        return String::new();
+    }
+
     let Ok(mut edit) = FlakeEdit::from_text(flake_text) else {
         return "Error parsing flake".to_string();
     };

@@ -5,7 +5,7 @@ use ropey::Rope;
 use crate::change::Change;
 use crate::edit::FlakeEdit;
 use crate::error::FlakeEditError;
-use crate::lock::FlakeLock;
+use crate::lock::{FlakeLock, NestedInput};
 use crate::tui;
 use crate::update::Updater;
 
@@ -615,6 +615,59 @@ pub fn list(flake_edit: &mut FlakeEdit, format: &crate::cli::ListFormat) -> Resu
     Ok(())
 }
 
+pub fn follow(
+    editor: &Editor,
+    flake_edit: &mut FlakeEdit,
+    state: &AppState,
+    input: Option<String>,
+    target: Option<String>,
+) -> Result<()> {
+    let change = if let (Some(input_val), Some(target_val)) = (input.clone(), target) {
+        // Both provided - non-interactive
+        Change::Follows {
+            input: input_val.into(),
+            target: target_val,
+        }
+    } else if state.interactive {
+        // Interactive mode - get nested inputs from lockfile with existing follows info
+        let nested_inputs: Vec<NestedInput> = FlakeLock::from_default_path()
+            .map(|lock| lock.get_nested_inputs())
+            .unwrap_or_default();
+
+        // Get top-level inputs as possible targets
+        let inputs = flake_edit.list();
+        let top_level_inputs: Vec<String> = inputs.keys().cloned().collect();
+
+        if nested_inputs.is_empty() {
+            eprintln!("No nested inputs found in flake.lock");
+            eprintln!("Make sure you have run `nix flake lock` first.");
+            return Ok(());
+        }
+
+        if top_level_inputs.is_empty() {
+            return Err(CommandError::NoInputs);
+        }
+
+        let tui_app = if let Some(input_val) = input {
+            // Input provided, show target selection only
+            tui::App::follow_target("Follow", editor.text(), input_val, top_level_inputs)
+        } else {
+            // Neither provided, show full workflow
+            tui::App::follow("Follow", editor.text(), nested_inputs, top_level_inputs)
+        };
+
+        let Some(tui::AppResult::Change(tui_change)) = tui::run(tui_app)? else {
+            return Ok(()); // User cancelled
+        };
+        tui_change
+    } else {
+        // Non-interactive but no input provided
+        return Err(CommandError::NoId);
+    };
+
+    apply_change(editor, flake_edit, state, change)
+}
+
 fn apply_change(
     editor: &Editor,
     flake_edit: &mut FlakeEdit,
@@ -666,6 +719,14 @@ fn apply_change(
                             uri.as_deref().unwrap_or("?")
                         );
                     }
+                    Change::Follows { input, target } => {
+                        println!(
+                            "Added follows: {}.inputs.{}.follows = \"{}\"",
+                            input.input(),
+                            input.follows().unwrap_or("?"),
+                            target
+                        );
+                    }
                     _ => {}
                 }
             }
@@ -678,6 +739,16 @@ fn apply_change(
                 return Err(CommandError::CouldNotRemove(
                     change.id().map(|id| id.to_string()).unwrap_or_default(),
                 ));
+            }
+            if change.is_follows() {
+                let id = change.id().map(|id| id.to_string()).unwrap_or_default();
+                eprintln!("The follows relationship for {} could not be created.", id);
+                eprintln!(
+                    "\nPlease check that the input exists in the flake.nix file.\n\
+                     Use dot notation: `flake-edit follow <input>.<nested-input> <target>`\n\
+                     Example: `flake-edit follow rust-overlay.nixpkgs nixpkgs`"
+                );
+                std::process::exit(1);
             }
             println!("Nothing changed.");
         }

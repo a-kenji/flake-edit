@@ -84,6 +84,12 @@ fn make_flake_false_attr(id: &str) -> Node {
     parse_node(&format!("{}.flake = false;", id))
 }
 
+/// Create a nested follows attribute node (inside an input block).
+/// Example: `inputs.nixpkgs.follows = "nixpkgs";`
+fn make_nested_follows_attr(input: &str, target: &str) -> Node {
+    parse_node(&format!("inputs.{}.follows = \"{}\";", input, target))
+}
+
 /// Find the index of adjacent whitespace to strip after removing/replacing a child.
 /// Returns the index of whitespace before the child if present, otherwise after.
 fn adjacent_whitespace_index(child: &rnix::SyntaxElement) -> Option<usize> {
@@ -548,6 +554,47 @@ impl<'a> Walker {
             | SyntaxKind::NODE_IDENT => {}
             _ => {}
         }
+
+        // Handle Change::Follows for flat-style inputs (inputs inside an attr set)
+        // This adds follows to the inputs attr set when there's no nested block
+        if let Change::Follows { input, target } = change
+            && node.kind() == SyntaxKind::NODE_ATTR_SET
+            && ctx.is_none()
+        {
+            let parent_id = input.input();
+            let nested_id = input.follows();
+
+            if let Some(nested_id) = nested_id {
+                // Check if the parent input exists in this attr set (flat style)
+                let parent_exists = self.inputs.contains_key(parent_id);
+
+                if parent_exists {
+                    // Add a flat-style follows attribute to this attr set
+                    let follows_node = parse_node(&format!(
+                        "{}.inputs.{}.follows = \"{}\";",
+                        parent_id, nested_id, target
+                    ));
+
+                    // Find the last actual child and insert after it
+                    let children: Vec<_> = node.children().collect();
+                    if let Some(last_child) = children.last() {
+                        let insert_index = last_child.index() + 1;
+
+                        let mut green = node
+                            .green()
+                            .insert_child(insert_index, follows_node.green().into());
+
+                        // Copy whitespace from before the last child
+                        if let Some(whitespace) = get_sibling_whitespace(last_child) {
+                            green = green.insert_child(insert_index, whitespace.green().into());
+                        }
+
+                        return Some(parse_node(&green.to_string()));
+                    }
+                }
+            }
+        }
+
         for child in node.children_with_tokens() {
             tracing::debug!("Inputs Child Kind: {:?}", child.kind());
             tracing::debug!("Inputs Child: {child}");
@@ -1110,6 +1157,45 @@ impl<'a> Walker {
                 }
             }
         }
+
+        // Handle Change::Follows - add follows to this input's attr set
+        if let Change::Follows { input, target } = change {
+            let parent_id = input.input();
+            let nested_id = input.follows();
+
+            // Check if this attr set belongs to the input we want to modify
+            if let Some(id_node) = child.prev_sibling()
+                && id_node.to_string() == parent_id
+                && let Some(nested_id) = nested_id
+            {
+                // Insert the follows attribute into this attr set
+                let follows_node = make_nested_follows_attr(nested_id, target);
+
+                // Find the last actual child (before the closing brace)
+                // and get whitespace from before it
+                let children: Vec<_> = child.children().collect();
+                if let Some(last_child) = children.last() {
+                    // Insert after the last child with proper whitespace
+                    let insert_index = last_child.index() + 1;
+
+                    let mut green = child
+                        .green()
+                        .insert_child(insert_index, follows_node.green().into());
+
+                    // Copy whitespace from before the last child
+                    if let Some(whitespace) = get_sibling_whitespace(last_child) {
+                        green = green.insert_child(insert_index, whitespace.green().into());
+                    }
+
+                    let new_child = parse_node(&green.to_string());
+                    let green = node
+                        .green()
+                        .replace_child(child.index(), new_child.green().into());
+                    return Some(parse_node(&green.to_string()));
+                }
+            }
+        }
+
         None
     }
 

@@ -45,12 +45,18 @@ impl Widget for &App {
             Screen::List(screen) => {
                 if self.show_diff() {
                     let diff = self.pending_diff();
-                    let diff_lines = diff.lines().count();
-                    let (main_area, diff_area) =
-                        layouts::content_with_diff_preview(area, diff_lines);
-                    List::new(&screen.state, &screen.items, &screen.prompt, self.context())
-                        .render(main_area, buf);
-                    render_diff_preview(&diff, diff_area, buf);
+                    // Only show diff preview if there's actual content
+                    if !diff.is_empty() {
+                        let diff_lines = diff.lines().count();
+                        let (main_area, diff_area) =
+                            layouts::content_with_diff_preview(area, diff_lines);
+                        List::new(&screen.state, &screen.items, &screen.prompt, self.context())
+                            .render(main_area, buf);
+                        render_diff_preview(&diff, diff_area, buf);
+                    } else {
+                        List::new(&screen.state, &screen.items, &screen.prompt, self.context())
+                            .render(area, buf);
+                    }
                 } else {
                     List::new(&screen.state, &screen.items, &screen.prompt, self.context())
                         .render(area, buf);
