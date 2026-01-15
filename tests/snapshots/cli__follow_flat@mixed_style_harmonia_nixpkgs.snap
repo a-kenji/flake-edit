@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/mixed_style.flake.nix"
+    - "--diff"
+    - follow
+    - harmonia.nixpkgs
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -8,6 +8,7 @@
+     systems.url = "github:nix-systems/default";
+
+     harmonia.url = "github:nix-community/harmonia";
++    harmonia.inputs.nixpkgs.follows = "nixpkgs";
+
+     nix-index-database.url = "github:nix-community/nix-index-database";
+
+
+----- stderr -----

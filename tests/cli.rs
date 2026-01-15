@@ -327,6 +327,10 @@ fn test_change_nonexistent(#[case] fixture: &str, #[case] id: &str, #[case] uri:
 #[case("root", "crane.flake-compat", "flake-compat")]
 #[case("centerpiece", "home-manager.nixpkgs", "nixpkgs")]
 #[case("centerpiece", "treefmt-nix.nixpkgs", "nixpkgs")]
+#[case("mixed_style", "blueprint.nixpkgs", "nixpkgs")]
+#[case("mixed_style", "blueprint.systems", "systems")]
+#[case("mixed_style", "mprisd.nixpkgs", "nixpkgs")]
+#[case("mixed_style", "mprisd.flake-parts", "flake-parts")]
 fn test_follow(#[case] fixture: &str, #[case] input: &str, #[case] target: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -348,6 +352,7 @@ fn test_follow(#[case] fixture: &str, #[case] input: &str, #[case] target: &str)
 /// Test the follow command for flat-style inputs
 #[rstest]
 #[case("one_level_nesting_flat", "rust-overlay.flake-compat", "flake-compat")]
+#[case("mixed_style", "harmonia.nixpkgs", "nixpkgs")]
 fn test_follow_flat(#[case] fixture: &str, #[case] input: &str, #[case] target: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -394,7 +399,8 @@ fn test_follow_nonexistent(#[case] fixture: &str, #[case] input: &str, #[case] t
 #[case("first_nested_node")] // naersk.nixpkgs already follows, utils.systems has no match
 #[case("flat_nested_flat")] // poetry2nix follows already set, no other matches
 #[case("root")] // Has follows in flake.nix but lockfile shows direct references
-#[case("hyperconfig")] // Large real-world flake with many nested inputs
+#[case("hyperconfig")] // Large real-world flake with mostly flat-style inputs
+#[case("mixed_style")] // Mixed flat and nested inputs (harmonia flat, blueprint/mprisd nested)
 fn test_follow_auto(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);

@@ -1,0 +1,58 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/mixed_style.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/mixed_style.flake.lock"
+    - "--diff"
+    - follow
+    - "--auto"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -3,20 +3,35 @@
+     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+     flake-parts.url = "github:hercules-ci/flake-parts";
+     treefmt-nix.url = "github:numtide/treefmt-nix";
++    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
+     crane.url = "github:ipetkov/crane";
+     nix.url = "github:NixOS/nix";
++    nix.inputs.flake-parts.follows = "flake-parts";
++    nix.inputs.nixpkgs.follows = "nixpkgs";
+     systems.url = "github:nix-systems/default";
+
+     harmonia.url = "github:nix-community/harmonia";
++    harmonia.inputs.crane.follows = "crane";
++    harmonia.inputs.flake-parts.follows = "flake-parts";
++    harmonia.inputs.nix.follows = "nix";
++    harmonia.inputs.nixpkgs.follows = "nixpkgs";
++    harmonia.inputs.treefmt-nix.follows = "treefmt-nix";
+
+     nix-index-database.url = "github:nix-community/nix-index-database";
++    nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
+
+     blueprint = {
+       url = "github:numtide/blueprint";
++      inputs.nixpkgs.follows = "nixpkgs";
++      inputs.systems.follows = "systems";
+     };
+
+     mprisd = {
+       url = "git+https://forge.kenji.rsvp/kenji/mprisd";
++      inputs.crane.follows = "crane";
++      inputs.flake-parts.follows = "flake-parts";
++      inputs.nixpkgs.follows = "nixpkgs";
++      inputs.treefmt-nix.follows = "treefmt-nix";
+     };
+   };
+
+
+----- stderr -----

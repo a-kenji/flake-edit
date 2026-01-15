@@ -17,13 +17,13 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -17,6 +17,7 @@
+@@ -16,6 +16,7 @@
+       inputs.nixpkgs.follows = "nixpkgs";
        inputs.rust-overlay.follows = "rust-overlay";
        inputs.flake-utils.follows = "flake-utils";
++      inputs.flake-compat.follows = "flake-compat";
      };
-+    crane.inputs.flake-compat.follows = "flake-compat";
    };
 
-   outputs = _: { };
 
 ----- stderr -----
