@@ -14,6 +14,7 @@
     - [`$ flake-edit pin`](#-flake-edit-pin)
     - [`$ flake-edit unpin`](#-flake-edit-unpin)
     - [`$ flake-edit list`](#-flake-edit-list)
+    - [`$ flake-edit follow`](#-flake-edit-follow)
   - [As a library](#as-a-library)
   - [Status](#status)
   - [License](#license)
@@ -45,16 +46,22 @@ Commands:
           Pin inputs to their current or a specified rev
   unpin
           Unpin an input so it tracks the upstream default again
+  follow
+          Add a follows relationship to make an input's dependency follow a top-level input
   help
           Print this message or the help of the given subcommand(s)
 
 Options:
       --flake <FLAKE>
           Location of the `flake.nix` file, that will be used
+      --lock-file <LOCK_FILE>
+          Location of the `flake.lock` file. Defaults to `flake.lock` in the current directory
       --diff
           Print a diff of the changes, will not write the changes to disk
       --no-lock
           Skip updating the lockfile after editing flake.nix
+      --non-interactive
+          Disable interactive prompts
   -h, --help
           Print help
   -V, --version
@@ -80,6 +87,8 @@ Options:
           Pin to a specific ref_or_rev
   -n, --no-flake
           The input itself is not a flake
+  -s, --shallow
+          Use shallow clone for the input
   -h, --help
           Print help
 ```
@@ -146,6 +155,8 @@ Arguments:
 Options:
       --ref-or-rev <REF_OR_REV>
           Pin to a specific ref_or_rev
+  -s, --shallow
+          Use shallow clone for the input
   -h, --help
           Print help
 ```
@@ -157,10 +168,10 @@ Options:
 ```
 Pin inputs to their current or a specified rev
 
-Usage: flake-edit pin <ID> [REV]
+Usage: flake-edit pin [ID] [REV]
 
 Arguments:
-  <ID>
+  [ID]
           The id of an input attribute
   [REV]
           Optionally specify a rev for the inputs attribute
@@ -178,10 +189,10 @@ Pin a specific input to it's current revision (rev).
 ```
 Unpin an input so it tracks the upstream default again
 
-Usage: flake-edit unpin <ID>
+Usage: flake-edit unpin [ID]
 
 Arguments:
-  <ID>
+  [ID]
           The id of an input attribute
 
 Options:
@@ -209,6 +220,38 @@ List the outputs, that are specified inside the inputs attribute.
 List the outputs, that are specified inside the inputs attribute, in json format.
 ![flake-edit list example](https://vhs.charm.sh/vhs-35E6eiL63lFTSC70rQyE1Y.gif)
 
+### `$ flake-edit follow`
+<!-- `$ flake-edit help follow` -->
+
+```
+Add a follows relationship to make an input's dependency follow a top-level input.
+
+Example: `flake-edit follow rust-overlay.nixpkgs nixpkgs`
+
+This creates: `rust-overlay.inputs.nixpkgs.follows = "nixpkgs";`
+
+Without arguments, starts an interactive selection.
+
+Usage: flake-edit follow [OPTIONS] [INPUT] [TARGET]
+
+Arguments:
+  [INPUT]
+          The input path in dot notation (e.g., "rust-overlay.nixpkgs" means the nixpkgs input of rust-overlay)
+
+  [TARGET]
+          The target input to follow (e.g., "nixpkgs")
+
+Options:
+  -a, --auto
+          Automatically follow inputs when their nested input names match top-level inputs
+
+  -h, --help
+          Print help (see a summary with '-h')
+```
+Add a follows relationship to a specific nested input.
+![flake-edit follow example](https://vhs.charm.sh/vhs-7p7Gx5DTc0oIf5HMsLhdCe.gif)
+Automatically add follows relationships for all nested inputs matching top-level inputs.
+![flake-edit follow auto example](https://vhs.charm.sh/vhs-7pxMkZCy3hnleU5y875Rp3.gif)
 
 ## As a library
 
