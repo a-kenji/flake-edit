@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/mixed_style.flake.nix"
+    - "--diff"
+    - follow
+    - mprisd.flake-parts
+    - flake-parts
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -17,6 +17,7 @@
+
+     mprisd = {
+       url = "git+https://forge.kenji.rsvp/kenji/mprisd";
++      inputs.flake-parts.follows = "flake-parts";
+     };
+   };
+
+
+----- stderr -----

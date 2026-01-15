@@ -568,7 +568,26 @@ impl<'a> Walker {
                 // Check if the parent input exists in this attr set (flat style)
                 let parent_exists = self.inputs.contains_key(parent_id);
 
-                if parent_exists {
+                // Check if this input uses nested-style (has an attr set block)
+                // If it does, we should NOT add flat-style follows here - the nested
+                // handler in handle_input_attr_set will add the follows inside the block
+                let has_nested_block = node.children().any(|child| {
+                    // Look for `parent_id = { ... }` pattern
+                    if child.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
+                        return false;
+                    }
+                    child
+                        .first_child()
+                        .and_then(|attrpath| attrpath.first_child())
+                        .map(|first_ident| first_ident.to_string() == parent_id)
+                        .unwrap_or(false)
+                        && child
+                            .children()
+                            .any(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
+                });
+
+                // Only use flat-style if the input exists AND doesn't have a nested block
+                if parent_exists && !has_nested_block {
                     // Add a flat-style follows attribute to this attr set
                     let follows_node = parse_node(&format!(
                         "{}.inputs.{}.follows = \"{}\";",

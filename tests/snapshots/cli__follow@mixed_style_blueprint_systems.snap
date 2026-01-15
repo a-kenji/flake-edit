@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/mixed_style.flake.nix"
+    - "--diff"
+    - follow
+    - blueprint.systems
+    - systems
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -13,6 +13,7 @@
+
+     blueprint = {
+       url = "github:numtide/blueprint";
++      inputs.systems.follows = "systems";
+     };
+
+     mprisd = {
+
+----- stderr -----

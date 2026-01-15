@@ -17,13 +17,13 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -6,6 +6,7 @@
+@@ -5,6 +5,7 @@
+     naersk = {
        url = "github:nix-community/naersk/master";
        inputs.nixpkgs.follows = "nixpkgs";
++      inputs.flake-utils.follows = "flake-utils";
      };
-+    naersk.inputs.flake-utils.follows = "flake-utils";
      nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
      utils.url = "github:numtide/flake-utils";
-     flake-compat = {
 
 ----- stderr -----
