@@ -9,6 +9,7 @@
 use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 
+use crate::cache::{Cache, DEFAULT_URI_TYPES};
 use crate::change::Change;
 use crate::cli::Command;
 use crate::lock::NestedInput;
@@ -22,8 +23,14 @@ use super::workflow::{AddPhase, ConfirmResultAction, FollowPhase, WorkflowData};
 pub use super::workflow::{AppResult, MultiSelectResultData, SingleSelectResult, UpdateResult};
 
 const MAX_LIST_HEIGHT: u16 = 12;
-/// 3 bordered content + 1 footer
-const INPUT_HEIGHT: u16 = 4;
+
+/// Build completion items: default URI types first, then cached URIs
+fn uri_completion_items() -> Vec<String> {
+    let mut items: Vec<String> = DEFAULT_URI_TYPES.iter().map(|s| s.to_string()).collect();
+    let cached = Cache::load().list_uris();
+    items.extend(cached);
+    items
+}
 
 #[derive(Debug, Clone)]
 pub struct App {
@@ -79,7 +86,7 @@ impl App {
             flake_text: flake_text.into(),
             show_diff: false,
             screen: Screen::Input(InputScreen {
-                state: InputState::new(prefill_uri),
+                state: InputState::with_completions(prefill_uri, uri_completion_items()),
                 prompt: "Enter flake URI".into(),
                 label: None,
             }),
@@ -160,7 +167,7 @@ impl App {
             flake_text: flake_text.into(),
             show_diff,
             screen: Screen::Input(InputScreen {
-                state: InputState::new(current_uri),
+                state: InputState::with_completions(current_uri, uri_completion_items()),
                 prompt: format!("for {}", id_string),
                 label: Some("URI".into()),
             }),
@@ -555,7 +562,10 @@ impl App {
                             {
                                 *phase = AddPhase::Uri;
                                 self.screen = Screen::Input(InputScreen {
-                                    state: InputState::new(uri.as_deref()),
+                                    state: InputState::with_completions(
+                                        uri.as_deref(),
+                                        uri_completion_items(),
+                                    ),
                                     prompt: "Enter flake URI".into(),
                                     label: None,
                                 });
@@ -703,7 +713,7 @@ impl App {
                 let current_uri = input_uris.get(&item).map(|s| s.as_str());
                 *selected_input = Some(item.clone());
                 self.screen = Screen::Input(InputScreen {
-                    state: InputState::new(current_uri),
+                    state: InputState::with_completions(current_uri, uri_completion_items()),
                     prompt: "Enter new URI".into(),
                     label: Some(item),
                 });
@@ -787,7 +797,7 @@ impl App {
                 ..
             } => {
                 self.screen = Screen::Input(InputScreen {
-                    state: InputState::new(uri.as_deref()),
+                    state: InputState::with_completions(uri.as_deref(), uri_completion_items()),
                     prompt: "Enter new URI".into(),
                     label: selected_input.clone(),
                 });
@@ -866,7 +876,16 @@ impl App {
 
     pub fn terminal_height(&self) -> u16 {
         match &self.screen {
-            Screen::Input(_) => INPUT_HEIGHT,
+            Screen::Input(screen) => {
+                let input = Input::new(
+                    &screen.state,
+                    &screen.prompt,
+                    &self.context,
+                    screen.label.as_deref(),
+                    self.show_diff,
+                );
+                input.required_height()
+            }
             Screen::List(s) => super::helpers::list_height(s.items.len(), MAX_LIST_HEIGHT),
             Screen::Confirm(s) => super::helpers::diff_height(s.diff.lines().count()),
         }

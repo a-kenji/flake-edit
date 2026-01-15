@@ -31,6 +31,18 @@ pub const LABEL_STYLE_INVERSE: Style = Style::new()
 /// Style for the footer bar background
 pub const FOOTER_STYLE: Style = Style::new().bg(FOOTER_BG_COLOR).fg(FOOTER_FG_COLOR);
 
+/// Style for matched characters in completions (cyan on grey background)
+pub const COMPLETION_MATCH_STYLE: Style = Style::new().bg(FOOTER_BG_COLOR).fg(HIGHLIGHT_COLOR);
+
+/// Style for matched characters in selected completion (cyan with grey background badge)
+pub const COMPLETION_SELECTED_MATCH_STYLE: Style = Style::new()
+    .bg(FOOTER_BG_COLOR)
+    .fg(HIGHLIGHT_COLOR)
+    .add_modifier(Modifier::BOLD);
+
+/// Dimmed style for secondary text like descriptions
+pub const DIMMED_STYLE: Style = Style::new().fg(Color::DarkGray);
+
 // Diff coloring styles
 pub const DIFF_ADD_COLOR: Color = Color::Green;
 pub const DIFF_REMOVE_COLOR: Color = Color::Red;
