@@ -17,13 +17,13 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -11,6 +11,7 @@
+@@ -7,6 +7,7 @@
+     rust-overlay.url = "github:oxalica/rust-overlay";
+     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+     rust-overlay.inputs.flake-utils.follows = "flake-utils";
++    rust-overlay.inputs.flake-compat.follows = "flake-compat";
+     crane.url = "github:ipetkov/crane";
      crane.inputs.nixpkgs.follows = "nixpkgs";
      crane.inputs.rust-overlay.follows = "rust-overlay";
-     crane.inputs.flake-utils.follows = "flake-utils";
-+    rust-overlay.inputs.flake-compat.follows = "flake-compat";
-   };
-
-   outputs =
 
 ----- stderr -----

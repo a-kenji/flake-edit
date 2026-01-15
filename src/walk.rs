@@ -575,18 +575,39 @@ impl<'a> Walker {
                         parent_id, nested_id, target
                     ));
 
-                    // Find the last actual child and insert after it
+                    // Find the last attribute belonging to this input's parent
+                    // This groups follows with their parent input instead of appending at the end
                     let children: Vec<_> = node.children().collect();
-                    if let Some(last_child) = children.last() {
-                        let insert_index = last_child.index() + 1;
+                    let insert_after = children.iter().rev().find(|child| {
+                        // Check if this child's attrpath starts with parent_id
+                        child
+                            .first_child()
+                            .and_then(|attrpath| attrpath.first_child())
+                            .map(|first_ident| first_ident.to_string() == parent_id)
+                            .unwrap_or(false)
+                    });
+
+                    // Use the found position, or fall back to end of inputs
+                    let reference_child = insert_after.or(children.last());
+                    if let Some(ref_child) = reference_child {
+                        let insert_index = ref_child.index() + 1;
 
                         let mut green = node
                             .green()
                             .insert_child(insert_index, follows_node.green().into());
 
-                        // Copy whitespace from before the last child
-                        if let Some(whitespace) = get_sibling_whitespace(last_child) {
-                            green = green.insert_child(insert_index, whitespace.green().into());
+                        // Copy whitespace from before the reference child, but normalize it
+                        // to a single newline + indentation (strip extra blank lines)
+                        if let Some(whitespace) = get_sibling_whitespace(ref_child) {
+                            let ws_str = whitespace.to_string();
+                            // Keep only the last newline and subsequent indentation
+                            let normalized = if let Some(last_nl) = ws_str.rfind('\n') {
+                                &ws_str[last_nl..]
+                            } else {
+                                &ws_str
+                            };
+                            let ws_node = parse_node(normalized);
+                            green = green.insert_child(insert_index, ws_node.green().into());
                         }
 
                         return Some(parse_node(&green.to_string()));
