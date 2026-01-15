@@ -25,6 +25,6 @@ exit_code: 0
 +    shallow_input.url = "github:foo/bar?shallow=1";
      nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
-     flake-utelinos.url = "github:numtide/flake-utils";
+     flake-utils.url = "github:numtide/flake-utils";
 
 ----- stderr -----

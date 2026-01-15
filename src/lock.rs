@@ -96,6 +96,7 @@ impl FlakeLock {
         let path = PathBuf::from(Self::LOCK);
         Self::from_file(path)
     }
+
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, FlakeEditError> {
         let mut file = File::open(path)?;
         let mut contents = String::new();

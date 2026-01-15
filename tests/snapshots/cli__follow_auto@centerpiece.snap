@@ -1,0 +1,31 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/centerpiece.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/centerpiece.flake.lock"
+    - "--diff"
+    - follow
+    - "--auto"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -6,6 +6,8 @@
+     home-manager.url = "github:nix-community/home-manager";
+     treefmt-nix.url = "github:numtide/treefmt-nix";
+     crane.url = "github:ipetkov/crane";
++    home-manager.inputs.nixpkgs.follows = "nixpkgs";
++    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
+   };
+
+   outputs =
+
+----- stderr -----

@@ -26,6 +26,6 @@ exit_code: 0
 +    not_a_flake.flake = false;
      nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
-     flake-utelinos.url = "github:numtide/flake-utils";
+     flake-utils.url = "github:numtide/flake-utils";
 
 ----- stderr -----

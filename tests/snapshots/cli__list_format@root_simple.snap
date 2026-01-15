@@ -18,7 +18,7 @@ crane
 crane.flake-utils
 crane.nixpkgs
 crane.rust-overlay
-flake-utelinos
+flake-utils
 nixpkgs
 rust-overlay
 rust-overlay.flake-utils

@@ -1,13 +1,14 @@
 ---
 source: tests/tui.rs
-expression: "snapshot(&mut terminal, &app)"
+description: pin → Down → Down
+expression: "snapshot(&mut terminal, session.app())"
 ---
 Buffer {
     area: Rect { x: 0, y: 0, width: 80, height: 7 },
     content: [
         "────────────────────────────────────────────────────────────────────────────────",
         "   crane                                                                        ",
-        "   flake-utelinos                                                               ",
+        "   flake-utils                                                                  ",
         ">> nixpkgs                                                                      ",
         "   rust-overlay                                                                 ",
         "────────────────────────────────────────────────────────────────────────────────",

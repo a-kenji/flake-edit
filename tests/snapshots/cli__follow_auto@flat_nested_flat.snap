@@ -1,0 +1,22 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/flat_nested_flat.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/flat_nested_flat.flake.lock"
+    - "--diff"
+    - follow
+    - "--auto"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+No inputs to auto-follow.
+All nested inputs either already follow something or have no matching top-level input.
+
+----- stderr -----

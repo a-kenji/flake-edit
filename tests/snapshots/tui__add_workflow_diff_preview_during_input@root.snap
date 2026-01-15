@@ -21,7 +21,7 @@ Buffer {
         "+    my-new-input.url = "github:user/my-new-input";                             ",
         "     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";                       ",
         "                                                                                ",
-        "     flake-utelinos.url = "github:numtide/flake-utils";                         ",
+        "     flake-utils.url = "github:numtide/flake-utils";                            ",
         "────────────────────────────────────────────────────────────────────────────────",
     ],
     styles: [

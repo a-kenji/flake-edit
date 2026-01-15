@@ -11,6 +11,9 @@ pub struct CliArgs {
     /// Location of the `flake.nix` file, that will be used.
     #[arg(long)]
     flake: Option<String>,
+    /// Location of the `flake.lock` file. Defaults to `flake.lock` in the current directory.
+    #[arg(long)]
+    lock_file: Option<String>,
     /// Print a diff of the changes, will not write the changes to disk.
     #[arg(long, default_value_t = false)]
     diff: bool,
@@ -60,6 +63,10 @@ impl CliArgs {
 
     pub fn flake(&self) -> Option<&String> {
         self.flake.as_ref()
+    }
+
+    pub fn lock_file(&self) -> Option<&String> {
+        self.lock_file.as_ref()
     }
 
     pub fn diff(&self) -> bool {
@@ -156,6 +163,9 @@ pub enum Command {
         input: Option<String>,
         /// The target input to follow (e.g., "nixpkgs").
         target: Option<String>,
+        /// Automatically follow inputs when their nested input names match top-level inputs.
+        #[arg(long, short)]
+        auto: bool,
     },
     #[clap(hide = true)]
     #[command(name = "completion")]

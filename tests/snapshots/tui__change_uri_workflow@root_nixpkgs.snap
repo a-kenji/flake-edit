@@ -12,4 +12,4 @@ expression: session.app().pending_diff()
 -    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 +    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
 
-     flake-utelinos.url = "github:numtide/flake-utils";
+     flake-utils.url = "github:numtide/flake-utils";

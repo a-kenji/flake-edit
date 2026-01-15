@@ -14,6 +14,11 @@ fn fixture_path(name: &str) -> String {
     format!("{dir}/tests/fixtures/{name}.flake.nix")
 }
 
+fn fixture_lock_path(name: &str) -> String {
+    let dir = env!("CARGO_MANIFEST_DIR");
+    format!("{dir}/tests/fixtures/{name}.flake.lock")
+}
+
 const FIXTURE_MARKER: &str = "/tests/fixtures/";
 
 /// Add redaction to filter environment-dependent fixture paths in args metadata.
@@ -320,6 +325,8 @@ fn test_change_nonexistent(#[case] fixture: &str, #[case] id: &str, #[case] uri:
 #[rstest]
 #[case("first_nested_node", "naersk.flake-utils", "flake-utils")]
 #[case("root", "crane.flake-compat", "flake-compat")]
+#[case("centerpiece", "home-manager.nixpkgs", "nixpkgs")]
+#[case("centerpiece", "treefmt-nix.nixpkgs", "nixpkgs")]
 fn test_follow(#[case] fixture: &str, #[case] input: &str, #[case] target: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -377,6 +384,30 @@ fn test_follow_nonexistent(#[case] fixture: &str, #[case] input: &str, #[case] t
                 .arg("follow")
                 .arg(input)
                 .arg(target)
+        );
+    });
+}
+
+/// Test the follow --auto command to automatically follow matching inputs
+#[rstest]
+#[case("centerpiece")] // Two nested nixpkgs inputs that can follow top-level nixpkgs
+#[case("first_nested_node")] // naersk.nixpkgs already follows, utils.systems has no match
+#[case("flat_nested_flat")] // poetry2nix follows already set, no other matches
+#[case("root")] // Has follows in flake.nix but lockfile shows direct references
+fn test_follow_auto(#[case] fixture: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    settings.set_snapshot_suffix(fixture);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--lock-file")
+                .arg(fixture_lock_path(fixture))
+                .arg("--diff")
+                .arg("follow")
+                .arg("--auto")
         );
     });
 }
