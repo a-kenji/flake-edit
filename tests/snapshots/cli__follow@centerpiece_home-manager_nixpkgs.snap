@@ -17,13 +17,13 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -6,6 +6,7 @@
+@@ -4,6 +4,7 @@
+   inputs = {
+     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
      home-manager.url = "github:nix-community/home-manager";
++    home-manager.inputs.nixpkgs.follows = "nixpkgs";
      treefmt-nix.url = "github:numtide/treefmt-nix";
      crane.url = "github:ipetkov/crane";
-+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
    };
-
-   outputs =
 
 ----- stderr -----

@@ -394,6 +394,7 @@ fn test_follow_nonexistent(#[case] fixture: &str, #[case] input: &str, #[case] t
 #[case("first_nested_node")] // naersk.nixpkgs already follows, utils.systems has no match
 #[case("flat_nested_flat")] // poetry2nix follows already set, no other matches
 #[case("root")] // Has follows in flake.nix but lockfile shows direct references
+#[case("hyperconfig")] // Large real-world flake with many nested inputs
 fn test_follow_auto(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
