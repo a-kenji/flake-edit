@@ -24,18 +24,6 @@ Error:
         flake-edit add nonexistent-input <flakeref>
 
       To see all current inputs: flake-edit list
-   1: Input 'nonexistent-input' not found in the flake.
-
-      To add it:
-        flake-edit add nonexistent-input <flakeref>
-
-      To see all current inputs: flake-edit list
-   2: Input 'nonexistent-input' not found in the flake.
-
-      To add it:
-        flake-edit add nonexistent-input <flakeref>
-
-      To see all current inputs: flake-edit list
 
 Location:
    src/bin/flake-edit/main.rs:<LINE>

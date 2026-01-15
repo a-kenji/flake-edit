@@ -18,7 +18,6 @@ exit_code: 1
 ----- stderr -----
 Error: 
    0: The input could not be removed: nonexistent-input
-   1: The input could not be removed: nonexistent-input
 
 Location:
    src/bin/flake-edit/main.rs:<LINE>
