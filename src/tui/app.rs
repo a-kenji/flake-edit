@@ -11,11 +11,12 @@ use ratatui::layout::Rect;
 
 use crate::change::Change;
 use crate::cli::Command;
+use crate::lock::NestedInput;
 
 use super::components::confirm::ConfirmAction;
 use super::components::input::{Input, InputAction, InputResult, InputState};
 use super::components::list::{ListAction, ListResult, ListState};
-use super::workflow::{AddPhase, ConfirmResultAction, WorkflowData};
+use super::workflow::{AddPhase, ConfirmResultAction, FollowPhase, WorkflowData};
 
 // Re-export workflow types that are part of the public API
 pub use super::workflow::{AppResult, MultiSelectResultData, SingleSelectResult, UpdateResult};
@@ -229,6 +230,72 @@ impl App {
         }
     }
 
+    /// Create a new App for the Follow workflow
+    ///
+    /// Shows a list of nested inputs to select from, then a list of targets.
+    /// `nested_inputs` contains the nested input paths with their existing follows info
+    /// `top_level_inputs` are the available targets like "nixpkgs", "flake-utils"
+    pub fn follow(
+        context: impl Into<String>,
+        flake_text: impl Into<String>,
+        nested_inputs: Vec<NestedInput>,
+        top_level_inputs: Vec<String>,
+    ) -> Self {
+        let len = nested_inputs.len();
+        // Convert to display strings for the UI
+        let display_items: Vec<String> = nested_inputs
+            .iter()
+            .map(|i| i.to_display_string())
+            .collect();
+        Self {
+            context: context.into(),
+            flake_text: flake_text.into(),
+            show_diff: false,
+            screen: Screen::List(ListScreen {
+                state: ListState::new(len, false, false),
+                items: display_items,
+                prompt: "Select input to add follows".into(),
+            }),
+            data: WorkflowData::Follow {
+                phase: FollowPhase::SelectInput,
+                selected_input: None,
+                selected_target: None,
+                nested_inputs,
+                top_level_inputs,
+            },
+        }
+    }
+
+    /// Create a new App for the Follow workflow when input is already selected
+    ///
+    /// Shows only the target selection list.
+    pub fn follow_target(
+        context: impl Into<String>,
+        flake_text: impl Into<String>,
+        input: impl Into<String>,
+        top_level_inputs: Vec<String>,
+    ) -> Self {
+        let len = top_level_inputs.len();
+        let input = input.into();
+        Self {
+            context: context.into(),
+            flake_text: flake_text.into(),
+            show_diff: false,
+            screen: Screen::List(ListScreen {
+                state: ListState::new(len, false, false),
+                items: top_level_inputs.clone(),
+                prompt: format!("Select target for {input}"),
+            }),
+            data: WorkflowData::Follow {
+                phase: FollowPhase::SelectTarget,
+                selected_input: Some(input),
+                selected_target: None,
+                nested_inputs: Vec::<NestedInput>::new(),
+                top_level_inputs,
+            },
+        }
+    }
+
     /// Create an App from a CLI Command.
     ///
     /// This is the main entry point for creating TUI apps from parsed CLI arguments.
@@ -335,8 +402,9 @@ impl App {
                 }
             }
 
-            // List and Completion don't need TUI
-            Command::List { .. } | Command::Completion { .. } => None,
+            // List, Completion, and Follow don't need TUI
+            // Follow always requires both input and target arguments
+            Command::List { .. } | Command::Completion { .. } | Command::Follow { .. } => None,
         }
     }
 
@@ -413,8 +481,35 @@ impl App {
                         WorkflowData::Remove { .. } => Change::Remove {
                             ids: selected_items.into_iter().map(|s| s.into()).collect(),
                         },
+                        WorkflowData::Follow {
+                            phase,
+                            selected_input,
+                            ..
+                        } => {
+                            // During SelectInput phase, we can't preview yet
+                            // During SelectTarget phase, use selected_input + current selection
+                            if *phase == FollowPhase::SelectTarget {
+                                if let Some(input) = selected_input {
+                                    let target =
+                                        selected_items.into_iter().next().unwrap_or_default();
+                                    Change::Follows {
+                                        input: input.clone().into(),
+                                        target,
+                                    }
+                                } else {
+                                    Change::None
+                                }
+                            } else {
+                                // SelectInput phase - no preview possible
+                                Change::None
+                            }
+                        }
                         _ => self.build_change(),
                     };
+                }
+                // For Follow workflow, return None when nothing selected yet
+                if let WorkflowData::Follow { .. } = &self.data {
+                    return Change::None;
                 }
                 self.build_change()
             }
@@ -499,9 +594,33 @@ impl App {
                     self.show_diff = show_diff;
                     let items: Vec<String> =
                         indices.iter().map(|&i| screen.items[i].clone()).collect();
-                    self.handle_list_submit(items)
+                    self.handle_list_submit(indices, items)
                 }
-                ListResult::Cancel => UpdateResult::Cancelled,
+                ListResult::Cancel => {
+                    // For Follow workflow, Escape from SelectTarget goes back to SelectInput
+                    if let WorkflowData::Follow {
+                        phase,
+                        nested_inputs,
+                        ..
+                    } = &mut self.data
+                        && *phase == FollowPhase::SelectTarget
+                        && !nested_inputs.is_empty()
+                    {
+                        *phase = FollowPhase::SelectInput;
+                        let len = nested_inputs.len();
+                        let display_items: Vec<String> = nested_inputs
+                            .iter()
+                            .map(|i| i.to_display_string())
+                            .collect();
+                        self.screen = Screen::List(ListScreen {
+                            state: ListState::new(len, false, self.show_diff),
+                            items: display_items,
+                            prompt: "Select input to add follows".into(),
+                        });
+                        return UpdateResult::Continue;
+                    }
+                    UpdateResult::Cancelled
+                }
             }
         } else {
             if let Screen::List(s) = &mut self.screen {
@@ -567,11 +686,12 @@ impl App {
             WorkflowData::Remove { .. }
             | WorkflowData::SelectOne { .. }
             | WorkflowData::SelectMany { .. }
-            | WorkflowData::ConfirmOnly { .. } => UpdateResult::Continue,
+            | WorkflowData::ConfirmOnly { .. }
+            | WorkflowData::Follow { .. } => UpdateResult::Continue,
         }
     }
 
-    fn handle_list_submit(&mut self, items: Vec<String>) -> UpdateResult {
+    fn handle_list_submit(&mut self, indices: Vec<usize>, items: Vec<String>) -> UpdateResult {
         match &mut self.data {
             WorkflowData::Change {
                 selected_input,
@@ -603,6 +723,38 @@ impl App {
             WorkflowData::SelectMany { selected_inputs } => {
                 *selected_inputs = items;
                 UpdateResult::Done
+            }
+            WorkflowData::Follow {
+                phase,
+                selected_input,
+                selected_target,
+                nested_inputs,
+                top_level_inputs,
+            } => {
+                match phase {
+                    FollowPhase::SelectInput => {
+                        // Use index to look up the path from nested_inputs
+                        let index = indices.first().copied().unwrap_or(0);
+                        let path = nested_inputs
+                            .get(index)
+                            .map(|i| i.path.clone())
+                            .unwrap_or_default();
+                        *selected_input = Some(path.clone());
+                        *phase = FollowPhase::SelectTarget;
+                        let len = top_level_inputs.len();
+                        self.screen = Screen::List(ListScreen {
+                            state: ListState::new(len, false, self.show_diff),
+                            items: top_level_inputs.clone(),
+                            prompt: format!("Select target for {path}"),
+                        });
+                        UpdateResult::Continue
+                    }
+                    FollowPhase::SelectTarget => {
+                        let item = items.into_iter().next().unwrap_or_default();
+                        *selected_target = Some(item);
+                        self.transition_to_confirm()
+                    }
+                }
             }
             _ => UpdateResult::Continue,
         }
@@ -647,6 +799,35 @@ impl App {
                     items: all_inputs.clone(),
                     prompt: "Select inputs to remove".into(),
                 });
+            }
+            WorkflowData::Follow {
+                phase,
+                nested_inputs,
+                top_level_inputs,
+                ..
+            } => {
+                // go_back is called from confirm screen, so we need to go back to
+                // the target selection list (SelectTarget phase)
+                if *phase == FollowPhase::SelectTarget {
+                    let len = top_level_inputs.len();
+                    self.screen = Screen::List(ListScreen {
+                        state: ListState::new(len, false, self.show_diff),
+                        items: top_level_inputs.clone(),
+                        prompt: "Select target to follow".into(),
+                    });
+                } else if !nested_inputs.is_empty() {
+                    // SelectInput phase - go back to input selection
+                    let len = nested_inputs.len();
+                    let display_items: Vec<String> = nested_inputs
+                        .iter()
+                        .map(|i| i.to_display_string())
+                        .collect();
+                    self.screen = Screen::List(ListScreen {
+                        state: ListState::new(len, false, self.show_diff),
+                        items: display_items,
+                        prompt: "Select input to add follows".into(),
+                    });
+                }
             }
             // Standalone workflows don't have a "back" concept - they're single screen
             WorkflowData::SelectOne { .. }
@@ -695,7 +876,8 @@ impl App {
         match self.data {
             WorkflowData::Add { .. }
             | WorkflowData::Change { .. }
-            | WorkflowData::Remove { .. } => {
+            | WorkflowData::Remove { .. }
+            | WorkflowData::Follow { .. } => {
                 let change = self.build_change();
                 if matches!(change, Change::None) {
                     None

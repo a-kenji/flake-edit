@@ -1,6 +1,7 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
+    style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List as RatatuiList, ListItem, ListState, StatefulWidget, Widget},
 };
@@ -9,6 +10,31 @@ use super::model::ListState as SelectionState;
 use crate::tui::components::footer::Footer;
 use crate::tui::helpers::{checkbox_line, context_span, diff_toggle_style, layouts};
 use crate::tui::style::{BORDER_STYLE, HIGHLIGHT_STYLE, HIGHLIGHT_SYMBOL};
+
+/// Parse an item string that may contain a follows indicator.
+/// Format: "path\tfollows_target" or just "path"
+/// Returns (path, Option<follows_target>)
+fn parse_follows_item(item: &str) -> (&str, Option<&str>) {
+    if let Some((path, follows)) = item.split_once('\t') {
+        (path, Some(follows))
+    } else {
+        (item, None)
+    }
+}
+
+/// Create a styled line for an item that may have a follows indicator.
+fn styled_item_line(item: &str) -> Line<'_> {
+    let (path, follows) = parse_follows_item(item);
+    if let Some(target) = follows {
+        Line::from(vec![
+            Span::raw(path),
+            Span::styled(" · ", Style::default().fg(Color::DarkGray)),
+            Span::styled(target, Style::default().fg(Color::DarkGray)),
+        ])
+    } else {
+        Line::raw(path)
+    }
+}
 
 /// Unified list widget for single and multi-select
 pub struct List<'a> {
@@ -50,7 +76,7 @@ impl Widget for List<'_> {
         } else {
             self.items
                 .iter()
-                .map(|item| ListItem::new(Line::raw(item.as_str())))
+                .map(|item| ListItem::new(styled_item_line(item)))
                 .collect()
         };
 
@@ -174,5 +200,44 @@ mod tests {
 
         let output = buffer_to_plain_text(&terminal);
         insta::assert_snapshot!(output);
+    }
+
+    #[test]
+    fn test_parse_follows_item_with_target() {
+        let (path, follows) = parse_follows_item("crane.nixpkgs\tnixpkgs");
+        assert_eq!(path, "crane.nixpkgs");
+        assert_eq!(follows, Some("nixpkgs"));
+    }
+
+    #[test]
+    fn test_parse_follows_item_without_target() {
+        let (path, follows) = parse_follows_item("crane.nixpkgs");
+        assert_eq!(path, "crane.nixpkgs");
+        assert_eq!(follows, None);
+    }
+
+    #[test]
+    fn test_nested_input_display_roundtrip() {
+        use crate::lock::NestedInput;
+
+        // With follows target
+        let input = NestedInput {
+            path: "crane.nixpkgs".into(),
+            follows: Some("nixpkgs".into()),
+        };
+        let display = input.to_display_string();
+        let (path, follows) = parse_follows_item(&display);
+        assert_eq!(path, "crane.nixpkgs");
+        assert_eq!(follows, Some("nixpkgs"));
+
+        // Without follows target
+        let input = NestedInput {
+            path: "crane.nixpkgs".into(),
+            follows: None,
+        };
+        let display = input.to_display_string();
+        let (path, follows) = parse_follows_item(&display);
+        assert_eq!(path, "crane.nixpkgs");
+        assert_eq!(follows, None);
     }
 }

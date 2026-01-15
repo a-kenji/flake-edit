@@ -54,6 +54,9 @@ impl CliArgs {
     pub fn change(&self) -> bool {
         matches!(self.subcommand, Command::Change { .. })
     }
+    pub fn follow(&self) -> bool {
+        matches!(self.subcommand, Command::Follow { .. })
+    }
 
     pub fn flake(&self) -> Option<&String> {
         self.flake.as_ref()
@@ -139,6 +142,21 @@ pub enum Command {
         /// The id of an input attribute.
         id: Option<String>,
     },
+    /// Add a follows relationship to make an input's dependency follow a top-level input.
+    ///
+    /// Example: `flake-edit follow rust-overlay.nixpkgs nixpkgs`
+    ///
+    /// This creates: `rust-overlay.inputs.nixpkgs.follows = "nixpkgs";`
+    ///
+    /// Without arguments, starts an interactive selection.
+    #[clap(alias = "f")]
+    Follow {
+        /// The input path in dot notation (e.g., "rust-overlay.nixpkgs" means
+        /// the nixpkgs input of rust-overlay).
+        input: Option<String>,
+        /// The target input to follow (e.g., "nixpkgs").
+        target: Option<String>,
+    },
     #[clap(hide = true)]
     #[command(name = "completion")]
     /// Meant for shell completions.
@@ -156,6 +174,7 @@ pub enum CompletionMode {
     None,
     Add,
     Change,
+    Follow,
 }
 
 impl From<String> for CompletionMode {
@@ -164,6 +183,7 @@ impl From<String> for CompletionMode {
         match value.to_lowercase().as_str() {
             "add" => Add,
             "change" => Change,
+            "follow" => Follow,
             _ => None,
         }
     }

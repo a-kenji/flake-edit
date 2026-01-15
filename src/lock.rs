@@ -5,6 +5,26 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+/// A nested input path with optional existing follows target.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NestedInput {
+    /// The path to the nested input (e.g., "crane.nixpkgs")
+    pub path: String,
+    /// The target this input follows, if any (e.g., "nixpkgs")
+    pub follows: Option<String>,
+}
+
+impl NestedInput {
+    /// Format for display: "path\tfollows_target" or just "path".
+    /// The tab separator allows the UI to parse and style the parts differently.
+    pub fn to_display_string(&self) -> String {
+        match &self.follows {
+            Some(target) => format!("{}\t{}", self.path, target),
+            None => self.path.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FlakeLock {
     nodes: HashMap<String, Node>,
@@ -108,6 +128,60 @@ impl FlakeLock {
             .get(&id)
             .ok_or_else(|| FlakeEditError::LockError("Could not find node with id.".into()))?;
         Ok(node.get_rev())
+    }
+
+    /// Get all nested input paths for shell completions.
+    /// Returns paths like "naersk.nixpkgs", "naersk.flake-utils", etc.
+    pub fn get_nested_input_paths(&self) -> Vec<String> {
+        self.get_nested_inputs()
+            .into_iter()
+            .map(|input| input.path)
+            .collect()
+    }
+
+    /// Get all nested inputs with their existing follows targets.
+    pub fn get_nested_inputs(&self) -> Vec<NestedInput> {
+        let mut inputs = Vec::new();
+
+        // Get the root node
+        let Some(root_node) = self.nodes.get(&self.root) else {
+            return inputs;
+        };
+
+        // Get top-level inputs from root
+        let Some(root_inputs) = &root_node.inputs else {
+            return inputs;
+        };
+
+        // For each top-level input, find its nested inputs
+        for (top_level_name, top_level_ref) in root_inputs {
+            // Resolve the node name (could be different from input name)
+            let node_name = match top_level_ref {
+                Input::Direct(name) => name.clone(),
+                Input::Indirect(_) => {
+                    // For indirect inputs (follows), skip - they don't have their own inputs
+                    continue;
+                }
+            };
+
+            // Get the node for this input
+            if let Some(node) = self.nodes.get(&node_name) {
+                // Get nested inputs of this node
+                if let Some(nested_inputs) = &node.inputs {
+                    for (nested_name, nested_ref) in nested_inputs {
+                        let path = format!("{}.{}", top_level_name, nested_name);
+                        let follows = match nested_ref {
+                            Input::Indirect(targets) => Some(targets.join(".")),
+                            Input::Direct(_) => None,
+                        };
+                        inputs.push(NestedInput { path, follows });
+                    }
+                }
+            }
+        }
+
+        inputs.sort_by(|a, b| a.path.cmp(&b.path));
+        inputs
     }
 }
 #[cfg(test)]

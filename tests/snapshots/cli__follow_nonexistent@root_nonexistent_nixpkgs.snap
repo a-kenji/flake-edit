@@ -1,0 +1,44 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/root.flake.nix"
+    - "--diff"
+    - follow
+    - nonexistent.nixpkgs
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+Error: 
+   0: Input 'nonexistent' not found in the flake.
+
+      To add it:
+        flake-edit add nonexistent <flakeref>
+
+      To see all current inputs: flake-edit list
+   1: Input 'nonexistent' not found in the flake.
+
+      To add it:
+        flake-edit add nonexistent <flakeref>
+
+      To see all current inputs: flake-edit list
+   2: Input 'nonexistent' not found in the flake.
+
+      To add it:
+        flake-edit add nonexistent <flakeref>
+
+      To see all current inputs: flake-edit list
+
+Location:
+   src/bin/flake-edit/main.rs:<LINE>
+
+Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
+Run with RUST_BACKTRACE=full to include source snippets.

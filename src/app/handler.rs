@@ -110,6 +110,16 @@ pub fn run(args: CliArgs) -> Result<()> {
             commands::unpin(&editor, &mut flake_edit, &state, id.clone())?;
         }
 
+        Command::Follow { input, target } => {
+            commands::follow(
+                &editor,
+                &mut flake_edit,
+                &state,
+                input.clone(),
+                target.clone(),
+            )?;
+        }
+
         Command::Completion { inputs: _, mode } => {
             use crate::cache::{Cache, DEFAULT_URI_TYPES};
             use crate::cli::CompletionMode;
@@ -128,6 +138,15 @@ pub fn run(args: CliArgs) -> Result<()> {
                     let inputs = flake_edit.list();
                     for id in inputs.keys() {
                         println!("{}", id);
+                    }
+                    std::process::exit(0);
+                }
+                CompletionMode::Follow => {
+                    // Get nested input paths from lockfile for follow completions
+                    if let Ok(lock) = crate::lock::FlakeLock::from_default_path() {
+                        for path in lock.get_nested_input_paths() {
+                            println!("{}", path);
+                        }
                     }
                     std::process::exit(0);
                 }

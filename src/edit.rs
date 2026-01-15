@@ -149,6 +149,26 @@ impl FlakeEdit {
                 Ok(res.map(|n| n.to_string()))
             }
             Change::Pin { .. } => todo!(),
+            Change::Follows { .. } => {
+                // Ensure inputs are populated first
+                if self.walker.inputs.is_empty() {
+                    let _ = self.walker.walk(&Change::None)?;
+                }
+
+                // Validate that the parent input exists
+                if let Some(input_id) = change.id() {
+                    let parent_input = input_id.input();
+                    if !self.walker.inputs.contains_key(parent_input) {
+                        return Err(FlakeEditError::InputNotFound(parent_input.to_string()));
+                    }
+                }
+
+                if let Some(maybe_changed_node) = self.walker.walk(&change)? {
+                    Ok(Some(maybe_changed_node.to_string()))
+                } else {
+                    Ok(None)
+                }
+            }
             Change::Change { .. } => {
                 if let Some(input_id) = change.id() {
                     if self.walker.inputs.is_empty() {

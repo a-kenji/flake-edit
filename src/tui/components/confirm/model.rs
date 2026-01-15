@@ -13,10 +13,8 @@ impl ConfirmAction {
     pub fn from_key(key: KeyEvent) -> Self {
         match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => ConfirmAction::Apply,
-            KeyCode::Char('b') | KeyCode::Char('B') => ConfirmAction::Back,
-            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc | KeyCode::Char('q') => {
-                ConfirmAction::Exit
-            }
+            KeyCode::Char('b') | KeyCode::Char('B') | KeyCode::Esc => ConfirmAction::Back,
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Char('q') => ConfirmAction::Exit,
             _ => ConfirmAction::None,
         }
     }
@@ -46,8 +44,11 @@ mod tests {
     fn test_confirm_action_exit() {
         let key = KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE);
         assert_eq!(ConfirmAction::from_key(key), ConfirmAction::Exit);
+    }
 
+    #[test]
+    fn test_confirm_action_back_esc() {
         let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
-        assert_eq!(ConfirmAction::from_key(key), ConfirmAction::Exit);
+        assert_eq!(ConfirmAction::from_key(key), ConfirmAction::Back);
     }
 }
