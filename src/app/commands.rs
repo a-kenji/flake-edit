@@ -44,6 +44,49 @@ pub enum CommandError {
     CouldNotRemove(String),
 }
 
+/// Load the flake.lock file, using the path from state if provided.
+fn load_flake_lock(state: &AppState) -> std::result::Result<FlakeLock, FlakeEditError> {
+    if let Some(lock_path) = &state.lock_file {
+        FlakeLock::from_file(lock_path)
+    } else {
+        FlakeLock::from_default_path()
+    }
+}
+
+struct FollowContext {
+    nested_inputs: Vec<NestedInput>,
+    top_level_inputs: std::collections::HashSet<String>,
+}
+
+/// Load nested inputs from lockfile and top-level inputs from flake.nix.
+/// Returns None if no nested inputs found (prints message to stderr).
+fn load_follow_context(
+    flake_edit: &mut FlakeEdit,
+    state: &AppState,
+) -> Result<Option<FollowContext>> {
+    let nested_inputs: Vec<NestedInput> = load_flake_lock(state)
+        .map(|lock| lock.get_nested_inputs())
+        .unwrap_or_default();
+
+    if nested_inputs.is_empty() {
+        eprintln!("No nested inputs found in flake.lock");
+        eprintln!("Make sure you have run `nix flake lock` first.");
+        return Ok(None);
+    }
+
+    let inputs = flake_edit.list();
+    let top_level_inputs: std::collections::HashSet<String> = inputs.keys().cloned().collect();
+
+    if top_level_inputs.is_empty() {
+        return Err(CommandError::NoInputs);
+    }
+
+    Ok(Some(FollowContext {
+        nested_inputs,
+        top_level_inputs,
+    }))
+}
+
 /// Result of running the confirm-or-apply workflow.
 enum ConfirmResult {
     /// Change was applied successfully.
@@ -621,7 +664,12 @@ pub fn follow(
     state: &AppState,
     input: Option<String>,
     target: Option<String>,
+    auto: bool,
 ) -> Result<()> {
+    if auto {
+        return follow_auto(editor, flake_edit, state);
+    }
+
     let change = if let (Some(input_val), Some(target_val)) = (input.clone(), target) {
         // Both provided - non-interactive
         Change::Follows {
@@ -629,43 +677,135 @@ pub fn follow(
             target: target_val,
         }
     } else if state.interactive {
-        // Interactive mode - get nested inputs from lockfile with existing follows info
-        let nested_inputs: Vec<NestedInput> = FlakeLock::from_default_path()
-            .map(|lock| lock.get_nested_inputs())
-            .unwrap_or_default();
-
-        // Get top-level inputs as possible targets
-        let inputs = flake_edit.list();
-        let top_level_inputs: Vec<String> = inputs.keys().cloned().collect();
-
-        if nested_inputs.is_empty() {
-            eprintln!("No nested inputs found in flake.lock");
-            eprintln!("Make sure you have run `nix flake lock` first.");
+        // Interactive mode
+        let Some(ctx) = load_follow_context(flake_edit, state)? else {
             return Ok(());
-        }
-
-        if top_level_inputs.is_empty() {
-            return Err(CommandError::NoInputs);
-        }
+        };
+        let top_level_vec: Vec<String> = ctx.top_level_inputs.into_iter().collect();
 
         let tui_app = if let Some(input_val) = input {
-            // Input provided, show target selection only
-            tui::App::follow_target("Follow", editor.text(), input_val, top_level_inputs)
+            tui::App::follow_target("Follow", editor.text(), input_val, top_level_vec)
         } else {
-            // Neither provided, show full workflow
-            tui::App::follow("Follow", editor.text(), nested_inputs, top_level_inputs)
+            tui::App::follow("Follow", editor.text(), ctx.nested_inputs, top_level_vec)
         };
 
         let Some(tui::AppResult::Change(tui_change)) = tui::run(tui_app)? else {
-            return Ok(()); // User cancelled
+            return Ok(());
         };
         tui_change
     } else {
-        // Non-interactive but no input provided
         return Err(CommandError::NoId);
     };
 
     apply_change(editor, flake_edit, state, change)
+}
+
+/// Automatically follow inputs based on lockfile information.
+///
+/// For each nested input (e.g., "crane.nixpkgs"), if there's a matching
+/// top-level input with the same name (e.g., "nixpkgs"), create a follows
+/// relationship. Skips inputs that already have follows set.
+fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) -> Result<()> {
+    let Some(ctx) = load_follow_context(flake_edit, state)? else {
+        return Ok(());
+    };
+
+    let mut to_follow: Vec<(String, String)> = Vec::new();
+
+    for nested in &ctx.nested_inputs {
+        if nested.follows.is_some() {
+            continue;
+        }
+
+        // e.g., "crane.nixpkgs" -> "nixpkgs"
+        let nested_name = nested.path.split('.').next_back().unwrap_or(&nested.path);
+
+        if ctx.top_level_inputs.contains(nested_name) {
+            to_follow.push((nested.path.clone(), nested_name.to_string()));
+        }
+    }
+
+    if to_follow.is_empty() {
+        println!("No inputs to auto-follow.");
+        println!(
+            "All nested inputs either already follow something or have no matching top-level input."
+        );
+        return Ok(());
+    }
+
+    if state.diff {
+        let mut current_text = editor.text();
+
+        for (input_path, target) in &to_follow {
+            let change = Change::Follows {
+                input: input_path.clone().into(),
+                target: target.clone(),
+            };
+
+            let mut temp_flake_edit =
+                FlakeEdit::from_text(&current_text).map_err(CommandError::FlakeEdit)?;
+
+            if let Ok(Some(resulting_change)) = temp_flake_edit.apply_change(change) {
+                current_text = resulting_change;
+            }
+        }
+
+        let original_text = editor.text();
+        let diff = crate::diff::Diff::new(&original_text, &current_text);
+        diff.compare();
+    } else {
+        let flake_path = editor.path().clone();
+        let mut applied_count = 0;
+
+        for (input_path, target) in &to_follow {
+            let change = Change::Follows {
+                input: input_path.clone().into(),
+                target: target.clone(),
+            };
+
+            // Re-read from disk to get fresh state after previous writes
+            let fresh_editor = Editor::from_path(flake_path.clone())?;
+            let mut fresh_flake_edit = fresh_editor
+                .create_flake_edit()
+                .map_err(CommandError::FlakeEdit)?;
+
+            match fresh_flake_edit.apply_change(change) {
+                Ok(Some(resulting_change)) => {
+                    let root = rnix::Root::parse(&resulting_change);
+                    let errors = root.errors();
+                    if !errors.is_empty() {
+                        eprintln!("Error applying follows for {}: parse errors", input_path);
+                        for e in errors {
+                            tracing::error!("Error: {e}");
+                        }
+                        continue;
+                    }
+
+                    fresh_editor.apply_or_diff(&resulting_change, state)?;
+                    applied_count += 1;
+
+                    let nested_name = input_path.split('.').next_back().unwrap_or(input_path);
+                    let parent = input_path.split('.').next().unwrap_or(input_path);
+                    println!(
+                        "Added follows: {}.inputs.{}.follows = \"{}\"",
+                        parent, nested_name, target
+                    );
+                }
+                Ok(None) => {
+                    eprintln!("Could not create follows for {}", input_path);
+                }
+                Err(e) => {
+                    eprintln!("Error applying follows for {}: {}", input_path, e);
+                }
+            }
+        }
+
+        if applied_count > 0 {
+            println!("\nAuto-followed {} input(s).", applied_count);
+        }
+    }
+
+    Ok(())
 }
 
 fn apply_change(

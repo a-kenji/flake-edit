@@ -24,7 +24,7 @@ exit_code: 0
 -    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 +    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
 
-     flake-utelinos.url = "github:numtide/flake-utils";
+     flake-utils.url = "github:numtide/flake-utils";
 
 
 ----- stderr -----

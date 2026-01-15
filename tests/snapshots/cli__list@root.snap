@@ -16,7 +16,7 @@ exit_code: 0
      flake-utils => "flake-utils"
      nixpkgs => "nixpkgs"
      rust-overlay => "rust-overlay"
-· flake-utelinos - "github:numtide/flake-utils"
+· flake-utils - "github:numtide/flake-utils"
 · nixpkgs - "github:nixos/nixpkgs/nixos-unstable"
 · rust-overlay - "github:oxalica/rust-overlay"
      flake-utils => "flake-utils"

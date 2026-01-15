@@ -9,6 +9,8 @@ pub struct AppState {
     pub flake_text: String,
     /// Path to the flake.nix file
     pub flake_path: PathBuf,
+    /// Path to the flake.lock file (if specified)
+    pub lock_file: Option<PathBuf>,
     /// Only show diff, don't write changes
     pub diff: bool,
     /// Skip running nix flake lock after changes
@@ -22,6 +24,7 @@ impl AppState {
         Self {
             flake_text,
             flake_path,
+            lock_file: None,
             diff: false,
             no_lock: false,
             interactive: true,
@@ -40,6 +43,11 @@ impl AppState {
 
     pub fn with_interactive(mut self, interactive: bool) -> Self {
         self.interactive = interactive;
+        self
+    }
+
+    pub fn with_lock_file(mut self, lock_file: Option<PathBuf>) -> Self {
+        self.lock_file = lock_file;
         self
     }
 }

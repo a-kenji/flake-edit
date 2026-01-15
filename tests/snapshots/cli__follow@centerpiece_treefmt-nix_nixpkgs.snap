@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/centerpiece.flake.nix"
+    - "--diff"
+    - follow
+    - treefmt-nix.nixpkgs
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -6,6 +6,7 @@
+     home-manager.url = "github:nix-community/home-manager";
+     treefmt-nix.url = "github:numtide/treefmt-nix";
+     crane.url = "github:ipetkov/crane";
++    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
+   };
+
+   outputs =
+
+----- stderr -----

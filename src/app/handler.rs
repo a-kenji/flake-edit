@@ -50,7 +50,8 @@ pub fn run(args: CliArgs) -> Result<()> {
     let state = AppState::new(editor.text(), flake_path)
         .with_diff(args.diff())
         .with_no_lock(args.no_lock())
-        .with_interactive(interactive);
+        .with_interactive(interactive)
+        .with_lock_file(args.lock_file().map(PathBuf::from));
 
     // Dispatch to command
     match args.subcommand() {
@@ -110,13 +111,18 @@ pub fn run(args: CliArgs) -> Result<()> {
             commands::unpin(&editor, &mut flake_edit, &state, id.clone())?;
         }
 
-        Command::Follow { input, target } => {
+        Command::Follow {
+            input,
+            target,
+            auto,
+        } => {
             commands::follow(
                 &editor,
                 &mut flake_edit,
                 &state,
                 input.clone(),
                 target.clone(),
+                *auto,
             )?;
         }
 

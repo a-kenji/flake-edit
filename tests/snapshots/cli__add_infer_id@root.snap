@@ -23,6 +23,6 @@ exit_code: 0
 +    vmsh.url = "github:mic92/vmsh";
      nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
-     flake-utelinos.url = "github:numtide/flake-utils";
+     flake-utils.url = "github:numtide/flake-utils";
 
 ----- stderr -----

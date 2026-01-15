@@ -15,7 +15,7 @@ info:
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
 
-    flake-utelinos.url = "github:numtide/flake-utils";
+    flake-utils.url = "github:numtide/flake-utils";
 
     rust-overlay = {
       url = "github:oxalica/rust-overlay";

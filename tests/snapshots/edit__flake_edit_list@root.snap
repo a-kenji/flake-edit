@@ -20,16 +20,16 @@ crane:
         - rust-overlay
         - "\"rust-overlay\""
   range:
-    start: 376
-    end: 398
-flake-utelinos:
-  id: flake-utelinos
+    start: 373
+    end: 395
+flake-utils:
+  id: flake-utils
   flake: true
   url: "\"github:numtide/flake-utils\""
   follows: []
   range:
-    start: 156
-    end: 184
+    start: 153
+    end: 181
 nixpkgs:
   id: nixpkgs
   flake: true
@@ -50,5 +50,5 @@ rust-overlay:
         - nixpkgs
         - "\"nixpkgs\""
   range:
-    start: 220
-    end: 249
+    start: 217
+    end: 246
