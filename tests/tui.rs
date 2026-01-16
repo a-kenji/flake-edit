@@ -154,6 +154,11 @@ impl TestSession {
         self.app.update(key(KeyCode::Backspace));
     }
 
+    fn tab(&mut self) {
+        self.actions.push("Tab".to_string());
+        self.app.update(key(KeyCode::Tab));
+    }
+
     fn description(&self) -> String {
         self.actions.join(" → ")
     }
@@ -843,4 +848,210 @@ fn test_terminal_height_confirm() {
     let diff = "@@ -1,3 +1,3 @@\n line1\n line2\n line3";
     let app = App::confirm("Test", diff);
     assert_eq!(app.terminal_height(), 7);
+}
+
+#[rstest]
+#[case("root")]
+fn test_add_completion_visible_on_typing(#[case] fixture_name: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let mut terminal = create_test_terminal(80, 4);
+    let app = app_from_args_with_fixture("add", &fixture).unwrap();
+    let mut session = TestSession::new(app, "add");
+
+    // Type "git" to trigger completions
+    session.type_text("git");
+
+    insta::with_settings!({
+        snapshot_suffix => fixture_name,
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut terminal, session.app()));
+    });
+}
+
+#[rstest]
+#[case("root")]
+fn test_add_completion_navigate_down(#[case] fixture_name: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let mut terminal = create_test_terminal(80, 4);
+    let app = app_from_args_with_fixture("add", &fixture).unwrap();
+    let mut session = TestSession::new(app, "add");
+
+    // Type "git" and navigate down
+    session.type_text("git");
+    session.nav_down();
+
+    insta::with_settings!({
+        snapshot_suffix => fixture_name,
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut terminal, session.app()));
+    });
+}
+
+#[rstest]
+#[case("root")]
+fn test_add_completion_accept_with_tab(#[case] fixture_name: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let mut terminal = create_test_terminal(80, 4);
+    let app = app_from_args_with_fixture("add", &fixture).unwrap();
+    let mut session = TestSession::new(app, "add");
+
+    // Type "git", navigate down, and accept with Tab
+    session.type_text("git");
+    session.nav_down();
+    session.tab();
+
+    insta::with_settings!({
+        snapshot_suffix => fixture_name,
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut terminal, session.app()));
+    });
+}
+
+#[rstest]
+#[case("root")]
+fn test_add_completion_scroll(#[case] fixture_name: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let mut terminal = create_test_terminal(80, 4);
+    let app = app_from_args_with_fixture("add", &fixture).unwrap();
+    let mut session = TestSession::new(app, "add");
+
+    // Type "git" and navigate down multiple times to trigger scroll
+    session.type_text("git");
+    session.nav_down();
+    session.nav_down();
+    session.nav_down();
+
+    insta::with_settings!({
+        snapshot_suffix => fixture_name,
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut terminal, session.app()));
+    });
+}
+
+#[rstest]
+#[case("root")]
+fn test_add_completion_query_params(#[case] fixture_name: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let mut terminal = create_test_terminal(80, 4);
+    let app = app_from_args_with_fixture("add", &fixture).unwrap();
+    let mut session = TestSession::new(app, "add");
+
+    // Type a full URI then "?" to show query param completions
+    session.type_text("github:nixos/nixpkgs?");
+
+    insta::with_settings!({
+        snapshot_suffix => fixture_name,
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut terminal, session.app()));
+    });
+}
+
+#[rstest]
+#[case("root")]
+fn test_add_completion_query_params_filter(#[case] fixture_name: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let mut terminal = create_test_terminal(80, 4);
+    let app = app_from_args_with_fixture("add", &fixture).unwrap();
+    let mut session = TestSession::new(app, "add");
+
+    // Type URI and filter query params by typing "r"
+    session.type_text("github:nixos/nixpkgs?r");
+
+    insta::with_settings!({
+        snapshot_suffix => fixture_name,
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut terminal, session.app()));
+    });
+}
+
+#[rstest]
+#[case("root")]
+fn test_add_completion_query_params_accept(#[case] fixture_name: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let mut terminal = create_test_terminal(80, 4);
+    let app = app_from_args_with_fixture("add", &fixture).unwrap();
+    let mut session = TestSession::new(app, "add");
+
+    // Type URI, filter to "ref", and accept
+    session.type_text("github:nixos/nixpkgs?ref");
+    session.tab();
+
+    insta::with_settings!({
+        snapshot_suffix => fixture_name,
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut terminal, session.app()));
+    });
+}
+
+#[rstest]
+#[case("root")]
+fn test_add_completion_hide_on_escape(#[case] fixture_name: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let mut terminal = create_test_terminal(80, 4);
+    let app = app_from_args_with_fixture("add", &fixture).unwrap();
+    let mut session = TestSession::new(app, "add");
+
+    // Type "git", then Esc to hide completions (first Esc hides, not cancel)
+    session.type_text("git");
+    let result = session.escape();
+
+    // First Esc should hide completions, not cancel
+    assert!(matches!(result, UpdateResult::Continue));
+
+    insta::with_settings!({
+        snapshot_suffix => fixture_name,
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut terminal, session.app()));
+    });
+}
+
+#[rstest]
+#[case("root", "nixpkgs")]
+fn test_change_completion_visible(#[case] fixture_name: &str, #[case] input_id: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let mut terminal = create_test_terminal(80, 4);
+    let cmd = format!("change {input_id}");
+    let app = app_from_args_with_fixture(&cmd, &fixture).unwrap();
+    let mut session = TestSession::new(app, cmd);
+
+    // Clear existing text and type "git"
+    session.ctrl('u');
+    session.type_text("git");
+
+    insta::with_settings!({
+        snapshot_suffix => format!("{fixture_name}_{input_id}"),
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut terminal, session.app()));
+    });
+}
+
+#[rstest]
+#[case("root", "nixpkgs")]
+fn test_change_completion_accept(#[case] fixture_name: &str, #[case] input_id: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let mut terminal = create_test_terminal(80, 4);
+    let cmd = format!("change {input_id}");
+    let app = app_from_args_with_fixture(&cmd, &fixture).unwrap();
+    let mut session = TestSession::new(app, cmd);
+
+    // Clear, type, and accept completion
+    session.ctrl('u');
+    session.type_text("gitlab");
+    session.tab();
+
+    insta::with_settings!({
+        snapshot_suffix => format!("{fixture_name}_{input_id}"),
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut terminal, session.app()));
+    });
 }

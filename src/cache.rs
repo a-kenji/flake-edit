@@ -84,14 +84,21 @@ impl Cache {
 }
 
 /// Default flake URI type prefixes for completion.
-pub const DEFAULT_URI_TYPES: [&str; 7] = [
+pub const DEFAULT_URI_TYPES: [&str; 14] = [
     "github:",
     "gitlab:",
     "sourcehut:",
     "git+https://",
     "git+ssh://",
+    "git+http://",
+    "git+file://",
+    "git://",
     "path:",
+    "file://",
     "tarball:",
+    "https://",
+    "http://",
+    "flake:",
 ];
 
 #[cfg(test)]

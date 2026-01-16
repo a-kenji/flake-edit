@@ -5,10 +5,126 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Widget},
 };
 
-use super::model::InputState;
+use std::collections::HashSet;
+
+use super::model::{CompletionItem, InputState, MAX_VISIBLE_COMPLETIONS};
 use crate::tui::components::footer::Footer;
 use crate::tui::helpers::{context_span, diff_toggle_style, layouts};
-use crate::tui::style::{BORDER_STYLE, INPUT_PROMPT, LABEL_STYLE_INVERSE, PLACEHOLDER_STYLE};
+use crate::tui::style::{
+    BORDER_STYLE, COMPLETION_MATCH_STYLE, COMPLETION_SELECTED_MATCH_STYLE, DIMMED_STYLE,
+    FOOTER_STYLE, HIGHLIGHT_STYLE, INPUT_PROMPT, LABEL_STYLE_INVERSE, PLACEHOLDER_STYLE,
+};
+
+/// Completion dropdown overlay widget
+struct Completion<'a> {
+    items: &'a [CompletionItem],
+    selected: Option<usize>,
+    anchor_x: u16,
+}
+
+impl<'a> Completion<'a> {
+    fn new(items: &'a [CompletionItem], selected: Option<usize>, anchor_x: u16) -> Self {
+        Self {
+            items,
+            selected,
+            anchor_x,
+        }
+    }
+
+    fn width(&self) -> u16 {
+        let max_len = self
+            .items
+            .iter()
+            .map(|item| {
+                let desc_len = item
+                    .description
+                    .as_ref()
+                    .map(|d| d.len() + 3) // " · " separator
+                    .unwrap_or(0);
+                item.text.len() + desc_len
+            })
+            .max()
+            .unwrap_or(0);
+        (max_len + 3) as u16 // 1 leading + 2 trailing padding
+    }
+}
+
+impl Widget for Completion<'_> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        if self.items.is_empty() {
+            return;
+        }
+
+        let width = self.width();
+        let max_x = area.x + area.width;
+        let items_to_show = self.items.len().min(MAX_VISIBLE_COMPLETIONS);
+
+        for (i, item) in self.items.iter().take(items_to_show).enumerate() {
+            let y = area.y + i as u16;
+            let is_selected = Some(i) == self.selected;
+
+            let (base_style, match_style) = if is_selected {
+                (HIGHLIGHT_STYLE, COMPLETION_SELECTED_MATCH_STYLE)
+            } else {
+                (FOOTER_STYLE, COMPLETION_MATCH_STYLE)
+            };
+
+            let match_set: HashSet<u32> = item.match_indices.iter().copied().collect();
+            let mut x = self.anchor_x;
+
+            // Leading padding
+            if let Some(cell) = buf.cell_mut((x, y)) {
+                cell.reset();
+                cell.set_char(' ');
+                cell.set_style(base_style);
+            }
+            x += 1;
+
+            // Completion text with match highlighting
+            for (char_idx, ch) in item.text.chars().enumerate() {
+                if x >= max_x || x >= self.anchor_x + width {
+                    break;
+                }
+                if let Some(cell) = buf.cell_mut((x, y)) {
+                    cell.reset();
+                    cell.set_char(ch);
+                    let style = if match_set.contains(&(char_idx as u32)) {
+                        match_style
+                    } else {
+                        base_style
+                    };
+                    cell.set_style(style);
+                }
+                x += 1;
+            }
+
+            // Description (dimmed)
+            if let Some(desc) = &item.description {
+                for ch in " · ".chars().chain(desc.chars()) {
+                    if x >= max_x {
+                        break;
+                    }
+                    if let Some(cell) = buf.cell_mut((x, y)) {
+                        cell.reset();
+                        cell.set_char(ch);
+                        cell.set_style(DIMMED_STYLE);
+                    }
+                    x += 1;
+                }
+            }
+
+            // Trailing padding
+            while x < (self.anchor_x + width).min(max_x) {
+                if let Some(cell) = buf.cell_mut((x, y)) {
+                    cell.reset();
+                    cell.set_char(' ');
+                    cell.set_style(base_style);
+                }
+                x += 1;
+            }
+        }
+    }
+}
 
 /// Input widget for text entry
 pub struct Input<'a> {
@@ -43,12 +159,18 @@ impl<'a> Input<'a> {
         let cursor_y = content_area.y + 1;
         (cursor_x, cursor_y)
     }
+
+    /// Calculate required height (fixed - completions overlay the footer)
+    pub fn required_height(&self) -> u16 {
+        4 // 3 for bordered content + 1 for footer
+    }
 }
 
 impl Widget for Input<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let (content_area, footer_area) = layouts::fixed_content_with_footer(area, 3);
 
+        // Render input box
         let display_text = if self.state.is_empty() {
             Line::from(vec![
                 Span::raw(INPUT_PROMPT),
@@ -64,6 +186,7 @@ impl Widget for Input<'_> {
         );
         content.render(content_area, buf);
 
+        // Render footer
         let mut footer_spans = vec![context_span(self.context)];
         if let Some(lbl) = self.label {
             footer_spans.push(Span::raw(" "));
@@ -77,6 +200,23 @@ impl Widget for Input<'_> {
             vec![Span::styled(format!(" {} ", diff_label), diff_style)],
         )
         .render(footer_area, buf);
+
+        // Render completions overlay on border/footer area
+        if self.state.completions_visible() {
+            let anchor_x = content_area.x + 2 + self.state.completion_anchor() as u16;
+            let overlay_area = Rect {
+                x: area.x,
+                y: footer_area.y.saturating_sub(1),
+                width: area.width,
+                height: MAX_VISIBLE_COMPLETIONS as u16,
+            };
+            Completion::new(
+                self.state.filtered_completions(),
+                self.state.visible_selected(),
+                anchor_x,
+            )
+            .render(overlay_area, buf);
+        }
     }
 }
 

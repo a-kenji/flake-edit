@@ -1,0 +1,34 @@
+---
+source: tests/tui.rs
+description: "add → type 'github:nixos/nixpkgs?'"
+expression: "snapshot(&mut terminal, session.app())"
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 80, height: 4 },
+    content: [
+        "────────────────────────────────────────────────────────────────────────────────",
+        "❯ github:nixos/nixpkgs?                                                         ",
+        "────────────────────── ?ref= · Git/Mercurial branch or tag  ────────────────────",
+        " Add  Enter flake URI  ?rev= · Git/Mercurial commit hash    f: Off   flake-edit ",
+    ],
+    styles: [
+        x: 0, y: 0, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 1, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 2, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 22, y: 2, fg: Cyan, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 23, y: 2, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: BOLD,
+        x: 24, y: 2, fg: Cyan, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 28, y: 2, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 58, y: 2, fg: Cyan, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 60, y: 2, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 5, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 23, y: 3, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 24, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 28, y: 3, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 56, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 60, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 67, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 68, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+    ]
+}
