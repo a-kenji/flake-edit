@@ -47,6 +47,7 @@ fn error_filters(settings: &mut insta::Settings) {
 #[case("one_level_nesting_flat")]
 #[case("flat_nested_flat")]
 #[case("first_nested_node")]
+#[case("follows_cycle")]
 fn test_list(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -401,6 +402,7 @@ fn test_follow_nonexistent(#[case] fixture: &str, #[case] input: &str, #[case] t
 #[case("root")] // Has follows in flake.nix but lockfile shows direct references
 #[case("hyperconfig")] // Large real-world flake with mostly flat-style inputs
 #[case("mixed_style")] // Mixed flat and nested inputs (harmonia flat, blueprint/mprisd nested)
+#[case("follows_cycle")] // Cycle detection: treefmt-nix follows harmonia/treefmt-nix
 fn test_follow_auto(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);

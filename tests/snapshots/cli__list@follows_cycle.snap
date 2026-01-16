@@ -1,0 +1,20 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/follows_cycle.flake.nix"
+    - list
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+· harmonia - "github:nix-community/harmonia"
+     nixpkgs => "nixpkgs"
+· nixpkgs - "github:NixOS/nixpkgs/nixos-unstable"
+· treefmt-nix <= "harmonia/treefmt-nix"
+
+----- stderr -----

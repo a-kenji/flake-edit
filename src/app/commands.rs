@@ -60,6 +60,16 @@ fn load_flake_lock(state: &AppState) -> std::result::Result<FlakeLock, FlakeEdit
 struct FollowContext {
     nested_inputs: Vec<NestedInput>,
     top_level_inputs: std::collections::HashSet<String>,
+    /// Full input map for checking URLs (needed for cycle detection)
+    inputs: crate::edit::InputMap,
+}
+
+/// Check if a top-level input's URL is a follows reference to a specific parent input.
+/// For example, `treefmt-nix.follows = "clan-core/treefmt-nix"` has URL `"clan-core/treefmt-nix"`
+/// which is a follows reference to the `clan-core` parent.
+fn is_follows_reference_to_parent(url: &str, parent: &str) -> bool {
+    let url_trimmed = url.trim_matches('"');
+    url_trimmed.starts_with(&format!("{}/", parent))
 }
 
 /// Load nested inputs from lockfile and top-level inputs from flake.nix.
@@ -78,7 +88,7 @@ fn load_follow_context(
         return Ok(None);
     }
 
-    let inputs = flake_edit.list();
+    let inputs = flake_edit.list().clone();
     let top_level_inputs: std::collections::HashSet<String> = inputs.keys().cloned().collect();
 
     if top_level_inputs.is_empty() {
@@ -88,6 +98,7 @@ fn load_follow_context(
     Ok(Some(FollowContext {
         nested_inputs,
         top_level_inputs,
+        inputs,
     }))
 }
 
@@ -783,9 +794,28 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
         .filter(|nested| nested.follows.is_none())
         .filter_map(|nested| {
             let nested_name = nested.path.split('.').next_back().unwrap_or(&nested.path);
-            ctx.top_level_inputs
-                .contains(nested_name)
-                .then(|| (nested.path.clone(), nested_name.to_string()))
+            let parent = nested.path.split('.').next().unwrap_or(&nested.path);
+
+            if !ctx.top_level_inputs.contains(nested_name) {
+                return None;
+            }
+
+            // Skip if target already follows from parent (would create cycle)
+            // e.g., treefmt-nix.follows = "clan-core/treefmt-nix" means we can't
+            // add clan-core.inputs.treefmt-nix.follows = "treefmt-nix"
+            if let Some(target_input) = ctx.inputs.get(nested_name)
+                && is_follows_reference_to_parent(target_input.url(), parent)
+            {
+                tracing::debug!(
+                    "Skipping {} -> {}: would create cycle (target follows {}/...)",
+                    nested.path,
+                    nested_name,
+                    parent
+                );
+                return None;
+            }
+
+            Some((nested.path.clone(), nested_name.to_string()))
         })
         .collect();
 
@@ -915,4 +945,55 @@ fn apply_change(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_follows_reference_to_parent() {
+        // Test case: treefmt-nix.follows = "clan-core/treefmt-nix"
+        // The URL would be stored as "\"clan-core/treefmt-nix\""
+        assert!(is_follows_reference_to_parent(
+            "\"clan-core/treefmt-nix\"",
+            "clan-core"
+        ));
+
+        // Also test without surrounding quotes (defensive)
+        assert!(is_follows_reference_to_parent(
+            "clan-core/treefmt-nix",
+            "clan-core"
+        ));
+
+        // Test with different parent
+        assert!(is_follows_reference_to_parent(
+            "\"some-input/nixpkgs\"",
+            "some-input"
+        ));
+
+        // Negative test: regular URL should not match
+        assert!(!is_follows_reference_to_parent(
+            "\"github:nixos/nixpkgs\"",
+            "clan-core"
+        ));
+
+        // Negative test: URL that contains the parent but doesn't start with it
+        assert!(!is_follows_reference_to_parent(
+            "\"github:foo/clan-core-utils\"",
+            "clan-core"
+        ));
+
+        // Negative test: parent name matches but not followed by /
+        assert!(!is_follows_reference_to_parent(
+            "\"clan-core-extended\"",
+            "clan-core"
+        ));
+
+        // Edge case: empty URL
+        assert!(!is_follows_reference_to_parent("", "clan-core"));
+
+        // Edge case: just quotes
+        assert!(!is_follows_reference_to_parent("\"\"", "clan-core"));
+    }
 }
