@@ -130,4 +130,36 @@ impl Change {
             _ => None,
         }
     }
+
+    pub fn success_messages(&self) -> Vec<String> {
+        match self {
+            Change::Add { id, uri, .. } => {
+                vec![format!(
+                    "Added input: {} = {}",
+                    id.as_deref().unwrap_or("?"),
+                    uri.as_deref().unwrap_or("?")
+                )]
+            }
+            Change::Remove { ids } => ids
+                .iter()
+                .map(|id| format!("Removed input: {}", id))
+                .collect(),
+            Change::Change { id, uri, .. } => {
+                vec![format!(
+                    "Changed input: {} -> {}",
+                    id.as_deref().unwrap_or("?"),
+                    uri.as_deref().unwrap_or("?")
+                )]
+            }
+            Change::Follows { input, target } => {
+                vec![format!(
+                    "Added follows: {}.inputs.{}.follows = \"{}\"",
+                    input.input(),
+                    input.follows().unwrap_or("?"),
+                    target
+                )]
+            }
+            Change::None | Change::Pin { .. } => vec![],
+        }
+    }
 }

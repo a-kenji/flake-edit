@@ -20,6 +20,19 @@ pub enum Outputs {
 
 pub type InputMap = HashMap<String, Input>;
 
+pub fn sorted_input_ids(inputs: &InputMap) -> Vec<&String> {
+    let mut keys: Vec<_> = inputs.keys().collect();
+    keys.sort();
+    keys
+}
+
+/// Returns owned strings, for contexts where references won't work.
+pub fn sorted_input_ids_owned(inputs: &InputMap) -> Vec<String> {
+    let mut keys: Vec<String> = inputs.keys().cloned().collect();
+    keys.sort();
+    keys
+}
+
 #[derive(Default, Debug)]
 pub enum OutputChange {
     #[default]

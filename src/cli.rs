@@ -23,6 +23,12 @@ pub struct CliArgs {
     /// Disable interactive prompts.
     #[arg(long, default_value_t = false)]
     non_interactive: bool,
+    /// Disable reading from and writing to the completion cache.
+    #[arg(long, default_value_t = false)]
+    no_cache: bool,
+    /// Path to a custom cache file (for testing or portable configs).
+    #[arg(long)]
+    cache: Option<String>,
 
     #[command(subcommand)]
     subcommand: Command,
@@ -79,6 +85,14 @@ impl CliArgs {
 
     pub fn non_interactive(&self) -> bool {
         self.non_interactive
+    }
+
+    pub fn no_cache(&self) -> bool {
+        self.no_cache
+    }
+
+    pub fn cache(&self) -> Option<&String> {
+        self.cache.as_ref()
     }
 }
 

@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use crate::cache::CacheConfig;
+
 /// Application state for a flake-edit session.
 ///
 /// Holds the flake content, file paths, and configuration options.
@@ -17,6 +19,10 @@ pub struct AppState {
     pub no_lock: bool,
     /// Allow interactive TUI prompts
     pub interactive: bool,
+    /// Disable reading from and writing to the completion cache
+    pub no_cache: bool,
+    /// Custom cache file path (for testing or portable configs)
+    pub cache_path: Option<PathBuf>,
 }
 
 impl AppState {
@@ -28,6 +34,8 @@ impl AppState {
             diff: false,
             no_lock: false,
             interactive: true,
+            no_cache: false,
+            cache_path: None,
         }
     }
 
@@ -49,5 +57,26 @@ impl AppState {
     pub fn with_lock_file(mut self, lock_file: Option<PathBuf>) -> Self {
         self.lock_file = lock_file;
         self
+    }
+
+    pub fn with_no_cache(mut self, no_cache: bool) -> Self {
+        self.no_cache = no_cache;
+        self
+    }
+
+    pub fn with_cache_path(mut self, cache_path: Option<PathBuf>) -> Self {
+        self.cache_path = cache_path;
+        self
+    }
+
+    /// Get the cache configuration based on CLI flags.
+    pub fn cache_config(&self) -> CacheConfig {
+        if self.no_cache {
+            CacheConfig::None
+        } else if let Some(ref path) = self.cache_path {
+            CacheConfig::Custom(path.clone())
+        } else {
+            CacheConfig::Default
+        }
     }
 }
