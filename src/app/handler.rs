@@ -231,6 +231,16 @@ fn list_raw(inputs: &InputMap) {
     println!("{:#?}", sorted);
 }
 
+/// Check if a URL is a top-level follows reference (e.g., "harmonia/treefmt-nix")
+/// rather than a real URL (which would have a protocol like "github:" or "git+").
+fn is_toplevel_follows(url: &str) -> bool {
+    let url_trimmed = url.trim_matches('"');
+    !url_trimmed.is_empty()
+        && !url_trimmed.contains(':')
+        && url_trimmed.contains('/')
+        && !url_trimmed.starts_with('/')
+}
+
 fn list_detailed(inputs: &InputMap) {
     let mut buf = String::new();
     for key in sorted_input_ids(inputs) {
@@ -238,8 +248,12 @@ fn list_detailed(inputs: &InputMap) {
         if !buf.is_empty() {
             buf.push('\n');
         }
-        let id = format!("· {} - {}", input.id(), input.url());
-        buf.push_str(&id);
+        let line = if is_toplevel_follows(input.url()) {
+            format!("· {} <= {}", input.id(), input.url())
+        } else {
+            format!("· {} - {}", input.id(), input.url())
+        };
+        buf.push_str(&line);
         for follows in input.follows() {
             if let Follows::Indirect(id, follow_id) = follows {
                 let id = format!("{}{} => {}", " ".repeat(5), id, follow_id);
@@ -251,4 +265,35 @@ fn list_detailed(inputs: &InputMap) {
         }
     }
     println!("{buf}");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_toplevel_follows() {
+        // Positive: follows references look like "parent/nested"
+        assert!(is_toplevel_follows("\"harmonia/treefmt-nix\""));
+        assert!(is_toplevel_follows("\"clan-core/treefmt-nix\""));
+        assert!(is_toplevel_follows("clan-core/systems"));
+
+        // Negative: real URLs have protocols
+        assert!(!is_toplevel_follows("\"github:NixOS/nixpkgs\""));
+        assert!(!is_toplevel_follows(
+            "\"git+https://git.clan.lol/clan/clan-core\""
+        ));
+        assert!(!is_toplevel_follows("\"path:/some/local/path\""));
+        assert!(!is_toplevel_follows("\"https://github.com/pinpox.keys\""));
+
+        // Negative: absolute paths
+        assert!(!is_toplevel_follows("\"/nix/store/abc\""));
+
+        // Negative: no slash (just a name)
+        assert!(!is_toplevel_follows("\"nixpkgs\""));
+
+        // Negative: empty
+        assert!(!is_toplevel_follows(""));
+        assert!(!is_toplevel_follows("\"\""));
+    }
 }
