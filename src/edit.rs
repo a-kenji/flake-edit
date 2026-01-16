@@ -79,10 +79,7 @@ impl FlakeEdit {
             Change::Add { .. } => {
                 // Check for duplicate input before adding
                 if let Some(input_id) = change.id() {
-                    // First walk to populate the inputs map if it's empty
-                    if self.walker.inputs.is_empty() {
-                        let _ = self.walker.walk(&Change::None)?;
-                    }
+                    self.ensure_inputs_populated()?;
 
                     let input_id_string = input_id.to_string();
                     if self.walker.inputs.contains_key(&input_id_string) {
@@ -114,10 +111,7 @@ impl FlakeEdit {
                 }
             }
             Change::Remove { .. } => {
-                // Ensure inputs are populated first so we can find orphaned follows
-                if self.walker.inputs.is_empty() {
-                    let _ = self.walker.walk(&Change::None)?;
-                }
+                self.ensure_inputs_populated()?;
 
                 let removed_id = change.id().unwrap().to_string();
 
@@ -163,10 +157,7 @@ impl FlakeEdit {
             }
             Change::Pin { .. } => todo!(),
             Change::Follows { .. } => {
-                // Ensure inputs are populated first
-                if self.walker.inputs.is_empty() {
-                    let _ = self.walker.walk(&Change::None)?;
-                }
+                self.ensure_inputs_populated()?;
 
                 // Validate that the parent input exists
                 if let Some(input_id) = change.id() {
@@ -184,9 +175,7 @@ impl FlakeEdit {
             }
             Change::Change { .. } => {
                 if let Some(input_id) = change.id() {
-                    if self.walker.inputs.is_empty() {
-                        let _ = self.walker.walk(&Change::None)?;
-                    }
+                    self.ensure_inputs_populated()?;
 
                     let input_id_string = input_id.to_string();
                     if !self.walker.inputs.contains_key(&input_id_string) {
@@ -205,6 +194,14 @@ impl FlakeEdit {
 
     pub fn walker(&self) -> &Walker {
         &self.walker
+    }
+
+    /// Ensure the inputs map is populated by walking if empty.
+    fn ensure_inputs_populated(&mut self) -> Result<(), FlakeEditError> {
+        if self.walker.inputs.is_empty() {
+            let _ = self.walker.walk(&Change::None)?;
+        }
+        Ok(())
     }
 
     /// Collect follows references that point to a removed input.

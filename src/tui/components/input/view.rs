@@ -202,7 +202,7 @@ impl Widget for Input<'_> {
         .render(footer_area, buf);
 
         // Render completions overlay on border/footer area
-        if self.state.completions_visible() {
+        if self.state.has_visible_completions() {
             let anchor_x = content_area.x + 2 + self.state.completion_anchor() as u16;
             let overlay_area = Rect {
                 x: area.x,
@@ -212,7 +212,7 @@ impl Widget for Input<'_> {
             };
             Completion::new(
                 self.state.filtered_completions(),
-                self.state.visible_selected(),
+                self.state.visible_selection_index(),
                 anchor_x,
             )
             .render(overlay_area, buf);

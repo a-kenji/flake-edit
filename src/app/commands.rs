@@ -79,7 +79,7 @@ fn load_follow_context(
     state: &AppState,
 ) -> Result<Option<FollowContext>> {
     let nested_inputs: Vec<NestedInput> = load_flake_lock(state)
-        .map(|lock| lock.get_nested_inputs())
+        .map(|lock| lock.nested_inputs())
         .unwrap_or_default();
 
     if nested_inputs.is_empty() {
@@ -648,7 +648,7 @@ pub fn pin(
         let target_rev = if let Some(rev) = rev {
             rev
         } else {
-            lock.get_rev_by_id(&id)
+            lock.rev_for(&id)
                 .map_err(|_| CommandError::InputNotFound(id.clone()))?
         };
         let mut updater = updater(editor, inputs);
@@ -672,7 +672,7 @@ pub fn pin(
             input_ids,
             |id| {
                 let target_rev = lock
-                    .get_rev_by_id(id)
+                    .rev_for(id)
                     .map_err(|_| CommandError::InputNotFound(id.to_string()))?;
                 let mut updater = updater(editor, inputs.clone());
                 updater.pin_input_to_ref(id, &target_rev);
