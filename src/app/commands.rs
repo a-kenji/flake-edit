@@ -16,10 +16,10 @@ pub type Result<T> = std::result::Result<T, CommandError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CommandError {
-    #[error("{0}")]
+    #[error(transparent)]
     FlakeEdit(#[from] FlakeEditError),
 
-    #[error("{0}")]
+    #[error(transparent)]
     Io(#[from] std::io::Error),
 
     #[error("No URI provided")]

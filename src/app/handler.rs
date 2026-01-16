@@ -16,13 +16,13 @@ pub type Result<T> = std::result::Result<T, HandlerError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum HandlerError {
-    #[error("{0}")]
+    #[error(transparent)]
     Command(#[from] CommandError),
 
-    #[error("{0}")]
+    #[error(transparent)]
     Io(#[from] std::io::Error),
 
-    #[error("{0}")]
+    #[error(transparent)]
     FlakeEdit(#[from] crate::error::FlakeEditError),
 
     #[error("Flake not found")]
