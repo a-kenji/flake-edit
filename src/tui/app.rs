@@ -9,11 +9,12 @@
 use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 
-use crate::cache::{Cache, DEFAULT_URI_TYPES};
+use crate::cache::CacheConfig;
 use crate::change::Change;
 use crate::cli::Command;
 use crate::lock::NestedInput;
 
+use super::completions::uri_completion_items;
 use super::components::confirm::ConfirmAction;
 use super::components::input::{Input, InputAction, InputResult, InputState};
 use super::components::list::{ListAction, ListResult, ListState};
@@ -24,19 +25,12 @@ pub use super::workflow::{AppResult, MultiSelectResultData, SingleSelectResult, 
 
 const MAX_LIST_HEIGHT: u16 = 12;
 
-/// Build completion items: default URI types first, then cached URIs
-fn uri_completion_items() -> Vec<String> {
-    let mut items: Vec<String> = DEFAULT_URI_TYPES.iter().map(|s| s.to_string()).collect();
-    let cached = Cache::load().list_uris();
-    items.extend(cached);
-    items
-}
-
 #[derive(Debug, Clone)]
 pub struct App {
     context: String,
     flake_text: String,
     show_diff: bool,
+    cache_config: CacheConfig,
     screen: Screen,
     data: WorkflowData,
 }
@@ -65,6 +59,26 @@ pub struct ListScreen {
     pub prompt: String,
 }
 
+impl ListScreen {
+    pub fn single(items: Vec<String>, prompt: impl Into<String>, show_diff: bool) -> Self {
+        let len = items.len();
+        Self {
+            state: ListState::new(len, false, show_diff),
+            items,
+            prompt: prompt.into(),
+        }
+    }
+
+    pub fn multi(items: Vec<String>, prompt: impl Into<String>, show_diff: bool) -> Self {
+        let len = items.len();
+        Self {
+            state: ListState::new(len, true, show_diff),
+            items,
+            prompt: prompt.into(),
+        }
+    }
+}
+
 /// Confirm screen state
 #[derive(Debug, Clone)]
 pub struct ConfirmScreen {
@@ -80,13 +94,16 @@ impl App {
         context: impl Into<String>,
         flake_text: impl Into<String>,
         prefill_uri: Option<&str>,
+        cache_config: CacheConfig,
     ) -> Self {
+        let completions = uri_completion_items(None, &cache_config);
         Self {
             context: context.into(),
             flake_text: flake_text.into(),
             show_diff: false,
+            cache_config,
             screen: Screen::Input(InputScreen {
-                state: InputState::with_completions(prefill_uri, uri_completion_items()),
+                state: InputState::with_completions(prefill_uri, completions),
                 prompt: "Enter flake URI".into(),
                 label: None,
             }),
@@ -106,19 +123,20 @@ impl App {
         context: impl Into<String>,
         flake_text: impl Into<String>,
         inputs: Vec<(String, String)>,
+        cache_config: CacheConfig,
     ) -> Self {
-        let len = inputs.len();
         let input_ids: Vec<String> = inputs.iter().map(|(id, _)| id.clone()).collect();
         let input_uris: std::collections::HashMap<String, String> = inputs.into_iter().collect();
         Self {
             context: context.into(),
             flake_text: flake_text.into(),
             show_diff: false,
-            screen: Screen::List(ListScreen {
-                state: ListState::new(len, false, false),
-                items: input_ids.clone(),
-                prompt: "Select input to change".into(),
-            }),
+            cache_config,
+            screen: Screen::List(ListScreen::single(
+                input_ids.clone(),
+                "Select input to change",
+                false,
+            )),
             data: WorkflowData::Change {
                 selected_input: None,
                 uri: None,
@@ -134,16 +152,16 @@ impl App {
         flake_text: impl Into<String>,
         inputs: Vec<String>,
     ) -> Self {
-        let len = inputs.len();
         Self {
             context: context.into(),
             flake_text: flake_text.into(),
             show_diff: false,
-            screen: Screen::List(ListScreen {
-                state: ListState::new(len, true, false),
-                items: inputs.clone(),
-                prompt: "Select inputs to remove".into(),
-            }),
+            cache_config: CacheConfig::default(),
+            screen: Screen::List(ListScreen::multi(
+                inputs.clone(),
+                "Select inputs to remove",
+                false,
+            )),
             data: WorkflowData::Remove {
                 selected_inputs: Vec::new(),
                 all_inputs: inputs,
@@ -160,14 +178,17 @@ impl App {
         id: impl Into<String>,
         current_uri: Option<&str>,
         show_diff: bool,
+        cache_config: CacheConfig,
     ) -> Self {
         let id_string = id.into();
+        let completions = uri_completion_items(Some(&id_string), &cache_config);
         Self {
             context: context.into(),
             flake_text: flake_text.into(),
             show_diff,
+            cache_config,
             screen: Screen::Input(InputScreen {
-                state: InputState::with_completions(current_uri, uri_completion_items()),
+                state: InputState::with_completions(current_uri, completions),
                 prompt: format!("for {}", id_string),
                 label: Some("URI".into()),
             }),
@@ -187,16 +208,12 @@ impl App {
         items: Vec<String>,
         initial_diff: bool,
     ) -> Self {
-        let len = items.len();
         Self {
             context: context.into(),
             flake_text: String::new(),
             show_diff: initial_diff,
-            screen: Screen::List(ListScreen {
-                state: ListState::new(len, false, initial_diff),
-                items,
-                prompt: prompt.into(),
-            }),
+            cache_config: CacheConfig::default(),
+            screen: Screen::List(ListScreen::single(items, prompt, initial_diff)),
             data: WorkflowData::SelectOne {
                 selected_input: None,
             },
@@ -210,16 +227,12 @@ impl App {
         items: Vec<String>,
         initial_diff: bool,
     ) -> Self {
-        let len = items.len();
         Self {
             context: context.into(),
             flake_text: String::new(),
             show_diff: initial_diff,
-            screen: Screen::List(ListScreen {
-                state: ListState::new(len, true, initial_diff),
-                items,
-                prompt: prompt.into(),
-            }),
+            cache_config: CacheConfig::default(),
+            screen: Screen::List(ListScreen::multi(items, prompt, initial_diff)),
             data: WorkflowData::SelectMany {
                 selected_inputs: Vec::new(),
             },
@@ -232,6 +245,7 @@ impl App {
             context: context.into(),
             flake_text: String::new(),
             show_diff: true,
+            cache_config: CacheConfig::default(),
             screen: Screen::Confirm(ConfirmScreen { diff: diff.into() }),
             data: WorkflowData::ConfirmOnly { action: None },
         }
@@ -248,7 +262,6 @@ impl App {
         nested_inputs: Vec<NestedInput>,
         top_level_inputs: Vec<String>,
     ) -> Self {
-        let len = nested_inputs.len();
         // Convert to display strings for the UI
         let display_items: Vec<String> = nested_inputs
             .iter()
@@ -258,11 +271,12 @@ impl App {
             context: context.into(),
             flake_text: flake_text.into(),
             show_diff: false,
-            screen: Screen::List(ListScreen {
-                state: ListState::new(len, false, false),
-                items: display_items,
-                prompt: "Select input to add follows".into(),
-            }),
+            cache_config: CacheConfig::default(),
+            screen: Screen::List(ListScreen::single(
+                display_items,
+                "Select input to add follows",
+                false,
+            )),
             data: WorkflowData::Follow {
                 phase: FollowPhase::SelectInput,
                 selected_input: None,
@@ -282,17 +296,17 @@ impl App {
         input: impl Into<String>,
         top_level_inputs: Vec<String>,
     ) -> Self {
-        let len = top_level_inputs.len();
         let input = input.into();
         Self {
             context: context.into(),
             flake_text: flake_text.into(),
             show_diff: false,
-            screen: Screen::List(ListScreen {
-                state: ListState::new(len, false, false),
-                items: top_level_inputs.clone(),
-                prompt: format!("Select target for {input}"),
-            }),
+            cache_config: CacheConfig::default(),
+            screen: Screen::List(ListScreen::single(
+                top_level_inputs.clone(),
+                format!("Select target for {input}"),
+                false,
+            )),
             data: WorkflowData::Follow {
                 phase: FollowPhase::SelectTarget,
                 selected_input: Some(input),
@@ -314,11 +328,13 @@ impl App {
     /// * `flake_text` - The content of the flake.nix file
     /// * `inputs` - List of (id, uri) pairs representing current inputs
     /// * `diff` - Whether diff mode is enabled
+    /// * `cache_config` - Cache configuration for completions
     pub fn from_command(
         command: &Command,
         flake_text: impl Into<String>,
         inputs: Vec<(String, String)>,
         diff: bool,
+        cache_config: CacheConfig,
     ) -> Option<Self> {
         let flake_text = flake_text.into();
         let input_ids: Vec<String> = inputs.iter().map(|(id, _)| id.clone()).collect();
@@ -331,7 +347,7 @@ impl App {
                 } else {
                     // prefill_uri is the first positional arg (id field) when uri is None
                     let prefill = id.as_deref();
-                    Some(Self::add("Add", flake_text, prefill).with_diff(diff))
+                    Some(Self::add("Add", flake_text, prefill, cache_config).with_diff(diff))
                 }
             }
 
@@ -360,10 +376,11 @@ impl App {
                         id,
                         current_uri,
                         diff,
+                        cache_config,
                     ))
                 } else {
                     // No args: show input selection list
-                    Some(Self::change("Change", flake_text, inputs))
+                    Some(Self::change("Change", flake_text, inputs, cache_config).with_diff(diff))
                 }
             }
 
@@ -564,7 +581,7 @@ impl App {
                                 self.screen = Screen::Input(InputScreen {
                                     state: InputState::with_completions(
                                         uri.as_deref(),
-                                        uri_completion_items(),
+                                        uri_completion_items(None, &self.cache_config),
                                     ),
                                     prompt: "Enter flake URI".into(),
                                     label: None,
@@ -575,12 +592,11 @@ impl App {
                             if let WorkflowData::Change { all_inputs, .. } = &self.data
                                 && !all_inputs.is_empty()
                             {
-                                let len = all_inputs.len();
-                                self.screen = Screen::List(ListScreen {
-                                    state: ListState::new(len, false, self.show_diff),
-                                    items: all_inputs.clone(),
-                                    prompt: "Select input to change".into(),
-                                });
+                                self.screen = Screen::List(ListScreen::single(
+                                    all_inputs.clone(),
+                                    "Select input to change",
+                                    self.show_diff,
+                                ));
                                 return UpdateResult::Continue;
                             }
                             UpdateResult::Cancelled
@@ -617,16 +633,15 @@ impl App {
                         && !nested_inputs.is_empty()
                     {
                         *phase = FollowPhase::SelectInput;
-                        let len = nested_inputs.len();
                         let display_items: Vec<String> = nested_inputs
                             .iter()
                             .map(|i| i.to_display_string())
                             .collect();
-                        self.screen = Screen::List(ListScreen {
-                            state: ListState::new(len, false, self.show_diff),
-                            items: display_items,
-                            prompt: "Select input to add follows".into(),
-                        });
+                        self.screen = Screen::List(ListScreen::single(
+                            display_items,
+                            "Select input to add follows",
+                            self.show_diff,
+                        ));
                         return UpdateResult::Continue;
                     }
                     UpdateResult::Cancelled
@@ -713,7 +728,10 @@ impl App {
                 let current_uri = input_uris.get(&item).map(|s| s.as_str());
                 *selected_input = Some(item.clone());
                 self.screen = Screen::Input(InputScreen {
-                    state: InputState::with_completions(current_uri, uri_completion_items()),
+                    state: InputState::with_completions(
+                        current_uri,
+                        uri_completion_items(Some(&item), &self.cache_config),
+                    ),
                     prompt: "Enter new URI".into(),
                     label: Some(item),
                 });
@@ -751,12 +769,11 @@ impl App {
                             .unwrap_or_default();
                         *selected_input = Some(path.clone());
                         *phase = FollowPhase::SelectTarget;
-                        let len = top_level_inputs.len();
-                        self.screen = Screen::List(ListScreen {
-                            state: ListState::new(len, false, self.show_diff),
-                            items: top_level_inputs.clone(),
-                            prompt: format!("Select target for {path}"),
-                        });
+                        self.screen = Screen::List(ListScreen::single(
+                            top_level_inputs.clone(),
+                            format!("Select target for {path}"),
+                            self.show_diff,
+                        ));
                         UpdateResult::Continue
                     }
                     FollowPhase::SelectTarget => {
@@ -797,18 +814,20 @@ impl App {
                 ..
             } => {
                 self.screen = Screen::Input(InputScreen {
-                    state: InputState::with_completions(uri.as_deref(), uri_completion_items()),
+                    state: InputState::with_completions(
+                        uri.as_deref(),
+                        uri_completion_items(selected_input.as_deref(), &self.cache_config),
+                    ),
                     prompt: "Enter new URI".into(),
                     label: selected_input.clone(),
                 });
             }
             WorkflowData::Remove { all_inputs, .. } => {
-                let len = all_inputs.len();
-                self.screen = Screen::List(ListScreen {
-                    state: ListState::new(len, true, self.show_diff),
-                    items: all_inputs.clone(),
-                    prompt: "Select inputs to remove".into(),
-                });
+                self.screen = Screen::List(ListScreen::multi(
+                    all_inputs.clone(),
+                    "Select inputs to remove",
+                    self.show_diff,
+                ));
             }
             WorkflowData::Follow {
                 phase,
@@ -819,24 +838,22 @@ impl App {
                 // go_back is called from confirm screen, so we need to go back to
                 // the target selection list (SelectTarget phase)
                 if *phase == FollowPhase::SelectTarget {
-                    let len = top_level_inputs.len();
-                    self.screen = Screen::List(ListScreen {
-                        state: ListState::new(len, false, self.show_diff),
-                        items: top_level_inputs.clone(),
-                        prompt: "Select target to follow".into(),
-                    });
+                    self.screen = Screen::List(ListScreen::single(
+                        top_level_inputs.clone(),
+                        "Select target to follow",
+                        self.show_diff,
+                    ));
                 } else if !nested_inputs.is_empty() {
                     // SelectInput phase - go back to input selection
-                    let len = nested_inputs.len();
                     let display_items: Vec<String> = nested_inputs
                         .iter()
                         .map(|i| i.to_display_string())
                         .collect();
-                    self.screen = Screen::List(ListScreen {
-                        state: ListState::new(len, false, self.show_diff),
-                        items: display_items,
-                        prompt: "Select input to add follows".into(),
-                    });
+                    self.screen = Screen::List(ListScreen::single(
+                        display_items,
+                        "Select input to add follows",
+                        self.show_diff,
+                    ));
                 }
             }
             // Standalone workflows don't have a "back" concept - they're single screen

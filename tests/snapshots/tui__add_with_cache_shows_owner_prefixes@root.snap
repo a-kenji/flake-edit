@@ -1,0 +1,34 @@
+---
+source: tests/tui.rs
+assertion_line: 1137
+description: "add (with cache) → type 'github:num'"
+expression: "snapshot(&mut terminal, session.app())"
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 80, height: 6 },
+    content: [
+        "────────────────────────────────────────────────────────────────────────────────",
+        "❯ github:num                                                                    ",
+        "── github:numtide/             ─────────────────────────────────────────────────",
+        " A github:numtide/flake-utils                            Diff: Off   flake-edit ",
+        "                                                                                ",
+        "                                                                                ",
+    ],
+    styles: [
+        x: 0, y: 0, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 1, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 2, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 2, y: 2, fg: Cyan, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 3, y: 2, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: BOLD,
+        x: 13, y: 2, fg: Cyan, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 31, y: 2, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 0, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 2, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 3, y: 3, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 13, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 56, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 67, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 68, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 0, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+    ]
+}

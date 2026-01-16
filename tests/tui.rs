@@ -13,10 +13,12 @@
 
 use clap::Parser;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::path::PathBuf;
+
 use flake_edit::cli::CliArgs;
 use flake_edit::edit::FlakeEdit;
-use flake_edit::tui::App;
 use flake_edit::tui::app::UpdateResult;
+use flake_edit::tui::{App, CacheConfig};
 use ratatui::{Terminal, backend::TestBackend, widgets::Widget};
 use rstest::rstest;
 
@@ -53,9 +55,22 @@ impl Fixture {
     }
 }
 
+/// Build cache configuration from CLI args
+fn cache_config_from_cli(cli: &CliArgs) -> CacheConfig {
+    if cli.no_cache() {
+        CacheConfig::None
+    } else if let Some(path) = cli.cache() {
+        CacheConfig::Custom(PathBuf::from(path))
+    } else {
+        CacheConfig::Default
+    }
+}
+
 /// Parse CLI arguments and create App using from_command with a fixture
 fn app_from_args_with_fixture(args: &str, fixture: &Fixture) -> Option<App> {
+    // Always add --no-cache to ensure deterministic test results
     let args: Vec<&str> = std::iter::once("flake-edit")
+        .chain(std::iter::once("--no-cache"))
         .chain(args.split_whitespace())
         .collect();
     let cli = CliArgs::try_parse_from(args).expect("Failed to parse CLI args");
@@ -64,6 +79,7 @@ fn app_from_args_with_fixture(args: &str, fixture: &Fixture) -> Option<App> {
         &fixture.text,
         fixture.inputs.clone(),
         cli.diff(),
+        cache_config_from_cli(&cli),
     )
 }
 
@@ -1050,6 +1066,68 @@ fn test_change_completion_accept(#[case] fixture_name: &str, #[case] input_id: &
 
     insta::with_settings!({
         snapshot_suffix => format!("{fixture_name}_{input_id}"),
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut terminal, session.app()));
+    });
+}
+
+/// Get path to test cache fixture
+fn cache_fixture_path() -> PathBuf {
+    let dir = env!("CARGO_MANIFEST_DIR");
+    PathBuf::from(format!("{dir}/tests/fixtures/test_cache.json"))
+}
+
+/// Parse CLI arguments and create App with a custom cache file
+fn app_from_args_with_cache(args: &str, fixture: &Fixture) -> Option<App> {
+    let cache_path = cache_fixture_path();
+    let cache_arg = format!("--cache={}", cache_path.display());
+    let args: Vec<&str> = std::iter::once("flake-edit")
+        .chain(std::iter::once(cache_arg.as_str()))
+        .chain(args.split_whitespace())
+        .collect();
+    let cli = CliArgs::try_parse_from(args).expect("Failed to parse CLI args");
+    App::from_command(
+        cli.subcommand(),
+        &fixture.text,
+        fixture.inputs.clone(),
+        cli.diff(),
+        cache_config_from_cli(&cli),
+    )
+}
+
+#[rstest]
+#[case("root")]
+fn test_add_with_cache_shows_cached_uris(#[case] fixture_name: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let mut terminal = create_test_terminal(80, 6);
+    let app = app_from_args_with_cache("add", &fixture).unwrap();
+    let mut session = TestSession::new(app, "add (with cache)");
+
+    // Type a partial match for cached URIs
+    session.type_text("github:nix");
+
+    insta::with_settings!({
+        snapshot_suffix => fixture_name,
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut terminal, session.app()));
+    });
+}
+
+#[rstest]
+#[case("root")]
+fn test_add_with_cache_shows_owner_prefixes(#[case] fixture_name: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let mut terminal = create_test_terminal(80, 6);
+    let app = app_from_args_with_cache("add", &fixture).unwrap();
+    let mut session = TestSession::new(app, "add (with cache)");
+
+    // Type to match owner prefix (should show github:numtide/ from cache)
+    session.type_text("github:num");
+
+    insta::with_settings!({
+        snapshot_suffix => fixture_name,
         description => session.description()
     }, {
         insta::assert_snapshot!(snapshot(&mut terminal, session.app()));

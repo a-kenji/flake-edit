@@ -3,7 +3,7 @@ use nix_uri::{FlakeRef, NixUriResult};
 use ropey::Rope;
 
 use crate::change::Change;
-use crate::edit::FlakeEdit;
+use crate::edit::{FlakeEdit, InputMap, sorted_input_ids, sorted_input_ids_owned};
 use crate::error::FlakeEditError;
 use crate::lock::{FlakeLock, NestedInput};
 use crate::tui;
@@ -11,6 +11,10 @@ use crate::update::Updater;
 
 use super::editor::Editor;
 use super::state::AppState;
+
+fn updater(editor: &Editor, inputs: InputMap) -> Updater {
+    Updater::new(Rope::from_str(&editor.text()), inputs)
+}
 
 pub type Result<T> = std::result::Result<T, CommandError>;
 
@@ -97,6 +101,81 @@ enum ConfirmResult {
     Back,
 }
 
+/// Run an interactive single-select loop with confirmation.
+///
+/// 1. Show selection screen
+/// 2. User selects an item
+/// 3. Create change based on selection
+/// 4. Show confirmation (with diff if requested)
+/// 5. Apply or go back
+fn interactive_single_select<F, OnApplied, ExtraData>(
+    editor: &Editor,
+    state: &AppState,
+    title: &str,
+    prompt: &str,
+    items: Vec<String>,
+    make_change: F,
+    on_applied: OnApplied,
+) -> Result<()>
+where
+    F: Fn(&str) -> Result<(String, ExtraData)>,
+    OnApplied: Fn(&str, ExtraData),
+{
+    loop {
+        let select_app = tui::App::select_one(title, prompt, items.clone(), state.diff);
+        let Some(tui::AppResult::SingleSelect(result)) = tui::run(select_app)? else {
+            return Ok(());
+        };
+        let tui::SingleSelectResult {
+            item: id,
+            show_diff,
+        } = result;
+        let (change, extra_data) = make_change(&id)?;
+
+        match confirm_or_apply(editor, state, title, &change, show_diff)? {
+            ConfirmResult::Applied => {
+                on_applied(&id, extra_data);
+                break;
+            }
+            ConfirmResult::Back => continue,
+            ConfirmResult::Cancelled => return Ok(()),
+        }
+    }
+    Ok(())
+}
+
+/// Like `interactive_single_select` but for multi-selection.
+fn interactive_multi_select<F>(
+    editor: &Editor,
+    state: &AppState,
+    title: &str,
+    prompt: &str,
+    items: Vec<String>,
+    make_change: F,
+) -> Result<()>
+where
+    F: Fn(&[String]) -> String,
+{
+    loop {
+        let select_app = tui::App::select_many(title, prompt, items.clone(), state.diff);
+        let Some(tui::AppResult::MultiSelect(result)) = tui::run(select_app)? else {
+            return Ok(());
+        };
+        let tui::MultiSelectResultData {
+            items: selected,
+            show_diff,
+        } = result;
+        let change = make_change(&selected);
+
+        match confirm_or_apply(editor, state, title, &change, show_diff)? {
+            ConfirmResult::Applied => break,
+            ConfirmResult::Back => continue,
+            ConfirmResult::Cancelled => return Ok(()),
+        }
+    }
+    Ok(())
+}
+
 /// Run the confirm-or-apply workflow for a change.
 ///
 /// If `show_diff` is true, shows a confirmation screen with the diff.
@@ -134,7 +213,7 @@ fn confirm_or_apply(
 }
 
 /// Apply URI options (ref_or_rev, shallow) to a FlakeRef.
-pub fn apply_uri_options(
+fn apply_uri_options(
     mut flake_ref: FlakeRef,
     ref_or_rev: Option<&str>,
     shallow: bool,
@@ -155,108 +234,118 @@ pub fn apply_uri_options(
     Ok(flake_ref)
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Transform a URI string by applying ref_or_rev and shallow options if specified.
+///
+/// If neither option is set, returns the original URI unchanged.
+/// Otherwise, parses the URI, applies the options, and returns the transformed string.
+fn transform_uri(uri: String, ref_or_rev: Option<&str>, shallow: bool) -> Result<String> {
+    if ref_or_rev.is_none() && !shallow {
+        return Ok(uri);
+    }
+
+    let flake_ref: FlakeRef = uri
+        .parse()
+        .map_err(|e| CommandError::CouldNotInferId(format!("{}: {}", uri, e)))?;
+
+    apply_uri_options(flake_ref, ref_or_rev, shallow)
+        .map(|f| f.to_string())
+        .map_err(CommandError::CouldNotInferId)
+}
+
+#[derive(Default)]
+pub struct UriOptions<'a> {
+    pub ref_or_rev: Option<&'a str>,
+    pub shallow: bool,
+    pub no_flake: bool,
+}
+
 pub fn add(
     editor: &Editor,
     flake_edit: &mut FlakeEdit,
     state: &AppState,
     id: Option<String>,
     uri: Option<String>,
-    ref_or_rev: Option<&str>,
-    no_flake: bool,
-    shallow: bool,
+    opts: UriOptions<'_>,
 ) -> Result<()> {
-    let change = if let (Some(id_val), Some(uri_str)) = (id.clone(), uri) {
-        // Both provided - non-interactive
-        let final_uri = if ref_or_rev.is_some() || shallow {
-            let flake_ref: FlakeRef = uri_str
-                .parse()
-                .map_err(|e| CommandError::CouldNotInferId(format!("{}: {}", uri_str, e)))?;
-            apply_uri_options(flake_ref, ref_or_rev, shallow)
-                .map_err(CommandError::CouldNotInferId)?
-                .to_string()
-        } else {
-            uri_str
-        };
-        Change::Add {
-            id: Some(id_val),
-            uri: Some(final_uri),
-            flake: !no_flake,
+    let change = match (id, uri, state.interactive) {
+        // Both ID and URI provided - non-interactive add
+        (Some(id_val), Some(uri_str), _) => add_with_id_and_uri(id_val, uri_str, &opts)?,
+        // Interactive mode - show TUI (with or without prefill)
+        (id, None, true) | (None, id, true) => {
+            add_interactive(editor, state, id.as_deref(), &opts)?
         }
-    } else if state.interactive {
-        // Interactive mode
-        let prefill_uri = id.as_deref();
-        let tui_app = tui::App::add("Add", editor.text(), prefill_uri);
-        let Some(tui::AppResult::Change(tui_change)) = tui::run(tui_app)? else {
-            return Ok(()); // User cancelled
-        };
-
-        // Apply URI options if needed
-        if ref_or_rev.is_some() || shallow {
-            if let Change::Add {
-                id,
-                uri: Some(uri_str),
-                flake,
-            } = tui_change
-            {
-                let flake_ref: FlakeRef = uri_str
-                    .parse()
-                    .map_err(|e| CommandError::CouldNotInferId(format!("{}", e)))?;
-                Change::Add {
-                    id,
-                    uri: Some(
-                        apply_uri_options(flake_ref, ref_or_rev, shallow)
-                            .map_err(CommandError::CouldNotInferId)?
-                            .to_string(),
-                    ),
-                    flake: flake && !no_flake,
-                }
-            } else {
-                tui_change
-            }
-        } else if no_flake {
-            if let Change::Add { id, uri, .. } = tui_change {
-                Change::Add {
-                    id,
-                    uri,
-                    flake: false,
-                }
-            } else {
-                tui_change
-            }
-        } else {
-            tui_change
+        // Non-interactive with only one arg (could be in id or uri position) - infer ID
+        (Some(uri), None, false) | (None, Some(uri), false) => add_infer_id(uri, &opts)?,
+        // No arguments and non-interactive
+        (None, None, false) => {
+            return Err(CommandError::NoUri);
         }
-    } else if let Some(uri) = id {
-        // Non-interactive with URI provided positionally (id field is actually URI)
-        let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(&uri);
-
-        let (inferred_id, final_uri) = if let Ok(flake_ref) = flake_ref {
-            let flake_ref = apply_uri_options(flake_ref, ref_or_rev, shallow)
-                .map_err(CommandError::CouldNotInferId)?;
-            let parsed_uri = flake_ref.to_string();
-            let final_uri = if parsed_uri.is_empty() || parsed_uri == "none" {
-                uri.clone()
-            } else {
-                parsed_uri
-            };
-            (flake_ref.id(), final_uri)
-        } else {
-            (None, uri.clone())
-        };
-
-        let final_id = inferred_id.ok_or(CommandError::CouldNotInferId(uri))?;
-
-        Change::Add {
-            id: Some(final_id),
-            uri: Some(final_uri),
-            flake: !no_flake,
-        }
-    } else {
-        return Err(CommandError::NoUri);
     };
 
     apply_change(editor, flake_edit, state, change)
+}
+
+fn add_with_id_and_uri(id: String, uri: String, opts: &UriOptions<'_>) -> Result<Change> {
+    let final_uri = transform_uri(uri, opts.ref_or_rev, opts.shallow)?;
+    Ok(Change::Add {
+        id: Some(id),
+        uri: Some(final_uri),
+        flake: !opts.no_flake,
+    })
+}
+
+fn add_interactive(
+    editor: &Editor,
+    state: &AppState,
+    prefill_uri: Option<&str>,
+    opts: &UriOptions<'_>,
+) -> Result<Change> {
+    let tui_app = tui::App::add("Add", editor.text(), prefill_uri, state.cache_config());
+    let Some(tui::AppResult::Change(tui_change)) = tui::run(tui_app)? else {
+        // User cancelled - return a no-op change
+        return Ok(Change::None);
+    };
+
+    // Apply CLI options to the TUI result
+    if let Change::Add { id, uri, flake } = tui_change {
+        let final_uri = uri
+            .map(|u| transform_uri(u, opts.ref_or_rev, opts.shallow))
+            .transpose()?;
+        Ok(Change::Add {
+            id,
+            uri: final_uri,
+            flake: flake && !opts.no_flake,
+        })
+    } else {
+        Ok(tui_change)
+    }
+}
+
+/// Add with only URI provided, inferring ID from the flake reference.
+fn add_infer_id(uri: String, opts: &UriOptions<'_>) -> Result<Change> {
+    let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(&uri);
+
+    let (inferred_id, final_uri) = if let Ok(flake_ref) = flake_ref {
+        let flake_ref = apply_uri_options(flake_ref, opts.ref_or_rev, opts.shallow)
+            .map_err(CommandError::CouldNotInferId)?;
+        let parsed_uri = flake_ref.to_string();
+        let final_uri = if parsed_uri.is_empty() || parsed_uri == "none" {
+            uri.clone()
+        } else {
+            parsed_uri
+        };
+        (flake_ref.id(), final_uri)
+    } else {
+        (None, uri.clone())
+    };
+
+    let final_id = inferred_id.ok_or(CommandError::CouldNotInferId(uri))?;
+
+    Ok(Change::Add {
+        id: Some(final_id),
+        uri: Some(final_uri),
+        flake: !opts.no_flake,
+    })
 }
 
 pub fn remove(
@@ -272,9 +361,7 @@ pub fn remove(
     } else if state.interactive {
         let inputs = flake_edit.list();
         let mut removable: Vec<String> = Vec::new();
-        let mut keys: Vec<_> = inputs.keys().collect();
-        keys.sort();
-        for input_id in keys {
+        for input_id in sorted_input_ids(inputs) {
             let input = &inputs[input_id];
             removable.push(input_id.clone());
             for follows in input.follows() {
@@ -327,130 +414,144 @@ pub fn change(
 ) -> Result<()> {
     let inputs = flake_edit.list();
 
-    let change = if id.is_none() && uri.is_none() && state.interactive {
+    let change = match (id, uri, state.interactive) {
         // Full interactive: select input, then enter URI
-        let mut keys: Vec<_> = inputs.keys().collect();
-        keys.sort();
-        let input_pairs: Vec<(String, String)> = keys
-            .iter()
-            .map(|id| {
-                (
-                    (*id).clone(),
-                    inputs[*id].url().trim_matches('"').to_string(),
-                )
-            })
-            .collect();
-        if input_pairs.is_empty() {
-            return Err(CommandError::NoInputs);
+        // Also handles case where only URI provided interactively (need to select input)
+        (None, None, true) | (None, Some(_), true) => {
+            change_full_interactive(editor, state, inputs, ref_or_rev, shallow)?
         }
-
-        let tui_app = tui::App::change("Change", editor.text(), input_pairs);
-        let Some(tui::AppResult::Change(tui_change)) = tui::run(tui_app)? else {
-            return Ok(());
-        };
-
-        if ref_or_rev.is_some() || shallow {
-            if let Change::Change {
-                id,
-                uri: Some(uri_str),
-                ..
-            } = tui_change
-            {
-                let flake_ref: FlakeRef = uri_str
-                    .parse()
-                    .map_err(|e| CommandError::CouldNotInferId(format!("{}", e)))?;
-                Change::Change {
-                    id,
-                    uri: Some(
-                        apply_uri_options(flake_ref, ref_or_rev, shallow)
-                            .map_err(CommandError::CouldNotInferId)?
-                            .to_string(),
-                    ),
-                    ref_or_rev: None,
-                }
-            } else {
-                tui_change
-            }
-        } else {
-            tui_change
+        // ID provided, no URI, interactive: show URI input for that ID
+        (Some(id), None, true) => {
+            change_uri_interactive(editor, state, inputs, &id, ref_or_rev, shallow)?
         }
-    } else if id.is_some() && uri.is_none() && state.interactive {
-        // ID provided but no URI: show URI input
-        let id_ref = id.as_ref().unwrap();
-        let current_uri = inputs.get(id_ref).map(|i| i.url().trim_matches('"'));
-        let tui_app =
-            tui::App::change_uri("Change", editor.text(), id_ref, current_uri, state.diff);
-        let Some(tui::AppResult::Change(tui_change)) = tui::run(tui_app)? else {
-            return Ok(());
-        };
-
-        if let Change::Change {
-            uri: Some(new_uri), ..
-        } = tui_change
-        {
-            let final_uri = if ref_or_rev.is_some() || shallow {
-                let flake_ref: FlakeRef = new_uri
-                    .parse()
-                    .map_err(|e| CommandError::CouldNotInferId(format!("{}", e)))?;
-                apply_uri_options(flake_ref, ref_or_rev, shallow)
-                    .map_err(CommandError::CouldNotInferId)?
-                    .to_string()
-            } else {
-                new_uri
-            };
-            Change::Change {
-                id,
-                uri: Some(final_uri),
-                ref_or_rev: None,
-            }
-        } else {
-            return Err(CommandError::NoUri);
+        // Both ID and URI provided - non-interactive
+        (Some(id_val), Some(uri_str), _) => {
+            change_with_id_and_uri(id_val, uri_str, ref_or_rev, shallow)?
         }
-    } else if let (Some(id_val), Some(uri_str)) = (id.clone(), uri) {
-        // Both provided - non-interactive
-        let final_uri = if ref_or_rev.is_some() || shallow {
-            let flake_ref: FlakeRef = uri_str
-                .parse()
-                .map_err(|e| CommandError::CouldNotInferId(format!("{}: {}", uri_str, e)))?;
-            apply_uri_options(flake_ref, ref_or_rev, shallow)
-                .map_err(CommandError::CouldNotInferId)?
-                .to_string()
-        } else {
-            uri_str
-        };
-        Change::Change {
-            id: Some(id_val),
-            uri: Some(final_uri),
-            ref_or_rev: None,
+        // Only one positional arg (in id position), infer ID from URI
+        (Some(uri), None, false) | (None, Some(uri), false) => {
+            change_infer_id(uri, ref_or_rev, shallow)?
         }
-    } else if let Some(uri) = id {
-        // Only positional arg provided, try to infer ID from URI
-        let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(&uri);
-        if let Ok(flake_ref) = flake_ref {
-            let flake_ref = apply_uri_options(flake_ref, ref_or_rev, shallow)
-                .map_err(CommandError::CouldNotInferId)?;
-            let final_uri = if flake_ref.to_string().is_empty() {
-                uri.clone()
-            } else {
-                flake_ref.to_string()
-            };
-            if let Some(id) = flake_ref.id() {
-                Change::Change {
-                    id: Some(id),
-                    uri: Some(final_uri),
-                    ref_or_rev: None,
-                }
-            } else {
-                return Err(CommandError::CouldNotInferId(uri));
-            }
-        } else {
-            return Err(CommandError::CouldNotInferId(uri));
+        // No arguments and non-interactive
+        (None, None, false) => {
+            return Err(CommandError::NoId);
         }
-    } else {
-        return Err(CommandError::NoId);
     };
 
     apply_change(editor, flake_edit, state, change)
+}
+
+/// Full interactive change: select input from list, then enter new URI.
+fn change_full_interactive(
+    editor: &Editor,
+    state: &AppState,
+    inputs: &crate::edit::InputMap,
+    ref_or_rev: Option<&str>,
+    shallow: bool,
+) -> Result<Change> {
+    let input_pairs: Vec<(String, String)> = sorted_input_ids(inputs)
+        .into_iter()
+        .map(|id| (id.clone(), inputs[id].url().trim_matches('"').to_string()))
+        .collect();
+
+    if input_pairs.is_empty() {
+        return Err(CommandError::NoInputs);
+    }
+
+    let tui_app = tui::App::change("Change", editor.text(), input_pairs, state.cache_config());
+    let Some(tui::AppResult::Change(tui_change)) = tui::run(tui_app)? else {
+        return Ok(Change::None);
+    };
+
+    // Apply CLI options to the TUI result
+    if let Change::Change { id, uri, .. } = tui_change {
+        let final_uri = uri
+            .map(|u| transform_uri(u, ref_or_rev, shallow))
+            .transpose()?;
+        Ok(Change::Change {
+            id,
+            uri: final_uri,
+            ref_or_rev: None,
+        })
+    } else {
+        Ok(tui_change)
+    }
+}
+
+/// Interactive change with ID already known: show URI input.
+fn change_uri_interactive(
+    editor: &Editor,
+    state: &AppState,
+    inputs: &crate::edit::InputMap,
+    id: &str,
+    ref_or_rev: Option<&str>,
+    shallow: bool,
+) -> Result<Change> {
+    let current_uri = inputs.get(id).map(|i| i.url().trim_matches('"'));
+    let tui_app = tui::App::change_uri(
+        "Change",
+        editor.text(),
+        id,
+        current_uri,
+        state.diff,
+        state.cache_config(),
+    );
+
+    let Some(tui::AppResult::Change(tui_change)) = tui::run(tui_app)? else {
+        return Ok(Change::None);
+    };
+
+    // Apply CLI options to the TUI result
+    if let Change::Change {
+        uri: Some(new_uri), ..
+    } = tui_change
+    {
+        let final_uri = transform_uri(new_uri, ref_or_rev, shallow)?;
+        Ok(Change::Change {
+            id: Some(id.to_string()),
+            uri: Some(final_uri),
+            ref_or_rev: None,
+        })
+    } else {
+        Err(CommandError::NoUri)
+    }
+}
+
+fn change_with_id_and_uri(
+    id: String,
+    uri: String,
+    ref_or_rev: Option<&str>,
+    shallow: bool,
+) -> Result<Change> {
+    let final_uri = transform_uri(uri, ref_or_rev, shallow)?;
+    Ok(Change::Change {
+        id: Some(id),
+        uri: Some(final_uri),
+        ref_or_rev: None,
+    })
+}
+
+/// Change with only URI provided, inferring ID from the flake reference.
+fn change_infer_id(uri: String, ref_or_rev: Option<&str>, shallow: bool) -> Result<Change> {
+    let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(&uri);
+
+    let flake_ref = flake_ref.map_err(|_| CommandError::CouldNotInferId(uri.clone()))?;
+    let flake_ref =
+        apply_uri_options(flake_ref, ref_or_rev, shallow).map_err(CommandError::CouldNotInferId)?;
+
+    let final_uri = if flake_ref.to_string().is_empty() {
+        uri.clone()
+    } else {
+        flake_ref.to_string()
+    };
+
+    let id = flake_ref.id().ok_or(CommandError::CouldNotInferId(uri))?;
+
+    Ok(Change::Change {
+        id: Some(id),
+        uri: Some(final_uri),
+        ref_or_rev: None,
+    })
 }
 
 pub fn update(
@@ -461,11 +562,10 @@ pub fn update(
     init: bool,
 ) -> Result<()> {
     let inputs = flake_edit.list().clone();
-    let mut input_ids: Vec<String> = inputs.keys().cloned().collect();
-    input_ids.sort();
+    let input_ids = sorted_input_ids_owned(&inputs);
 
     if let Some(id) = id {
-        let mut updater = Updater::new(Rope::from_str(&editor.text()), inputs);
+        let mut updater = updater(editor, inputs);
         updater.update_all_inputs_to_latest_semver(Some(id), init);
         let change = updater.get_changes();
         editor.apply_or_diff(&change, state)?;
@@ -491,39 +591,27 @@ pub fn update(
             })
             .collect();
 
-        loop {
-            let select_app = tui::App::select_many(
-                "Update",
-                "Space select, U all, ^D diff",
-                display_items.clone(),
-                state.diff,
-            );
-            let Some(tui::AppResult::MultiSelect(result)) = tui::run(select_app)? else {
-                return Ok(());
-            };
-            let tui::MultiSelectResultData {
-                items: selected,
-                show_diff,
-            } = result;
-            let ids: Vec<String> = selected
-                .iter()
-                .map(|s| s.split(" - ").next().unwrap_or(s).to_string())
-                .collect();
-
-            let mut updater = Updater::new(Rope::from_str(&editor.text()), inputs.clone());
-            for id in &ids {
-                updater.update_all_inputs_to_latest_semver(Some(id.clone()), init);
-            }
-            let change = updater.get_changes();
-
-            match confirm_or_apply(editor, state, "Update", &change, show_diff)? {
-                ConfirmResult::Applied => break,
-                ConfirmResult::Back => continue,
-                ConfirmResult::Cancelled => return Ok(()),
-            }
-        }
+        interactive_multi_select(
+            editor,
+            state,
+            "Update",
+            "Space select, U all, ^D diff",
+            display_items,
+            |selected| {
+                // Strip version suffix from display strings to get IDs
+                let ids: Vec<String> = selected
+                    .iter()
+                    .map(|s| s.split(" - ").next().unwrap_or(s).to_string())
+                    .collect();
+                let mut updater = updater(editor, inputs.clone());
+                for id in &ids {
+                    updater.update_all_inputs_to_latest_semver(Some(id.clone()), init);
+                }
+                updater.get_changes()
+            },
+        )?;
     } else {
-        let mut updater = Updater::new(Rope::from_str(&editor.text()), inputs);
+        let mut updater = updater(editor, inputs);
         for id in &input_ids {
             updater.update_all_inputs_to_latest_semver(Some(id.clone()), init);
         }
@@ -542,8 +630,7 @@ pub fn pin(
     rev: Option<String>,
 ) -> Result<()> {
     let inputs = flake_edit.list().clone();
-    let mut input_ids: Vec<String> = inputs.keys().cloned().collect();
-    input_ids.sort();
+    let input_ids = sorted_input_ids_owned(&inputs);
 
     if let Some(id) = id {
         let lock = FlakeLock::from_default_path().map_err(|_| CommandError::NoLock)?;
@@ -553,7 +640,7 @@ pub fn pin(
             lock.get_rev_by_id(&id)
                 .map_err(|_| CommandError::InputNotFound(id.clone()))?
         };
-        let mut updater = Updater::new(Rope::from_str(&editor.text()), inputs);
+        let mut updater = updater(editor, inputs);
         updater.pin_input_to_ref(&id, &target_rev);
         let change = updater.get_changes();
         editor.apply_or_diff(&change, state)?;
@@ -566,32 +653,22 @@ pub fn pin(
         }
         let lock = FlakeLock::from_default_path().map_err(|_| CommandError::NoLock)?;
 
-        loop {
-            let select_app =
-                tui::App::select_one("Pin", "Select input", input_ids.clone(), state.diff);
-            let Some(tui::AppResult::SingleSelect(result)) = tui::run(select_app)? else {
-                return Ok(());
-            };
-            let tui::SingleSelectResult {
-                item: id,
-                show_diff,
-            } = result;
-            let target_rev = lock
-                .get_rev_by_id(&id)
-                .map_err(|_| CommandError::InputNotFound(id.clone()))?;
-            let mut updater = Updater::new(Rope::from_str(&editor.text()), inputs.clone());
-            updater.pin_input_to_ref(&id, &target_rev);
-            let change = updater.get_changes();
-
-            match confirm_or_apply(editor, state, "Pin", &change, show_diff)? {
-                ConfirmResult::Applied => {
-                    println!("Pinned input: {} to {}", id, target_rev);
-                    break;
-                }
-                ConfirmResult::Back => continue,
-                ConfirmResult::Cancelled => return Ok(()),
-            }
-        }
+        interactive_single_select(
+            editor,
+            state,
+            "Pin",
+            "Select input",
+            input_ids,
+            |id| {
+                let target_rev = lock
+                    .get_rev_by_id(id)
+                    .map_err(|_| CommandError::InputNotFound(id.to_string()))?;
+                let mut updater = updater(editor, inputs.clone());
+                updater.pin_input_to_ref(id, &target_rev);
+                Ok((updater.get_changes(), target_rev))
+            },
+            |id, target_rev| println!("Pinned input: {} to {}", id, target_rev),
+        )?;
     } else {
         return Err(CommandError::NoId);
     }
@@ -606,11 +683,10 @@ pub fn unpin(
     id: Option<String>,
 ) -> Result<()> {
     let inputs = flake_edit.list().clone();
-    let mut input_ids: Vec<String> = inputs.keys().cloned().collect();
-    input_ids.sort();
+    let input_ids = sorted_input_ids_owned(&inputs);
 
     if let Some(id) = id {
-        let mut updater = Updater::new(Rope::from_str(&editor.text()), inputs);
+        let mut updater = updater(editor, inputs);
         updater.unpin_input(&id);
         let change = updater.get_changes();
         editor.apply_or_diff(&change, state)?;
@@ -622,29 +698,19 @@ pub fn unpin(
             return Err(CommandError::NoInputs);
         }
 
-        loop {
-            let select_app =
-                tui::App::select_one("Unpin", "Select input", input_ids.clone(), state.diff);
-            let Some(tui::AppResult::SingleSelect(result)) = tui::run(select_app)? else {
-                return Ok(());
-            };
-            let tui::SingleSelectResult {
-                item: id,
-                show_diff,
-            } = result;
-            let mut updater = Updater::new(Rope::from_str(&editor.text()), inputs.clone());
-            updater.unpin_input(&id);
-            let change = updater.get_changes();
-
-            match confirm_or_apply(editor, state, "Unpin", &change, show_diff)? {
-                ConfirmResult::Applied => {
-                    println!("Unpinned input: {}", id);
-                    break;
-                }
-                ConfirmResult::Back => continue,
-                ConfirmResult::Cancelled => return Ok(()),
-            }
-        }
+        interactive_single_select(
+            editor,
+            state,
+            "Unpin",
+            "Select input",
+            input_ids,
+            |id| {
+                let mut updater = updater(editor, inputs.clone());
+                updater.unpin_input(id);
+                Ok((updater.get_changes(), ()))
+            },
+            |id, ()| println!("Unpinned input: {}", id),
+        )?;
     } else {
         return Err(CommandError::NoId);
     }
@@ -710,20 +776,18 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
         return Ok(());
     };
 
-    let mut to_follow: Vec<(String, String)> = Vec::new();
-
-    for nested in &ctx.nested_inputs {
-        if nested.follows.is_some() {
-            continue;
-        }
-
-        // e.g., "crane.nixpkgs" -> "nixpkgs"
-        let nested_name = nested.path.split('.').next_back().unwrap_or(&nested.path);
-
-        if ctx.top_level_inputs.contains(nested_name) {
-            to_follow.push((nested.path.clone(), nested_name.to_string()));
-        }
-    }
+    // Collect candidates: nested inputs that match a top-level input
+    let to_follow: Vec<(String, String)> = ctx
+        .nested_inputs
+        .iter()
+        .filter(|nested| nested.follows.is_none())
+        .filter_map(|nested| {
+            let nested_name = nested.path.split('.').next_back().unwrap_or(&nested.path);
+            ctx.top_level_inputs
+                .contains(nested_name)
+                .then(|| (nested.path.clone(), nested_name.to_string()))
+        })
+        .collect();
 
     if to_follow.is_empty() {
         println!("No inputs to auto-follow.");
@@ -733,76 +797,53 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
         return Ok(());
     }
 
-    if state.diff {
-        let mut current_text = editor.text();
+    // Apply all changes in memory
+    let mut current_text = editor.text();
+    let mut applied: Vec<(&str, &str)> = Vec::new();
 
-        for (input_path, target) in &to_follow {
-            let change = Change::Follows {
-                input: input_path.clone().into(),
-                target: target.clone(),
-            };
+    for (input_path, target) in &to_follow {
+        let change = Change::Follows {
+            input: input_path.clone().into(),
+            target: target.clone(),
+        };
 
-            let mut temp_flake_edit =
-                FlakeEdit::from_text(&current_text).map_err(CommandError::FlakeEdit)?;
+        let mut temp_flake_edit =
+            FlakeEdit::from_text(&current_text).map_err(CommandError::FlakeEdit)?;
 
-            if let Ok(Some(resulting_change)) = temp_flake_edit.apply_change(change) {
-                current_text = resulting_change;
+        match temp_flake_edit.apply_change(change) {
+            Ok(Some(resulting_text)) => {
+                let root = rnix::Root::parse(&resulting_text);
+                if root.errors().is_empty() {
+                    current_text = resulting_text;
+                    applied.push((input_path, target));
+                } else {
+                    eprintln!("Error applying follows for {}: parse errors", input_path);
+                }
             }
+            Ok(None) => eprintln!("Could not create follows for {}", input_path),
+            Err(e) => eprintln!("Error applying follows for {}: {}", input_path, e),
         }
+    }
 
-        let original_text = editor.text();
-        let diff = crate::diff::Diff::new(&original_text, &current_text);
+    if applied.is_empty() {
+        return Ok(());
+    }
+
+    if state.diff {
+        let original = editor.text();
+        let diff = crate::diff::Diff::new(&original, &current_text);
         diff.compare();
     } else {
-        let flake_path = editor.path().clone();
-        let mut applied_count = 0;
-
-        for (input_path, target) in &to_follow {
-            let change = Change::Follows {
-                input: input_path.clone().into(),
-                target: target.clone(),
-            };
-
-            // Re-read from disk to get fresh state after previous writes
-            let fresh_editor = Editor::from_path(flake_path.clone())?;
-            let mut fresh_flake_edit = fresh_editor
-                .create_flake_edit()
-                .map_err(CommandError::FlakeEdit)?;
-
-            match fresh_flake_edit.apply_change(change) {
-                Ok(Some(resulting_change)) => {
-                    let root = rnix::Root::parse(&resulting_change);
-                    let errors = root.errors();
-                    if !errors.is_empty() {
-                        eprintln!("Error applying follows for {}: parse errors", input_path);
-                        for e in errors {
-                            tracing::error!("Error: {e}");
-                        }
-                        continue;
-                    }
-
-                    fresh_editor.apply_or_diff(&resulting_change, state)?;
-                    applied_count += 1;
-
-                    let nested_name = input_path.split('.').next_back().unwrap_or(input_path);
-                    let parent = input_path.split('.').next().unwrap_or(input_path);
-                    println!(
-                        "Added follows: {}.inputs.{}.follows = \"{}\"",
-                        parent, nested_name, target
-                    );
-                }
-                Ok(None) => {
-                    eprintln!("Could not create follows for {}", input_path);
-                }
-                Err(e) => {
-                    eprintln!("Error applying follows for {}: {}", input_path, e);
-                }
-            }
+        editor.apply_or_diff(&current_text, state)?;
+        for (input_path, target) in &applied {
+            let nested_name = input_path.split('.').next_back().unwrap_or(input_path);
+            let parent = input_path.split('.').next().unwrap_or(input_path);
+            println!(
+                "Added follows: {}.inputs.{}.follows = \"{}\"",
+                parent, nested_name, target
+            );
         }
-
-        if applied_count > 0 {
-            println!("\nAuto-followed {} input(s).", applied_count);
-        }
+        println!("\nAuto-followed {} input(s).", applied.len());
     }
 
     Ok(())
@@ -831,43 +872,22 @@ fn apply_change(
             editor.apply_or_diff(&resulting_change, state)?;
 
             if !state.diff {
-                match &change {
-                    Change::Add { id, uri, .. } => {
-                        // Cache the entry for future completions
-                        if let (Some(id), Some(uri)) = (id, uri) {
-                            let mut cache = crate::cache::Cache::load();
-                            cache.add_entry(id.clone(), uri.clone());
-                            if let Err(e) = cache.commit() {
-                                tracing::debug!("Could not write to cache: {}", e);
-                            }
-                        }
-                        println!(
-                            "Added input: {} = {}",
-                            id.as_deref().unwrap_or("?"),
-                            uri.as_deref().unwrap_or("?")
-                        );
+                // Cache added entries for future completions
+                if let Change::Add {
+                    id: Some(id),
+                    uri: Some(uri),
+                    ..
+                } = &change
+                {
+                    let mut cache = crate::cache::Cache::load();
+                    cache.add_entry(id.clone(), uri.clone());
+                    if let Err(e) = cache.commit() {
+                        tracing::debug!("Could not write to cache: {}", e);
                     }
-                    Change::Remove { ids } => {
-                        for id in ids {
-                            println!("Removed input: {}", id);
-                        }
-                    }
-                    Change::Change { id, uri, .. } => {
-                        println!(
-                            "Changed input: {} -> {}",
-                            id.as_deref().unwrap_or("?"),
-                            uri.as_deref().unwrap_or("?")
-                        );
-                    }
-                    Change::Follows { input, target } => {
-                        println!(
-                            "Added follows: {}.inputs.{}.follows = \"{}\"",
-                            input.input(),
-                            input.follows().unwrap_or("?"),
-                            target
-                        );
-                    }
-                    _ => {}
+                }
+
+                for msg in change.success_messages() {
+                    println!("{}", msg);
                 }
             }
         }

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use crate::cli::{CliArgs, Command, ListFormat};
-use crate::edit::InputMap;
+use crate::edit::{InputMap, sorted_input_ids};
 use crate::input::Follows;
 use crate::tui;
 
@@ -47,11 +47,14 @@ pub fn run(args: CliArgs) -> Result<()> {
     let mut flake_edit = editor.create_flake_edit()?;
     let interactive = tui::is_interactive(args.non_interactive());
 
+    let no_cache = args.no_cache();
     let state = AppState::new(editor.text(), flake_path)
         .with_diff(args.diff())
         .with_no_lock(args.no_lock())
         .with_interactive(interactive)
-        .with_lock_file(args.lock_file().map(PathBuf::from));
+        .with_lock_file(args.lock_file().map(PathBuf::from))
+        .with_no_cache(no_cache)
+        .with_cache_path(args.cache().map(PathBuf::from));
 
     // Dispatch to command
     match args.subcommand() {
@@ -68,9 +71,11 @@ pub fn run(args: CliArgs) -> Result<()> {
                 &state,
                 id.clone(),
                 uri.clone(),
-                ref_or_rev.as_deref(),
-                *no_flake,
-                *shallow,
+                commands::UriOptions {
+                    ref_or_rev: ref_or_rev.as_deref(),
+                    shallow: *shallow,
+                    no_flake: *no_flake,
+                },
             )?;
         }
 
@@ -142,6 +147,8 @@ pub fn run(args: CliArgs) -> Result<()> {
                 }
                 CompletionMode::Change => {
                     let inputs = flake_edit.list();
+                    // Cache inputs while we have them
+                    crate::cache::populate_cache_from_input_map(inputs, no_cache);
                     for id in inputs.keys() {
                         println!("{}", id);
                     }
@@ -161,6 +168,11 @@ pub fn run(args: CliArgs) -> Result<()> {
         }
     }
 
+    // Cache any inputs we've seen during this command.
+    // This helps build up the completion cache over time as users interact
+    // with different flakes, not just when they explicitly add inputs.
+    crate::cache::populate_cache_from_input_map(flake_edit.curr_list(), no_cache);
+
     Ok(())
 }
 
@@ -178,9 +190,7 @@ pub fn list_inputs(inputs: &InputMap, format: &ListFormat) {
 
 fn list_simple(inputs: &InputMap) {
     let mut buf = String::new();
-    let mut keys: Vec<_> = inputs.keys().collect();
-    keys.sort();
-    for key in keys {
+    for key in sorted_input_ids(inputs) {
         let input = &inputs[key];
         if !buf.is_empty() {
             buf.push('\n');
@@ -207,9 +217,7 @@ fn list_json(inputs: &InputMap) {
 
 fn list_toplevel(inputs: &InputMap) {
     let mut buf = String::new();
-    let mut keys: Vec<_> = inputs.keys().collect();
-    keys.sort();
-    for key in keys {
+    for key in sorted_input_ids(inputs) {
         if !buf.is_empty() {
             buf.push('\n');
         }
@@ -225,9 +233,7 @@ fn list_raw(inputs: &InputMap) {
 
 fn list_detailed(inputs: &InputMap) {
     let mut buf = String::new();
-    let mut keys: Vec<_> = inputs.keys().collect();
-    keys.sort();
-    for key in keys {
+    for key in sorted_input_ids(inputs) {
         let input = &inputs[key];
         if !buf.is_empty() {
             buf.push('\n');

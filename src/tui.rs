@@ -2,6 +2,7 @@ use std::io::{self, IsTerminal};
 
 pub mod app;
 mod backend;
+pub mod completions;
 pub mod components;
 mod helpers;
 mod run;
@@ -9,6 +10,7 @@ mod style;
 mod view;
 pub mod workflow;
 
+pub use crate::cache::CacheConfig;
 pub use app::App;
 pub use run::run;
 pub use workflow::{AppResult, ConfirmResultAction, MultiSelectResultData, SingleSelectResult};

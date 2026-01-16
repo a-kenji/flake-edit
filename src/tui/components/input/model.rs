@@ -447,15 +447,8 @@ impl InputState {
     pub fn handle(&mut self, action: InputAction) -> Option<InputResult> {
         match action {
             InputAction::Submit => {
-                // If a completion is selected, accept it instead of submitting
-                if self
-                    .completion
-                    .as_ref()
-                    .is_some_and(|c| c.selected.is_some())
-                {
-                    self.accept_completion();
-                    return None;
-                }
+                // Enter always submits the user's typed input.
+                // Use Tab to accept a completion instead.
                 if !self.input.is_empty() {
                     return Some(InputResult::Submit(self.input.clone()));
                 }

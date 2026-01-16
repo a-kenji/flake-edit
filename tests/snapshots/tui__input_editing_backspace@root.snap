@@ -1,6 +1,7 @@
 ---
 source: tests/tui.rs
-expression: "snapshot(&mut terminal, &app)"
+description: "add github:nixos/nixpkgs → Backspace → Backspace → Backspace"
+expression: "snapshot(&mut terminal, session.app())"
 ---
 Buffer {
     area: Rect { x: 0, y: 0, width: 80, height: 4 },

@@ -1,0 +1,39 @@
+{
+  "entries": {
+    "nixpkgs.github:NixOS/nixpkgs": {
+      "id": "nixpkgs",
+      "uri": "github:NixOS/nixpkgs",
+      "hit": 5
+    },
+    "home-manager.github:nix-community/home-manager": {
+      "id": "home-manager",
+      "uri": "github:nix-community/home-manager",
+      "hit": 3
+    },
+    "treefmt-nix.github:numtide/treefmt-nix": {
+      "id": "treefmt-nix",
+      "uri": "github:numtide/treefmt-nix",
+      "hit": 2
+    },
+    "treefmt-nix.path:/home/user/dev/treefmt-nix": {
+      "id": "treefmt-nix",
+      "uri": "path:/home/user/dev/treefmt-nix",
+      "hit": 1
+    },
+    "flake-utils.github:numtide/flake-utils": {
+      "id": "flake-utils",
+      "uri": "github:numtide/flake-utils",
+      "hit": 4
+    },
+    "rust-overlay.github:oxalica/rust-overlay": {
+      "id": "rust-overlay",
+      "uri": "github:oxalica/rust-overlay",
+      "hit": 2
+    },
+    "disko.github:nix-community/disko": {
+      "id": "disko",
+      "uri": "github:nix-community/disko",
+      "hit": 1
+    }
+  }
+}
