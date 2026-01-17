@@ -16,7 +16,6 @@ info:
 success: true
 exit_code: 0
 ----- stdout -----
-No inputs to auto-follow.
-All nested inputs either already follow something or have no matching top-level input.
+All inputs are already deduplicated.
 
 ----- stderr -----
