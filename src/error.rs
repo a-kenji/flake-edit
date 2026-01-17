@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+use crate::validate::ValidationError;
 use crate::walk::WalkerError;
 
 #[derive(Debug, Error)]
@@ -22,4 +23,14 @@ pub enum FlakeEditError {
         "Input '{0}' not found in the flake.\n\nTo add it:\n  flake-edit add {0} <flakeref>\n\nTo see all current inputs: flake-edit list"
     )]
     InputNotFound(String),
+    #[error("Validation error in flake.nix:\n{}", format_validation_errors(.0))]
+    Validation(Vec<ValidationError>),
+}
+
+fn format_validation_errors(errors: &[ValidationError]) -> String {
+    errors
+        .iter()
+        .map(|e| format!("  - {}", e))
+        .collect::<Vec<_>>()
+        .join("\n")
 }

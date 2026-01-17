@@ -24,11 +24,11 @@ const FIXTURE_MARKER: &str = "/tests/fixtures/";
 /// Add redaction to filter environment-dependent fixture paths in args metadata.
 fn path_redactions(settings: &mut insta::Settings) {
     settings.add_dynamic_redaction(".args[]", |value, _path| {
-        if let Some(s) = value.as_str() {
-            if let Some(idx) = s.find(FIXTURE_MARKER) {
-                let rest = &s[idx + FIXTURE_MARKER.len()..];
-                return Content::from(format!("[FIXTURES]/{rest}"));
-            }
+        if let Some(s) = value.as_str()
+            && let Some(idx) = s.find(FIXTURE_MARKER)
+        {
+            let rest = &s[idx + FIXTURE_MARKER.len()..];
+            return Content::from(format!("[FIXTURES]/{rest}"));
         }
         value
     });

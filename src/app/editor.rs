@@ -8,6 +8,7 @@ use ropey::Rope;
 use crate::diff::Diff;
 use crate::edit::FlakeEdit;
 use crate::error::FlakeEditError;
+use crate::validate;
 
 use super::state::AppState;
 
@@ -92,7 +93,14 @@ impl Editor {
     }
 
     /// Apply changes to the flake file, or show diff if in diff mode.
-    pub fn apply_or_diff(&self, new_content: &str, state: &AppState) -> io::Result<()> {
+    ///
+    /// Validates the new content for duplicate attributes before writing.
+    pub fn apply_or_diff(&self, new_content: &str, state: &AppState) -> Result<(), FlakeEditError> {
+        let validation = validate::validate(new_content);
+        if validation.has_errors() {
+            return Err(FlakeEditError::Validation(validation.errors));
+        }
+
         if state.diff {
             let old = self.text();
             let diff = Diff::new(&old, new_content);

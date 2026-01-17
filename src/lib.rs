@@ -16,5 +16,6 @@ pub mod state;
 pub mod tui;
 pub mod update;
 pub mod uri;
+pub mod validate;
 pub mod version;
 pub mod walk;
