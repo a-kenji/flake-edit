@@ -40,8 +40,8 @@ pub struct Node {
 }
 
 impl Node {
-    fn get_rev(&self) -> String {
-        self.locked.clone().unwrap().get_rev().to_string()
+    fn rev(&self) -> String {
+        self.locked.clone().unwrap().rev().to_string()
     }
 }
 
@@ -53,7 +53,7 @@ pub enum Input {
 }
 
 impl Input {
-    fn get_id(&self) -> String {
+    fn id(&self) -> String {
         match self {
             Input::Direct(id) => id.to_string(),
             Input::Indirect(_) => todo!(),
@@ -73,7 +73,7 @@ pub struct Locked {
 }
 
 impl Locked {
-    fn get_rev(&self) -> String {
+    fn rev(&self) -> String {
         self.rev.clone().unwrap()
     }
 }
@@ -110,7 +110,7 @@ impl FlakeLock {
         &self.root
     }
     /// Query the lock file for a specific rev.
-    pub fn get_rev_by_id(&self, id: &str) -> Result<String, FlakeEditError> {
+    pub fn rev_for(&self, id: &str) -> Result<String, FlakeEditError> {
         let root = self.root();
         let resolved_root = self
             .nodes
@@ -123,25 +123,25 @@ impl FlakeLock {
         let resolved_id = binding
             .get(id)
             .ok_or_else(|| FlakeEditError::LockError("Could not resolve id.".into()))?;
-        let id = resolved_id.get_id();
+        let id = resolved_id.id();
         let node = self
             .nodes
             .get(&id)
             .ok_or_else(|| FlakeEditError::LockError("Could not find node with id.".into()))?;
-        Ok(node.get_rev())
+        Ok(node.rev())
     }
 
     /// Get all nested input paths for shell completions.
     /// Returns paths like "naersk.nixpkgs", "naersk.flake-utils", etc.
-    pub fn get_nested_input_paths(&self) -> Vec<String> {
-        self.get_nested_inputs()
+    pub fn nested_input_paths(&self) -> Vec<String> {
+        self.nested_inputs()
             .into_iter()
             .map(|input| input.path)
             .collect()
     }
 
     /// Get all nested inputs with their existing follows targets.
-    pub fn get_nested_inputs(&self) -> Vec<NestedInput> {
+    pub fn nested_inputs(&self) -> Vec<NestedInput> {
         let mut inputs = Vec::new();
 
         // Get the root node
@@ -367,7 +367,7 @@ mod tests {
         assert_eq!(
             "c00d587b1a1afbf200b1d8f0b0e4ba9deb1c7f0e",
             parsed_lock
-                .get_rev_by_id("nixpkgs")
+                .rev_for("nixpkgs")
                 .expect("Id: nixpkgs is in the lockfile.")
         );
     }
@@ -384,7 +384,7 @@ mod tests {
         assert_eq!(
             "ad0b5eed1b6031efaed382844806550c3dcb4206",
             parsed_lock
-                .get_rev_by_id("nixpkgs")
+                .rev_for("nixpkgs")
                 .expect("Id: nixpkgs is in the lockfile.")
         );
     }

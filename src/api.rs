@@ -52,12 +52,25 @@ impl ForgeClient {
         }
     }
 
-    fn make_headers() -> HeaderMap {
+    fn base_headers() -> HeaderMap {
         let mut headers = HeaderMap::new();
         if let Ok(user_agent) = HeaderValue::from_str("flake-edit") {
             headers.insert(USER_AGENT, user_agent);
         }
         headers
+    }
+
+    /// Create headers with optional Bearer token authentication for the given domain.
+    fn auth_headers(domain: &str) -> Result<HeaderMap, ApiError> {
+        let mut headers = Self::base_headers();
+        if let Some(token) = get_forge_token(domain) {
+            tracing::debug!("Found token for {}", domain);
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {token}"))?,
+            );
+        }
+        Ok(headers)
     }
 
     pub fn detect_forge_type(&self, domain: &str) -> ForgeType {
@@ -66,7 +79,7 @@ impl ForgeClient {
         }
 
         tracing::debug!("Attempting to detect forge type for domain: {}", domain);
-        let headers = Self::make_headers();
+        let headers = Self::base_headers();
 
         // Try both HTTPS and HTTP for each endpoint
         for scheme in ["https", "http"] {
@@ -106,15 +119,7 @@ impl ForgeClient {
     }
 
     pub fn query_github_tags(&self, repo: &str, owner: &str) -> Result<IntermediaryTags, ApiError> {
-        let mut headers = Self::make_headers();
-        if let Some(token) = get_forge_token("github.com") {
-            tracing::debug!("Found github token.");
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {token}"))?,
-            );
-        }
-
+        let headers = Self::auth_headers("github.com")?;
         let body = self.get(
             &format!("https://api.github.com/repos/{}/{}/tags", owner, repo),
             headers,
@@ -127,14 +132,7 @@ impl ForgeClient {
 
     /// Check if a specific branch exists (returns true/false, no error on 404)
     pub fn branch_exists_github(&self, repo: &str, owner: &str, branch: &str) -> bool {
-        let mut headers = Self::make_headers();
-        if let Some(token) = get_forge_token("github.com") {
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
-            );
-        }
-
+        let headers = Self::auth_headers("github.com").unwrap_or_else(|_| Self::base_headers());
         let url = format!(
             "https://api.github.com/repos/{}/{}/branches/{}",
             owner, repo, branch
@@ -145,14 +143,7 @@ impl ForgeClient {
 
     /// Check if a specific branch exists on Gitea/Forgejo
     pub fn branch_exists_gitea(&self, repo: &str, owner: &str, domain: &str, branch: &str) -> bool {
-        let mut headers = Self::make_headers();
-        if let Some(token) = get_forge_token(domain) {
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
-            );
-        }
-
+        let headers = Self::auth_headers(domain).unwrap_or_else(|_| Self::base_headers());
         for scheme in ["https", "http"] {
             let url = format!(
                 "{}://{}/api/v1/repos/{}/{}/branches/{}",
@@ -171,15 +162,7 @@ impl ForgeClient {
         owner: &str,
         domain: &str,
     ) -> Result<IntermediaryTags, ApiError> {
-        let mut headers = Self::make_headers();
-
-        if let Some(token) = get_forge_token(domain) {
-            tracing::debug!("Found token for {}", domain);
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {token}"))?,
-            );
-        }
+        let headers = Self::auth_headers(domain)?;
 
         // Try HTTPS first, then HTTP
         for scheme in ["https", "http"] {
@@ -205,14 +188,7 @@ impl ForgeClient {
         repo: &str,
         owner: &str,
     ) -> Result<IntermediaryBranches, ApiError> {
-        let mut headers = Self::make_headers();
-        if let Some(token) = get_forge_token("github.com") {
-            tracing::debug!("Found github token.");
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {token}"))?,
-            );
-        }
+        let headers = Self::auth_headers("github.com")?;
 
         let mut all_branches = Vec::new();
         let mut page = 1;
@@ -251,15 +227,7 @@ impl ForgeClient {
         owner: &str,
         domain: &str,
     ) -> Result<IntermediaryBranches, ApiError> {
-        let mut headers = Self::make_headers();
-
-        if let Some(token) = get_forge_token(domain) {
-            tracing::debug!("Found token for {}", domain);
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {token}"))?,
-            );
-        }
+        let headers = Self::auth_headers(domain)?;
 
         let mut all_branches = Vec::new();
         let mut page = 1;

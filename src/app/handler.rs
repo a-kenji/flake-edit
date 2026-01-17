@@ -157,7 +157,7 @@ pub fn run(args: CliArgs) -> Result<()> {
                 CompletionMode::Follow => {
                     // Get nested input paths from lockfile for follow completions
                     if let Ok(lock) = crate::lock::FlakeLock::from_default_path() {
-                        for path in lock.get_nested_input_paths() {
+                        for path in lock.nested_input_paths() {
                             println!("{}", path);
                         }
                     }

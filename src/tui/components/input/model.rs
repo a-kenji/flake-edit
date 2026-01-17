@@ -375,7 +375,7 @@ impl InputState {
     // Completion accessors for the view
 
     /// Whether completions are enabled and visible with items to show
-    pub fn completions_visible(&self) -> bool {
+    pub fn has_visible_completions(&self) -> bool {
         self.completion
             .as_ref()
             .is_some_and(|c| c.visible && !c.filtered.is_empty())
@@ -395,12 +395,12 @@ impl InputState {
     }
 
     /// Get the currently selected completion index (absolute)
-    pub fn completion_selected(&self) -> Option<usize> {
+    pub fn selected_index(&self) -> Option<usize> {
         self.completion.as_ref().and_then(|c| c.selected)
     }
 
     /// Get the selected index relative to the visible window (for rendering)
-    pub fn visible_selected(&self) -> Option<usize> {
+    pub fn visible_selection_index(&self) -> Option<usize> {
         self.completion
             .as_ref()
             .and_then(|c| c.selected.map(|sel| sel.saturating_sub(c.scroll_offset)))
@@ -455,7 +455,7 @@ impl InputState {
             }
             InputAction::Cancel => {
                 // If completions are visible, hide them first
-                if self.completions_visible() {
+                if self.has_visible_completions() {
                     if let Some(ref mut comp) = self.completion {
                         comp.hide();
                     }
@@ -600,13 +600,13 @@ mod tests {
         let mut state = InputState::with_completions(None, items);
 
         // No completions visible when input is empty
-        assert!(!state.completions_visible());
+        assert!(!state.has_visible_completions());
 
         // Type "git" - should show matches (limited to visible window of 2)
         state.handle(InputAction::Insert('g'));
         state.handle(InputAction::Insert('i'));
         state.handle(InputAction::Insert('t'));
-        assert!(state.completions_visible());
+        assert!(state.has_visible_completions());
         // Only 2 visible at once, but all 3 match
         assert_eq!(state.filtered_completions().len(), 2);
 
@@ -614,13 +614,13 @@ mod tests {
         state.handle(InputAction::Insert('h'));
         state.handle(InputAction::Insert('u'));
         state.handle(InputAction::Insert('b'));
-        assert!(state.completions_visible());
+        assert!(state.has_visible_completions());
         assert_eq!(state.filtered_completions().len(), 1);
         assert_eq!(state.filtered_completions()[0].text, "github:");
 
         // Type "z" -> "githubz" - no matches
         state.handle(InputAction::Insert('z'));
-        assert!(!state.completions_visible());
+        assert!(!state.has_visible_completions());
     }
 
     #[test]
@@ -631,25 +631,25 @@ mod tests {
 
         // Type "a" - all items match fuzzy
         state.handle(InputAction::Insert('a'));
-        assert!(state.completions_visible());
+        assert!(state.has_visible_completions());
         // First item auto-selected
-        assert_eq!(state.completion_selected(), Some(0));
+        assert_eq!(state.selected_index(), Some(0));
 
         // Down moves to second
         state.handle(InputAction::CompletionDown);
-        assert_eq!(state.completion_selected(), Some(1));
+        assert_eq!(state.selected_index(), Some(1));
 
         // Up moves back to first
         state.handle(InputAction::CompletionUp);
-        assert_eq!(state.completion_selected(), Some(0));
+        assert_eq!(state.selected_index(), Some(0));
 
         // Up from first wraps to last
         state.handle(InputAction::CompletionUp);
-        assert_eq!(state.completion_selected(), Some(2));
+        assert_eq!(state.selected_index(), Some(2));
 
         // Down from last wraps to first
         state.handle(InputAction::CompletionDown);
-        assert_eq!(state.completion_selected(), Some(0));
+        assert_eq!(state.selected_index(), Some(0));
     }
 
     #[test]
@@ -659,13 +659,13 @@ mod tests {
 
         // Type "g" to show completions - first item is auto-selected
         state.handle(InputAction::Insert('g'));
-        assert!(state.completions_visible());
-        assert_eq!(state.completion_selected(), Some(0));
+        assert!(state.has_visible_completions());
+        assert_eq!(state.selected_index(), Some(0));
 
         // Accept with Tab (no need to press Down, first item already selected)
         state.handle(InputAction::Accept);
         assert_eq!(state.text(), "github:");
-        assert!(!state.completions_visible());
+        assert!(!state.has_visible_completions());
     }
 
     #[test]
@@ -675,12 +675,12 @@ mod tests {
 
         // Type to show completions
         state.handle(InputAction::Insert('g'));
-        assert!(state.completions_visible());
+        assert!(state.has_visible_completions());
 
         // Cancel should hide completions, not return Cancel result
         let result = state.handle(InputAction::Cancel);
         assert_eq!(result, None);
-        assert!(!state.completions_visible());
+        assert!(!state.has_visible_completions());
 
         // Cancel again should return Cancel result
         let result = state.handle(InputAction::Cancel);
@@ -698,14 +698,14 @@ mod tests {
         }
 
         // Should show query param completions
-        assert!(state.completions_visible());
+        assert!(state.has_visible_completions());
         let completions = state.filtered_completions();
         assert!(!completions.is_empty());
         assert!(completions.iter().any(|c| c.text.contains("ref")));
 
         // Type "r" to filter to ref/rev
         state.handle(InputAction::Insert('r'));
-        assert!(state.completions_visible());
+        assert!(state.has_visible_completions());
         let completions = state.filtered_completions();
         assert!(completions.iter().all(|c| c.text.contains("r")));
 
@@ -716,7 +716,7 @@ mod tests {
         // Should have appended the param
         assert!(state.text().starts_with("github:nixos/nixpkgs?"));
         assert!(state.text().contains("="));
-        assert!(!state.completions_visible());
+        assert!(!state.has_visible_completions());
     }
 
     #[test]
@@ -727,7 +727,7 @@ mod tests {
         // Type just "?" without a URI - should not show query params
         state.handle(InputAction::Insert('?'));
         // Should show URI completions (none match "?") so not visible
-        assert!(!state.completions_visible());
+        assert!(!state.has_visible_completions());
     }
 
     #[test]
@@ -742,7 +742,7 @@ mod tests {
         // Type "vm" - should fuzzy match "github:mic92/vmsh"
         state.handle(InputAction::Insert('v'));
         state.handle(InputAction::Insert('m'));
-        assert!(state.completions_visible());
+        assert!(state.has_visible_completions());
         let completions = state.filtered_completions();
         assert!(completions.iter().any(|c| c.text.contains("vmsh")));
 
@@ -758,7 +758,7 @@ mod tests {
         for c in "nix".chars() {
             state2.handle(InputAction::Insert(c));
         }
-        assert!(state2.completions_visible());
+        assert!(state2.has_visible_completions());
         let completions = state2.filtered_completions();
         assert!(completions.iter().any(|c| c.text.contains("nixpkgs")));
     }
@@ -776,41 +776,41 @@ mod tests {
 
         // Type to show all items
         state.handle(InputAction::Insert('i'));
-        assert!(state.completions_visible());
+        assert!(state.has_visible_completions());
 
         // Should show first 2 items (scroll_offset = 0)
         assert_eq!(state.filtered_completions().len(), 2);
         assert_eq!(state.filtered_completions()[0].text, "item0");
         assert_eq!(state.filtered_completions()[1].text, "item1");
-        assert_eq!(state.visible_selected(), Some(0));
+        assert_eq!(state.visible_selection_index(), Some(0));
 
         // Navigate down once - still in first window
         state.handle(InputAction::CompletionDown);
-        assert_eq!(state.completion_selected(), Some(1));
-        assert_eq!(state.visible_selected(), Some(1));
+        assert_eq!(state.selected_index(), Some(1));
+        assert_eq!(state.visible_selection_index(), Some(1));
         assert_eq!(state.filtered_completions()[0].text, "item0");
 
         // Navigate down one more - should scroll
         state.handle(InputAction::CompletionDown);
-        assert_eq!(state.completion_selected(), Some(2));
+        assert_eq!(state.selected_index(), Some(2));
         // Window should have scrolled
-        assert_eq!(state.visible_selected(), Some(1)); // relative to scroll offset
+        assert_eq!(state.visible_selection_index(), Some(1)); // relative to scroll offset
         assert_eq!(state.filtered_completions()[0].text, "item1"); // scrolled by 1
 
         // Navigate down more
         state.handle(InputAction::CompletionDown);
-        assert_eq!(state.completion_selected(), Some(3));
+        assert_eq!(state.selected_index(), Some(3));
         assert_eq!(state.filtered_completions()[0].text, "item2"); // scrolled so last 2 visible
 
         // Navigate down wraps to top
         state.handle(InputAction::CompletionDown);
-        assert_eq!(state.completion_selected(), Some(0));
-        assert_eq!(state.visible_selected(), Some(0));
+        assert_eq!(state.selected_index(), Some(0));
+        assert_eq!(state.visible_selection_index(), Some(0));
         assert_eq!(state.filtered_completions()[0].text, "item0"); // scroll reset to top
 
         // Navigate up from top wraps to bottom
         state.handle(InputAction::CompletionUp);
-        assert_eq!(state.completion_selected(), Some(3));
+        assert_eq!(state.selected_index(), Some(3));
         // Scroll should be at end (items 2-3 visible)
         assert_eq!(state.filtered_completions()[0].text, "item2");
     }
