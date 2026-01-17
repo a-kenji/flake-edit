@@ -820,10 +820,7 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
         .collect();
 
     if to_follow.is_empty() {
-        println!("No inputs to auto-follow.");
-        println!(
-            "All nested inputs either already follow something or have no matching top-level input."
-        );
+        println!("All inputs are already deduplicated.");
         return Ok(());
     }
 
