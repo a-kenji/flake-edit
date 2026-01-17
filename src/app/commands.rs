@@ -862,15 +862,20 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
         diff.compare();
     } else {
         editor.apply_or_diff(&current_text, state)?;
+        println!(
+            "Deduplicated {} {}.",
+            applied.len(),
+            if applied.len() == 1 {
+                "input"
+            } else {
+                "inputs"
+            }
+        );
         for (input_path, target) in &applied {
             let nested_name = input_path.split('.').next_back().unwrap_or(input_path);
             let parent = input_path.split('.').next().unwrap_or(input_path);
-            println!(
-                "Added follows: {}.inputs.{}.follows = \"{}\"",
-                parent, nested_name, target
-            );
+            println!("  {}.{} → {}", parent, nested_name, target);
         }
-        println!("\nAuto-followed {} input(s).", applied.len());
     }
 
     Ok(())
