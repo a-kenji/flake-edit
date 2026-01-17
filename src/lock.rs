@@ -53,10 +53,13 @@ pub enum Input {
 }
 
 impl Input {
+    /// Get the target node name for this input.
+    /// For Direct inputs, returns the node name directly.
+    /// For Indirect inputs (follows paths), returns the final target in the path.
     fn id(&self) -> String {
         match self {
             Input::Direct(id) => id.to_string(),
-            Input::Indirect(_) => todo!(),
+            Input::Indirect(path) => path.last().cloned().unwrap_or_default(),
         }
     }
 }
@@ -392,5 +395,12 @@ mod tests {
     fn parse_minimal_independent_lock_nixpkgs_overridden() {
         let minimal_lock = minimal_independent_lock_nixpkgs_overridden();
         FlakeLock::read_from_str(minimal_lock).expect("Should be parsed correctly.");
+    }
+
+    #[test]
+    fn input_indirect_id() {
+        // Follows path like ["nixpkgs"] should return "nixpkgs"
+        let input = Input::Indirect(vec!["nixpkgs".to_string()]);
+        assert_eq!("nixpkgs", input.id());
     }
 }

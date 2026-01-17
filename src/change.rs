@@ -13,9 +13,6 @@ pub enum Change {
     Remove {
         ids: Vec<ChangeId>,
     },
-    Pin {
-        id: String,
-    },
     Change {
         id: Option<String>,
         uri: Option<String>,
@@ -91,7 +88,6 @@ impl Change {
             Change::Add { id, .. } => id.clone().map(|id| id.into()),
             Change::Remove { ids } => ids.first().cloned(),
             Change::Change { id, .. } => id.clone().map(|id| id.into()),
-            Change::Pin { id } => Some(id.clone().into()),
             Change::Follows { input, .. } => Some(input.clone()),
         }
     }
@@ -159,7 +155,7 @@ impl Change {
                     target
                 )]
             }
-            Change::None | Change::Pin { .. } => vec![],
+            Change::None => vec![],
         }
     }
 }
