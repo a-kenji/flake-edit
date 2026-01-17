@@ -1,17 +1,17 @@
-_: {
+{ self, ... }:
+{
   imports = [
     ./forgejo-test.nix
   ];
 
   perSystem =
-    { self', ... }:
+    { pkgs, ... }:
     {
       checks = {
-        inherit (self'.packages)
+        inherit ((pkgs.callPackage ./flake-edit.nix { inherit self; }))
           flake-edit
           cargoArtifacts
           cargoClippy
-          # cargoDeny
           cargoDoc
           cargoTest
           cargoTarpaulin

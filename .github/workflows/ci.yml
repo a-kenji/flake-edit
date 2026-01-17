@@ -30,7 +30,7 @@ jobs:
         with:
           diagnostic-endpoint: ""
       - name: "build dependencies"
-        run: nix build .#cargoArtifacts -Lvv --no-update-lock-file
+        run: nix build .#checks.x86_64-linux.cargoArtifacts -Lvv --no-update-lock-file
   formatting:
     runs-on: ubuntu-latest
     environment: cachix
@@ -71,7 +71,7 @@ jobs:
         with:
           diagnostic-endpoint: ""
       - name: "run tests"
-        run: nix build .#cargoTest -Lvv --no-update-lock-file
+        run: nix build .#checks.x86_64-linux.cargoTest -Lvv --no-update-lock-file
   docs:
     runs-on: ubuntu-latest
     environment: cachix
@@ -92,7 +92,7 @@ jobs:
         with:
           diagnostic-endpoint: ""
       - name: "build cargo documentation"
-        run: nix build .#cargoDoc -Lvv --no-update-lock-file
+        run: nix build .#checks.x86_64-linux.cargoDoc -Lvv --no-update-lock-file
   clippy:
     runs-on: ubuntu-latest
     environment: cachix
@@ -113,7 +113,7 @@ jobs:
         with:
           diagnostic-endpoint: ""
       - name: "run cargo clippy"
-        run: nix build .#cargoClippy -Lvv --no-update-lock-file
+        run: nix build .#checks.x86_64-linux.cargoClippy -Lvv --no-update-lock-file
   flake-edit:
     runs-on: ubuntu-latest
     environment: cachix
