@@ -1,0 +1,22 @@
+---
+source: tests/cli.rs
+assertion_line: 412
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/centerpiece-lock-outdated.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/centerpiece-lock-outdated.flake.lock"
+    - "--diff"
+    - follow
+    - "--auto"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+All inputs are already deduplicated.
+
+----- stderr -----

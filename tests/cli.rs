@@ -397,6 +397,7 @@ fn test_follow_nonexistent(#[case] fixture: &str, #[case] input: &str, #[case] t
 /// Test the follow --auto command to automatically follow matching inputs
 #[rstest]
 #[case("centerpiece")] // Two nested nixpkgs inputs that can follow top-level nixpkgs
+#[case("centerpiece-lock-outdated")] // Follows already in flake.nix but lockfile is outdated
 #[case("first_nested_node")] // naersk.nixpkgs already follows, utils.systems has no match
 #[case("flat_nested_flat")] // poetry2nix follows already set, no other matches
 #[case("root")] // Has follows in flake.nix but lockfile shows direct references

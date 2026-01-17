@@ -800,6 +800,17 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
                 return None;
             }
 
+            // Skip if follows already exists in flake.nix (lockfile may be outdated)
+            if let Some(parent_input) = ctx.inputs.get(parent) {
+                let already_follows = parent_input.follows().iter().any(|f| match f {
+                    crate::input::Follows::Indirect(from, _)
+                    | crate::input::Follows::Direct(from, _) => from == nested_name,
+                });
+                if already_follows {
+                    return None;
+                }
+            }
+
             // Skip if target already follows from parent (would create cycle)
             // e.g., treefmt-nix.follows = "clan-core/treefmt-nix" means we can't
             // add clan-core.inputs.treefmt-nix.follows = "treefmt-nix"
@@ -887,6 +898,24 @@ fn apply_change(
     state: &AppState,
     change: Change,
 ) -> Result<()> {
+    // Check if follows already exists to prevent duplicates
+    if let Change::Follows { ref input, .. } = change {
+        let parent = input.input();
+        if let Some(nested_name) = input.follows() {
+            let inputs = flake_edit.list();
+            if let Some(parent_input) = inputs.get(parent) {
+                let already_exists = parent_input.follows().iter().any(|f| match f {
+                    crate::input::Follows::Indirect(from, _)
+                    | crate::input::Follows::Direct(from, _) => from == nested_name,
+                });
+                if already_exists {
+                    println!("Follows already exists for {}", input);
+                    return Ok(());
+                }
+            }
+        }
+    }
+
     match flake_edit.apply_change(change.clone()) {
         Ok(Some(resulting_change)) => {
             let root = rnix::Root::parse(&resulting_change);
