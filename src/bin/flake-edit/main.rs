@@ -7,13 +7,17 @@ mod log;
 fn main() -> eyre::Result<()> {
     let args = CliArgs::parse();
 
-    if std::env::var("NO_COLOR").is_err() {
-        color_eyre::install()?;
+    // Hide internal source locations from error output
+    let builder = color_eyre::config::HookBuilder::new()
+        .display_location_section(false)
+        .display_env_section(false);
+
+    let builder = if std::env::var("NO_COLOR").is_ok() {
+        builder.theme(color_eyre::config::Theme::new())
     } else {
-        color_eyre::config::HookBuilder::new()
-            .theme(color_eyre::config::Theme::new())
-            .install()?;
-    }
+        builder
+    };
+    builder.install()?;
 
     log::init().ok();
     tracing::debug!("Cli args: {args:?}");

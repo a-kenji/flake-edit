@@ -18,9 +18,3 @@ exit_code: 1
 ----- stderr -----
 Error: 
    0: The input could not be removed: nonexistent-input
-
-Location:
-   src/bin/flake-edit/main.rs:<LINE>
-
-Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
-Run with RUST_BACKTRACE=full to include source snippets.

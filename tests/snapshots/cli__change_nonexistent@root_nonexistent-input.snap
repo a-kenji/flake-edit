@@ -24,9 +24,3 @@ Error:
         flake-edit add nonexistent-input <flakeref>
 
       To see all current inputs: flake-edit list
-
-Location:
-   src/bin/flake-edit/main.rs:<LINE>
-
-Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
-Run with RUST_BACKTRACE=full to include source snippets.

@@ -8,6 +8,7 @@ use crate::error::FlakeEditError;
 use crate::lock::{FlakeLock, NestedInput};
 use crate::tui;
 use crate::update::Updater;
+use crate::validate;
 
 use super::editor::Editor;
 use super::state::AppState;
@@ -839,12 +840,14 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
 
         match temp_flake_edit.apply_change(change) {
             Ok(Some(resulting_text)) => {
-                let root = rnix::Root::parse(&resulting_text);
-                if root.errors().is_empty() {
+                let validation = validate::validate(&resulting_text);
+                if validation.is_ok() {
                     current_text = resulting_text;
                     applied.push((input_path, target));
                 } else {
-                    eprintln!("Error applying follows for {}: parse errors", input_path);
+                    for err in validation.errors {
+                        eprintln!("Error applying follows for {}: {}", input_path, err);
+                    }
                 }
             }
             Ok(None) => eprintln!("Could not create follows for {}", input_path),
@@ -889,11 +892,10 @@ fn apply_change(
 ) -> Result<()> {
     match flake_edit.apply_change(change.clone()) {
         Ok(Some(resulting_change)) => {
-            let root = rnix::Root::parse(&resulting_change);
-            let errors = root.errors();
-            if !errors.is_empty() {
+            let validation = validate::validate(&resulting_change);
+            if validation.has_errors() {
                 eprintln!("There are errors in the changes:");
-                for e in errors {
+                for e in &validation.errors {
                     tracing::error!("Error: {e}");
                 }
                 eprintln!("{}", resulting_change);

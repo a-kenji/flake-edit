@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::change::Change;
 use crate::error::FlakeEditError;
 use crate::input::{Follows, Input};
+use crate::validate;
 use crate::walk::Walker;
 
 pub struct FlakeEdit {
@@ -47,6 +48,11 @@ impl FlakeEdit {
     }
 
     pub fn from_text(stream: &str) -> Result<Self, FlakeEditError> {
+        let validation = validate::validate(stream);
+        if validation.has_errors() {
+            return Err(FlakeEditError::Validation(validation.errors));
+        }
+
         let walker = Walker::new(stream);
         Ok(Self::new(Vec::new(), walker))
     }
