@@ -7,7 +7,7 @@
   pkg-config,
 }:
 let
-  cargoTOML = builtins.fromTOML (builtins.readFile (self + "/Cargo.toml"));
+  cargoTOML = fromTOML (builtins.readFile (self + "/Cargo.toml"));
   inherit (cargoTOML.package) version name;
   pname = name;
   gitDate = "${builtins.substring 0 4 self.lastModifiedDate}-${
