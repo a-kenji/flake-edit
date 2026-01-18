@@ -22,11 +22,9 @@ let
     fileset = lib.fileset.unions [
       ../Cargo.toml
       ../Cargo.lock
-      ../build.rs
       ../src
       ../benches
       ../tests
-      ../assets
     ];
   };
   commonArgs = {
@@ -47,19 +45,14 @@ let
   cargoTarpaulin = craneLib.cargoTarpaulin (commonArgs // { inherit cargoArtifacts; });
   cargoDoc = craneLib.cargoDoc (commonArgs // { inherit cargoArtifacts; });
   cargoTest = craneLib.cargoNextest (commonArgs // { inherit cargoArtifacts; });
-  assetDir = "target/assets";
+  # Generate shell completions via CompleteEnv
   postInstall = ''
-    # install the manpage
-    installManPage ${assetDir}/${name}.1
-    # explicit behavior
-    cp ${assetDir}/${name}.bash ./completions.bash
-    installShellCompletion --bash --name ${name}.bash ./completions.bash
-    cp ${assetDir}/${name}.fish ./completions.fish
-    installShellCompletion --fish --name ${name}.fish ./completions.fish
-    cp ${assetDir}/_${name} ./completions.zsh
-    installShellCompletion --zsh --name _${name} ./completions.zsh
-    mkdir -p $out/share/nu
-    cp ${assetDir}/${name}.nu $out/share/${name}.nu
+    COMPLETE=bash $out/bin/${name} > ${name}.bash
+    COMPLETE=zsh $out/bin/${name} > _${name}
+    COMPLETE=fish $out/bin/${name} > ${name}.fish
+    installShellCompletion --bash --name ${name}.bash ${name}.bash
+    installShellCompletion --zsh --name _${name} _${name}
+    installShellCompletion --fish --name ${name}.fish ${name}.fish
   '';
 in
 {
@@ -67,11 +60,10 @@ in
     commonArgs
     // {
       cargoExtraArgs = "-p ${name}";
-      buildInputs = [ installShellFiles ];
+      nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ installShellFiles ];
       env = {
         GIT_DATE = gitDate;
         GIT_REV = gitRev;
-        ASSET_DIR = assetDir;
       };
       doCheck = false;
       version = version + "-unstable-" + gitDate;
@@ -79,7 +71,6 @@ in
         name
         pname
         postInstall
-        assetDir
         cargoArtifacts
         meta
         ;

@@ -5,6 +5,8 @@ pub mod cache;
 pub mod change;
 pub mod channel;
 pub mod cli;
+#[cfg(feature = "completions")]
+pub mod completions;
 #[cfg(feature = "diff")]
 pub mod diff;
 pub mod edit;

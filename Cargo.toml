@@ -13,7 +13,7 @@ license = "MIT"
 repository = "https://github.com/a-kenji/flake-edit"
 documentation = "https://github.com/a-kenji/flake-edit"
 homepage = "https://github.com/a-kenji/flake-edit"
-include = ["src/**/*", "LICENSE", "README.md", "build.rs"]
+include = ["src/**/*", "LICENSE", "README.md"]
 
 [[bin]]
 name = "flake-edit"
@@ -27,20 +27,21 @@ default = ["application"]
 application = [
   "clap",
   "write",
-  "assets",
   "anyhow",
   "diff",
   "tracing-subscriber",
   "tui",
+  "completions",
 ]
 tui = ["ratatui", "crossterm", "nucleo-matcher"]
 write = []
 diff = ["diffy"]
-assets = ["clap_complete", "clap_complete_nushell", "roff", "clap_mangen"]
+completions = ["clap_complete"]
 
 [dependencies]
 anyhow = { version = "1.0.100", optional = true }
 clap = { version = "4.5.54", optional = true, features = ["derive"] }
+clap_complete = { version = "4.5.65", features = ["unstable-dynamic"], optional = true }
 color-eyre = "0.6.5"
 diffy = { version = "0.4.2", optional = true }
 directories = "6.0.0"
@@ -64,14 +65,6 @@ ratatui = { version = "0.30.0", optional = true, default-features = false, featu
 ] }
 crossterm = { version = "0.29.0", optional = true }
 nucleo-matcher = { version = "0.3", optional = true }
-
-
-[build-dependencies]
-clap = { version = "4.5.54", features = ["derive"], optional = true }
-clap_complete = { version = "4.5.65", features = [], optional = true }
-clap_complete_nushell = { version = "4.5.10", optional = true }
-clap_mangen = { version = "0.2.31", features = [], optional = true }
-roff = { version = "0.2.2", optional = true }
 
 [[bench]]
 name = "benches"

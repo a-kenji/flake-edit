@@ -1,6 +1,8 @@
 use std::fmt::Display;
 
 use clap::{Parser, Subcommand};
+#[cfg(feature = "completions")]
+use clap_complete::engine::ArgValueCompleter;
 
 #[derive(Parser, Debug)]
 #[command(author, version = CliArgs::unstable_version(), about, long_about = None)]
@@ -104,6 +106,7 @@ pub enum Command {
         /// The name of an input attribute.
         id: Option<String>,
         /// The uri that should be added to the input.
+        #[cfg_attr(feature = "completions", arg(add = ArgValueCompleter::new(crate::completions::complete_uris)))]
         uri: Option<String>,
         #[arg(long)]
         /// Pin to a specific ref_or_rev
@@ -117,13 +120,18 @@ pub enum Command {
     },
     /// Remove a specific flake reference based on its id.
     #[clap(alias = "rm")]
-    Remove { id: Option<String> },
+    Remove {
+        #[cfg_attr(feature = "completions", arg(add = ArgValueCompleter::new(crate::completions::complete_inputs)))]
+        id: Option<String>,
+    },
     /// Change an existing flake reference's URI.
     #[clap(alias = "c")]
     Change {
         /// The name of an existing input attribute.
+        #[cfg_attr(feature = "completions", arg(add = ArgValueCompleter::new(crate::completions::complete_inputs)))]
         id: Option<String>,
         /// The new URI for the input.
+        #[cfg_attr(feature = "completions", arg(add = ArgValueCompleter::new(crate::completions::complete_uris)))]
         uri: Option<String>,
         #[arg(long)]
         /// Pin to a specific ref_or_rev
@@ -143,6 +151,7 @@ pub enum Command {
     Update {
         /// The id of an input attribute.
         /// If omitted will update all inputs.
+        #[cfg_attr(feature = "completions", arg(add = ArgValueCompleter::new(crate::completions::complete_toplevel_inputs)))]
         id: Option<String>,
         /// Whether the latest semver release of the remote should be used even thought the release
         /// itself isn't yet pinned to a specific release.
@@ -153,6 +162,7 @@ pub enum Command {
     #[clap(alias = "p")]
     Pin {
         /// The id of an input attribute.
+        #[cfg_attr(feature = "completions", arg(add = ArgValueCompleter::new(crate::completions::complete_toplevel_inputs)))]
         id: Option<String>,
         /// Optionally specify a rev for the inputs attribute.
         rev: Option<String>,
@@ -161,6 +171,7 @@ pub enum Command {
     #[clap(alias = "up")]
     Unpin {
         /// The id of an input attribute.
+        #[cfg_attr(feature = "completions", arg(add = ArgValueCompleter::new(crate::completions::complete_toplevel_inputs)))]
         id: Option<String>,
     },
     /// Add a follows relationship to make an input's dependency follow a top-level input.
@@ -174,8 +185,10 @@ pub enum Command {
     Follow {
         /// The input path in dot notation (e.g., "rust-overlay.nixpkgs" means
         /// the nixpkgs input of rust-overlay).
+        #[cfg_attr(feature = "completions", arg(add = ArgValueCompleter::new(crate::completions::complete_follow_paths)))]
         input: Option<String>,
         /// The target input to follow (e.g., "nixpkgs").
+        #[cfg_attr(feature = "completions", arg(add = ArgValueCompleter::new(crate::completions::complete_toplevel_inputs)))]
         target: Option<String>,
         /// Automatically follow inputs when their nested input names match top-level inputs.
         #[arg(long, short)]

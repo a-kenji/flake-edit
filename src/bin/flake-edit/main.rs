@@ -1,10 +1,13 @@
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use color_eyre::eyre;
 use flake_edit::cli::CliArgs;
 
 mod log;
 
 fn main() -> eyre::Result<()> {
+    // Handle dynamic shell completions (COMPLETE=bash/zsh/fish env var)
+    clap_complete::CompleteEnv::with_factory(CliArgs::command).complete();
+
     let args = CliArgs::parse();
 
     // Hide internal source locations from error output
