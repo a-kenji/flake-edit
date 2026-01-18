@@ -1133,3 +1133,52 @@ fn test_add_with_cache_shows_owner_prefixes(#[case] fixture_name: &str) {
         insta::assert_snapshot!(snapshot(&mut terminal, session.app()));
     });
 }
+
+#[rstest]
+#[case("root")]
+fn test_change_workflow_escape_back_to_list(#[case] fixture_name: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let list_height = (fixture.inputs.len() as u16 + 3).min(12);
+    let mut list_terminal = create_test_terminal(80, list_height);
+    let mut input_terminal = create_test_terminal(80, 4);
+    let app = app_from_args_with_fixture("--diff change", &fixture).unwrap();
+    let mut session = TestSession::new(app, "--diff change");
+
+    session.submit();
+    insta::with_settings!({
+        snapshot_suffix => format!("{fixture_name}_1_input"),
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut input_terminal, session.app()));
+    });
+
+    let result = session.escape();
+    assert!(matches!(result, UpdateResult::Continue));
+    insta::with_settings!({
+        snapshot_suffix => format!("{fixture_name}_2_back_to_list"),
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut list_terminal, session.app()));
+    });
+
+    session.nav_down();
+    session.submit();
+    insta::with_settings!({
+        snapshot_suffix => format!("{fixture_name}_3_different_input"),
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut input_terminal, session.app()));
+    });
+
+    session.ctrl('u');
+    session.type_text("github:nixos/nixpkgs/nixos-unstable");
+    let result = session.submit();
+    assert!(matches!(result, UpdateResult::Continue));
+    let mut confirm_terminal = create_test_terminal(80, 12);
+    insta::with_settings!({
+        snapshot_suffix => format!("{fixture_name}_4_confirm"),
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut confirm_terminal, session.app()));
+    });
+}

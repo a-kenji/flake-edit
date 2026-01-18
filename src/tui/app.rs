@@ -468,7 +468,7 @@ impl App {
             Screen::Input(screen) => {
                 let current_text = screen.state.text();
                 if current_text.is_empty() {
-                    return self.build_change();
+                    return Change::None;
                 }
                 match &self.data {
                     WorkflowData::Add { phase, uri, .. } => match phase {
@@ -531,8 +531,10 @@ impl App {
                         _ => self.build_change(),
                     };
                 }
-                // For Follow workflow, return None when nothing selected yet
-                if let WorkflowData::Follow { .. } = &self.data {
+                if matches!(
+                    &self.data,
+                    WorkflowData::Follow { .. } | WorkflowData::Change { .. }
+                ) {
                     return Change::None;
                 }
                 self.build_change()
