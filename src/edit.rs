@@ -161,7 +161,6 @@ impl FlakeEdit {
 
                 Ok(res.map(|n| n.to_string()))
             }
-            Change::Pin { .. } => todo!(),
             Change::Follows { .. } => {
                 self.ensure_inputs_populated()?;
 
