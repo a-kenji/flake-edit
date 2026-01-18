@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1] - 2026-01-18
+
+### 🚀 Features
+
+- Init `change` subcommand
+- *(cli)* Add --shallow flag to add shallow inputs
+- Init `follow` subcommand
+- Add `--auto` flag to the follow subcommand
+- An interactive mode for querying user input
+- Implement nested follows in lock files
+
+### 🐛 Bug Fixes
+
+- *(command)* Improve URI validation
+- *(remove)* Correctly also remove orphaned follow inputs
+- *(test)* Remove deprecated nodes.*.config usage
+- *(tests)* Filter environment-dependent paths in CLI snapshot metadata
+- Fix transitive follows in `--auto`
+
+### 📚 Documentation
+
+- Add `follow` subcommand docs
+
+### ⚙️ Miscellaneous Tasks
+
+- Upgrade to Rust 2024 edition
+- Improve validation before change
+- Parametrize snapshot tests
+
+
 ## [0.3.0] - 2026-11-01
 
 ### 🚀 Features
