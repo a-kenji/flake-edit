@@ -36,6 +36,9 @@ pub enum CommandError {
     #[error("Could not infer ID from flake reference: {0}")]
     CouldNotInferId(String),
 
+    #[error("Invalid URI: {0}")]
+    InvalidUri(String),
+
     #[error("No inputs found in the flake")]
     NoInputs,
 
@@ -248,16 +251,17 @@ fn apply_uri_options(
 
 /// Transform a URI string by applying ref_or_rev and shallow options if specified.
 ///
-/// If neither option is set, returns the original URI unchanged.
-/// Otherwise, parses the URI, applies the options, and returns the transformed string.
+/// Always validates the URI through nix-uri parsing.
+/// If neither option is set, returns the original URI unchanged after validation.
+/// Otherwise, applies the options and returns the transformed string.
 fn transform_uri(uri: String, ref_or_rev: Option<&str>, shallow: bool) -> Result<String> {
+    let flake_ref: FlakeRef = uri
+        .parse()
+        .map_err(|e| CommandError::InvalidUri(format!("{}: {}", uri, e)))?;
+
     if ref_or_rev.is_none() && !shallow {
         return Ok(uri);
     }
-
-    let flake_ref: FlakeRef = uri
-        .parse()
-        .map_err(|e| CommandError::CouldNotInferId(format!("{}: {}", uri, e)))?;
 
     apply_uri_options(flake_ref, ref_or_rev, shallow)
         .map(|f| f.to_string())
