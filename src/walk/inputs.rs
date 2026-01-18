@@ -8,8 +8,8 @@ use crate::input::Input;
 use super::context::Context;
 use super::node::{
     adjacent_whitespace_index, empty_node, get_sibling_whitespace, make_flake_false_attr,
-    make_nested_follows_attr, make_quoted_string, make_url_attr, parse_node, should_remove_input,
-    should_remove_nested_input, substitute_child,
+    make_nested_follows_attr, make_quoted_string, make_toplevel_follows_attr, make_url_attr,
+    parse_node, should_remove_input, should_remove_nested_input, substitute_child,
 };
 
 /// Remove a child node along with its adjacent whitespace.
@@ -367,6 +367,7 @@ fn handle_child_attrpath_value(
             id: Some(id),
             uri: Some(uri),
             flake,
+            follows,
         } = change
     {
         let uri_node = make_url_attr(id, uri);
@@ -374,15 +375,32 @@ fn handle_child_attrpath_value(
             .green()
             .insert_child(child.index(), uri_node.green().into());
 
+        // Track the current insertion offset
+        let mut offset = 1;
+
         if let Some(whitespace) = get_sibling_whitespace(child_node) {
-            green = green.insert_child(child.index() + 1, whitespace.green().into());
+            green = green.insert_child(child.index() + offset, whitespace.green().into());
+            offset += 1;
+        }
+
+        // Add follows directives
+        for follow_spec in follows {
+            let follows_node = make_toplevel_follows_attr(id, &follow_spec.from, &follow_spec.to);
+            green = green.insert_child(child.index() + offset, follows_node.green().into());
+            offset += 1;
+
+            if let Some(whitespace) = get_sibling_whitespace(child_node) {
+                green = green.insert_child(child.index() + offset, whitespace.green().into());
+                offset += 1;
+            }
         }
 
         if !flake {
             let no_flake = make_flake_false_attr(id);
-            green = green.insert_child(child.index() + 2, no_flake.green().into());
+            green = green.insert_child(child.index() + offset, no_flake.green().into());
+            offset += 1;
             if let Some(whitespace) = get_sibling_whitespace(child_node) {
-                green = green.insert_child(child.index() + 3, whitespace.green().into());
+                green = green.insert_child(child.index() + offset, whitespace.green().into());
             }
         }
         return Some(parse_node(&green.to_string()));

@@ -9,7 +9,7 @@ Buffer {
         "────────────────────────────────────────────────────────────────────────────────",
         "❯ repo                                                                          ",
         "────────────────────────────────────────────────────────────────────────────────",
-        " Add   ID  for github:user/repo                          Diff: Off   flake-edit ",
+        " Add   ID  for github:user/repo             Diff: Off   Follow: On   flake-edit ",
     ],
     styles: [
         x: 0, y: 0, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
@@ -19,7 +19,9 @@ Buffer {
         x: 5, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
         x: 6, y: 3, fg: DarkGray, bg: White, underline: Reset, modifier: BOLD,
         x: 10, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
-        x: 56, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 43, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 54, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 55, y: 3, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: BOLD,
         x: 67, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
         x: 68, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
     ]

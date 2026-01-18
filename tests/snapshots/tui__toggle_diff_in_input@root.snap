@@ -9,7 +9,7 @@ Buffer {
         "────────────────────────────────────────────────────────────────────────────────",
         "❯ Type here...                                                                  ",
         "────────────────────────────────────────────────────────────────────────────────",
-        " Add  Enter flake URI                                     Diff: On   flake-edit ",
+        " Add  Enter flake URI                        Diff: On   Follow: On   flake-edit ",
     ],
     styles: [
         x: 0, y: 0, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
@@ -19,7 +19,9 @@ Buffer {
         x: 0, y: 2, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
         x: 0, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
         x: 5, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
-        x: 57, y: 3, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: BOLD,
+        x: 44, y: 3, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: BOLD,
+        x: 54, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 55, y: 3, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: BOLD,
         x: 67, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
         x: 68, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
     ]

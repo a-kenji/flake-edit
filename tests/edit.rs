@@ -1,7 +1,7 @@
 mod common;
 
 use common::{Info, load_flake};
-use flake_edit::change::Change;
+use flake_edit::change::{Change, FollowSpec};
 use flake_edit::edit::FlakeEdit;
 use flake_edit::walk::Walker;
 use rstest::rstest;
@@ -43,6 +43,7 @@ fn test_add_input(#[case] fixture: &str, #[case] is_flake: bool, #[case] uri: &s
         id: Some(id.to_owned()),
         uri: Some(uri.to_owned()),
         flake: is_flake,
+        follows: vec![],
     };
     let info = Info::with_change(change.clone());
     let result = flake_edit.apply_change(change).unwrap().unwrap();
@@ -64,6 +65,42 @@ fn test_add_with_ref_or_rev() {
         id: Some("home-manager".to_owned()),
         uri: Some("github:nix-community/home-manager/release-24.05".to_owned()),
         flake: true,
+        follows: vec![],
+    };
+    let info = Info::with_change(change.clone());
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+
+#[test]
+fn test_add_with_single_follow() {
+    let content = load_flake("root");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let change = Change::Add {
+        id: Some("treefmt-nix".to_owned()),
+        uri: Some("github:numtide/treefmt-nix".to_owned()),
+        flake: true,
+        follows: vec![FollowSpec::new("nixpkgs", "nixpkgs")],
+    };
+    let info = Info::with_change(change.clone());
+    insta::with_settings!({sort_maps => true, info => &info}, {
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+    });
+}
+
+#[test]
+fn test_add_with_multiple_follows() {
+    let content = load_flake("root");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let change = Change::Add {
+        id: Some("crane-new".to_owned()),
+        uri: Some("github:ipetkov/crane".to_owned()),
+        flake: true,
+        follows: vec![
+            FollowSpec::new("nixpkgs", "nixpkgs"),
+            FollowSpec::new("flake-utils", "flake-utils"),
+        ],
     };
     let info = Info::with_change(change.clone());
     insta::with_settings!({sort_maps => true, info => &info}, {
@@ -86,6 +123,7 @@ fn test_first_nested_node_add_with_list(#[case] is_flake: bool) {
         id: Some(id.to_owned()),
         uri: Some(uri.to_owned()),
         flake: is_flake,
+        follows: vec![],
     };
     let info = Info::empty();
     let suffix = format!("flake_{}", is_flake);

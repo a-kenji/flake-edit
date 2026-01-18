@@ -2,9 +2,10 @@ use nix_uri::urls::UrlWrapper;
 use nix_uri::{FlakeRef, NixUriResult};
 use ropey::Rope;
 
-use crate::change::Change;
+use crate::change::{Change, FollowSpec};
 use crate::edit::{FlakeEdit, InputMap, sorted_input_ids, sorted_input_ids_owned};
 use crate::error::FlakeEditError;
+use crate::follows;
 use crate::lock::{FlakeLock, NestedInput};
 use crate::tui;
 use crate::update::Updater;
@@ -271,6 +272,21 @@ pub struct UriOptions<'a> {
     pub no_flake: bool,
 }
 
+#[derive(Default)]
+pub struct FollowOptions {
+    /// Enable automatic follows detection
+    pub follow: bool,
+    /// Disable automatic follows detection
+    pub no_follow: bool,
+}
+
+impl FollowOptions {
+    /// Check if follows should be attempted
+    pub fn should_follow(&self) -> bool {
+        self.follow && !self.no_follow
+    }
+}
+
 pub fn add(
     editor: &Editor,
     flake_edit: &mut FlakeEdit,
@@ -278,16 +294,21 @@ pub fn add(
     id: Option<String>,
     uri: Option<String>,
     opts: UriOptions<'_>,
+    follow_opts: FollowOptions,
 ) -> Result<()> {
     let change = match (id, uri, state.interactive) {
         // Both ID and URI provided - non-interactive add
-        (Some(id_val), Some(uri_str), _) => add_with_id_and_uri(id_val, uri_str, &opts)?,
+        (Some(id_val), Some(uri_str), _) => {
+            add_with_id_and_uri(id_val, uri_str, &opts, &follow_opts, flake_edit)?
+        }
         // Interactive mode - show TUI (with or without prefill)
         (id, None, true) | (None, id, true) => {
-            add_interactive(editor, state, id.as_deref(), &opts)?
+            add_interactive(editor, state, id.as_deref(), &opts, &follow_opts)?
         }
         // Non-interactive with only one arg (could be in id or uri position) - infer ID
-        (Some(uri), None, false) | (None, Some(uri), false) => add_infer_id(uri, &opts)?,
+        (Some(uri), None, false) | (None, Some(uri), false) => {
+            add_infer_id(uri, &opts, &follow_opts, flake_edit)?
+        }
         // No arguments and non-interactive
         (None, None, false) => {
             return Err(CommandError::NoUri);
@@ -297,12 +318,57 @@ pub fn add(
     apply_change(editor, flake_edit, state, change)
 }
 
-fn add_with_id_and_uri(id: String, uri: String, opts: &UriOptions<'_>) -> Result<Change> {
+/// Compute follows for a new dependency based on follow options.
+///
+/// If follows are enabled, fetches metadata from the dependency URI,
+/// finds matching inputs, and returns FollowSpecs for all matches.
+fn compute_follows(
+    uri: &str,
+    follow_opts: &FollowOptions,
+    local_inputs: &[String],
+) -> Vec<FollowSpec> {
+    if !follow_opts.should_follow() {
+        return vec![];
+    }
+
+    // Fetch metadata from the dependency
+    let metadata = match follows::fetch_flake_metadata(uri) {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::warn!("Failed to fetch flake metadata for follows: {}", e);
+            return vec![];
+        }
+    };
+
+    // Get dependency inputs
+    let dep_inputs = follows::get_dependency_inputs(&metadata);
+    if dep_inputs.is_empty() {
+        return vec![];
+    }
+
+    // Find and return all matching candidates
+    let candidates = follows::find_follow_candidates(&dep_inputs, local_inputs);
+    follows::candidates_to_specs(&candidates)
+}
+
+fn add_with_id_and_uri(
+    id: String,
+    uri: String,
+    opts: &UriOptions<'_>,
+    follow_opts: &FollowOptions,
+    flake_edit: &FlakeEdit,
+) -> Result<Change> {
     let final_uri = transform_uri(uri, opts.ref_or_rev, opts.shallow)?;
+
+    // Compute follows if requested
+    let local_inputs: Vec<String> = flake_edit.curr_list().keys().cloned().collect();
+    let follows = compute_follows(&final_uri, follow_opts, &local_inputs);
+
     Ok(Change::Add {
         id: Some(id),
         uri: Some(final_uri),
         flake: !opts.no_flake,
+        follows,
     })
 }
 
@@ -311,6 +377,7 @@ fn add_interactive(
     state: &AppState,
     prefill_uri: Option<&str>,
     opts: &UriOptions<'_>,
+    _follow_opts: &FollowOptions,
 ) -> Result<Change> {
     let tui_app = tui::App::add("Add", editor.text(), prefill_uri, state.cache_config());
     let Some(tui::AppResult::Change(tui_change)) = tui::run(tui_app)? else {
@@ -318,8 +385,14 @@ fn add_interactive(
         return Ok(Change::None);
     };
 
-    // Apply CLI options to the TUI result
-    if let Change::Add { id, uri, flake } = tui_change {
+    // Apply CLI options to the TUI result, preserving follows from TUI
+    if let Change::Add {
+        id,
+        uri,
+        flake,
+        follows,
+    } = tui_change
+    {
         let final_uri = uri
             .map(|u| transform_uri(u, opts.ref_or_rev, opts.shallow))
             .transpose()?;
@@ -327,6 +400,7 @@ fn add_interactive(
             id,
             uri: final_uri,
             flake: flake && !opts.no_flake,
+            follows, // Preserve follows from TUI
         })
     } else {
         Ok(tui_change)
@@ -334,7 +408,12 @@ fn add_interactive(
 }
 
 /// Add with only URI provided, inferring ID from the flake reference.
-fn add_infer_id(uri: String, opts: &UriOptions<'_>) -> Result<Change> {
+fn add_infer_id(
+    uri: String,
+    opts: &UriOptions<'_>,
+    follow_opts: &FollowOptions,
+    flake_edit: &FlakeEdit,
+) -> Result<Change> {
     let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(&uri);
 
     let (inferred_id, final_uri) = if let Ok(flake_ref) = flake_ref {
@@ -353,10 +432,15 @@ fn add_infer_id(uri: String, opts: &UriOptions<'_>) -> Result<Change> {
 
     let final_id = inferred_id.ok_or(CommandError::CouldNotInferId(uri))?;
 
+    // Compute follows if requested
+    let local_inputs: Vec<String> = flake_edit.curr_list().keys().cloned().collect();
+    let follows = compute_follows(&final_uri, follow_opts, &local_inputs);
+
     Ok(Change::Add {
         id: Some(final_id),
         uri: Some(final_uri),
         flake: !opts.no_flake,
+        follows,
     })
 }
 

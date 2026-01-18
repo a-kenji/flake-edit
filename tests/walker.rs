@@ -44,6 +44,7 @@ fn test_walker_add_input(#[case] fixture: &str, #[case] is_flake: bool) {
         id: Some(id.to_owned()),
         uri: Some(uri.to_owned()),
         flake: is_flake,
+        follows: vec![],
     };
     let info = Info::with_change(change.clone());
     let result = walker.walk(&change).unwrap().unwrap();

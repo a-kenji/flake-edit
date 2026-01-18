@@ -88,6 +88,13 @@ impl ListState {
         self.multi_select
     }
 
+    /// Programmatically select an index (for pre-selecting items)
+    pub fn select(&mut self, index: usize) {
+        if index < self.len {
+            self.selected.insert(index);
+        }
+    }
+
     /// Handle a list action, returns Some if the interaction is complete
     pub fn handle(&mut self, action: ListAction) -> Option<ListResult> {
         match action {

@@ -29,6 +29,7 @@ fn add_input() {
         id: Some("nixpkgs".to_owned()),
         uri: Some("github/nixos/nixpkgs".to_owned()),
         flake: false,
+        follows: vec![],
     };
     let _ = walker.walk(&change);
     // a simple sanity check

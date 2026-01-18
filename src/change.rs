@@ -1,5 +1,24 @@
 use crate::walk::Context;
 
+/// Specification for a single follows directive.
+/// Represents: `inputs.<new_input>.inputs.<from>.follows = "<to>"`
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct FollowSpec {
+    /// The input name from the dependency to redirect (e.g., "nixpkgs")
+    pub from: String,
+    /// The local input to follow (e.g., "nixpkgs")
+    pub to: String,
+}
+
+impl FollowSpec {
+    pub fn new(from: impl Into<String>, to: impl Into<String>) -> Self {
+        Self {
+            from: from.into(),
+            to: to.into(),
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Change {
     #[default]
@@ -7,8 +26,11 @@ pub enum Change {
     Add {
         id: Option<String>,
         uri: Option<String>,
-        // Add an input as a flake.
+        /// Add an input as a flake.
         flake: bool,
+        /// Follows directives to add with this input.
+        #[serde(default)]
+        follows: Vec<FollowSpec>,
     },
     Remove {
         ids: Vec<ChangeId>,
@@ -129,12 +151,23 @@ impl Change {
 
     pub fn success_messages(&self) -> Vec<String> {
         match self {
-            Change::Add { id, uri, .. } => {
-                vec![format!(
+            Change::Add {
+                id, uri, follows, ..
+            } => {
+                let mut msgs = vec![format!(
                     "Added input: {} = {}",
                     id.as_deref().unwrap_or("?"),
                     uri.as_deref().unwrap_or("?")
-                )]
+                )];
+                for follow in follows {
+                    msgs.push(format!(
+                        "  with follows: {}.inputs.{}.follows = \"{}\"",
+                        id.as_deref().unwrap_or("?"),
+                        follow.from,
+                        follow.to
+                    ));
+                }
+                msgs
             }
             Change::Remove { ids } => ids
                 .iter()

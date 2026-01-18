@@ -19,7 +19,8 @@ pub use error::WalkerError;
 
 use inputs::{remove_child_with_whitespace, walk_inputs};
 use node::{
-    get_sibling_whitespace, make_toplevel_flake_false_attr, make_toplevel_url_attr, parse_node,
+    get_sibling_whitespace, make_toplevel_flake_false_attr, make_toplevel_follows_attr,
+    make_toplevel_url_attr, parse_node,
 };
 
 #[derive(Debug, Clone)]
@@ -183,6 +184,7 @@ impl<'a> Walker {
             id: Some(id),
             uri: Some(uri),
             flake,
+            follows,
         } = change
         else {
             return None;
@@ -206,15 +208,32 @@ impl<'a> Walker {
             green = green.insert_child(insert_pos, whitespace.green().into());
         }
 
-        // Add flake=false if needed
-        if !flake {
-            let no_flake = make_toplevel_flake_false_attr(id);
-            green = green.insert_child(toplevel.index() + 1, no_flake.green().into());
+        // Position for additional attributes (follows, flake=false)
+        // Using toplevel.index() + 1 as the base position for items after the url,
+        // since inserting at the same position pushes previous items forward
+        let after_url_pos = toplevel.index() + 1;
+
+        // Add follows directives
+        for follow_spec in follows {
+            let follows_node = make_toplevel_follows_attr(id, &follow_spec.from, &follow_spec.to);
+            green = green.insert_child(after_url_pos, follows_node.green().into());
 
             if let Some(prev_child) = root.children().find(|c| c.index() == toplevel.index() - 2)
                 && let Some(whitespace) = get_sibling_whitespace(&prev_child)
             {
-                green = green.insert_child(toplevel.index() + 1, whitespace.green().into());
+                green = green.insert_child(after_url_pos, whitespace.green().into());
+            }
+        }
+
+        // Add flake=false if needed
+        if !flake {
+            let no_flake = make_toplevel_flake_false_attr(id);
+            green = green.insert_child(after_url_pos, no_flake.green().into());
+
+            if let Some(prev_child) = root.children().find(|c| c.index() == toplevel.index() - 2)
+                && let Some(whitespace) = get_sibling_whitespace(&prev_child)
+            {
+                green = green.insert_child(after_url_pos, whitespace.green().into());
             }
         }
 

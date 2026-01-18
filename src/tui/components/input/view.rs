@@ -9,7 +9,7 @@ use std::collections::HashSet;
 
 use super::model::{CompletionItem, InputState, MAX_VISIBLE_COMPLETIONS};
 use crate::tui::components::footer::Footer;
-use crate::tui::helpers::{context_span, diff_toggle_style, layouts};
+use crate::tui::helpers::{context_span, diff_toggle_style, follow_toggle_style, layouts};
 use crate::tui::style::{
     BORDER_STYLE, COMPLETION_MATCH_STYLE, COMPLETION_SELECTED_MATCH_STYLE, DIMMED_STYLE,
     FOOTER_STYLE, HIGHLIGHT_STYLE, INPUT_PROMPT, LABEL_STYLE_INVERSE, PLACEHOLDER_STYLE,
@@ -133,6 +133,8 @@ pub struct Input<'a> {
     context: &'a str,
     label: Option<&'a str>,
     show_diff: bool,
+    /// Optional follows toggle state (only shown for Add workflow)
+    show_follows: Option<bool>,
 }
 
 impl<'a> Input<'a> {
@@ -149,7 +151,14 @@ impl<'a> Input<'a> {
             context,
             label,
             show_diff,
+            show_follows: None,
         }
+    }
+
+    /// Set the follows toggle state (for Add workflow)
+    pub fn with_follows(mut self, enabled: bool) -> Self {
+        self.show_follows = Some(enabled);
+        self
     }
 
     /// Calculate cursor position for the given area
@@ -195,11 +204,16 @@ impl Widget for Input<'_> {
         footer_spans.push(Span::raw(format!(" {}", self.prompt)));
 
         let (diff_label, diff_style) = diff_toggle_style(self.show_diff);
-        Footer::new(
-            footer_spans,
-            vec![Span::styled(format!(" {} ", diff_label), diff_style)],
-        )
-        .render(footer_area, buf);
+        let mut right_spans = vec![Span::styled(format!(" {} ", diff_label), diff_style)];
+
+        // Add follows toggle if enabled (for Add workflow)
+        if let Some(follows_enabled) = self.show_follows {
+            let (follow_label, follow_style) = follow_toggle_style(follows_enabled);
+            right_spans.push(Span::raw(" "));
+            right_spans.push(Span::styled(format!(" {} ", follow_label), follow_style));
+        }
+
+        Footer::new(footer_spans, right_spans).render(footer_area, buf);
 
         // Render completions overlay on border/footer area
         if self.state.has_visible_completions() {

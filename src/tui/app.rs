@@ -111,6 +111,9 @@ impl App {
                 phase: AddPhase::Uri,
                 uri: None,
                 id: None,
+                follow_candidates: vec![],
+                selected_follows: std::collections::HashSet::new(),
+                follows_enabled: true, // On by default in TUI
             },
         }
     }
@@ -444,6 +447,18 @@ impl App {
         &self.context
     }
 
+    /// Get the follows_enabled state if in Add workflow, None otherwise.
+    pub fn follows_enabled(&self) -> Option<bool> {
+        if let WorkflowData::Add {
+            follows_enabled, ..
+        } = &self.data
+        {
+            Some(*follows_enabled)
+        } else {
+            None
+        }
+    }
+
     /// Get the Change that would be applied based on current workflow state.
     /// Useful for testing to verify what modification the TUI would produce.
     pub fn pending_change(&self) -> Change {
@@ -476,12 +491,18 @@ impl App {
                             id: None,
                             uri: Some(current_text.to_string()),
                             flake: true,
+                            follows: vec![],
                         },
                         AddPhase::Id => Change::Add {
                             id: Some(current_text.to_string()),
                             uri: uri.clone(),
                             flake: true,
+                            follows: vec![],
                         },
+                        AddPhase::Follow => {
+                            // Follow phase uses List screen, not Input
+                            self.build_change()
+                        }
                     },
                     WorkflowData::Change { selected_input, .. } => Change::Change {
                         id: selected_input.clone(),
@@ -493,43 +514,62 @@ impl App {
             }
             // For List screens, use current selections
             Screen::List(screen) => {
-                let selected_items: Vec<String> = screen
-                    .state
-                    .selected_indices()
-                    .iter()
-                    .filter_map(|&i| screen.items.get(i).cloned())
-                    .collect();
+                let selected_indices = screen.state.selected_indices();
 
-                if !selected_items.is_empty() {
-                    return match &self.data {
-                        WorkflowData::Remove { .. } => Change::Remove {
+                match &self.data {
+                    WorkflowData::Add {
+                        phase,
+                        uri,
+                        id,
+                        follow_candidates,
+                        ..
+                    } if *phase == AddPhase::Follow => {
+                        // Build follows from current list selections
+                        let follows: Vec<crate::change::FollowSpec> = selected_indices
+                            .iter()
+                            .filter_map(|&i| follow_candidates.get(i))
+                            .map(|c| c.to_follow_spec())
+                            .collect();
+                        return Change::Add {
+                            id: id.clone(),
+                            uri: uri.clone(),
+                            flake: true,
+                            follows,
+                        };
+                    }
+                    WorkflowData::Remove { .. } if !selected_indices.is_empty() => {
+                        let selected_items: Vec<String> = selected_indices
+                            .iter()
+                            .filter_map(|&i| screen.items.get(i).cloned())
+                            .collect();
+                        return Change::Remove {
                             ids: selected_items.into_iter().map(|s| s.into()).collect(),
-                        },
-                        WorkflowData::Follow {
-                            phase,
-                            selected_input,
-                            ..
-                        } => {
-                            // During SelectInput phase, we can't preview yet
-                            // During SelectTarget phase, use selected_input + current selection
-                            if *phase == FollowPhase::SelectTarget {
-                                if let Some(input) = selected_input {
-                                    let target =
-                                        selected_items.into_iter().next().unwrap_or_default();
-                                    Change::Follows {
-                                        input: input.clone().into(),
-                                        target,
-                                    }
-                                } else {
-                                    Change::None
-                                }
-                            } else {
-                                // SelectInput phase - no preview possible
-                                Change::None
-                            }
+                        };
+                    }
+                    WorkflowData::Follow {
+                        phase,
+                        selected_input,
+                        ..
+                    } => {
+                        // During SelectInput phase, we can't preview yet
+                        // During SelectTarget phase, use selected_input + current selection
+                        if *phase == FollowPhase::SelectTarget
+                            && !selected_indices.is_empty()
+                            && let Some(input) = selected_input
+                        {
+                            let target = screen
+                                .items
+                                .get(selected_indices[0])
+                                .cloned()
+                                .unwrap_or_default();
+                            return Change::Follows {
+                                input: input.clone().into(),
+                                target,
+                            };
                         }
-                        _ => self.build_change(),
-                    };
+                        return Change::None;
+                    }
+                    _ => {}
                 }
                 // For Follow workflow, return None when nothing selected yet
                 if let WorkflowData::Follow { .. } = &self.data {
@@ -566,6 +606,16 @@ impl App {
         match action {
             InputAction::ToggleDiff => {
                 self.show_diff = !self.show_diff;
+                UpdateResult::Continue
+            }
+            InputAction::ToggleFollows => {
+                // Toggle follows_enabled in Add workflow
+                if let WorkflowData::Add {
+                    follows_enabled, ..
+                } = &mut self.data
+                {
+                    *follows_enabled = !*follows_enabled;
+                }
                 UpdateResult::Continue
             }
             _ => {
@@ -685,30 +735,114 @@ impl App {
     }
 
     fn handle_input_submit(&mut self, text: String) -> UpdateResult {
-        match &mut self.data {
-            WorkflowData::Add { phase, uri, id } => match phase {
+        // Handle Add workflow separately to avoid borrow conflicts
+        if let WorkflowData::Add { phase, .. } = &self.data {
+            match phase {
                 AddPhase::Uri => {
                     let (inferred_id, normalized_uri) = Self::parse_uri_and_infer_id(&text);
-                    *uri = Some(normalized_uri);
-                    *phase = AddPhase::Id;
+                    if let WorkflowData::Add { phase, uri, .. } = &mut self.data {
+                        *uri = Some(normalized_uri);
+                        *phase = AddPhase::Id;
+                    }
                     self.screen = Screen::Input(InputScreen {
                         state: InputState::new(inferred_id.as_deref()),
                         prompt: format!("for {}", text),
                         label: Some("ID".into()),
                     });
-                    UpdateResult::Continue
+                    return UpdateResult::Continue;
                 }
                 AddPhase::Id => {
-                    *id = Some(text);
-                    self.transition_to_confirm()
+                    // Extract uri for fetching before mutating
+                    let uri_for_fetch = if let WorkflowData::Add {
+                        uri,
+                        follows_enabled,
+                        ..
+                    } = &self.data
+                    {
+                        if *follows_enabled { uri.clone() } else { None }
+                    } else {
+                        None
+                    };
+
+                    // Update the id
+                    if let WorkflowData::Add { id, .. } = &mut self.data {
+                        *id = Some(text);
+                    }
+
+                    // Fetch follow candidates if enabled
+                    let candidates = if let Some(uri_str) = uri_for_fetch.as_ref() {
+                        self.fetch_follow_candidates_new(uri_str)
+                    } else {
+                        vec![]
+                    };
+
+                    // Update data with candidates
+                    let should_show_follow = if let WorkflowData::Add {
+                        phase,
+                        follow_candidates,
+                        selected_follows,
+                        follows_enabled,
+                        ..
+                    } = &mut self.data
+                    {
+                        for (i, candidate) in candidates.into_iter().enumerate() {
+                            follow_candidates.push(candidate);
+                            selected_follows.insert(i);
+                        }
+                        if !follow_candidates.is_empty() && *follows_enabled {
+                            *phase = AddPhase::Follow;
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
+                    if should_show_follow {
+                        let items = if let WorkflowData::Add {
+                            follow_candidates, ..
+                        } = &self.data
+                        {
+                            follow_candidates
+                                .iter()
+                                .map(|c| format!("{} → {}", c.dep_input, c.local_input))
+                                .collect()
+                        } else {
+                            vec![]
+                        };
+                        let num_candidates = items.len();
+                        self.screen = Screen::List(ListScreen::multi(
+                            items,
+                            "Select inputs to follow",
+                            self.show_diff,
+                        ));
+                        // Pre-select all candidates
+                        if let Screen::List(ref mut list_screen) = self.screen {
+                            for i in 0..num_candidates {
+                                list_screen.state.select(i);
+                            }
+                        }
+                        return UpdateResult::Continue;
+                    } else {
+                        return self.transition_to_confirm();
+                    }
                 }
-            },
+                AddPhase::Follow => {
+                    // This shouldn't happen (Follow uses List screen)
+                    return self.transition_to_confirm();
+                }
+            }
+        }
+
+        match &mut self.data {
             WorkflowData::Change { uri, .. } => {
                 *uri = Some(text);
                 self.transition_to_confirm()
             }
-            // These workflows don't use input screens
-            WorkflowData::Remove { .. }
+            // These workflows don't use input screens, or are handled above (Add)
+            WorkflowData::Add { .. }
+            | WorkflowData::Remove { .. }
             | WorkflowData::SelectOne { .. }
             | WorkflowData::SelectMany { .. }
             | WorkflowData::ConfirmOnly { .. }
@@ -751,6 +885,18 @@ impl App {
             WorkflowData::SelectMany { selected_inputs } => {
                 *selected_inputs = items;
                 UpdateResult::Done
+            }
+            WorkflowData::Add {
+                phase,
+                selected_follows,
+                ..
+            } if *phase == AddPhase::Follow => {
+                // Update selected_follows from the selected indices
+                selected_follows.clear();
+                for idx in indices {
+                    selected_follows.insert(idx);
+                }
+                self.transition_to_confirm()
             }
             WorkflowData::Follow {
                 phase,
@@ -800,13 +946,34 @@ impl App {
 
     fn go_back(&mut self) {
         match &mut self.data {
-            WorkflowData::Add { phase, id, uri } => {
-                *phase = AddPhase::Id;
-                self.screen = Screen::Input(InputScreen {
-                    state: InputState::new(id.as_deref()),
-                    prompt: format!("for {}", uri.as_deref().unwrap_or("")),
-                    label: Some("ID".into()),
-                });
+            WorkflowData::Add {
+                phase,
+                id,
+                uri,
+                follow_candidates,
+                ..
+            } => {
+                match phase {
+                    AddPhase::Follow => {
+                        // Go back from Follow phase to Id input
+                        *phase = AddPhase::Id;
+                        follow_candidates.clear();
+                        self.screen = Screen::Input(InputScreen {
+                            state: InputState::new(id.as_deref()),
+                            prompt: format!("for {}", uri.as_deref().unwrap_or("")),
+                            label: Some("ID".into()),
+                        });
+                    }
+                    _ => {
+                        // From confirm screen, go back to Id input
+                        *phase = AddPhase::Id;
+                        self.screen = Screen::Input(InputScreen {
+                            state: InputState::new(id.as_deref()),
+                            prompt: format!("for {}", uri.as_deref().unwrap_or("")),
+                            label: Some("ID".into()),
+                        });
+                    }
+                }
             }
             WorkflowData::Change {
                 selected_input,
@@ -873,6 +1040,29 @@ impl App {
 
     fn parse_uri_and_infer_id(uri: &str) -> (Option<String>, String) {
         super::workflow::parse_uri_and_infer_id(uri)
+    }
+
+    /// Fetch follow candidates for the given URI and return them.
+    fn fetch_follow_candidates_new(&self, uri: &str) -> Vec<crate::follows::FollowCandidate> {
+        use crate::edit::FlakeEdit;
+        use crate::follows::{fetch_flake_metadata, find_follow_candidates, get_dependency_inputs};
+
+        // Try to parse the flake and get local inputs
+        let local_inputs: Vec<String> = if let Ok(mut edit) = FlakeEdit::from_text(&self.flake_text)
+        {
+            edit.list().keys().map(|k| k.to_string()).collect()
+        } else {
+            return vec![];
+        };
+
+        // Try to fetch remote metadata and find candidates
+        match fetch_flake_metadata(uri) {
+            Ok(metadata) => {
+                let dep_inputs = get_dependency_inputs(&metadata);
+                find_follow_candidates(&dep_inputs, &local_inputs)
+            }
+            Err(_) => vec![],
+        }
     }
 
     pub fn cursor_position(&self, area: Rect) -> Option<(u16, u16)> {

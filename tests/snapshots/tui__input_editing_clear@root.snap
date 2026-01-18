@@ -1,6 +1,7 @@
 ---
 source: tests/tui.rs
-expression: "snapshot(&mut terminal, &app)"
+description: "add github:nixos/nixpkgs → Ctrl+u"
+expression: "snapshot(&mut terminal, session.app())"
 ---
 Buffer {
     area: Rect { x: 0, y: 0, width: 80, height: 4 },
@@ -8,7 +9,7 @@ Buffer {
         "────────────────────────────────────────────────────────────────────────────────",
         "❯ Type here...                                                                  ",
         "────────────────────────────────────────────────────────────────────────────────",
-        " Add  Enter flake URI                                    Diff: Off   flake-edit ",
+        " Add  Enter flake URI                       Diff: Off   Follow: On   flake-edit ",
     ],
     styles: [
         x: 0, y: 0, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
@@ -18,7 +19,9 @@ Buffer {
         x: 0, y: 2, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
         x: 0, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
         x: 5, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
-        x: 56, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 43, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
+        x: 54, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
+        x: 55, y: 3, fg: Cyan, bg: Rgb(40, 40, 40), underline: Reset, modifier: BOLD,
         x: 67, y: 3, fg: Gray, bg: Rgb(40, 40, 40), underline: Reset, modifier: NONE,
         x: 68, y: 3, fg: White, bg: DarkGray, underline: Reset, modifier: BOLD,
     ]

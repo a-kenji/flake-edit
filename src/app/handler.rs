@@ -64,6 +64,8 @@ pub fn run(args: CliArgs) -> Result<()> {
             id,
             no_flake,
             shallow,
+            follow,
+            no_follow,
         } => {
             commands::add(
                 &editor,
@@ -75,6 +77,10 @@ pub fn run(args: CliArgs) -> Result<()> {
                     ref_or_rev: ref_or_rev.as_deref(),
                     shallow: *shallow,
                     no_flake: *no_flake,
+                },
+                commands::FollowOptions {
+                    follow: *follow,
+                    no_follow: *no_follow,
                 },
             )?;
         }

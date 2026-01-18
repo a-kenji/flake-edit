@@ -122,3 +122,14 @@ pub fn make_flake_false_attr(id: &str) -> Node {
 pub fn make_nested_follows_attr(input: &str, target: &str) -> Node {
     parse_node(&format!("inputs.{}.follows = \"{}\";", input, target))
 }
+
+/// Create a toplevel follows attribute node for use during Add.
+/// Example: `treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";`
+///
+/// Parameters:
+/// - `id`: The new input being added (e.g., "treefmt-nix")
+/// - `from`: The dependency input to redirect (e.g., "nixpkgs")
+/// - `to`: The local input to follow (e.g., "nixpkgs")
+pub fn make_toplevel_follows_attr(id: &str, from: &str, to: &str) -> Node {
+    parse_node(&format!("{}.inputs.{}.follows = \"{}\";", id, from, to))
+}

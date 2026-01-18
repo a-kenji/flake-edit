@@ -17,50 +17,32 @@ impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
         match self.screen() {
             Screen::Input(screen) => {
+                let mut input = Input::new(
+                    &screen.state,
+                    &screen.prompt,
+                    self.context(),
+                    screen.label.as_deref(),
+                    self.show_diff(),
+                );
+                // Add follows indicator for Add workflow
+                if let Some(follows_enabled) = self.follows_enabled() {
+                    input = input.with_follows(follows_enabled);
+                }
+
                 if self.show_diff() {
                     let diff = self.pending_diff();
                     let diff_lines = diff.lines().count();
                     let (main_area, diff_area) =
                         layouts::content_with_diff_preview(area, diff_lines);
-                    Input::new(
-                        &screen.state,
-                        &screen.prompt,
-                        self.context(),
-                        screen.label.as_deref(),
-                        self.show_diff(),
-                    )
-                    .render(main_area, buf);
+                    input.render(main_area, buf);
                     render_diff_preview(&diff, diff_area, buf);
                 } else {
-                    Input::new(
-                        &screen.state,
-                        &screen.prompt,
-                        self.context(),
-                        screen.label.as_deref(),
-                        self.show_diff(),
-                    )
-                    .render(area, buf);
+                    input.render(area, buf);
                 }
             }
             Screen::List(screen) => {
-                if self.show_diff() {
-                    let diff = self.pending_diff();
-                    // Only show diff preview if there's actual content
-                    if !diff.is_empty() {
-                        let diff_lines = diff.lines().count();
-                        let (main_area, diff_area) =
-                            layouts::content_with_diff_preview(area, diff_lines);
-                        List::new(&screen.state, &screen.items, &screen.prompt, self.context())
-                            .render(main_area, buf);
-                        render_diff_preview(&diff, diff_area, buf);
-                    } else {
-                        List::new(&screen.state, &screen.items, &screen.prompt, self.context())
-                            .render(area, buf);
-                    }
-                } else {
-                    List::new(&screen.state, &screen.items, &screen.prompt, self.context())
-                        .render(area, buf);
-                }
+                List::new(&screen.state, &screen.items, &screen.prompt, self.context())
+                    .render(area, buf);
             }
             Screen::Confirm(screen) => {
                 Confirm::new(&screen.diff, self.context()).render(area, buf);

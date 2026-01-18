@@ -16,6 +16,7 @@ pub enum InputAction {
     BackWord,
     Clear,
     ToggleDiff,
+    ToggleFollows,
     Insert(char),
     /// Move completion selection up
     CompletionUp,
@@ -43,6 +44,7 @@ impl InputAction {
             KeyCode::End => InputAction::End,
             KeyCode::Char('a') if ctrl => InputAction::Home,
             KeyCode::Char('d') if ctrl => InputAction::ToggleDiff,
+            KeyCode::Char('f') if ctrl => InputAction::ToggleFollows,
             KeyCode::Char('e') if ctrl => InputAction::End,
             KeyCode::Char('b') if ctrl => InputAction::BackWord,
             KeyCode::Char('u') | KeyCode::Char('c') if ctrl => InputAction::Clear,
@@ -525,7 +527,7 @@ impl InputState {
                     comp.select_next(); // Select first item
                 }
             }
-            InputAction::ToggleDiff | InputAction::None => {}
+            InputAction::ToggleDiff | InputAction::ToggleFollows | InputAction::None => {}
         }
         None
     }

@@ -9,6 +9,7 @@ pub mod cli;
 pub mod diff;
 pub mod edit;
 pub mod error;
+pub mod follows;
 pub mod input;
 pub mod lock;
 pub mod state;

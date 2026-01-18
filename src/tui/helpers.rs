@@ -34,6 +34,15 @@ pub fn diff_toggle_style(show_diff: bool) -> (&'static str, Style) {
     }
 }
 
+/// Returns (label, style) for follow toggle display
+pub fn follow_toggle_style(show_follows: bool) -> (&'static str, Style) {
+    if show_follows {
+        ("Follow: On", HIGHLIGHT_STYLE)
+    } else {
+        ("Follow: Off", LABEL_STYLE)
+    }
+}
+
 /// Calculate height for inline list widget
 /// Accounts for top/bottom borders (+2) and footer bar (+1)
 pub fn list_height(item_count: usize, max_height: u16) -> u16 {

@@ -13,6 +13,7 @@ use nix_uri::urls::UrlWrapper;
 use crate::change::Change;
 use crate::diff::Diff;
 use crate::edit::FlakeEdit;
+use crate::follows::FollowCandidate;
 use crate::lock::NestedInput;
 
 /// Result from single-select including selected item and whether diff preview is enabled
@@ -42,6 +43,8 @@ pub enum ConfirmResultAction {
 pub enum AddPhase {
     Uri,
     Id,
+    /// Select which follow candidates to apply
+    Follow,
 }
 
 /// Phase within the Follow workflow
@@ -84,6 +87,12 @@ pub enum WorkflowData {
         phase: AddPhase,
         uri: Option<String>,
         id: Option<String>,
+        /// Available follow candidates (populated after Id phase)
+        follow_candidates: Vec<FollowCandidate>,
+        /// Indices of selected follow candidates
+        selected_follows: std::collections::HashSet<usize>,
+        /// Whether follows feature is enabled (toggle with Ctrl+F)
+        follows_enabled: bool,
     },
     Change {
         selected_input: Option<String>,
@@ -121,11 +130,32 @@ impl WorkflowData {
     /// Build a Change based on the current workflow state.
     pub fn build_change(&self) -> Change {
         match self {
-            WorkflowData::Add { id, uri, .. } => Change::Add {
-                id: id.clone(),
-                uri: uri.clone(),
-                flake: true,
-            },
+            WorkflowData::Add {
+                id,
+                uri,
+                follow_candidates,
+                selected_follows,
+                follows_enabled,
+                ..
+            } => {
+                // Build follows list from selected candidates
+                let follows = if *follows_enabled {
+                    follow_candidates
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, _)| selected_follows.contains(i))
+                        .map(|(_, c)| c.to_follow_spec())
+                        .collect()
+                } else {
+                    vec![]
+                };
+                Change::Add {
+                    id: id.clone(),
+                    uri: uri.clone(),
+                    flake: true,
+                    follows,
+                }
+            }
             WorkflowData::Change {
                 selected_input,
                 uri,

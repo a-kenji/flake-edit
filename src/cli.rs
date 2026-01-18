@@ -114,6 +114,15 @@ pub enum Command {
         /// Use shallow clone for the input.
         #[arg(long, short)]
         shallow: bool,
+        /// Enable automatic follows detection for this input.
+        /// Fetches the dependency's metadata and creates follows directives for
+        /// any inputs that match your existing top-level inputs by name.
+        #[arg(long, short = 'f')]
+        follow: bool,
+        /// Disable automatic follows detection.
+        /// In TUI mode, follows are enabled by default; use this to disable.
+        #[arg(long)]
+        no_follow: bool,
     },
     /// Remove a specific flake reference based on its id.
     #[clap(alias = "rm")]
