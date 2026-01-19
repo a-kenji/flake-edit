@@ -1,29 +1,26 @@
 use std::collections::HashMap;
 use std::process::Command;
 
-use reqwest::blocking::Client;
-use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue, USER_AGENT};
 use semver::Version;
 use serde::Deserialize;
 use thiserror::Error;
+use ureq::Agent;
 
 use crate::version::parse_ref;
+
 #[derive(Error, Debug)]
 pub enum ApiError {
     #[error("HTTP request failed: {0}")]
-    HttpError(#[from] reqwest::Error),
+    HttpError(#[from] ureq::Error),
 
     #[error("JSON parsing failed: {0}")]
     JsonError(#[from] serde_json::Error),
 
-    #[error("Invalid header value: {0}")]
-    InvalidHeader(#[from] reqwest::header::InvalidHeaderValue),
-
     #[error("UTF-8 conversion failed: {0}")]
     Utf8Error(#[from] std::string::FromUtf8Error),
 
-    #[error("Failed to execute command: {0}")]
-    CommandError(#[from] std::io::Error),
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
 
     #[error("No tags found for repository")]
     NoTagsFound,
@@ -32,45 +29,65 @@ pub enum ApiError {
     InvalidInput(String),
 }
 
-#[derive(Default)]
+/// Headers for HTTP requests
+#[derive(Clone, Default)]
+struct Headers {
+    user_agent: Option<String>,
+    authorization: Option<String>,
+}
+
 pub struct ForgeClient {
-    client: Client,
+    agent: Agent,
+}
+
+impl Default for ForgeClient {
+    fn default() -> Self {
+        Self {
+            agent: Agent::new_with_defaults(),
+        }
+    }
 }
 
 impl ForgeClient {
-    fn get(&self, url: &str, headers: HeaderMap) -> Result<String, ApiError> {
-        let response = self.client.get(url).headers(headers).send()?;
-        let text = response.text()?;
-        Ok(text)
+    fn get(&self, url: &str, headers: &Headers) -> Result<String, ApiError> {
+        let mut request = self.agent.get(url);
+        if let Some(ref ua) = headers.user_agent {
+            request = request.header("User-Agent", ua);
+        }
+        if let Some(ref auth) = headers.authorization {
+            request = request.header("Authorization", auth);
+        }
+        let body = request.call()?.body_mut().read_to_string()?;
+        Ok(body)
     }
 
     /// Check if a URL returns a successful (2xx) response
-    fn head_ok(&self, url: &str, headers: HeaderMap) -> bool {
-        match self.client.get(url).headers(headers).send() {
-            Ok(response) => response.status().is_success(),
-            Err(_) => false,
+    fn head_ok(&self, url: &str, headers: &Headers) -> bool {
+        let mut request = self.agent.get(url);
+        if let Some(ref ua) = headers.user_agent {
+            request = request.header("User-Agent", ua);
         }
+        if let Some(ref auth) = headers.authorization {
+            request = request.header("Authorization", auth);
+        }
+        request.call().is_ok()
     }
 
-    fn base_headers() -> HeaderMap {
-        let mut headers = HeaderMap::new();
-        if let Ok(user_agent) = HeaderValue::from_str("flake-edit") {
-            headers.insert(USER_AGENT, user_agent);
+    fn base_headers() -> Headers {
+        Headers {
+            user_agent: Some("flake-edit".to_string()),
+            authorization: None,
         }
-        headers
     }
 
     /// Create headers with optional Bearer token authentication for the given domain.
-    fn auth_headers(domain: &str) -> Result<HeaderMap, ApiError> {
+    fn auth_headers(domain: &str) -> Headers {
         let mut headers = Self::base_headers();
         if let Some(token) = get_forge_token(domain) {
             tracing::debug!("Found token for {}", domain);
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {token}"))?,
-            );
+            headers.authorization = Some(format!("Bearer {token}"));
         }
-        Ok(headers)
+        headers
     }
 
     pub fn detect_forge_type(&self, domain: &str) -> ForgeType {
@@ -86,7 +103,7 @@ impl ForgeClient {
             // Try Forgejo version endpoint first
             let forgejo_url = format!("{}://{}/api/forgejo/v1/version", scheme, domain);
             tracing::debug!("Trying Forgejo endpoint: {}", forgejo_url);
-            if let Ok(text) = self.get(&forgejo_url, headers.clone()) {
+            if let Ok(text) = self.get(&forgejo_url, &headers) {
                 tracing::debug!("Forgejo endpoint response body: {}", text);
                 if let Some(forge_type) = parse_forge_version(&text) {
                     tracing::info!("Detected Forgejo/Gitea at {}", domain);
@@ -97,7 +114,7 @@ impl ForgeClient {
             // Try Gitea version endpoint
             let gitea_url = format!("{}://{}/api/v1/version", scheme, domain);
             tracing::debug!("Trying Gitea endpoint: {}", gitea_url);
-            if let Ok(text) = self.get(&gitea_url, headers.clone()) {
+            if let Ok(text) = self.get(&gitea_url, &headers) {
                 tracing::debug!("Gitea endpoint response body: {}", text);
                 if let Some(forge_type) = parse_forge_version(&text) {
                     tracing::info!("Detected Forgejo/Gitea at {}", domain);
@@ -119,10 +136,10 @@ impl ForgeClient {
     }
 
     pub fn query_github_tags(&self, repo: &str, owner: &str) -> Result<IntermediaryTags, ApiError> {
-        let headers = Self::auth_headers("github.com")?;
+        let headers = Self::auth_headers("github.com");
         let body = self.get(
             &format!("https://api.github.com/repos/{}/{}/tags", owner, repo),
-            headers,
+            &headers,
         )?;
 
         tracing::debug!("Body from api: {body}");
@@ -132,24 +149,24 @@ impl ForgeClient {
 
     /// Check if a specific branch exists (returns true/false, no error on 404)
     pub fn branch_exists_github(&self, repo: &str, owner: &str, branch: &str) -> bool {
-        let headers = Self::auth_headers("github.com").unwrap_or_else(|_| Self::base_headers());
+        let headers = Self::auth_headers("github.com");
         let url = format!(
             "https://api.github.com/repos/{}/{}/branches/{}",
             owner, repo, branch
         );
 
-        self.head_ok(&url, headers)
+        self.head_ok(&url, &headers)
     }
 
     /// Check if a specific branch exists on Gitea/Forgejo
     pub fn branch_exists_gitea(&self, repo: &str, owner: &str, domain: &str, branch: &str) -> bool {
-        let headers = Self::auth_headers(domain).unwrap_or_else(|_| Self::base_headers());
+        let headers = Self::auth_headers(domain);
         for scheme in ["https", "http"] {
             let url = format!(
                 "{}://{}/api/v1/repos/{}/{}/branches/{}",
                 scheme, domain, owner, repo, branch
             );
-            if self.head_ok(&url, headers.clone()) {
+            if self.head_ok(&url, &headers) {
                 return true;
             }
         }
@@ -162,7 +179,7 @@ impl ForgeClient {
         owner: &str,
         domain: &str,
     ) -> Result<IntermediaryTags, ApiError> {
-        let headers = Self::auth_headers(domain)?;
+        let headers = Self::auth_headers(domain);
 
         // Try HTTPS first, then HTTP
         for scheme in ["https", "http"] {
@@ -172,7 +189,7 @@ impl ForgeClient {
             );
             tracing::debug!("Trying Gitea tags endpoint: {}", url);
 
-            if let Ok(body) = self.get(&url, headers.clone()) {
+            if let Ok(body) = self.get(&url, &headers) {
                 tracing::debug!("Body from Gitea API: {body}");
                 if let Ok(tags) = serde_json::from_str::<IntermediaryTags>(&body) {
                     return Ok(tags);
@@ -188,7 +205,7 @@ impl ForgeClient {
         repo: &str,
         owner: &str,
     ) -> Result<IntermediaryBranches, ApiError> {
-        let headers = Self::auth_headers("github.com")?;
+        let headers = Self::auth_headers("github.com");
 
         let mut all_branches = Vec::new();
         let mut page = 1;
@@ -201,7 +218,7 @@ impl ForgeClient {
             );
             tracing::debug!("Fetching branches page {}: {}", page, url);
 
-            let body = self.get(&url, headers.clone())?;
+            let body = self.get(&url, &headers)?;
             let page_branches = serde_json::from_str::<IntermediaryBranches>(&body)?;
 
             let count = page_branches.0.len();
@@ -227,7 +244,7 @@ impl ForgeClient {
         owner: &str,
         domain: &str,
     ) -> Result<IntermediaryBranches, ApiError> {
-        let headers = Self::auth_headers(domain)?;
+        let headers = Self::auth_headers(domain);
 
         let mut all_branches = Vec::new();
         let mut page = 1;
@@ -242,7 +259,7 @@ impl ForgeClient {
                 );
                 tracing::debug!("Trying Gitea branches endpoint: {}", url);
 
-                match self.get(&url, headers.clone()) {
+                match self.get(&url, &headers) {
                     Ok(body) => {
                         tracing::debug!("Body from Gitea API: {body}");
                         match serde_json::from_str::<IntermediaryBranches>(&body) {
