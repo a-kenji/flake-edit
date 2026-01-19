@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.2] - 2026-01-19
+
+### 🚀 Features
+
+- Initialize a configuration file
+- Unfollow stale follows
+
+### 🐛 Bug Fixes
+
+- Only show diff before commit
+
+
 ## [0.3.1] - 2026-01-18
 
 ### 🚀 Features
