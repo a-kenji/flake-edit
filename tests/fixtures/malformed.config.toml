@@ -1,0 +1,5 @@
+# This is a malformed config file for testing error handling
+
+[follow.auto
+# Missing closing bracket - invalid TOML syntax
+ignore = ["systems"]

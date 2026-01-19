@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::cache::CacheConfig;
-use crate::config::Config;
+use crate::config::{Config, ConfigError};
 
 /// Application state for a flake-edit session.
 ///
@@ -29,8 +29,12 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(flake_text: String, flake_path: PathBuf) -> Self {
-        Self {
+    pub fn new(
+        flake_text: String,
+        flake_path: PathBuf,
+        config_path: Option<PathBuf>,
+    ) -> Result<Self, ConfigError> {
+        Ok(Self {
             flake_text,
             flake_path,
             lock_file: None,
@@ -39,8 +43,8 @@ impl AppState {
             interactive: true,
             no_cache: false,
             cache_path: None,
-            config: Config::load(),
-        }
+            config: Config::load_from(config_path.as_deref())?,
+        })
     }
 
     pub fn with_diff(mut self, diff: bool) -> Self {

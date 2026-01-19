@@ -29,6 +29,9 @@ pub struct CliArgs {
     /// Path to a custom cache file (for testing or portable configs).
     #[arg(long)]
     cache: Option<String>,
+    /// Path to a custom configuration file.
+    #[arg(long)]
+    config: Option<String>,
 
     #[command(subcommand)]
     subcommand: Command,
@@ -93,6 +96,10 @@ impl CliArgs {
 
     pub fn cache(&self) -> Option<&String> {
         self.cache.as_ref()
+    }
+
+    pub fn config(&self) -> Option<&String> {
+        self.config.as_ref()
     }
 }
 

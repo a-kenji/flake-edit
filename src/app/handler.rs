@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use crate::cli::{CliArgs, Command, ListFormat};
+use crate::config::ConfigError;
 use crate::edit::{InputMap, sorted_input_ids};
 use crate::input::Follows;
 use crate::tui;
@@ -24,6 +25,9 @@ pub enum HandlerError {
 
     #[error(transparent)]
     FlakeEdit(#[from] crate::error::FlakeEditError),
+
+    #[error(transparent)]
+    Config(#[from] ConfigError),
 
     #[error("Flake not found")]
     FlakeNotFound,
@@ -48,7 +52,7 @@ pub fn run(args: CliArgs) -> Result<()> {
     let interactive = tui::is_interactive(args.non_interactive());
 
     let no_cache = args.no_cache();
-    let state = AppState::new(editor.text(), flake_path)
+    let state = AppState::new(editor.text(), flake_path, args.config().map(PathBuf::from))?
         .with_diff(args.diff())
         .with_no_lock(args.no_lock())
         .with_interactive(interactive)

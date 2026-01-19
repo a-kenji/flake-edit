@@ -1,0 +1,32 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/centerpiece.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/centerpiece.flake.lock"
+    - "--config"
+    - "[FIXTURES]/ignore_treefmt.config.toml"
+    - "--diff"
+    - follow
+    - "--auto"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -4,6 +4,7 @@
+   inputs = {
+     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+     home-manager.url = "github:nix-community/home-manager";
++    home-manager.inputs.nixpkgs.follows = "nixpkgs";
+     treefmt-nix.url = "github:numtide/treefmt-nix";
+     crane.url = "github:ipetkov/crane";
+   };
+
+----- stderr -----

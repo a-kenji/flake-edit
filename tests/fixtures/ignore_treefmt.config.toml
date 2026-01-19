@@ -1,0 +1,5 @@
+# Test config that ignores treefmt-nix.nixpkgs for follow --auto
+
+[follow.auto]
+# Ignore the specific nested input treefmt-nix.nixpkgs
+ignore = ["treefmt-nix.nixpkgs"]

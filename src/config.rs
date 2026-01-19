@@ -5,6 +5,23 @@ use std::path::{Path, PathBuf};
 /// Default configuration embedded in the binary.
 pub const DEFAULT_CONFIG_TOML: &str = include_str!("assets/config.toml");
 
+/// Error type for configuration loading failures.
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigError {
+    #[error("Failed to read config file '{path}': {source}")]
+    Io {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("Failed to parse config file '{path}':\n{source}")]
+    Parse {
+        path: PathBuf,
+        #[source]
+        source: toml::de::Error,
+    },
+}
+
 /// Filenames to search for project-level configuration.
 const CONFIG_FILENAMES: &[&str] = &["flake-edit.toml", ".flake-edit.toml"];
 
@@ -80,10 +97,39 @@ impl Config {
     /// 1. Project-level config (flake-edit.toml or .flake-edit.toml in current/parent dirs)
     /// 2. User-level config (~/.config/flake-edit/config.toml)
     /// 3. Default embedded config
-    pub fn load() -> Self {
-        Self::load_project_config()
-            .or_else(Self::load_user_config)
-            .unwrap_or_default()
+    ///
+    /// Returns an error if a config file exists but is malformed.
+    pub fn load() -> Result<Self, ConfigError> {
+        if let Some(path) = Self::project_config_path() {
+            return Self::try_load_from_file(&path);
+        }
+        if let Some(path) = Self::user_config_path() {
+            return Self::try_load_from_file(&path);
+        }
+        Ok(Self::default())
+    }
+
+    /// Load configuration from an explicitly specified path.
+    ///
+    /// Returns an error if the file doesn't exist or is malformed.
+    /// If no path is specified, falls back to the default load order.
+    pub fn load_from(path: Option<&Path>) -> Result<Self, ConfigError> {
+        match path {
+            Some(p) => Self::try_load_from_file(p),
+            None => Self::load(),
+        }
+    }
+
+    /// Try to load config from a file, returning detailed errors on failure.
+    fn try_load_from_file(path: &Path) -> Result<Self, ConfigError> {
+        let content = std::fs::read_to_string(path).map_err(|e| ConfigError::Io {
+            path: path.to_path_buf(),
+            source: e,
+        })?;
+        toml::from_str(&content).map_err(|e| ConfigError::Parse {
+            path: path.to_path_buf(),
+            source: e,
+        })
     }
 
     pub fn project_config_path() -> Option<PathBuf> {
@@ -105,17 +151,6 @@ impl Config {
         Self::xdg_config_dir()
     }
 
-    fn load_project_config() -> Option<Self> {
-        let path = Self::project_config_path()?;
-        Self::load_from_file(&path)
-    }
-
-    /// Load user-level config from XDG config directory.
-    fn load_user_config() -> Option<Self> {
-        let path = Self::user_config_path()?;
-        Self::load_from_file(&path)
-    }
-
     fn find_config_in_ancestors(start: &Path) -> Option<PathBuf> {
         let mut current = start.to_path_buf();
         loop {
@@ -130,17 +165,6 @@ impl Config {
             }
         }
         None
-    }
-
-    fn load_from_file(path: &Path) -> Option<Self> {
-        let content = std::fs::read_to_string(path).ok()?;
-        match toml::from_str(&content) {
-            Ok(config) => Some(config),
-            Err(e) => {
-                tracing::warn!("Failed to parse config at {}: {}", path.display(), e);
-                None
-            }
-        }
     }
 }
 

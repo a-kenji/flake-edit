@@ -19,6 +19,11 @@ fn fixture_lock_path(name: &str) -> String {
     format!("{dir}/tests/fixtures/{name}.flake.lock")
 }
 
+fn fixture_config_path(name: &str) -> String {
+    let dir = env!("CARGO_MANIFEST_DIR");
+    format!("{dir}/tests/fixtures/{name}.config.toml")
+}
+
 const FIXTURE_MARKER: &str = "/tests/fixtures/";
 
 /// Add redaction to filter environment-dependent fixture paths in args metadata.
@@ -36,6 +41,12 @@ fn path_redactions(settings: &mut insta::Settings) {
 
 fn error_filters(settings: &mut insta::Settings) {
     settings.add_filter(r"\.rs:\d+", ".rs:<LINE>");
+}
+
+/// Filter fixture paths in stderr output (e.g., config parse errors).
+fn stderr_path_filters(settings: &mut insta::Settings) {
+    // Replace absolute paths containing /tests/fixtures/ with [FIXTURES]/
+    settings.add_filter(r"'[^']*(/tests/fixtures/)([^']+)'", "'[FIXTURES]/$2'");
 }
 
 #[rstest]
@@ -416,6 +427,55 @@ fn test_follow_auto(#[case] fixture: &str) {
                 .arg(fixture_path(fixture))
                 .arg("--lock-file")
                 .arg(fixture_lock_path(fixture))
+                .arg("--diff")
+                .arg("follow")
+                .arg("--auto")
+        );
+    });
+}
+
+/// Test the follow --auto command with a custom config file
+#[rstest]
+#[case("centerpiece", "ignore_treefmt")] // Config ignores treefmt-nix.nixpkgs, only home-manager follows
+fn test_follow_auto_with_config(#[case] fixture: &str, #[case] config: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    let suffix = format!("{fixture}_{config}");
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--lock-file")
+                .arg(fixture_lock_path(fixture))
+                .arg("--config")
+                .arg(fixture_config_path(config))
+                .arg("--diff")
+                .arg("follow")
+                .arg("--auto")
+        );
+    });
+}
+
+/// Test behavior with a malformed config file (returns error with line info)
+#[rstest]
+#[case("centerpiece", "malformed")] // Malformed TOML shows parse error with line number
+fn test_follow_auto_with_malformed_config(#[case] fixture: &str, #[case] config: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    stderr_path_filters(&mut settings);
+    let suffix = format!("{fixture}_{config}");
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--lock-file")
+                .arg(fixture_lock_path(fixture))
+                .arg("--config")
+                .arg(fixture_config_path(config))
                 .arg("--diff")
                 .arg("follow")
                 .arg("--auto")

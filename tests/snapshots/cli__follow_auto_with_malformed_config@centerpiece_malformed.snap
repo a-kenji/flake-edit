@@ -1,0 +1,37 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/centerpiece.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/centerpiece.flake.lock"
+    - "--config"
+    - "[FIXTURES]/malformed.config.toml"
+    - "--diff"
+    - follow
+    - "--auto"
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+Error: 
+   0: Failed to parse config file '[FIXTURES]/malformed.config.toml':
+      TOML parse error at line 3, column 13
+        |
+      3 | [follow.auto
+        |             ^
+      invalid table header
+      expected `.`, `]`
+
+   1: TOML parse error at line 3, column 13
+        |
+      3 | [follow.auto
+        |             ^
+      invalid table header
+      expected `.`, `]`
