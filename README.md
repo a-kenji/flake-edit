@@ -15,6 +15,12 @@
     - [`$ flake-edit unpin`](#-flake-edit-unpin)
     - [`$ flake-edit list`](#-flake-edit-list)
     - [`$ flake-edit follow`](#-flake-edit-follow)
+    - [`$ flake-edit config`](#-flake-edit-config)
+  - [Quick Start](#quick-start)
+    - [Installation](#installation)
+    - [Running](#running)
+    - [Basic Usage](#basic-usage)
+  - [Configuration](#configuration)
   - [As a library](#as-a-library)
   - [Status](#status)
   - [License](#license)
@@ -48,6 +54,8 @@ Commands:
           Unpin an input so it tracks the upstream default again
   follow
           Add a follows relationship to make an input's dependency follow a top-level input
+  config
+          Manage flake-edit configuration
   help
           Print this message or the help of the given subcommand(s)
 
@@ -62,6 +70,10 @@ Options:
           Skip updating the lockfile after editing flake.nix
       --non-interactive
           Disable interactive prompts
+      --no-cache
+          Disable reading from and writing to the completion cache
+      --cache <CACHE>
+          Path to a custom cache file (for testing or portable configs)
   -h, --help
           Print help
   -V, --version
@@ -252,6 +264,90 @@ Add a follows relationship to a specific nested input.
 ![flake-edit follow example](https://vhs.charm.sh/vhs-7p7Gx5DTc0oIf5HMsLhdCe.gif)
 Automatically add follows relationships for all nested inputs matching top-level inputs.
 ![flake-edit follow auto example](https://vhs.charm.sh/vhs-7pxMkZCy3hnleU5y875Rp3.gif)
+
+### `$ flake-edit config`
+<!-- `$ flake-edit help config` -->
+
+```
+Manage flake-edit configuration
+
+Usage: flake-edit config [OPTIONS]
+
+Options:
+      --print-default
+          Output the default configuration to stdout
+      --path
+          Show where configuration would be loaded from
+  -h, --help
+          Print help
+```
+
+## Quick Start
+
+### Installation
+
+```
+cargo install flake-edit --locked
+```
+
+### Running
+
+From `nixpkgs`:
+
+```
+nix run nixpkgs#flake-edit -- --diff follow --auto
+```
+
+From `main` of `flake-edit`:
+```
+nix run github:a-kenji/flake-edit -- --diff follow --auto
+```
+
+### Basic Usage
+
+Add a new input to your flake:
+
+```
+flake-edit add github:numtide/treefmt-nix
+```
+
+Auto-follow all your inputs through `flake.nix`:
+
+```
+flake-edit follow --auto
+```
+
+Add `--diff` to any command to get a preview of the changes:
+
+```
+flake-edit --diff follow --auto
+```
+
+## Configuration
+
+`flake-edit` uses TOML configuration files.
+
+Run `flake-edit config --print-default` to create a default configuration:
+
+<!-- `$ flake-edit config --print-default` -->
+
+```
+# flake-edit ~ configuration file
+# https://github.com/a-kenji/flake-edit
+
+# Configuration for `flake-edit follow --auto`
+[follow.auto]
+# Inputs to ignore. Supports two formats:
+#   - Full path: "crane.nixpkgs" - ignores only that specific nested input
+#   - Simple name: "systems" - ignores all nested inputs with that name
+# ignore = ["systems", "crane.flake-utils"]
+
+# Alias mappings.
+# Key is the canonical name (must exist at top-level), values are alternatives.
+# Example: if nested input is "nixpkgs-lib" and top-level "nixpkgs" exists,
+# auto-follow will suggest: poetry2nix.nixpkgs-lib -> nixpkgs
+# aliases = { nixpkgs = ["nixpkgs-lib"] }
+```
 
 ## As a library
 

@@ -166,6 +166,14 @@ pub fn run(args: CliArgs) -> Result<()> {
                 CompletionMode::None => {}
             }
         }
+
+        Command::Config {
+            print_default,
+            path,
+        } => {
+            commands::config(*print_default, *path)?;
+            return Ok(());
+        }
     }
 
     // Cache any inputs we've seen during this command.

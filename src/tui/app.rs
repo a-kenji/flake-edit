@@ -426,9 +426,12 @@ impl App {
                 }
             }
 
-            // List, Completion, and Follow don't need TUI
+            // List, Completion, Follow, and Config don't need TUI
             // Follow always requires both input and target arguments
-            Command::List { .. } | Command::Completion { .. } | Command::Follow { .. } => None,
+            Command::List { .. }
+            | Command::Completion { .. }
+            | Command::Follow { .. }
+            | Command::Config { .. } => None,
         }
     }
 

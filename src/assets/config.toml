@@ -1,0 +1,15 @@
+# flake-edit ~ configuration file
+# https://github.com/a-kenji/flake-edit
+
+# Configuration for `flake-edit follow --auto`
+[follow.auto]
+# Inputs to ignore. Supports two formats:
+#   - Full path: "crane.nixpkgs" - ignores only that specific nested input
+#   - Simple name: "systems" - ignores all nested inputs with that name
+# ignore = ["systems", "crane.flake-utils"]
+
+# Alias mappings.
+# Key is the canonical name (must exist at top-level), values are alternatives.
+# Example: if nested input is "nixpkgs-lib" and top-level "nixpkgs" exists,
+# auto-follow will suggest: poetry2nix.nixpkgs-lib -> nixpkgs
+# aliases = { nixpkgs = ["nixpkgs-lib"] }
