@@ -9,7 +9,6 @@ info:
     - "[FIXTURES]/first_nested_node.flake.lock"
     - "--diff"
     - follow
-    - "--auto"
   env:
     NO_COLOR: "1"
 ---

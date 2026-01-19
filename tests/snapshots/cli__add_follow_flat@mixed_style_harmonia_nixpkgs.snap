@@ -6,7 +6,7 @@ info:
     - "--flake"
     - "[FIXTURES]/mixed_style.flake.nix"
     - "--diff"
-    - follow
+    - add-follow
     - harmonia.nixpkgs
     - nixpkgs
   env:

@@ -9,7 +9,6 @@ info:
     - "[FIXTURES]/flat_nested_flat.flake.lock"
     - "--diff"
     - follow
-    - "--auto"
   env:
     NO_COLOR: "1"
 ---

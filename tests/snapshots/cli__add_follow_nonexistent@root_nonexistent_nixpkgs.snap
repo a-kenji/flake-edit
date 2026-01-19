@@ -6,7 +6,7 @@ info:
     - "--flake"
     - "[FIXTURES]/root.flake.nix"
     - "--diff"
-    - follow
+    - add-follow
     - nonexistent.nixpkgs
     - nixpkgs
   env:

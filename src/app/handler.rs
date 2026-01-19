@@ -31,12 +31,25 @@ pub enum HandlerError {
 
     #[error("Flake not found")]
     FlakeNotFound,
+
+    #[error("--flake and --lock cannot be used with 'follow [PATHS]'")]
+    IncompatibleFollowOptions,
 }
 
 /// Main entry point for the application.
 ///
 /// Parses CLI arguments, initializes state, and dispatches to command handlers.
 pub fn run(args: CliArgs) -> Result<()> {
+    // Handle batch mode for follow [paths...] early, before creating Editor/AppState
+    if let Command::Follow { paths } = args.subcommand()
+        && !paths.is_empty()
+    {
+        if args.flake().is_some() || args.lock_file().is_some() {
+            return Err(HandlerError::IncompatibleFollowOptions);
+        }
+        return commands::follow_auto_batch(paths, &args).map_err(HandlerError::Command);
+    }
+
     // Find flake.nix path
     let flake_path = if let Some(flake) = args.flake() {
         PathBuf::from(flake)
@@ -120,18 +133,18 @@ pub fn run(args: CliArgs) -> Result<()> {
             commands::unpin(&editor, &mut flake_edit, &state, id.clone())?;
         }
 
-        Command::Follow {
-            input,
-            target,
-            auto,
-        } => {
-            commands::follow(
+        Command::Follow { paths: _ } => {
+            // Batch mode with paths is handled above; here we run on the current flake
+            commands::follow_auto(&editor, &mut flake_edit, &state)?;
+        }
+
+        Command::AddFollow { input, target } => {
+            commands::add_follow(
                 &editor,
                 &mut flake_edit,
                 &state,
                 input.clone(),
                 target.clone(),
-                *auto,
             )?;
         }
 

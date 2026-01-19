@@ -3,13 +3,8 @@ source: tests/cli.rs
 info:
   program: flake-edit
   args:
-    - "--flake"
-    - "[FIXTURES]/centerpiece.flake.nix"
-    - "--lock-file"
-    - "[FIXTURES]/centerpiece.flake.lock"
     - "--diff"
     - follow
-    - "--auto"
   env:
     NO_COLOR: "1"
 ---

@@ -6,7 +6,7 @@ info:
     - "--flake"
     - "[FIXTURES]/centerpiece.flake.nix"
     - "--diff"
-    - follow
+    - add-follow
     - home-manager.nixpkgs
     - nixpkgs
   env:

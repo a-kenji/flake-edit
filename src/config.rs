@@ -26,6 +26,7 @@ pub enum ConfigError {
 const CONFIG_FILENAMES: &[&str] = &["flake-edit.toml", ".flake-edit.toml"];
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default)]
     pub follow: FollowConfig,
@@ -33,15 +34,9 @@ pub struct Config {
 
 /// Configuration for the `follow` command.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct FollowConfig {
-    #[serde(default)]
-    pub auto: FollowAutoConfig,
-}
-
-/// Configuration for `follow --auto` behavior.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct FollowAutoConfig {
-    /// Inputs to ignore during auto-follow.
+    /// Inputs to ignore during follow.
     #[serde(default)]
     pub ignore: Vec<String>,
 
@@ -51,7 +46,7 @@ pub struct FollowAutoConfig {
     pub aliases: HashMap<String, Vec<String>>,
 }
 
-impl FollowAutoConfig {
+impl FollowConfig {
     /// Check if an input should be ignored.
     ///
     /// Supports two formats:
@@ -176,13 +171,13 @@ mod tests {
     fn test_default_config_parses() {
         let config: Config =
             toml::from_str(DEFAULT_CONFIG_TOML).expect("default config should parse");
-        assert!(config.follow.auto.ignore.is_empty());
-        assert!(config.follow.auto.aliases.is_empty());
+        assert!(config.follow.ignore.is_empty());
+        assert!(config.follow.aliases.is_empty());
     }
 
     #[test]
     fn test_is_ignored_by_name() {
-        let config = FollowAutoConfig {
+        let config = FollowConfig {
             ignore: vec!["flake-utils".to_string(), "systems".to_string()],
             ..Default::default()
         };
@@ -195,7 +190,7 @@ mod tests {
 
     #[test]
     fn test_is_ignored_by_path() {
-        let config = FollowAutoConfig {
+        let config = FollowConfig {
             ignore: vec!["crane.nixpkgs".to_string()],
             ..Default::default()
         };
@@ -207,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_is_ignored_mixed() {
-        let config = FollowAutoConfig {
+        let config = FollowConfig {
             ignore: vec!["systems".to_string(), "crane.flake-utils".to_string()],
             ..Default::default()
         };
@@ -223,7 +218,7 @@ mod tests {
 
     #[test]
     fn test_resolve_alias() {
-        let config = FollowAutoConfig {
+        let config = FollowConfig {
             aliases: HashMap::from([(
                 "nixpkgs".to_string(),
                 vec!["nixpkgs-lib".to_string(), "nixpkgs-stable".to_string()],
@@ -239,14 +234,14 @@ mod tests {
 
     #[test]
     fn test_can_follow_direct_match() {
-        let config = FollowAutoConfig::default();
+        let config = FollowConfig::default();
         assert!(config.can_follow("nixpkgs", "nixpkgs"));
         assert!(!config.can_follow("nixpkgs", "flake-utils"));
     }
 
     #[test]
     fn test_can_follow_with_alias() {
-        let config = FollowAutoConfig {
+        let config = FollowConfig {
             aliases: HashMap::from([("nixpkgs".to_string(), vec!["nixpkgs-lib".to_string()])]),
             ..Default::default()
         };

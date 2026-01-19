@@ -9,7 +9,6 @@ info:
     - "[FIXTURES]/mixed_style.flake.lock"
     - "--diff"
     - follow
-    - "--auto"
   env:
     NO_COLOR: "1"
 ---

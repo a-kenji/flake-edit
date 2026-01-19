@@ -4,12 +4,11 @@ info:
   program: flake-edit
   args:
     - "--flake"
-    - "[FIXTURES]/stale_follows_invalid_parent.flake.nix"
+    - "[FIXTURES]/centerpiece.flake.nix"
     - "--lock-file"
-    - "[FIXTURES]/stale_follows_invalid_parent.flake.lock"
+    - "[FIXTURES]/centerpiece.flake.lock"
     - "--diff"
     - follow
-    - "--auto"
   env:
     NO_COLOR: "1"
 ---
@@ -18,15 +17,15 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -1,8 +1,8 @@
- {
+@@ -4,7 +4,9 @@
    inputs = {
+     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+     home-manager.url = "github:nix-community/home-manager";
++    home-manager.inputs.nixpkgs.follows = "nixpkgs";
      treefmt-nix.url = "github:numtide/treefmt-nix";
 +    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
-     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
--    nixpkgs.inputs.treefmt-nix.follows = "treefmt-nix";
+     crane.url = "github:ipetkov/crane";
    };
 
-   outputs = { self, nixpkgs , treefmt-nix }: { };
 
 ----- stderr -----

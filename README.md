@@ -53,7 +53,9 @@ Commands:
   unpin
           Unpin an input so it tracks the upstream default again
   follow
-          Add a follows relationship to make an input's dependency follow a top-level input
+          Automatically add and remove follows declarations
+  add-follow
+          Manually add a single follows declaration
   config
           Manage flake-edit configuration
   help
@@ -61,7 +63,7 @@ Commands:
 
 Options:
       --flake <FLAKE>
-          Location of the `flake.nix` file, that will be used
+          Location of the `flake.nix` file, that will be used. Defaults to `flake.nix` in the current directory
       --lock-file <LOCK_FILE>
           Location of the `flake.lock` file. Defaults to `flake.lock` in the current directory
       --diff
@@ -73,7 +75,9 @@ Options:
       --no-cache
           Disable reading from and writing to the completion cache
       --cache <CACHE>
-          Path to a custom cache file (for testing or portable configs)
+          Path to a custom cache file
+      --config <CONFIG>
+          Path to a custom configuration file
   -h, --help
           Print help
   -V, --version
@@ -236,15 +240,38 @@ List the outputs, that are specified inside the inputs attribute, in json format
 <!-- `$ flake-edit help follow` -->
 
 ```
-Add a follows relationship to make an input's dependency follow a top-level input.
+Automatically add and remove follows declarations.
 
-Example: `flake-edit follow rust-overlay.nixpkgs nixpkgs`
+Analyzes the flake.lock to find nested inputs that match top-level inputs, then adds appropriate follows declarations and removes stale ones.
+
+With file paths, processes multiple flakes in batch. For every `flake.nix` file passed in it will assume a `flake.lock` file exists in the same directory.
+
+Usage: flake-edit follow [PATHS]...
+
+Arguments:
+  [PATHS]...
+          Flake.nix paths to process. If empty, runs on current directory
+
+Options:
+  -h, --help
+          Print help (see a summary with '-h')
+```
+Automatically add follows relationships for all nested inputs matching top-level inputs.
+![flake-edit follow example](https://vhs.charm.sh/vhs-5ZsxM5lx22BY2IuquxCGgk.gif)
+
+### `$ flake-edit add-follow`
+<!-- `$ flake-edit help add-follow` -->
+
+```
+Manually add a single follows declaration.
+
+Example: `flake-edit add-follow rust-overlay.nixpkgs nixpkgs`
 
 This creates: `rust-overlay.inputs.nixpkgs.follows = "nixpkgs";`
 
 Without arguments, starts an interactive selection.
 
-Usage: flake-edit follow [OPTIONS] [INPUT] [TARGET]
+Usage: flake-edit add-follow [INPUT] [TARGET]
 
 Arguments:
   [INPUT]
@@ -254,16 +281,12 @@ Arguments:
           The target input to follow (e.g., "nixpkgs")
 
 Options:
-  -a, --auto
-          Automatically follow inputs when their nested input names match top-level inputs
-
   -h, --help
           Print help (see a summary with '-h')
 ```
+
 Add a follows relationship to a specific nested input.
-![flake-edit follow example](https://vhs.charm.sh/vhs-7p7Gx5DTc0oIf5HMsLhdCe.gif)
-Automatically add follows relationships for all nested inputs matching top-level inputs.
-![flake-edit follow auto example](https://vhs.charm.sh/vhs-7pxMkZCy3hnleU5y875Rp3.gif)
+![flake-edit add-follow example](https://vhs.charm.sh/vhs-1HFngcI5dHEoTeU2L0K06d.gif)
 
 ### `$ flake-edit config`
 <!-- `$ flake-edit help config` -->
@@ -295,12 +318,12 @@ cargo install flake-edit --locked
 From `nixpkgs`:
 
 ```
-nix run nixpkgs#flake-edit -- --diff follow --auto
+nix run nixpkgs#flake-edit -- --diff follow
 ```
 
 From `main` of `flake-edit`:
 ```
-nix run github:a-kenji/flake-edit -- --diff follow --auto
+nix run github:a-kenji/flake-edit -- --diff follow
 ```
 
 ### Basic Usage
@@ -314,13 +337,13 @@ flake-edit add github:numtide/treefmt-nix
 Auto-follow all your inputs through `flake.nix`:
 
 ```
-flake-edit follow --auto
+flake-edit follow
 ```
 
 Add `--diff` to any command to get a preview of the changes:
 
 ```
-flake-edit --diff follow --auto
+flake-edit --diff follow
 ```
 
 ## Configuration
@@ -335,7 +358,7 @@ Run `flake-edit config --print-default` to create a default configuration:
 # flake-edit ~ configuration file
 # https://github.com/a-kenji/flake-edit
 
-# Configuration for `flake-edit follow --auto`
+# Configuration for `flake-edit follow [PATHS]`
 [follow.auto]
 # Inputs to ignore. Supports two formats:
 #   - Full path: "crane.nixpkgs" - ignores only that specific nested input

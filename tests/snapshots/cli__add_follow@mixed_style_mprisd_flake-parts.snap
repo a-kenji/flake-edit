@@ -6,9 +6,9 @@ info:
     - "--flake"
     - "[FIXTURES]/mixed_style.flake.nix"
     - "--diff"
-    - follow
-    - blueprint.systems
-    - systems
+    - add-follow
+    - mprisd.flake-parts
+    - flake-parts
   env:
     NO_COLOR: "1"
 ---
@@ -17,13 +17,13 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -13,6 +13,7 @@
-
-     blueprint = {
-       url = "github:numtide/blueprint";
-+      inputs.systems.follows = "systems";
-     };
+@@ -17,6 +17,7 @@
 
      mprisd = {
+       url = "git+https://forge.kenji.rsvp/kenji/mprisd";
++      inputs.flake-parts.follows = "flake-parts";
+     };
+   };
+
 
 ----- stderr -----

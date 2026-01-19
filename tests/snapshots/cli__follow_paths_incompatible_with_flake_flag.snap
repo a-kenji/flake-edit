@@ -1,0 +1,19 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/centerpiece.flake.nix"
+    - follow
+    - "[FIXTURES]/first_nested_node.flake.nix"
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+Error: 
+   0: --flake and --lock cannot be used with 'follow [PATHS]'
