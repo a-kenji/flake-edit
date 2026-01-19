@@ -4,12 +4,11 @@ info:
   program: flake-edit
   args:
     - "--flake"
-    - "[FIXTURES]/root.flake.nix"
+    - "[FIXTURES]/follows_cycle.flake.nix"
     - "--lock-file"
-    - "[FIXTURES]/root.flake.lock"
+    - "[FIXTURES]/follows_cycle.flake.lock"
     - "--diff"
     - follow
-    - "--auto"
   env:
     NO_COLOR: "1"
 ---

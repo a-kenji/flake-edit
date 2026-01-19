@@ -11,7 +11,6 @@ info:
     - "[FIXTURES]/ignore_treefmt.config.toml"
     - "--diff"
     - follow
-    - "--auto"
   env:
     NO_COLOR: "1"
 ---

@@ -9,9 +9,11 @@ use clap::{Parser, Subcommand};
 /// Edit your flake inputs with ease
 pub struct CliArgs {
     /// Location of the `flake.nix` file, that will be used.
+    /// Defaults to `flake.nix` in the current directory.
     #[arg(long)]
     flake: Option<String>,
-    /// Location of the `flake.lock` file. Defaults to `flake.lock` in the current directory.
+    /// Location of the `flake.lock` file.
+    /// Defaults to `flake.lock` in the current directory.
     #[arg(long)]
     lock_file: Option<String>,
     /// Print a diff of the changes, will not write the changes to disk.
@@ -26,7 +28,7 @@ pub struct CliArgs {
     /// Disable reading from and writing to the completion cache.
     #[arg(long, default_value_t = false)]
     no_cache: bool,
-    /// Path to a custom cache file (for testing or portable configs).
+    /// Path to a custom cache file.
     #[arg(long)]
     cache: Option<String>,
     /// Path to a custom configuration file.
@@ -170,23 +172,34 @@ pub enum Command {
         /// The id of an input attribute.
         id: Option<String>,
     },
-    /// Add a follows relationship to make an input's dependency follow a top-level input.
+    /// Automatically add and remove follows declarations.
     ///
-    /// Example: `flake-edit follow rust-overlay.nixpkgs nixpkgs`
+    /// Analyzes the flake.lock to find nested inputs that match top-level inputs,
+    /// then adds appropriate follows declarations and removes stale ones.
+    ///
+    /// With file paths, processes multiple flakes in batch.
+    /// For every `flake.nix` file passed in it will assume a
+    /// `flake.lock` file exists in the same directory.
+    #[clap(alias = "f")]
+    Follow {
+        /// Flake.nix paths to process. If empty, runs on current directory.
+        #[arg(trailing_var_arg = true, num_args = 0..)]
+        paths: Vec<std::path::PathBuf>,
+    },
+    /// Manually add a single follows declaration.
+    ///
+    /// Example: `flake-edit add-follow rust-overlay.nixpkgs nixpkgs`
     ///
     /// This creates: `rust-overlay.inputs.nixpkgs.follows = "nixpkgs";`
     ///
     /// Without arguments, starts an interactive selection.
-    #[clap(alias = "f")]
-    Follow {
+    #[clap(alias = "af")]
+    AddFollow {
         /// The input path in dot notation (e.g., "rust-overlay.nixpkgs" means
         /// the nixpkgs input of rust-overlay).
         input: Option<String>,
         /// The target input to follow (e.g., "nixpkgs").
         target: Option<String>,
-        /// Automatically follow inputs when their nested input names match top-level inputs.
-        #[arg(long, short)]
-        auto: bool,
     },
     #[clap(hide = true)]
     #[command(name = "completion")]

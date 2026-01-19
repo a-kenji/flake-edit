@@ -30,6 +30,9 @@ pub enum CommandError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
+    #[error(transparent)]
+    Config(#[from] crate::config::ConfigError),
+
     #[error("No URI provided")]
     NoUri,
 
@@ -45,8 +48,11 @@ pub enum CommandError {
     #[error("No inputs found in the flake")]
     NoInputs,
 
-    #[error("Could not read flake.lock")]
-    NoLock,
+    #[error("Could not read lock file '{path}': {source}")]
+    LockFileError {
+        path: String,
+        source: FlakeEditError,
+    },
 
     #[error("Input not found: {0}")]
     InputNotFound(String),
@@ -80,18 +86,26 @@ fn is_follows_reference_to_parent(url: &str, parent: &str) -> bool {
 }
 
 /// Load nested inputs from lockfile and top-level inputs from flake.nix.
-/// Returns None if no nested inputs found (prints message to stderr).
 fn load_follow_context(
     flake_edit: &mut FlakeEdit,
     state: &AppState,
 ) -> Result<Option<FollowContext>> {
-    let nested_inputs: Vec<NestedInput> = load_flake_lock(state)
-        .map(|lock| lock.nested_inputs())
-        .unwrap_or_default();
+    let nested_inputs: Vec<NestedInput> = match load_flake_lock(state) {
+        Ok(lock) => lock.nested_inputs(),
+        Err(e) => {
+            let lock_path = state
+                .lock_file
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "flake.lock".to_string());
+            return Err(CommandError::LockFileError {
+                path: lock_path,
+                source: e,
+            });
+        }
+    };
 
     if nested_inputs.is_empty() {
-        eprintln!("No nested inputs found in flake.lock");
-        eprintln!("Make sure you have run `nix flake lock` first.");
         return Ok(None);
     }
 
@@ -652,7 +666,10 @@ pub fn pin(
     let input_ids = sorted_input_ids_owned(&inputs);
 
     if let Some(id) = id {
-        let lock = FlakeLock::from_default_path().map_err(|_| CommandError::NoLock)?;
+        let lock = FlakeLock::from_default_path().map_err(|e| CommandError::LockFileError {
+            path: "flake.lock".to_string(),
+            source: e,
+        })?;
         let target_rev = if let Some(rev) = rev {
             rev
         } else {
@@ -670,7 +687,10 @@ pub fn pin(
         if input_ids.is_empty() {
             return Err(CommandError::NoInputs);
         }
-        let lock = FlakeLock::from_default_path().map_err(|_| CommandError::NoLock)?;
+        let lock = FlakeLock::from_default_path().map_err(|e| CommandError::LockFileError {
+            path: "flake.lock".to_string(),
+            source: e,
+        })?;
 
         interactive_single_select(
             editor,
@@ -779,18 +799,14 @@ pub fn config(print_default: bool, path: bool) -> Result<()> {
     Ok(())
 }
 
-pub fn follow(
+/// Manually add a single follows declaration.
+pub fn add_follow(
     editor: &Editor,
     flake_edit: &mut FlakeEdit,
     state: &AppState,
     input: Option<String>,
     target: Option<String>,
-    auto: bool,
 ) -> Result<()> {
-    if auto {
-        return follow_auto(editor, flake_edit, state);
-    }
-
     let change = if let (Some(input_val), Some(target_val)) = (input.clone(), target) {
         // Both provided - non-interactive
         Change::Follows {
@@ -850,10 +866,23 @@ fn collect_stale_follows(
 /// no longer present in the lock file.
 ///
 /// The config file controls behavior:
-/// - `follow.auto.ignore`: List of input names to skip
-/// - `follow.auto.aliases`: Map of canonical names to alternatives (e.g., nixpkgs = ["nixpkgs-lib"])
-fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) -> Result<()> {
+/// - `follow.ignore`: List of input names to skip
+/// - `follow.aliases`: Map of canonical names to alternatives (e.g., nixpkgs = ["nixpkgs-lib"])
+pub fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) -> Result<()> {
+    follow_auto_impl(editor, flake_edit, state, false)
+}
+
+/// Internal implementation with quiet flag for batch processing.
+fn follow_auto_impl(
+    editor: &Editor,
+    flake_edit: &mut FlakeEdit,
+    state: &AppState,
+    quiet: bool,
+) -> Result<()> {
     let Some(ctx) = load_follow_context(flake_edit, state)? else {
+        if !quiet {
+            println!("Nothing to deduplicate.");
+        }
         return Ok(());
     };
 
@@ -863,7 +892,7 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
 
     let to_unfollow = collect_stale_follows(&ctx.inputs, &existing_nested_paths);
 
-    let auto_config = &state.config.follow.auto;
+    let follow_config = &state.config.follow;
 
     // Collect candidates: nested inputs that match a top-level input
     let to_follow: Vec<(String, String)> = ctx
@@ -875,7 +904,7 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
             let parent = nested.path.split('.').next().unwrap_or(&nested.path);
 
             // Skip ignored inputs (supports both full path and simple name)
-            if auto_config.is_ignored(&nested.path, nested_name) {
+            if follow_config.is_ignored(&nested.path, nested_name) {
                 tracing::debug!("Skipping {}: ignored by config", nested.path);
                 return None;
             }
@@ -884,7 +913,7 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
             let matching_top_level = ctx
                 .top_level_inputs
                 .iter()
-                .find(|top| auto_config.can_follow(nested_name, top));
+                .find(|top| follow_config.can_follow(nested_name, top));
 
             let target = matching_top_level?;
 
@@ -908,7 +937,9 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
         .collect();
 
     if to_follow.is_empty() && to_unfollow.is_empty() {
-        println!("All inputs are already deduplicated.");
+        if !quiet {
+            println!("All inputs are already deduplicated.");
+        }
         return Ok(());
     }
 
@@ -976,40 +1007,108 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
     } else {
         editor.apply_or_diff(&current_text, state)?;
 
-        if !applied.is_empty() {
-            println!(
-                "Deduplicated {} {}.",
-                applied.len(),
-                if applied.len() == 1 {
-                    "input"
-                } else {
-                    "inputs"
+        if !quiet {
+            if !applied.is_empty() {
+                println!(
+                    "Deduplicated {} {}.",
+                    applied.len(),
+                    if applied.len() == 1 {
+                        "input"
+                    } else {
+                        "inputs"
+                    }
+                );
+                for (input_path, target) in &applied {
+                    let nested_name = input_path.split('.').next_back().unwrap_or(input_path);
+                    let parent = input_path.split('.').next().unwrap_or(input_path);
+                    println!("  {}.{} → {}", parent, nested_name, target);
                 }
-            );
-            for (input_path, target) in &applied {
-                let nested_name = input_path.split('.').next_back().unwrap_or(input_path);
-                let parent = input_path.split('.').next().unwrap_or(input_path);
-                println!("  {}.{} → {}", parent, nested_name, target);
             }
-        }
 
-        if !unfollowed.is_empty() {
-            println!(
-                "Removed {} stale follows {}.",
-                unfollowed.len(),
-                if unfollowed.len() == 1 {
-                    "declaration"
-                } else {
-                    "declarations"
+            if !unfollowed.is_empty() {
+                println!(
+                    "Removed {} stale follows {}.",
+                    unfollowed.len(),
+                    if unfollowed.len() == 1 {
+                        "declaration"
+                    } else {
+                        "declarations"
+                    }
+                );
+                for path in &unfollowed {
+                    println!("  {} (input no longer exists)", path);
                 }
-            );
-            for path in &unfollowed {
-                println!("  {} (input no longer exists)", path);
             }
         }
     }
 
     Ok(())
+}
+
+/// Process multiple flake files in batch mode.
+///
+/// Each file is processed independently with its own Editor/AppState.
+/// Errors are collected and reported at the end, but processing continues
+/// for all files. Returns error if any file failed.
+pub fn follow_auto_batch(paths: &[std::path::PathBuf], args: &crate::cli::CliArgs) -> Result<()> {
+    use std::path::PathBuf;
+
+    let mut errors: Vec<(PathBuf, CommandError)> = Vec::new();
+
+    for flake_path in paths {
+        let lock_path = flake_path
+            .parent()
+            .map(|p| p.join("flake.lock"))
+            .unwrap_or_else(|| PathBuf::from("flake.lock"));
+
+        let editor = match Editor::from_path(flake_path.clone()) {
+            Ok(e) => e,
+            Err(e) => {
+                errors.push((flake_path.clone(), e.into()));
+                continue;
+            }
+        };
+
+        let mut flake_edit = match editor.create_flake_edit() {
+            Ok(fe) => fe,
+            Err(e) => {
+                errors.push((flake_path.clone(), e.into()));
+                continue;
+            }
+        };
+
+        let state = match AppState::new(
+            editor.text(),
+            flake_path.clone(),
+            args.config().map(PathBuf::from),
+        ) {
+            Ok(s) => s
+                .with_diff(args.diff())
+                .with_no_lock(args.no_lock())
+                .with_interactive(false)
+                .with_lock_file(Some(lock_path))
+                .with_no_cache(args.no_cache())
+                .with_cache_path(args.cache().map(PathBuf::from)),
+            Err(e) => {
+                errors.push((flake_path.clone(), e.into()));
+                continue;
+            }
+        };
+
+        if let Err(e) = follow_auto_impl(&editor, &mut flake_edit, &state, true) {
+            errors.push((flake_path.clone(), e));
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        for (path, err) in &errors {
+            eprintln!("Error processing {}: {}", path.display(), err);
+        }
+        // Return the first error
+        Err(errors.into_iter().next().unwrap().1)
+    }
 }
 
 fn apply_change(

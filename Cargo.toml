@@ -111,3 +111,4 @@ divan = "0.1.21"
 insta = { version = "1.46.0", features = ["yaml", "filters", "redactions"] }
 insta-cmd = "0.6"
 rstest = "0.26"
+tempfile = "3"

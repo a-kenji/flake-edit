@@ -6,7 +6,7 @@ info:
     - "--flake"
     - "[FIXTURES]/one_level_nesting_flat.flake.nix"
     - "--diff"
-    - follow
+    - add-follow
     - rust-overlay.flake-compat
     - flake-compat
   env:

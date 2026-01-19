@@ -6,9 +6,9 @@ info:
     - "--flake"
     - "[FIXTURES]/mixed_style.flake.nix"
     - "--diff"
-    - follow
-    - blueprint.nixpkgs
-    - nixpkgs
+    - add-follow
+    - blueprint.systems
+    - systems
   env:
     NO_COLOR: "1"
 ---
@@ -21,7 +21,7 @@ exit_code: 0
 
      blueprint = {
        url = "github:numtide/blueprint";
-+      inputs.nixpkgs.follows = "nixpkgs";
++      inputs.systems.follows = "systems";
      };
 
      mprisd = {

@@ -6,7 +6,7 @@ info:
     - "--flake"
     - "[FIXTURES]/first_nested_node.flake.nix"
     - "--diff"
-    - follow
+    - add-follow
     - naersk.flake-utils
     - flake-utils
   env:
