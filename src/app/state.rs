@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crate::cache::CacheConfig;
+use crate::config::Config;
 
 /// Application state for a flake-edit session.
 ///
@@ -23,6 +24,8 @@ pub struct AppState {
     pub no_cache: bool,
     /// Custom cache file path (for testing or portable configs)
     pub cache_path: Option<PathBuf>,
+    /// Loaded configuration
+    pub config: Config,
 }
 
 impl AppState {
@@ -36,6 +39,7 @@ impl AppState {
             interactive: true,
             no_cache: false,
             cache_path: None,
+            config: Config::load(),
         }
     }
 

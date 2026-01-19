@@ -189,6 +189,16 @@ pub enum Command {
         inputs: bool,
         mode: CompletionMode,
     },
+    /// Manage flake-edit configuration.
+    #[clap(alias = "cfg", arg_required_else_help = true)]
+    Config {
+        /// Output the default configuration to stdout.
+        #[arg(long)]
+        print_default: bool,
+        /// Show where configuration would be loaded from.
+        #[arg(long)]
+        path: bool,
+    },
 }
 
 #[derive(Debug, Clone, Default)]

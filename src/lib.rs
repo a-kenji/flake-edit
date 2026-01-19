@@ -5,6 +5,7 @@ pub mod cache;
 pub mod change;
 pub mod channel;
 pub mod cli;
+pub mod config;
 #[cfg(feature = "diff")]
 pub mod diff;
 pub mod edit;

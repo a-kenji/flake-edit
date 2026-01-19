@@ -743,6 +743,42 @@ pub fn list(flake_edit: &mut FlakeEdit, format: &crate::cli::ListFormat) -> Resu
     Ok(())
 }
 
+/// Handle the `config` subcommand.
+pub fn config(print_default: bool, path: bool) -> Result<()> {
+    use crate::config::{Config, DEFAULT_CONFIG_TOML};
+
+    if print_default {
+        print!("{}", DEFAULT_CONFIG_TOML);
+        return Ok(());
+    }
+
+    if path {
+        // Show where config would be loaded from
+        let project_path = Config::project_config_path();
+        let user_path = Config::user_config_path();
+
+        if let Some(path) = &project_path {
+            println!("Project config: {}", path.display());
+        }
+        if let Some(path) = &user_path {
+            println!("User config: {}", path.display());
+        }
+
+        if project_path.is_none() && user_path.is_none() {
+            if let Some(user_dir) = Config::user_config_dir() {
+                println!("No config found. Create one at:");
+                println!("  Project: flake-edit.toml (in current directory)");
+                println!("  User:    {}/config.toml", user_dir.display());
+            } else {
+                println!("No config found. Create flake-edit.toml in current directory.");
+            }
+        }
+        return Ok(());
+    }
+
+    Ok(())
+}
+
 pub fn follow(
     editor: &Editor,
     flake_edit: &mut FlakeEdit,
@@ -812,6 +848,10 @@ fn collect_stale_follows(
 /// relationship. Skips inputs that already have follows set.
 /// Also removes stale follows declarations that reference nested inputs
 /// no longer present in the lock file.
+///
+/// The config file controls behavior:
+/// - `follow.auto.ignore`: List of input names to skip
+/// - `follow.auto.aliases`: Map of canonical names to alternatives (e.g., nixpkgs = ["nixpkgs-lib"])
 fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) -> Result<()> {
     let Some(ctx) = load_follow_context(flake_edit, state)? else {
         return Ok(());
@@ -823,6 +863,8 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
 
     let to_unfollow = collect_stale_follows(&ctx.inputs, &existing_nested_paths);
 
+    let auto_config = &state.config.follow.auto;
+
     // Collect candidates: nested inputs that match a top-level input
     let to_follow: Vec<(String, String)> = ctx
         .nested_inputs
@@ -832,26 +874,36 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
             let nested_name = nested.path.split('.').next_back().unwrap_or(&nested.path);
             let parent = nested.path.split('.').next().unwrap_or(&nested.path);
 
-            if !ctx.top_level_inputs.contains(nested_name) {
+            // Skip ignored inputs (supports both full path and simple name)
+            if auto_config.is_ignored(&nested.path, nested_name) {
+                tracing::debug!("Skipping {}: ignored by config", nested.path);
                 return None;
             }
+
+            // Find matching top-level input (direct match or via alias)
+            let matching_top_level = ctx
+                .top_level_inputs
+                .iter()
+                .find(|top| auto_config.can_follow(nested_name, top));
+
+            let target = matching_top_level?;
 
             // Skip if target already follows from parent (would create cycle)
             // e.g., treefmt-nix.follows = "clan-core/treefmt-nix" means we can't
             // add clan-core.inputs.treefmt-nix.follows = "treefmt-nix"
-            if let Some(target_input) = ctx.inputs.get(nested_name)
+            if let Some(target_input) = ctx.inputs.get(target.as_str())
                 && is_follows_reference_to_parent(target_input.url(), parent)
             {
                 tracing::debug!(
                     "Skipping {} -> {}: would create cycle (target follows {}/...)",
                     nested.path,
-                    nested_name,
+                    target,
                     parent
                 );
                 return None;
             }
 
-            Some((nested.path.clone(), nested_name.to_string()))
+            Some((nested.path.clone(), target.clone()))
         })
         .collect();
 
