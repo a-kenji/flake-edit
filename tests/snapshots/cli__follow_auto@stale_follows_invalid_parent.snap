@@ -1,0 +1,32 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/stale_follows_invalid_parent.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/stale_follows_invalid_parent.flake.lock"
+    - "--diff"
+    - follow
+    - "--auto"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -1,8 +1,8 @@
+ {
+   inputs = {
+     treefmt-nix.url = "github:numtide/treefmt-nix";
++    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
+     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+-    nixpkgs.inputs.treefmt-nix.follows = "treefmt-nix";
+   };
+
+   outputs = { self, nixpkgs , treefmt-nix }: { };
+
+----- stderr -----

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use nix_uri::urls::UrlWrapper;
 use nix_uri::{FlakeRef, NixUriResult};
 use ropey::Rope;
@@ -5,6 +7,7 @@ use ropey::Rope;
 use crate::change::Change;
 use crate::edit::{FlakeEdit, InputMap, sorted_input_ids, sorted_input_ids_owned};
 use crate::error::FlakeEditError;
+use crate::input::Follows;
 use crate::lock::{FlakeLock, NestedInput};
 use crate::tui;
 use crate::update::Updater;
@@ -63,7 +66,7 @@ fn load_flake_lock(state: &AppState) -> std::result::Result<FlakeLock, FlakeEdit
 
 struct FollowContext {
     nested_inputs: Vec<NestedInput>,
-    top_level_inputs: std::collections::HashSet<String>,
+    top_level_inputs: HashSet<String>,
     /// Full input map for checking URLs (needed for cycle detection)
     inputs: crate::edit::InputMap,
 }
@@ -93,7 +96,7 @@ fn load_follow_context(
     }
 
     let inputs = flake_edit.list().clone();
-    let top_level_inputs: std::collections::HashSet<String> = inputs.keys().cloned().collect();
+    let top_level_inputs: HashSet<String> = inputs.keys().cloned().collect();
 
     if top_level_inputs.is_empty() {
         return Err(CommandError::NoInputs);
@@ -782,15 +785,43 @@ pub fn follow(
     apply_change(editor, flake_edit, state, change)
 }
 
+/// Collect follows declarations that reference nested inputs
+/// no longer present in the lock file.
+fn collect_stale_follows(
+    inputs: &InputMap,
+    existing_nested_paths: &HashSet<String>,
+) -> Vec<String> {
+    let mut stale = Vec::new();
+    for (input_id, input) in inputs {
+        for follows in input.follows() {
+            if let Follows::Indirect(nested_name, _target) = follows {
+                let nested_path = format!("{}.{}", input_id, nested_name);
+                if !existing_nested_paths.contains(&nested_path) {
+                    stale.push(nested_path);
+                }
+            }
+        }
+    }
+    stale
+}
+
 /// Automatically follow inputs based on lockfile information.
 ///
 /// For each nested input (e.g., "crane.nixpkgs"), if there's a matching
 /// top-level input with the same name (e.g., "nixpkgs"), create a follows
 /// relationship. Skips inputs that already have follows set.
+/// Also removes stale follows declarations that reference nested inputs
+/// no longer present in the lock file.
 fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) -> Result<()> {
     let Some(ctx) = load_follow_context(flake_edit, state)? else {
         return Ok(());
     };
+
+    let existing_nested_paths: HashSet<String> = load_flake_lock(state)
+        .map(|l| l.nested_input_paths().into_iter().collect())
+        .unwrap_or_default();
+
+    let to_unfollow = collect_stale_follows(&ctx.inputs, &existing_nested_paths);
 
     // Collect candidates: nested inputs that match a top-level input
     let to_follow: Vec<(String, String)> = ctx
@@ -824,7 +855,7 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
         })
         .collect();
 
-    if to_follow.is_empty() {
+    if to_follow.is_empty() && to_unfollow.is_empty() {
         println!("All inputs are already deduplicated.");
         return Ok(());
     }
@@ -859,7 +890,30 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
         }
     }
 
-    if applied.is_empty() {
+    let mut unfollowed: Vec<&str> = Vec::new();
+
+    for nested_path in &to_unfollow {
+        let change = Change::Remove {
+            ids: vec![nested_path.clone().into()],
+        };
+
+        let mut temp_flake_edit =
+            FlakeEdit::from_text(&current_text).map_err(CommandError::FlakeEdit)?;
+
+        match temp_flake_edit.apply_change(change) {
+            Ok(Some(resulting_text)) => {
+                let validation = validate::validate(&resulting_text);
+                if validation.is_ok() {
+                    current_text = resulting_text;
+                    unfollowed.push(nested_path);
+                }
+            }
+            Ok(None) => {}
+            Err(e) => eprintln!("Error removing stale follows for {}: {}", nested_path, e),
+        }
+    }
+
+    if applied.is_empty() && unfollowed.is_empty() {
         return Ok(());
     }
 
@@ -869,19 +923,37 @@ fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) ->
         diff.compare();
     } else {
         editor.apply_or_diff(&current_text, state)?;
-        println!(
-            "Deduplicated {} {}.",
-            applied.len(),
-            if applied.len() == 1 {
-                "input"
-            } else {
-                "inputs"
+
+        if !applied.is_empty() {
+            println!(
+                "Deduplicated {} {}.",
+                applied.len(),
+                if applied.len() == 1 {
+                    "input"
+                } else {
+                    "inputs"
+                }
+            );
+            for (input_path, target) in &applied {
+                let nested_name = input_path.split('.').next_back().unwrap_or(input_path);
+                let parent = input_path.split('.').next().unwrap_or(input_path);
+                println!("  {}.{} → {}", parent, nested_name, target);
             }
-        );
-        for (input_path, target) in &applied {
-            let nested_name = input_path.split('.').next_back().unwrap_or(input_path);
-            let parent = input_path.split('.').next().unwrap_or(input_path);
-            println!("  {}.{} → {}", parent, nested_name, target);
+        }
+
+        if !unfollowed.is_empty() {
+            println!(
+                "Removed {} stale follows {}.",
+                unfollowed.len(),
+                if unfollowed.len() == 1 {
+                    "declaration"
+                } else {
+                    "declarations"
+                }
+            );
+            for path in &unfollowed {
+                println!("  {} (input no longer exists)", path);
+            }
         }
     }
 
