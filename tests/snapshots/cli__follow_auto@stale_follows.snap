@@ -1,0 +1,30 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/stale_follows.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/stale_follows.flake.lock"
+    - "--diff"
+    - follow
+    - "--auto"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -8,7 +8,6 @@
+     crane.url = "github:ipetkov/crane";
+     crane.inputs.nixpkgs.follows = "nixpkgs";
+     # This follows declaration is stale - crane no longer has flake-compat
+-    crane.inputs.flake-compat.follows = "flake-compat";
+
+     # This top-level input exists but is no longer used by crane
+     flake-compat.url = "github:edolstra/flake-compat";
+
+----- stderr -----

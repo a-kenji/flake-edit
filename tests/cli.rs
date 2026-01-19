@@ -403,6 +403,8 @@ fn test_follow_nonexistent(#[case] fixture: &str, #[case] input: &str, #[case] t
 #[case("hyperconfig")] // Large real-world flake with mostly flat-style inputs
 #[case("mixed_style")] // Mixed flat and nested inputs (harmonia flat, blueprint/mprisd nested)
 #[case("follows_cycle")] // Cycle detection: treefmt-nix follows harmonia/treefmt-nix
+#[case("stale_follows")] // Stale follows: crane.flake-compat no longer exists in lock
+#[case("stale_follows_invalid_parent")] // Stale follows: nixpkgs.treefmt-nix doesn't exist
 fn test_follow_auto(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
