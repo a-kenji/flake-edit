@@ -105,6 +105,8 @@ Options:
           The input itself is not a flake
   -s, --shallow
           Use shallow clone for the input
+      --config <CONFIG>
+          Path to a custom configuration file
   -h, --help
           Print help
 ```
@@ -121,13 +123,15 @@ For some inputs, the uri can be put in directly and the id and type will be infe
 ```
 Remove a specific flake reference based on its id
 
-Usage: flake-edit remove [ID]
+Usage: flake-edit remove [OPTIONS] [ID]
 
 Arguments:
   [ID]
           
 
 Options:
+      --config <CONFIG>
+          Path to a custom configuration file
   -h, --help
           Print help
 ```
@@ -148,6 +152,8 @@ Arguments:
 Options:
       --init
           Whether the latest semver release of the remote should be used even thought the release itself isn't yet pinned to a specific release
+      --config <CONFIG>
+          Path to a custom configuration file
   -h, --help
           Print help
 ```
@@ -173,6 +179,8 @@ Options:
           Pin to a specific ref_or_rev
   -s, --shallow
           Use shallow clone for the input
+      --config <CONFIG>
+          Path to a custom configuration file
   -h, --help
           Print help
 ```
@@ -184,7 +192,7 @@ Options:
 ```
 Pin inputs to their current or a specified rev
 
-Usage: flake-edit pin [ID] [REV]
+Usage: flake-edit pin [OPTIONS] [ID] [REV]
 
 Arguments:
   [ID]
@@ -193,6 +201,8 @@ Arguments:
           Optionally specify a rev for the inputs attribute
 
 Options:
+      --config <CONFIG>
+          Path to a custom configuration file
   -h, --help
           Print help
 ```
@@ -205,13 +215,15 @@ Pin a specific input to it's current revision (rev).
 ```
 Unpin an input so it tracks the upstream default again
 
-Usage: flake-edit unpin [ID]
+Usage: flake-edit unpin [OPTIONS] [ID]
 
 Arguments:
   [ID]
           The id of an input attribute
 
 Options:
+      --config <CONFIG>
+          Path to a custom configuration file
   -h, --help
           Print help
 ```
@@ -228,6 +240,8 @@ Usage: flake-edit list [OPTIONS]
 Options:
       --format <FORMAT>
           [default: detailed]
+      --config <CONFIG>
+          Path to a custom configuration file
   -h, --help
           Print help
 ```
@@ -246,13 +260,16 @@ Analyzes the flake.lock to find nested inputs that match top-level inputs, then 
 
 With file paths, processes multiple flakes in batch. For every `flake.nix` file passed in it will assume a `flake.lock` file exists in the same directory.
 
-Usage: flake-edit follow [PATHS]...
+Usage: flake-edit follow [OPTIONS] [PATHS]...
 
 Arguments:
   [PATHS]...
           Flake.nix paths to process. If empty, runs on current directory
 
 Options:
+      --config <CONFIG>
+          Path to a custom configuration file
+
   -h, --help
           Print help (see a summary with '-h')
 ```
@@ -271,7 +288,7 @@ This creates: `rust-overlay.inputs.nixpkgs.follows = "nixpkgs";`
 
 Without arguments, starts an interactive selection.
 
-Usage: flake-edit add-follow [INPUT] [TARGET]
+Usage: flake-edit add-follow [OPTIONS] [INPUT] [TARGET]
 
 Arguments:
   [INPUT]
@@ -281,6 +298,9 @@ Arguments:
           The target input to follow (e.g., "nixpkgs")
 
 Options:
+      --config <CONFIG>
+          Path to a custom configuration file
+
   -h, --help
           Print help (see a summary with '-h')
 ```
@@ -301,6 +321,8 @@ Options:
           Output the default configuration to stdout
       --path
           Show where configuration would be loaded from
+      --config <CONFIG>
+          Path to a custom configuration file
   -h, --help
           Print help
 ```
@@ -359,7 +381,7 @@ Run `flake-edit config --print-default` to create a default configuration:
 # https://github.com/a-kenji/flake-edit
 
 # Configuration for `flake-edit follow [PATHS]`
-[follow.auto]
+[follow]
 # Inputs to ignore. Supports two formats:
 #   - Full path: "crane.nixpkgs" - ignores only that specific nested input
 #   - Simple name: "systems" - ignores all nested inputs with that name
@@ -368,7 +390,7 @@ Run `flake-edit config --print-default` to create a default configuration:
 # Alias mappings.
 # Key is the canonical name (must exist at top-level), values are alternatives.
 # Example: if nested input is "nixpkgs-lib" and top-level "nixpkgs" exists,
-# auto-follow will suggest: poetry2nix.nixpkgs-lib -> nixpkgs
+# follow will suggest: poetry2nix.nixpkgs-lib -> nixpkgs
 # aliases = { nixpkgs = ["nixpkgs-lib"] }
 ```
 
