@@ -32,7 +32,7 @@ pub struct CliArgs {
     #[arg(long)]
     cache: Option<String>,
     /// Path to a custom configuration file.
-    #[arg(long)]
+    #[arg(long, global = true)]
     config: Option<String>,
 
     #[command(subcommand)]
