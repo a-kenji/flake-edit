@@ -182,6 +182,10 @@ pub enum Command {
     /// `flake.lock` file exists in the same directory.
     #[clap(alias = "f")]
     Follow {
+        /// Show estimated space savings from deduplication.
+        /// Queries Nix store for input sizes (requires inputs to be cached).
+        #[arg(long, short)]
+        stats: bool,
         /// Flake.nix paths to process. If empty, runs on current directory.
         #[arg(trailing_var_arg = true, num_args = 0..)]
         paths: Vec<std::path::PathBuf>,

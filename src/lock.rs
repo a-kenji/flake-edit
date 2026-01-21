@@ -73,11 +73,48 @@ pub struct Locked {
     node_type: String,
     #[serde(rename = "ref")]
     ref_field: Option<String>,
+    #[serde(rename = "narHash")]
+    nar_hash: Option<String>,
+    url: Option<String>,
+    path: Option<String>,
 }
 
 impl Locked {
     fn rev(&self) -> String {
         self.rev.clone().unwrap()
+    }
+
+    /// Construct a flake URL from the locked information.
+    /// Returns None if the type is not supported or required fields are missing.
+    pub fn to_flake_url(&self) -> Option<String> {
+        match self.node_type.as_str() {
+            "github" => {
+                let owner = self.owner.as_ref()?;
+                let repo = self.repo.as_ref()?;
+                let rev = self.rev.as_ref()?;
+                Some(format!("github:{}/{}?rev={}", owner, repo, rev))
+            }
+            "gitlab" => {
+                let owner = self.owner.as_ref()?;
+                let repo = self.repo.as_ref()?;
+                let rev = self.rev.as_ref()?;
+                Some(format!("gitlab:{}/{}?rev={}", owner, repo, rev))
+            }
+            "sourcehut" => {
+                let owner = self.owner.as_ref()?;
+                let repo = self.repo.as_ref()?;
+                let rev = self.rev.as_ref()?;
+                Some(format!("sourcehut:{}/{}?rev={}", owner, repo, rev))
+            }
+            "git" => {
+                let url = self.url.as_ref()?;
+                let rev = self.rev.as_ref()?;
+                Some(format!("git+{}?rev={}", url, rev))
+            }
+            "tarball" => self.url.clone(),
+            "path" => self.path.clone().map(|p| format!("path:{}", p)),
+            _ => None,
+        }
     }
 }
 
@@ -187,7 +224,81 @@ impl FlakeLock {
         inputs.sort_by(|a, b| a.path.cmp(&b.path));
         inputs
     }
+
+    /// Get the locked information for a nested input path (e.g., "crane.nixpkgs").
+    /// Returns the Locked data which can be used to construct flake URLs.
+    pub fn locked_for_nested(&self, path: &str) -> Option<&Locked> {
+        let mut parts = path.split('.');
+        let top_level_name = parts.next()?;
+        let nested_name = parts.next()?;
+
+        // Get the root node
+        let root_node = self.nodes.get(&self.root)?;
+        let root_inputs = root_node.inputs.as_ref()?;
+
+        // Get the top-level input's node name
+        let top_level_ref = root_inputs.get(top_level_name)?;
+        let top_level_node_name = match top_level_ref {
+            Input::Direct(name) => name,
+            Input::Indirect(_) => return None, // Can't look up nested inputs of a follows
+        };
+
+        // Get the top-level node
+        let top_level_node = self.nodes.get(top_level_node_name)?;
+        let nested_inputs = top_level_node.inputs.as_ref()?;
+
+        // Get the nested input's node name
+        let nested_ref = nested_inputs.get(nested_name)?;
+        let nested_node_name = match nested_ref {
+            Input::Direct(name) => name,
+            Input::Indirect(_) => return None, // Already has follows, no locked data
+        };
+
+        // Get the nested node's locked info
+        let nested_node = self.nodes.get(nested_node_name)?;
+        nested_node.locked.as_ref()
+    }
 }
+
+/// Query the NAR size of a flake input using `nix path-info`.
+/// Returns the size in bytes, or None if the query fails.
+pub fn query_input_size(flake_url: &str) -> Option<u64> {
+    use std::process::Command;
+
+    // First get the store path using nix flake metadata
+    let metadata_output = Command::new("nix")
+        .args(["flake", "metadata", "--json", flake_url])
+        .output()
+        .ok()?;
+
+    if !metadata_output.status.success() {
+        return None;
+    }
+
+    let metadata: serde_json::Value = serde_json::from_slice(&metadata_output.stdout).ok()?;
+    let store_path = metadata.get("path")?.as_str()?;
+
+    // Then get the size using nix path-info
+    let path_info_output = Command::new("nix")
+        .args(["path-info", "--json", store_path])
+        .output()
+        .ok()?;
+
+    if !path_info_output.status.success() {
+        return None;
+    }
+
+    let path_info: serde_json::Value = serde_json::from_slice(&path_info_output.stdout).ok()?;
+
+    // The output is a map from store path to info
+    path_info
+        .as_object()?
+        .values()
+        .next()?
+        .get("narSize")?
+        .as_u64()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

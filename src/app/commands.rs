@@ -868,8 +868,13 @@ fn collect_stale_follows(
 /// The config file controls behavior:
 /// - `follow.ignore`: List of input names to skip
 /// - `follow.aliases`: Map of canonical names to alternatives (e.g., nixpkgs = ["nixpkgs-lib"])
-pub fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) -> Result<()> {
-    follow_auto_impl(editor, flake_edit, state, false)
+pub fn follow_auto(
+    editor: &Editor,
+    flake_edit: &mut FlakeEdit,
+    state: &AppState,
+    stats: bool,
+) -> Result<()> {
+    follow_auto_impl(editor, flake_edit, state, false, stats)
 }
 
 /// Internal implementation with quiet flag for batch processing.
@@ -878,6 +883,7 @@ fn follow_auto_impl(
     flake_edit: &mut FlakeEdit,
     state: &AppState,
     quiet: bool,
+    stats: bool,
 ) -> Result<()> {
     let Some(ctx) = load_follow_context(flake_edit, state)? else {
         if !quiet {
@@ -886,7 +892,10 @@ fn follow_auto_impl(
         return Ok(());
     };
 
-    let existing_nested_paths: HashSet<String> = load_flake_lock(state)
+    let flake_lock = load_flake_lock(state);
+
+    let existing_nested_paths: HashSet<String> = flake_lock
+        .as_ref()
         .map(|l| l.nested_input_paths().into_iter().collect())
         .unwrap_or_default();
 
@@ -1039,6 +1048,55 @@ fn follow_auto_impl(
                     println!("  {} (input no longer exists)", path);
                 }
             }
+
+            // Calculate and display space savings if --stats flag is set
+            if stats && !applied.is_empty() {
+                if let Ok(ref lock) = flake_lock {
+                    println!();
+                    println!("Calculating space savings...");
+                    let mut total_bytes: u64 = 0;
+                    let mut queried_count = 0;
+                    let mut failed_count = 0;
+
+                    for (input_path, _target) in &applied {
+                        if let Some(locked) = lock.locked_for_nested(input_path) {
+                            if let Some(ref flake_url) = locked.to_flake_url() {
+                                if let Some(size) = crate::lock::query_input_size(flake_url) {
+                                    total_bytes += size;
+                                    queried_count += 1;
+                                } else {
+                                    failed_count += 1;
+                                }
+                            } else {
+                                failed_count += 1;
+                            }
+                        } else {
+                            failed_count += 1;
+                        }
+                    }
+
+                    if queried_count > 0 {
+                        let total_mb = total_bytes as f64 / (1024.0 * 1024.0);
+                        println!(
+                            "Estimated space savings: {:.1} MB ({} bytes)",
+                            total_mb, total_bytes
+                        );
+                        if failed_count > 0 {
+                            println!(
+                                "  (Could not query size for {} {})",
+                                failed_count,
+                                if failed_count == 1 { "input" } else { "inputs" }
+                            );
+                        }
+                    } else if failed_count > 0 {
+                        println!(
+                            "Could not calculate space savings (failed to query {} {}).",
+                            failed_count,
+                            if failed_count == 1 { "input" } else { "inputs" }
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -1050,7 +1108,11 @@ fn follow_auto_impl(
 /// Each file is processed independently with its own Editor/AppState.
 /// Errors are collected and reported at the end, but processing continues
 /// for all files. Returns error if any file failed.
-pub fn follow_auto_batch(paths: &[std::path::PathBuf], args: &crate::cli::CliArgs) -> Result<()> {
+pub fn follow_auto_batch(
+    paths: &[std::path::PathBuf],
+    args: &crate::cli::CliArgs,
+    stats: bool,
+) -> Result<()> {
     use std::path::PathBuf;
 
     let mut errors: Vec<(PathBuf, CommandError)> = Vec::new();
@@ -1095,7 +1157,7 @@ pub fn follow_auto_batch(paths: &[std::path::PathBuf], args: &crate::cli::CliArg
             }
         };
 
-        if let Err(e) = follow_auto_impl(&editor, &mut flake_edit, &state, true) {
+        if let Err(e) = follow_auto_impl(&editor, &mut flake_edit, &state, true, stats) {
             errors.push((flake_path.clone(), e));
         }
     }
