@@ -873,8 +873,9 @@ pub fn follow_auto(
     flake_edit: &mut FlakeEdit,
     state: &AppState,
     stats: bool,
+    dry_run: bool,
 ) -> Result<()> {
-    follow_auto_impl(editor, flake_edit, state, false, stats)
+    follow_auto_impl(editor, flake_edit, state, false, stats, dry_run)
 }
 
 /// Internal implementation with quiet flag for batch processing.
@@ -884,6 +885,7 @@ fn follow_auto_impl(
     state: &AppState,
     quiet: bool,
     stats: bool,
+    dry_run: bool,
 ) -> Result<()> {
     let Some(ctx) = load_follow_context(flake_edit, state)? else {
         if !quiet {
@@ -1006,13 +1008,60 @@ fn follow_auto_impl(
     }
 
     if applied.is_empty() && unfollowed.is_empty() {
+        if !quiet && dry_run {
+            println!("Nothing to deduplicate.");
+        }
         return Ok(());
     }
 
-    if state.diff {
+    if state.diff && !dry_run {
         let original = editor.text();
         let diff = crate::diff::Diff::new(&original, &current_text);
         diff.compare();
+    } else if dry_run {
+        // Dry run mode: show what would happen without modifying files
+        if !quiet {
+            if !applied.is_empty() {
+                println!(
+                    "Would deduplicate {} {}:",
+                    applied.len(),
+                    if applied.len() == 1 {
+                        "input"
+                    } else {
+                        "inputs"
+                    }
+                );
+                for (input_path, target) in &applied {
+                    let nested_name = input_path.split('.').next_back().unwrap_or(input_path);
+                    let parent = input_path.split('.').next().unwrap_or(input_path);
+                    println!("  {}.{} → {}", parent, nested_name, target);
+                }
+            }
+
+            if !unfollowed.is_empty() {
+                println!(
+                    "Would remove {} stale follows {}:",
+                    unfollowed.len(),
+                    if unfollowed.len() == 1 {
+                        "declaration"
+                    } else {
+                        "declarations"
+                    }
+                );
+                for path in &unfollowed {
+                    println!("  {} (input no longer exists)", path);
+                }
+            }
+
+            // Calculate and display space savings (always shown in dry_run mode since it implies stats)
+            if !applied.is_empty()
+                && let Ok(ref lock) = flake_lock
+            {
+                println!();
+                println!("Calculating space savings...");
+                print_space_savings(&applied, lock);
+            }
+        }
     } else {
         editor.apply_or_diff(&current_text, state)?;
 
@@ -1050,57 +1099,126 @@ fn follow_auto_impl(
             }
 
             // Calculate and display space savings if --stats flag is set
-            if stats && !applied.is_empty() {
-                if let Ok(ref lock) = flake_lock {
-                    println!();
-                    println!("Calculating space savings...");
-                    let mut total_bytes: u64 = 0;
-                    let mut queried_count = 0;
-                    let mut failed_count = 0;
-
-                    for (input_path, _target) in &applied {
-                        if let Some(locked) = lock.locked_for_nested(input_path) {
-                            if let Some(ref flake_url) = locked.to_flake_url() {
-                                if let Some(size) = crate::lock::query_input_size(flake_url) {
-                                    total_bytes += size;
-                                    queried_count += 1;
-                                } else {
-                                    failed_count += 1;
-                                }
-                            } else {
-                                failed_count += 1;
-                            }
-                        } else {
-                            failed_count += 1;
-                        }
-                    }
-
-                    if queried_count > 0 {
-                        let total_mb = total_bytes as f64 / (1024.0 * 1024.0);
-                        println!(
-                            "Estimated space savings: {:.1} MB ({} bytes)",
-                            total_mb, total_bytes
-                        );
-                        if failed_count > 0 {
-                            println!(
-                                "  (Could not query size for {} {})",
-                                failed_count,
-                                if failed_count == 1 { "input" } else { "inputs" }
-                            );
-                        }
-                    } else if failed_count > 0 {
-                        println!(
-                            "Could not calculate space savings (failed to query {} {}).",
-                            failed_count,
-                            if failed_count == 1 { "input" } else { "inputs" }
-                        );
-                    }
-                }
+            if stats
+                && !applied.is_empty()
+                && let Ok(ref lock) = flake_lock
+            {
+                println!();
+                println!("Calculating space savings...");
+                print_space_savings(&applied, lock);
             }
         }
     }
 
     Ok(())
+}
+
+/// Print space savings for deduplicated inputs by querying Nix store in parallel.
+fn print_space_savings(applied: &[(&str, &str)], lock: &crate::lock::FlakeLock) {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    // Collect flake URLs for parallel querying
+    let urls_to_query: Vec<_> = applied
+        .iter()
+        .filter_map(|(input_path, _target)| {
+            lock.locked_for_nested(input_path)
+                .and_then(|locked| locked.to_flake_url())
+        })
+        .collect();
+
+    let urls_found = urls_to_query.len();
+    let urls_not_found = applied.len() - urls_found;
+
+    if urls_found == 0 {
+        if urls_not_found > 0 {
+            println!(
+                "Could not calculate space savings (failed to query {} {}).",
+                urls_not_found,
+                if urls_not_found == 1 {
+                    "input"
+                } else {
+                    "inputs"
+                }
+            );
+        }
+        return;
+    }
+
+    // Shared state for progress indicator
+    let completed = AtomicUsize::new(0);
+    let done = AtomicBool::new(false);
+    let total = urls_found;
+
+    // Query sizes in parallel using scoped threads
+    let results: Vec<Option<u64>> = std::thread::scope(|s| {
+        // Spawn progress indicator thread
+        let progress_handle = s.spawn(|| {
+            const SPINNER: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+            let mut i = 0;
+            while !done.load(Ordering::Relaxed) {
+                let count = completed.load(Ordering::Relaxed);
+                print!("\r  {} ({}/{})", SPINNER[i % SPINNER.len()], count, total);
+                let _ = std::io::stdout().flush();
+                i += 1;
+                std::thread::sleep(Duration::from_millis(80));
+            }
+            // Clear the progress line
+            print!("\r{}\r", " ".repeat(30));
+            let _ = std::io::stdout().flush();
+        });
+
+        // Spawn query threads
+        let handles: Vec<_> = urls_to_query
+            .iter()
+            .map(|url| {
+                s.spawn(|| {
+                    let result = crate::lock::query_input_size(url);
+                    completed.fetch_add(1, Ordering::Relaxed);
+                    result
+                })
+            })
+            .collect();
+
+        // Collect results
+        let results: Vec<Option<u64>> = handles
+            .into_iter()
+            .map(|h| h.join().ok().flatten())
+            .collect();
+
+        // Signal progress thread to stop
+        done.store(true, Ordering::Relaxed);
+        let _ = progress_handle.join();
+
+        results
+    });
+
+    let total_bytes: u64 = results.iter().filter_map(|r| *r).sum();
+    let queried_count = results.iter().filter(|r| r.is_some()).count();
+    let query_failed = results.iter().filter(|r| r.is_none()).count();
+    let failed_count = urls_not_found + query_failed;
+
+    if queried_count > 0 {
+        let total_mb = total_bytes as f64 / (1024.0 * 1024.0);
+        println!(
+            "Estimated space savings: {:.1} MB ({} bytes)",
+            total_mb, total_bytes
+        );
+        if failed_count > 0 {
+            println!(
+                "  (Could not query size for {} {})",
+                failed_count,
+                if failed_count == 1 { "input" } else { "inputs" }
+            );
+        }
+    } else if failed_count > 0 {
+        println!(
+            "Could not calculate space savings (failed to query {} {}).",
+            failed_count,
+            if failed_count == 1 { "input" } else { "inputs" }
+        );
+    }
 }
 
 /// Process multiple flake files in batch mode.
@@ -1112,6 +1230,7 @@ pub fn follow_auto_batch(
     paths: &[std::path::PathBuf],
     args: &crate::cli::CliArgs,
     stats: bool,
+    dry_run: bool,
 ) -> Result<()> {
     use std::path::PathBuf;
 
@@ -1157,7 +1276,7 @@ pub fn follow_auto_batch(
             }
         };
 
-        if let Err(e) = follow_auto_impl(&editor, &mut flake_edit, &state, true, stats) {
+        if let Err(e) = follow_auto_impl(&editor, &mut flake_edit, &state, true, stats, dry_run) {
             errors.push((flake_path.clone(), e));
         }
     }

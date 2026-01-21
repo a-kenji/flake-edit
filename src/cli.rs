@@ -186,6 +186,10 @@ pub enum Command {
         /// Queries Nix store for input sizes (requires inputs to be cached).
         #[arg(long, short)]
         stats: bool,
+        /// Show what would be deduplicated without modifying files.
+        /// Implies --stats.
+        #[arg(long)]
+        dry_run: bool,
         /// Flake.nix paths to process. If empty, runs on current directory.
         #[arg(trailing_var_arg = true, num_args = 0..)]
         paths: Vec<std::path::PathBuf>,

@@ -41,13 +41,20 @@ pub enum HandlerError {
 /// Parses CLI arguments, initializes state, and dispatches to command handlers.
 pub fn run(args: CliArgs) -> Result<()> {
     // Handle batch mode for follow [paths...] early, before creating Editor/AppState
-    if let Command::Follow { paths, stats } = args.subcommand()
+    if let Command::Follow {
+        paths,
+        stats,
+        dry_run,
+    } = args.subcommand()
         && !paths.is_empty()
     {
         if args.flake().is_some() || args.lock_file().is_some() {
             return Err(HandlerError::IncompatibleFollowOptions);
         }
-        return commands::follow_auto_batch(paths, &args, *stats).map_err(HandlerError::Command);
+        // dry_run implies stats
+        let show_stats = *stats || *dry_run;
+        return commands::follow_auto_batch(paths, &args, show_stats, *dry_run)
+            .map_err(HandlerError::Command);
     }
 
     // Find flake.nix path
@@ -133,9 +140,15 @@ pub fn run(args: CliArgs) -> Result<()> {
             commands::unpin(&editor, &mut flake_edit, &state, id.clone())?;
         }
 
-        Command::Follow { paths: _, stats } => {
+        Command::Follow {
+            paths: _,
+            stats,
+            dry_run,
+        } => {
             // Batch mode with paths is handled above; here we run on the current flake
-            commands::follow_auto(&editor, &mut flake_edit, &state, *stats)?;
+            // dry_run implies stats
+            let show_stats = *stats || *dry_run;
+            commands::follow_auto(&editor, &mut flake_edit, &state, show_stats, *dry_run)?;
         }
 
         Command::AddFollow { input, target } => {
