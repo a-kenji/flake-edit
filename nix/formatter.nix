@@ -4,7 +4,7 @@
 
   perSystem = _: {
     treefmt = {
-      projectRootFile = ".git/config";
+      projectRootFile = "LICENSE";
       programs.nixfmt.enable = true;
       programs.nixf-diagnose.enable = true;
       programs.deadnix.enable = true;
