@@ -1,6 +1,7 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
+    style::{Color, Modifier},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Widget},
 };
@@ -12,7 +13,7 @@ use crate::tui::components::footer::Footer;
 use crate::tui::helpers::{context_span, diff_toggle_style, layouts};
 use crate::tui::style::{
     BORDER_STYLE, COMPLETION_MATCH_STYLE, COMPLETION_SELECTED_MATCH_STYLE, DIMMED_STYLE,
-    FOOTER_STYLE, HIGHLIGHT_STYLE, INPUT_PROMPT, LABEL_STYLE_INVERSE, PLACEHOLDER_STYLE,
+    FOOTER_STYLE, HIGHLIGHT_COLOR, INPUT_PROMPT, LABEL_STYLE_INVERSE, PLACEHOLDER_STYLE,
 };
 
 /// Completion dropdown overlay widget
@@ -39,9 +40,9 @@ impl<'a> Completion<'a> {
                 let desc_len = item
                     .description
                     .as_ref()
-                    .map(|d| d.len() + 3) // " · " separator
+                    .map(|d| d.chars().count() + 3) // " · " separator
                     .unwrap_or(0);
-                item.text.len() + desc_len
+                item.text.chars().count() + desc_len
             })
             .max()
             .unwrap_or(0);
@@ -64,25 +65,34 @@ impl Widget for Completion<'_> {
             let is_selected = Some(i) == self.selected;
 
             let (base_style, match_style) = if is_selected {
-                (HIGHLIGHT_STYLE, COMPLETION_SELECTED_MATCH_STYLE)
+                (
+                    FOOTER_STYLE
+                        .fg(HIGHLIGHT_COLOR)
+                        .add_modifier(Modifier::BOLD),
+                    COMPLETION_SELECTED_MATCH_STYLE,
+                )
             } else {
                 (FOOTER_STYLE, COMPLETION_MATCH_STYLE)
             };
+            let desc_style = FOOTER_STYLE.fg(DIMMED_STYLE.fg.unwrap_or(Color::DarkGray));
+
+            let line_start = self.anchor_x;
+            let line_end = (self.anchor_x + width).min(max_x);
+
+            for x in line_start..line_end {
+                if let Some(cell) = buf.cell_mut((x, y)) {
+                    cell.reset();
+                    cell.set_char(' ');
+                    cell.set_style(base_style);
+                }
+            }
 
             let match_set: HashSet<u32> = item.match_indices.iter().copied().collect();
-            let mut x = self.anchor_x;
-
-            // Leading padding
-            if let Some(cell) = buf.cell_mut((x, y)) {
-                cell.reset();
-                cell.set_char(' ');
-                cell.set_style(base_style);
-            }
-            x += 1;
+            let mut x = line_start + 1;
 
             // Completion text with match highlighting
             for (char_idx, ch) in item.text.chars().enumerate() {
-                if x >= max_x || x >= self.anchor_x + width {
+                if x >= line_end {
                     break;
                 }
                 if let Some(cell) = buf.cell_mut((x, y)) {
@@ -101,26 +111,16 @@ impl Widget for Completion<'_> {
             // Description (dimmed)
             if let Some(desc) = &item.description {
                 for ch in " · ".chars().chain(desc.chars()) {
-                    if x >= max_x {
+                    if x >= line_end {
                         break;
                     }
                     if let Some(cell) = buf.cell_mut((x, y)) {
                         cell.reset();
                         cell.set_char(ch);
-                        cell.set_style(DIMMED_STYLE);
+                        cell.set_style(desc_style);
                     }
                     x += 1;
                 }
-            }
-
-            // Trailing padding
-            while x < (self.anchor_x + width).min(max_x) {
-                if let Some(cell) = buf.cell_mut((x, y)) {
-                    cell.reset();
-                    cell.set_char(' ');
-                    cell.set_style(base_style);
-                }
-                x += 1;
             }
         }
     }
