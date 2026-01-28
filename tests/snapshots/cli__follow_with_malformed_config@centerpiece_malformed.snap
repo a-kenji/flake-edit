@@ -25,12 +25,10 @@ Error:
         |
       3 | [follow.auto
         |             ^
-      invalid table header
-      expected `.`, `]`
+      unclosed table, expected `]`
 
    1: TOML parse error at line 3, column 13
         |
       3 | [follow.auto
         |             ^
-      invalid table header
-      expected `.`, `]`
+      unclosed table, expected `]`
