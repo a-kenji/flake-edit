@@ -12,11 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
-    - uses: cachix/install-nix-action@v31
+    - uses: nixos/nix-installer-action@main
       with:
-        extra_nix_config: |
+        extra-conf: |
           access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-        fetch-depth: 0
     - uses: DeterminateSystems/magic-nix-cache-action@v13
       with:
         diagnostic-endpoint: ""
