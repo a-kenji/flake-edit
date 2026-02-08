@@ -105,6 +105,12 @@ pub fn make_toplevel_flake_false_attr(id: &str) -> Node {
     parse_node(&format!("inputs.{}.flake = false;", id))
 }
 
+/// Create a toplevel input follows attribute node.
+/// Example: `inputs.nixpkgs.follows = "clan-core/nixpkgs";`
+pub fn make_toplevel_follows_attr(id: &str, target: &str) -> Node {
+    parse_node(&format!("inputs.{}.follows = \"{}\";", id, target))
+}
+
 /// Create a nested input URL attribute node.
 /// Example: `nixpkgs.url = "github:NixOS/nixpkgs";`
 pub fn make_url_attr(id: &str, uri: &str) -> Node {
@@ -121,4 +127,10 @@ pub fn make_flake_false_attr(id: &str) -> Node {
 /// Example: `inputs.nixpkgs.follows = "nixpkgs";`
 pub fn make_nested_follows_attr(input: &str, target: &str) -> Node {
     parse_node(&format!("inputs.{}.follows = \"{}\";", input, target))
+}
+
+/// Create a follows attribute node inside an input block.
+/// Example: `follows = "nixpkgs";`
+pub fn make_follows_attr(target: &str) -> Node {
+    parse_node(&format!("follows = \"{}\";", target))
 }

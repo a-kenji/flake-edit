@@ -8,8 +8,8 @@ use crate::input::Input;
 use super::context::Context;
 use super::node::{
     adjacent_whitespace_index, empty_node, get_sibling_whitespace, make_flake_false_attr,
-    make_nested_follows_attr, make_quoted_string, make_url_attr, parse_node, should_remove_input,
-    should_remove_nested_input, substitute_child,
+    make_follows_attr, make_nested_follows_attr, make_quoted_string, make_toplevel_follows_attr,
+    make_url_attr, parse_node, should_remove_input, should_remove_nested_input, substitute_child,
 };
 
 /// Remove a child node along with its adjacent whitespace.
@@ -146,6 +146,58 @@ pub fn walk_inputs(
                     if let Some(whitespace) = get_sibling_whitespace(ref_child) {
                         let ws_str = whitespace.to_string();
                         // Keep only the last newline and subsequent indentation
+                        let normalized = if let Some(last_nl) = ws_str.rfind('\n') {
+                            &ws_str[last_nl..]
+                        } else {
+                            &ws_str
+                        };
+                        let ws_node = parse_node(normalized);
+                        green = green.insert_child(insert_index, ws_node.green().into());
+                    }
+
+                    return Some(parse_node(&green.to_string()));
+                }
+            }
+        }
+
+        if nested_id.is_none() {
+            // Only use flat-style if the input does not have a nested block.
+            let has_nested_block = node.children().any(|child| {
+                if child.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
+                    return false;
+                }
+                child
+                    .first_child()
+                    .and_then(|attrpath| attrpath.first_child())
+                    .map(|first_ident| first_ident.to_string() == parent_id)
+                    .unwrap_or(false)
+                    && child
+                        .children()
+                        .any(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
+            });
+
+            if !has_nested_block {
+                let follows_node = make_toplevel_follows_attr(parent_id, target);
+
+                // Find the last attribute belonging to this input's parent
+                let children: Vec<_> = node.children().collect();
+                let insert_after = children.iter().rev().find(|child| {
+                    child
+                        .first_child()
+                        .and_then(|attrpath| attrpath.first_child())
+                        .map(|first_ident| first_ident.to_string() == parent_id)
+                        .unwrap_or(false)
+                });
+
+                let reference_child = insert_after.or(children.last());
+                if let Some(ref_child) = reference_child {
+                    let insert_index = ref_child.index() + 1;
+                    let mut green = node
+                        .green()
+                        .insert_child(insert_index, follows_node.green().into());
+
+                    if let Some(whitespace) = get_sibling_whitespace(ref_child) {
+                        let ws_str = whitespace.to_string();
                         let normalized = if let Some(last_nl) = ws_str.rfind('\n') {
                             &ws_str[last_nl..]
                         } else {
@@ -633,29 +685,55 @@ fn handle_input_attr_set(
         // Check if this attr set belongs to the input we want to modify
         if let Some(id_node) = child.prev_sibling()
             && id_node.to_string() == parent_id
-            && let Some(nested_id) = nested_id
         {
-            // Insert the follows attribute into this attr set
-            let follows_node = make_nested_follows_attr(nested_id, target);
+            if let Some(nested_id) = nested_id {
+                // Insert the follows attribute into this attr set
+                let follows_node = make_nested_follows_attr(nested_id, target);
 
-            // Find the last actual child (before the closing brace)
-            // and get whitespace from before it
-            let children: Vec<_> = child.children().collect();
-            if let Some(last_child) = children.last() {
-                // Insert after the last child with proper whitespace
-                let insert_index = last_child.index() + 1;
+                // Find the last actual child (before the closing brace)
+                // and get whitespace from before it
+                let children: Vec<_> = child.children().collect();
+                if let Some(last_child) = children.last() {
+                    // Insert after the last child with proper whitespace
+                    let insert_index = last_child.index() + 1;
 
-                let mut green = child
-                    .green()
-                    .insert_child(insert_index, follows_node.green().into());
+                    let mut green = child
+                        .green()
+                        .insert_child(insert_index, follows_node.green().into());
 
-                // Copy whitespace from before the last child
-                if let Some(whitespace) = get_sibling_whitespace(last_child) {
-                    green = green.insert_child(insert_index, whitespace.green().into());
+                    // Copy whitespace from before the last child
+                    if let Some(whitespace) = get_sibling_whitespace(last_child) {
+                        green = green.insert_child(insert_index, whitespace.green().into());
+                    }
+
+                    let new_child = parse_node(&green.to_string());
+                    return Some(substitute_child(node, child.index(), &new_child));
                 }
+            } else {
+                let has_follows = child.children().any(|attr| {
+                    attr.first_child()
+                        .and_then(|attrpath| attrpath.first_child())
+                        .map(|first_ident| first_ident.to_string() == "follows")
+                        .unwrap_or(false)
+                });
 
-                let new_child = parse_node(&green.to_string());
-                return Some(substitute_child(node, child.index(), &new_child));
+                if !has_follows {
+                    let follows_node = make_follows_attr(target);
+                    let children: Vec<_> = child.children().collect();
+                    if let Some(last_child) = children.last() {
+                        let insert_index = last_child.index() + 1;
+                        let mut green = child
+                            .green()
+                            .insert_child(insert_index, follows_node.green().into());
+
+                        if let Some(whitespace) = get_sibling_whitespace(last_child) {
+                            green = green.insert_child(insert_index, whitespace.green().into());
+                        }
+
+                        let new_child = parse_node(&green.to_string());
+                        return Some(substitute_child(node, child.index(), &new_child));
+                    }
+                }
             }
         }
     }
