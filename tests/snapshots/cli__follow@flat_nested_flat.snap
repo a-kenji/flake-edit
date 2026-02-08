@@ -1,5 +1,6 @@
 ---
 source: tests/cli.rs
+assertion_line: 509
 info:
   program: flake-edit
   args:
