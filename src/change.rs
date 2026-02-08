@@ -148,12 +148,21 @@ impl Change {
                 )]
             }
             Change::Follows { input, target } => {
-                vec![format!(
-                    "Added follows: {}.inputs.{}.follows = \"{}\"",
-                    input.input(),
-                    input.follows().unwrap_or("?"),
-                    target
-                )]
+                let msg = if let Some(nested) = input.follows() {
+                    format!(
+                        "Added follows: {}.inputs.{}.follows = \"{}\"",
+                        input.input(),
+                        nested,
+                        target
+                    )
+                } else {
+                    format!(
+                        "Added follows: inputs.{}.follows = \"{}\"",
+                        input.input(),
+                        target
+                    )
+                };
+                vec![msg]
             }
             Change::None => vec![],
         }

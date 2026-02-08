@@ -224,6 +224,7 @@ mod tests {
         let input = NestedInput {
             path: "crane.nixpkgs".into(),
             follows: Some("nixpkgs".into()),
+            url: None,
         };
         let display = input.to_display_string();
         let (path, follows) = parse_follows_item(&display);
@@ -234,6 +235,7 @@ mod tests {
         let input = NestedInput {
             path: "crane.nixpkgs".into(),
             follows: None,
+            url: None,
         };
         let display = input.to_display_string();
         let (path, follows) = parse_follows_item(&display);

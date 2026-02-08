@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use nix_uri::urls::UrlWrapper;
 use nix_uri::{FlakeRef, NixUriResult};
@@ -83,6 +83,28 @@ struct FollowContext {
 fn is_follows_reference_to_parent(url: &str, parent: &str) -> bool {
     let url_trimmed = url.trim_matches('"');
     url_trimmed.starts_with(&format!("{}/", parent))
+}
+
+/// Collect nested follows paths already declared in flake.nix.
+fn collect_existing_follows(inputs: &InputMap) -> HashSet<String> {
+    let mut existing = HashSet::new();
+    for (input_id, input) in inputs {
+        for follows in input.follows() {
+            if let Follows::Indirect(nested_name, _target) = follows {
+                existing.insert(format!("{}.{}", input_id, nested_name));
+            }
+        }
+    }
+    existing
+}
+
+/// Convert a lockfile follows path like "parent.child" to flake follows syntax "parent/child".
+fn lock_follows_to_flake_target(target: &str) -> String {
+    if target.contains('.') {
+        target.replace('.', "/")
+    } else {
+        target.to_string()
+    }
 }
 
 /// Load nested inputs from lockfile and top-level inputs from flake.nix.
@@ -868,6 +890,8 @@ fn collect_stale_follows(
 /// The config file controls behavior:
 /// - `follow.ignore`: List of input names to skip
 /// - `follow.aliases`: Map of canonical names to alternatives (e.g., nixpkgs = ["nixpkgs-lib"])
+/// - `follow.transitive_min`: Minimum number of matching transitive follows before adding a
+///   top-level follows input (set to 0 to disable)
 pub fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) -> Result<()> {
     follow_auto_impl(editor, flake_edit, state, false)
 }
@@ -893,12 +917,14 @@ fn follow_auto_impl(
     let to_unfollow = collect_stale_follows(&ctx.inputs, &existing_nested_paths);
 
     let follow_config = &state.config.follow;
+    let existing_follows = collect_existing_follows(&ctx.inputs);
+    let transitive_min = follow_config.transitive_min();
+    let mut seen_nested: HashSet<String> = HashSet::new();
 
     // Collect candidates: nested inputs that match a top-level input
-    let to_follow: Vec<(String, String)> = ctx
+    let mut to_follow: Vec<(String, String)> = ctx
         .nested_inputs
         .iter()
-        .filter(|nested| nested.follows.is_none())
         .filter_map(|nested| {
             let nested_name = nested.path.split('.').next_back().unwrap_or(&nested.path);
             let parent = nested.path.split('.').next().unwrap_or(&nested.path);
@@ -906,6 +932,12 @@ fn follow_auto_impl(
             // Skip ignored inputs (supports both full path and simple name)
             if follow_config.is_ignored(&nested.path, nested_name) {
                 tracing::debug!("Skipping {}: ignored by config", nested.path);
+                return None;
+            }
+
+            // Skip if already configured in flake.nix
+            if existing_follows.contains(&nested.path) {
+                tracing::debug!("Skipping {}: already follows in flake.nix", nested.path);
                 return None;
             }
 
@@ -936,7 +968,200 @@ fn follow_auto_impl(
         })
         .collect();
 
-    if to_follow.is_empty() && to_unfollow.is_empty() {
+    for (nested_path, _target) in &to_follow {
+        seen_nested.insert(nested_path.clone());
+    }
+
+    let mut transitive_groups: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
+
+    if transitive_min > 0 {
+        for nested in ctx.nested_inputs.iter() {
+            let nested_name = nested.path.split('.').next_back().unwrap_or(&nested.path);
+            let parent = nested.path.split('.').next().unwrap_or(&nested.path);
+
+            if follow_config.is_ignored(&nested.path, nested_name) {
+                continue;
+            }
+
+            if existing_follows.contains(&nested.path) || seen_nested.contains(&nested.path) {
+                continue;
+            }
+
+            let matching_top_level = ctx
+                .top_level_inputs
+                .iter()
+                .find(|top| follow_config.can_follow(nested_name, top));
+
+            if matching_top_level.is_some() {
+                continue;
+            }
+
+            let Some(transitive_target) = nested.follows.as_ref() else {
+                continue;
+            };
+
+            // Only consider transitive follows (path with a parent segment).
+            if !transitive_target.contains('.') {
+                continue;
+            }
+
+            // Avoid self-follow situations.
+            if transitive_target == nested_name {
+                continue;
+            }
+
+            let top_level_name = follow_config
+                .resolve_alias(nested_name)
+                .unwrap_or(nested_name)
+                .to_string();
+
+            // Skip if a top-level input already exists with that name.
+            if ctx.top_level_inputs.contains(&top_level_name) {
+                continue;
+            }
+
+            // Skip if target already follows from parent (would create cycle)
+            if let Some(target_input) = ctx.inputs.get(transitive_target.as_str())
+                && is_follows_reference_to_parent(target_input.url(), parent)
+            {
+                continue;
+            }
+
+            transitive_groups
+                .entry(top_level_name)
+                .or_default()
+                .entry(transitive_target.clone())
+                .or_default()
+                .push(nested.path.clone());
+        }
+    }
+
+    // Pass 2b: Group Direct references (follows: None) by canonical name.
+    // These are nested inputs that point to separate lock nodes rather than
+    // following an existing path. When multiple parents share the same
+    // dependency (e.g., treefmt.nixpkgs and treefmt-nix.nixpkgs), we can
+    // promote one to top-level and have the others follow it.
+    // Each entry: canonical_name -> Vec<(path, url)>
+    let mut direct_groups: HashMap<String, Vec<(String, Option<String>)>> = HashMap::new();
+
+    if transitive_min > 0 {
+        for nested in ctx.nested_inputs.iter() {
+            let nested_name = nested.path.split('.').next_back().unwrap_or(&nested.path);
+
+            if nested.follows.is_some() {
+                continue;
+            }
+
+            if follow_config.is_ignored(&nested.path, nested_name) {
+                continue;
+            }
+
+            if existing_follows.contains(&nested.path) || seen_nested.contains(&nested.path) {
+                continue;
+            }
+
+            let matching_top_level = ctx
+                .top_level_inputs
+                .iter()
+                .find(|top| follow_config.can_follow(nested_name, top));
+
+            if matching_top_level.is_some() {
+                continue;
+            }
+
+            let canonical_name = follow_config
+                .resolve_alias(nested_name)
+                .unwrap_or(nested_name)
+                .to_string();
+
+            if ctx.top_level_inputs.contains(&canonical_name) {
+                continue;
+            }
+
+            direct_groups
+                .entry(canonical_name)
+                .or_default()
+                .push((nested.path.clone(), nested.url.clone()));
+        }
+    }
+
+    let mut toplevel_follows: Vec<(String, String)> = Vec::new();
+    let mut toplevel_adds: Vec<(String, String)> = Vec::new();
+
+    if transitive_min > 0 {
+        for (top_name, targets) in transitive_groups {
+            let mut eligible: Vec<(String, Vec<String>)> = targets
+                .into_iter()
+                .filter(|(_, paths)| paths.len() >= transitive_min)
+                .collect();
+
+            if eligible.len() != 1 {
+                continue;
+            }
+
+            let (target_path, paths) = eligible.pop().unwrap();
+            let follow_target = lock_follows_to_flake_target(&target_path);
+
+            if follow_target == top_name {
+                continue;
+            }
+
+            toplevel_follows.push((top_name.clone(), follow_target));
+
+            for path in paths {
+                if seen_nested.insert(path.clone()) {
+                    to_follow.push((path, top_name.clone()));
+                }
+            }
+        }
+
+        // Promote Direct reference groups: add a new top-level input with the
+        // URL from one of the nested references, then have all paths follow it.
+        // Only promote if at least one follows can actually be applied.
+        let mut direct_groups_sorted: Vec<_> = direct_groups.into_iter().collect();
+        direct_groups_sorted.sort_by(|a, b| a.0.cmp(&b.0));
+        for (canonical_name, mut entries) in direct_groups_sorted {
+            if entries.len() < transitive_min {
+                continue;
+            }
+
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
+
+            let url = entries.iter().find_map(|(_, u)| u.clone());
+            let Some(url) = url else {
+                continue;
+            };
+
+            // Dry-run: check that at least one follows can be applied.
+            let can_follow = entries.iter().any(|(path, _)| {
+                let change = Change::Follows {
+                    input: path.clone().into(),
+                    target: canonical_name.clone(),
+                };
+                FlakeEdit::from_text(&editor.text())
+                    .ok()
+                    .and_then(|mut fe| fe.apply_change(change).ok().flatten())
+                    .is_some()
+            });
+            if !can_follow {
+                continue;
+            }
+
+            toplevel_adds.push((canonical_name.clone(), url));
+
+            for (path, _) in &entries {
+                if seen_nested.insert(path.clone()) {
+                    to_follow.push((path.clone(), canonical_name.clone()));
+                }
+            }
+        }
+    }
+
+    if to_follow.is_empty()
+        && to_unfollow.is_empty()
+        && toplevel_follows.is_empty()
+        && toplevel_adds.is_empty()
+    {
         if !quiet {
             println!("All inputs are already deduplicated.");
         }
@@ -947,7 +1172,39 @@ fn follow_auto_impl(
     let mut current_text = editor.text();
     let mut applied: Vec<(&str, &str)> = Vec::new();
 
-    for (input_path, target) in &to_follow {
+    // First, add new top-level inputs (from Direct reference promotion).
+    // These must be added before follows declarations that reference them.
+    for (id, url) in &toplevel_adds {
+        let change = Change::Add {
+            id: Some(id.clone()),
+            uri: Some(url.clone()),
+            flake: true,
+        };
+
+        let mut temp_flake_edit =
+            FlakeEdit::from_text(&current_text).map_err(CommandError::FlakeEdit)?;
+
+        match temp_flake_edit.apply_change(change) {
+            Ok(Some(resulting_text)) => {
+                let validation = validate::validate(&resulting_text);
+                if validation.is_ok() {
+                    current_text = resulting_text;
+                } else {
+                    for err in validation.errors {
+                        eprintln!("Error adding top-level input {}: {}", id, err);
+                    }
+                }
+            }
+            Ok(None) => eprintln!("Could not add top-level input {}", id),
+            Err(e) => eprintln!("Error adding top-level input {}: {}", id, e),
+        }
+    }
+
+    let mut follow_changes: Vec<(String, String)> = Vec::new();
+    follow_changes.extend(toplevel_follows.into_iter());
+    follow_changes.extend(to_follow.into_iter());
+
+    for (input_path, target) in &follow_changes {
         let change = Change::Follows {
             input: input_path.clone().into(),
             target: target.clone(),
@@ -1019,9 +1276,12 @@ fn follow_auto_impl(
                     }
                 );
                 for (input_path, target) in &applied {
-                    let nested_name = input_path.split('.').next_back().unwrap_or(input_path);
-                    let parent = input_path.split('.').next().unwrap_or(input_path);
-                    println!("  {}.{} → {}", parent, nested_name, target);
+                    if let Some((parent, _)) = input_path.split_once('.') {
+                        let nested_name = input_path.split('.').next_back().unwrap_or(input_path);
+                        println!("  {}.{} → {}", parent, nested_name, target);
+                    } else {
+                        println!("  {} → {}", input_path, target);
+                    }
                 }
             }
 

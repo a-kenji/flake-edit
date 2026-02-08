@@ -17,7 +17,20 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -20,15 +20,27 @@
+@@ -2,6 +2,12 @@
+   description = "nas home server";
+
+   inputs = {
++    treefmt-nix.url = "github:numtide/treefmt-nix";
++    systems.url = "github:nix-systems/default";
++    nixpkgs-regression.url = "github:NixOS/nixpkgs";
++    nixpkgs-23-11.url = "github:NixOS/nixpkgs";
++    hercules-ci-effects.url = "github:hercules-ci/hercules-ci-effects";
++    git-hooks-nix.url = "github:cachix/git-hooks.nix";
+     flake-parts.url = "github:hercules-ci/flake-parts";
+     flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
+     flake-compat = {
+@@ -20,15 +26,38 @@
      nixos-hardware.url = "github:nixos/nixos-hardware";
 
      nil.url = "github:oxalica/nil";
@@ -27,14 +40,23 @@ exit_code: 0
 +    nix.inputs.flake-compat.follows = "flake-compat";
 +    nix.inputs.flake-parts.follows = "flake-parts";
 +    nix.inputs.nixpkgs.follows = "nixpkgs";
++    nix.inputs.git-hooks-nix.follows = "git-hooks-nix";
++    nix.inputs.nixpkgs-23-11.follows = "nixpkgs-23-11";
++    nix.inputs.nixpkgs-regression.follows = "nixpkgs-regression";
      nix-lazy.url = "github:edolstra/nix/lazy-trees";
 +    nix-lazy.inputs.flake-compat.follows = "flake-compat";
 +    nix-lazy.inputs.flake-parts.follows = "flake-parts";
 +    nix-lazy.inputs.nixpkgs.follows = "nixpkgs";
++    nix-lazy.inputs.git-hooks-nix.follows = "git-hooks-nix";
++    nix-lazy.inputs.nixpkgs-23-11.follows = "nixpkgs-23-11";
++    nix-lazy.inputs.nixpkgs-regression.follows = "nixpkgs-regression";
      nix-multi.url = "git+https://github.com/DeterminateSystems/nix-src?&ref=multithreaded-eval&shallow=1";
 +    nix-multi.inputs.flake-compat.follows = "flake-compat";
 +    nix-multi.inputs.flake-parts.follows = "flake-parts";
 +    nix-multi.inputs.nixpkgs.follows = "nixpkgs";
++    nix-multi.inputs.git-hooks-nix.follows = "git-hooks-nix";
++    nix-multi.inputs.nixpkgs-23-11.follows = "nixpkgs-23-11";
++    nix-multi.inputs.nixpkgs-regression.follows = "nixpkgs-regression";
 
      retiolum.url = "github:mic92/retiolum";
 
@@ -42,34 +64,42 @@ exit_code: 0
      clan-core.inputs.nixpkgs.follows = "nixpkgs";
 +    clan-core.inputs.disko.follows = "disko";
 +    clan-core.inputs.flake-parts.follows = "flake-parts";
++    clan-core.inputs.systems.follows = "systems";
++    clan-core.inputs.treefmt-nix.follows = "treefmt-nix";
 
      disko.url = "github:nix-community/disko";
      disko.inputs.nixpkgs.follows = "nixpkgs";
-@@ -37,6 +49,7 @@
+@@ -37,6 +66,8 @@
 
      envfs.url = "github:Mic92/envfs";
      envfs.inputs.nixpkgs.follows = "nixpkgs";
 +    envfs.inputs.flake-parts.follows = "flake-parts";
++    envfs.inputs.treefmt-nix.follows = "treefmt-nix";
 
      nix-heuristic-gc.url = "github:risicle/nix-heuristic-gc";
      nix-heuristic-gc.inputs.nixpkgs.follows = "nixpkgs";
-@@ -46,15 +59,19 @@
+@@ -46,15 +77,24 @@
 
      hyprspace.url = "github:hyprspace/hyprspace";
      hyprspace.inputs.nixpkgs.follows = "nixpkgs";
 +    hyprspace.inputs.flake-parts.follows = "flake-parts";
++    hyprspace.inputs.hercules-ci-effects.follows = "hercules-ci-effects";
 
      nixvim.url = "github:nix-community/nixvim";
      nixvim.inputs.nixpkgs.follows = "nixpkgs";
 +    nixvim.inputs.flake-parts.follows = "flake-parts";
++    nixvim.inputs.systems.follows = "systems";
 
      buildbot-nix.url = "github:DavHau/buildbot-nix/anon-control";
      buildbot-nix.inputs.nixpkgs.follows = "nixpkgs";
 +    buildbot-nix.inputs.flake-parts.follows = "flake-parts";
++    buildbot-nix.inputs.hercules-ci-effects.follows = "hercules-ci-effects";
++    buildbot-nix.inputs.treefmt-nix.follows = "treefmt-nix";
 
      stylix.url = "github:nix-community/stylix";
      stylix.inputs.nixpkgs.follows = "nixpkgs";
 +    stylix.inputs.flake-parts.follows = "flake-parts";
++    stylix.inputs.systems.follows = "systems";
 
      easytier.url = "github:EasyTier/EasyTier";
      easytier.flake = false;
