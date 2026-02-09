@@ -112,7 +112,7 @@ opt-level = 3
 opt-level = 3
 
 [dev-dependencies]
-criterion = "0.8.1"
+criterion = "0.8.2"
 divan = "0.1.21"
 insta = { version = "1.46.0", features = ["yaml", "filters", "redactions"] }
 insta-cmd = "0.6"
