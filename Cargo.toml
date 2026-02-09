@@ -40,7 +40,7 @@ assets = ["clap_complete", "clap_complete_nushell", "roff", "clap_mangen"]
 
 [dependencies]
 anyhow = { version = "1.0.100", optional = true }
-clap = { version = "4.5.54", optional = true, features = ["derive"] }
+clap = { version = "4.5.57", optional = true, features = ["derive"] }
 color-eyre = { version = "0.6.5", default-features = false, features = [
   "track-caller",
 ] }
@@ -73,7 +73,7 @@ nucleo-matcher = { version = "0.3", optional = true }
 
 
 [build-dependencies]
-clap = { version = "4.5.54", features = ["derive"], optional = true }
+clap = { version = "4.5.57", features = ["derive"], optional = true }
 clap_complete = { version = "4.5.65", features = [], optional = true }
 clap_complete_nushell = { version = "4.5.10", optional = true }
 clap_mangen = { version = "0.2.31", features = [], optional = true }
