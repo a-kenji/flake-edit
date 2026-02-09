@@ -48,7 +48,7 @@ diffy = { version = "0.4.2", optional = true }
 directories = "6.0.0"
 nix-uri = "0.1.10"
 ureq = { version = "3", default-features = false, features = ["rustls"] }
-rnix = "0.12.0"
+rnix = "0.13.0"
 ropey = { version = "1.6.1" }
 semver = "1.0.27"
 serde = { version = "1.0.228", default-features = false, features = [
