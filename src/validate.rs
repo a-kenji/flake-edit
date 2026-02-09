@@ -162,8 +162,8 @@ impl Validator {
     }
 
     /// Extract location from an rnix ParseError.
-    fn parse_error_location(&self, error: &rnix::parser::ParseError) -> Location {
-        use rnix::parser::ParseError::*;
+    fn parse_error_location(&self, error: &rnix::ParseError) -> Location {
+        use rnix::ParseError::*;
         match error {
             Unexpected(r)
             | UnexpectedExtra(r)
