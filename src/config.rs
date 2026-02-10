@@ -33,17 +33,32 @@ pub struct Config {
 }
 
 /// Configuration for the `follow` command.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FollowConfig {
     /// Inputs to ignore during follow.
     #[serde(default)]
     pub ignore: Vec<String>,
 
+    /// Minimum number of transitive follows needed to add a top-level follows input.
+    /// Set to 0 to disable transitive follows deduplication.
+    #[serde(default = "default_transitive_min")]
+    pub transitive_min: usize,
+
     /// Alias mappings: canonical_name -> [alternative_names]
     /// e.g., nixpkgs = ["nixpkgs-lib"] means nixpkgs-lib can follow nixpkgs
     #[serde(default)]
     pub aliases: HashMap<String, Vec<String>>,
+}
+
+impl Default for FollowConfig {
+    fn default() -> Self {
+        Self {
+            ignore: Vec::new(),
+            transitive_min: default_transitive_min(),
+            aliases: HashMap::new(),
+        }
+    }
 }
 
 impl FollowConfig {
@@ -84,6 +99,10 @@ impl FollowConfig {
         }
         // Check if nested_name is an alias for top_level_name
         self.resolve_alias(nested_name) == Some(top_level_name)
+    }
+
+    pub fn transitive_min(&self) -> usize {
+        self.transitive_min
     }
 }
 
@@ -172,6 +191,7 @@ mod tests {
         let config: Config =
             toml::from_str(DEFAULT_CONFIG_TOML).expect("default config should parse");
         assert!(config.follow.ignore.is_empty());
+        assert_eq!(config.follow.transitive_min, 2);
         assert!(config.follow.aliases.is_empty());
     }
 
@@ -253,4 +273,8 @@ mod tests {
         // but not the reverse
         assert!(!config.can_follow("nixpkgs", "nixpkgs-lib"));
     }
+}
+
+fn default_transitive_min() -> usize {
+    2
 }

@@ -419,6 +419,7 @@ fn test_add_follow_nonexistent(#[case] fixture: &str, #[case] input: &str, #[cas
 #[case("follows_cycle")] // Cycle detection: treefmt-nix follows harmonia/treefmt-nix
 #[case("stale_follows")] // Stale follows: crane.flake-compat no longer exists in lock
 #[case("stale_follows_invalid_parent")] // Stale follows: nixpkgs.treefmt-nix doesn't exist
+#[case("treefmt_transitive")] // treefmt has treefmt-nix as transitive input that matches top-level
 fn test_follow(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);

@@ -12,6 +12,8 @@ pub struct NestedInput {
     pub path: String,
     /// The target this input follows, if any (e.g., "nixpkgs")
     pub follows: Option<String>,
+    /// The original flake URL for Direct references (e.g., "github:nixos/nixpkgs/nixos-unstable")
+    pub url: Option<String>,
 }
 
 impl NestedInput {
@@ -90,6 +92,25 @@ pub struct Original {
     #[serde(rename = "ref")]
     ref_field: Option<String>,
     url: Option<String>,
+}
+
+impl Original {
+    /// Reconstruct a flake URL from the original reference.
+    pub fn to_flake_url(&self) -> Option<String> {
+        match self.node_type.as_str() {
+            "github" | "gitlab" | "sourcehut" => {
+                let owner = self.owner.as_deref()?;
+                let repo = self.repo.as_deref()?;
+                let mut url = format!("{}:{}/{}", self.node_type, owner, repo);
+                if let Some(ref_field) = &self.ref_field {
+                    url.push('/');
+                    url.push_str(ref_field);
+                }
+                Some(url)
+            }
+            _ => self.url.clone(),
+        }
+    }
 }
 
 impl FlakeLock {
@@ -174,11 +195,18 @@ impl FlakeLock {
                 if let Some(nested_inputs) = &node.inputs {
                     for (nested_name, nested_ref) in nested_inputs {
                         let path = format!("{}.{}", top_level_name, nested_name);
-                        let follows = match nested_ref {
-                            Input::Indirect(targets) => Some(targets.join(".")),
-                            Input::Direct(_) => None,
+                        let (follows, url) = match nested_ref {
+                            Input::Indirect(targets) => (Some(targets.join(".")), None),
+                            Input::Direct(node_name) => {
+                                let url = self
+                                    .nodes
+                                    .get(node_name.as_str())
+                                    .and_then(|n| n.original.as_ref())
+                                    .and_then(|o| o.to_flake_url());
+                                (None, url)
+                            }
                         };
-                        inputs.push(NestedInput { path, follows });
+                        inputs.push(NestedInput { path, follows, url });
                     }
                 }
             }

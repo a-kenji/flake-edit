@@ -387,6 +387,10 @@ Run `flake-edit config --print-default` to create a default configuration:
 #   - Simple name: "systems" - ignores all nested inputs with that name
 # ignore = ["systems", "crane.flake-utils"]
 
+# Minimum number of transitive follows required to add a top-level follows input.
+# Set to 0 to disable transitive follows deduplication.
+# transitive_min = 2
+
 # Alias mappings.
 # Key is the canonical name (must exist at top-level), values are alternatives.
 # Example: if nested input is "nixpkgs-lib" and top-level "nixpkgs" exists,

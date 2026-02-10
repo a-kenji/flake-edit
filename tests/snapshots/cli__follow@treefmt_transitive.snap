@@ -1,0 +1,44 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/treefmt_transitive.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/treefmt_transitive.flake.lock"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -2,8 +2,12 @@
+   description = "test transitive follows with treefmt-nix and treefmt";
+
+   inputs = {
++    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+     treefmt-nix.url = "github:numtide/treefmt-nix";
++    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
+     treefmt.url = "github:numtide/treefmt";
++    treefmt.inputs.treefmt-nix.follows = "treefmt-nix";
++    treefmt.inputs.nixpkgs.follows = "nixpkgs";
+   };
+
+   outputs =
+@@ -11,6 +15,7 @@
+       self,
+       treefmt-nix,
+       treefmt,
++      nixpkgs,
+     }:
+     { };
+-}
++}
+\ No newline at end of file
+
+----- stderr -----
