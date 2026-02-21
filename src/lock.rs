@@ -91,6 +91,7 @@ pub struct Original {
     node_type: String,
     #[serde(rename = "ref")]
     ref_field: Option<String>,
+    rev: Option<String>,
     url: Option<String>,
 }
 
@@ -105,6 +106,10 @@ impl Original {
                 if let Some(ref_field) = &self.ref_field {
                     url.push('/');
                     url.push_str(ref_field);
+                }
+                if let Some(rev) = &self.rev {
+                    url.push_str("?rev=");
+                    url.push_str(rev);
                 }
                 Some(url)
             }

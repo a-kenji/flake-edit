@@ -1,5 +1,6 @@
 ---
 source: tests/cli.rs
+assertion_line: 428
 info:
   program: flake-edit
   args:
@@ -23,8 +24,8 @@ exit_code: 0
    inputs = {
 +    treefmt-nix.url = "github:numtide/treefmt-nix";
 +    systems.url = "github:nix-systems/default";
-+    nixpkgs-regression.url = "github:NixOS/nixpkgs";
-+    nixpkgs-23-11.url = "github:NixOS/nixpkgs";
++    nixpkgs-regression.url = "github:NixOS/nixpkgs?rev=215d4d0fd80ca5163643b03a33fde804a29cc1e2";
++    nixpkgs-23-11.url = "github:NixOS/nixpkgs?rev=a62e6edd6d5e1fa0329b8653c801147986f8d446";
 +    hercules-ci-effects.url = "github:hercules-ci/hercules-ci-effects";
 +    git-hooks-nix.url = "github:cachix/git-hooks.nix";
      flake-parts.url = "github:hercules-ci/flake-parts";
