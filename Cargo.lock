@@ -1623,9 +1623,9 @@ dependencies = [
 
 [[package]]
 name = "rnix"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b8276b540c344ec04cd215fb3d35db378c2b1861cc44802c2c097f3490f6e52"
+checksum = "c163bd17372eecdf10d351c34584b7de7c1a33be4e92a32f3fb3f5a7fe3f579b"
 dependencies = [
  "rowan",
 ]
