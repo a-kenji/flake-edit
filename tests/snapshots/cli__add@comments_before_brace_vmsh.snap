@@ -4,7 +4,7 @@ info:
   program: flake-edit
   args:
     - "--flake"
-    - "[FIXTURES]/flat_nested_flat.flake.nix"
+    - "[FIXTURES]/comments_before_brace.flake.nix"
     - "--diff"
     - add
     - vmsh
@@ -17,13 +17,12 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -8,6 +8,7 @@
-     inputs.nixpkgs.follows = "nixpkgs";
-     url = "github:nix-community/poetry2nix/master";
-   };
+@@ -5,5 +5,6 @@
+ {
+   description = "A flake with comments before the opening brace";
+   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 +  inputs.vmsh.url = "github:mic92/vmsh";
-
-   outputs =
-     {
+   outputs = _: { };
+ }
 
 ----- stderr -----

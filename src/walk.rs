@@ -17,9 +17,10 @@ use crate::input::Input;
 pub use context::Context;
 pub use error::WalkerError;
 
-use inputs::{remove_child_with_whitespace, walk_inputs};
+use inputs::walk_inputs;
 use node::{
-    get_sibling_whitespace, make_toplevel_flake_false_attr, make_toplevel_url_attr, parse_node,
+    adjacent_whitespace_index, get_sibling_whitespace, make_toplevel_flake_false_attr,
+    make_toplevel_url_attr, parse_node,
 };
 
 #[derive(Debug, Clone)]
@@ -45,11 +46,11 @@ impl<'a> Walker {
     /// - inputs
     /// - outputs
     pub fn walk(&mut self, change: &Change) -> Result<Option<SyntaxNode>, WalkerError> {
-        let cst = &self.root;
+        let cst = self.root.clone();
         if cst.kind() != SyntaxKind::NODE_ROOT {
             return Err(WalkerError::NotARoot(cst.kind()));
         }
-        self.walk_toplevel(cst.clone(), None, change)
+        self.walk_toplevel(cst, None, change)
     }
 
     /// Only walk the outputs attribute
@@ -72,11 +73,11 @@ impl<'a> Walker {
         ctx: Option<Context>,
         change: &Change,
     ) -> Result<Option<SyntaxNode>, WalkerError> {
-        let Some(root) = node.first_child() else {
+        let Some(attr_set) = node.first_child() else {
             return Ok(None);
         };
 
-        for toplevel in root.children() {
+        for toplevel in attr_set.children() {
             if toplevel.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
                 return Err(WalkerError::UnexpectedNodeKind {
                     expected: SyntaxKind::NODE_ATTRPATH_VALUE,
@@ -92,9 +93,7 @@ impl<'a> Walker {
                 }
 
                 if child_str == "inputs" {
-                    if let Some(result) =
-                        self.handle_inputs_attr(&root, &toplevel, &child, &ctx, change)
-                    {
+                    if let Some(result) = self.handle_inputs_attr(&toplevel, &child, &ctx, change) {
                         return Ok(Some(result));
                     }
                     continue;
@@ -102,7 +101,7 @@ impl<'a> Walker {
 
                 if child_str.starts_with("inputs") {
                     if let Some(result) =
-                        self.handle_inputs_flat(&root, &toplevel, &child, &ctx, change)
+                        self.handle_inputs_flat(&attr_set, &toplevel, &child, &ctx, change)
                     {
                         return Ok(Some(result));
                     }
@@ -110,7 +109,7 @@ impl<'a> Walker {
                 }
 
                 if child_str == "outputs"
-                    && let Some(result) = self.handle_add_at_outputs(&root, &toplevel, change)
+                    && let Some(result) = self.handle_add_at_outputs(&attr_set, &toplevel, change)
                 {
                     return Ok(Some(result));
                 }
@@ -119,10 +118,12 @@ impl<'a> Walker {
         Ok(None)
     }
 
-    /// Handle `inputs = { ... }` attribute
+    /// Handle `inputs = { ... }` attribute.
+    ///
+    /// `toplevel.replace_with()` propagates through NODE_ATTR_SET up to
+    /// NODE_ROOT, preserving any leading comments/trivia.
     fn handle_inputs_attr(
         &mut self,
-        _root: &SyntaxNode,
         toplevel: &SyntaxNode,
         child: &SyntaxNode,
         ctx: &Option<Context>,
@@ -138,10 +139,14 @@ impl<'a> Walker {
         Some(parse_node(&green.to_string()))
     }
 
-    /// Handle flat-style `inputs.foo.url = "..."` attributes
+    /// Handle flat-style `inputs.foo.url = "..."` attributes.
+    ///
+    /// For removals, builds the modified attr_set green and uses
+    /// `replace_with()` to propagate to NODE_ROOT.
+    /// For replacements, `toplevel.replace_with()` propagates naturally.
     fn handle_inputs_flat(
         &mut self,
-        root: &SyntaxNode,
+        attr_set: &SyntaxNode,
         toplevel: &SyntaxNode,
         child: &SyntaxNode,
         ctx: &Option<Context>,
@@ -149,13 +154,15 @@ impl<'a> Walker {
     ) -> Option<SyntaxNode> {
         let replacement = walk_inputs(&mut self.inputs, child.clone(), ctx, change)?;
 
-        // If replacement is empty, remove the entire toplevel node
+        // If replacement is empty, remove the entire toplevel node and
+        // propagate through attr_set to NODE_ROOT.
         if replacement.to_string().is_empty() {
-            return Some(remove_child_with_whitespace(
-                root,
-                toplevel,
-                toplevel.index(),
-            ));
+            let element: rnix::SyntaxElement = toplevel.clone().into();
+            let mut green = attr_set.green().remove_child(toplevel.index());
+            if let Some(ws_index) = adjacent_whitespace_index(&element) {
+                green = green.remove_child(ws_index);
+            }
+            return Some(parse_node(&attr_set.replace_with(green).to_string()));
         }
 
         let sibling = child.next_sibling()?;
@@ -166,10 +173,13 @@ impl<'a> Walker {
         Some(parse_node(&green.to_string()))
     }
 
-    /// Handle adding inputs when we've reached `outputs` but have no inputs yet
+    /// Handle adding inputs when we've reached `outputs` but have no inputs yet.
+    ///
+    /// Builds the modified attr_set green and uses `replace_with()` to
+    /// propagate to NODE_ROOT, preserving leading comments.
     fn handle_add_at_outputs(
         &mut self,
-        root: &SyntaxNode,
+        attr_set: &SyntaxNode,
         toplevel: &SyntaxNode,
         change: &Change,
     ) -> Option<SyntaxNode> {
@@ -193,12 +203,14 @@ impl<'a> Walker {
         let addition = make_toplevel_url_attr(id, uri);
         let insert_pos = toplevel.index() - 1;
 
-        let mut green = root
+        let mut green = attr_set
             .green()
             .insert_child(insert_pos, addition.green().into());
 
         // Add whitespace before the new input
-        if let Some(prev_child) = root.children().find(|c| c.index() == toplevel.index() - 2)
+        if let Some(prev_child) = attr_set
+            .children()
+            .find(|c| c.index() == toplevel.index() - 2)
             && let Some(whitespace) = get_sibling_whitespace(&prev_child)
         {
             green = green.insert_child(insert_pos, whitespace.green().into());
@@ -209,13 +221,15 @@ impl<'a> Walker {
             let no_flake = make_toplevel_flake_false_attr(id);
             green = green.insert_child(toplevel.index() + 1, no_flake.green().into());
 
-            if let Some(prev_child) = root.children().find(|c| c.index() == toplevel.index() - 2)
+            if let Some(prev_child) = attr_set
+                .children()
+                .find(|c| c.index() == toplevel.index() - 2)
                 && let Some(whitespace) = get_sibling_whitespace(&prev_child)
             {
                 green = green.insert_child(toplevel.index() + 1, whitespace.green().into());
             }
         }
 
-        Some(parse_node(&green.to_string()))
+        Some(parse_node(&attr_set.replace_with(green).to_string()))
     }
 }

@@ -32,8 +32,6 @@ exit_code: 0
 +      vmsh,
      }:
      { };
--}
-+}
-\ No newline at end of file
+ }
 
 ----- stderr -----

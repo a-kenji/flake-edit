@@ -16,7 +16,7 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -1,20 +1,16 @@
+@@ -1,17 +1,13 @@
  {
    description = "toplevel nesting";
 
@@ -34,10 +34,5 @@ exit_code: 0
      inputs.rust-overlay.follows = "rust-overlay";
      inputs.flake-utils.follows = "flake-utils";
    };
-
-   outputs = _: { };
--}
-+}
-\ No newline at end of file
 
 ----- stderr -----

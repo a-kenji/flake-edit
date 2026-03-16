@@ -13,7 +13,7 @@ use super::node::{
 };
 
 /// Remove a child node along with its adjacent whitespace.
-pub fn remove_child_with_whitespace(
+fn remove_child_with_whitespace(
     parent: &SyntaxNode,
     node: &SyntaxNode,
     index: usize,

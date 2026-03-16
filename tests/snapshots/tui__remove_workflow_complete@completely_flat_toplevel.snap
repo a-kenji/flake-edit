@@ -15,6 +15,4 @@ expression: session.app().pending_diff()
 -  inputs.crane.inputs.flake-utils.follows = "flake-utils";
 
    outputs = _: { };
--}
-+}
-\ No newline at end of file
+ }
