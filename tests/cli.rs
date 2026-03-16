@@ -103,6 +103,7 @@ fn test_list_format(#[case] fixture: &str, #[case] format: &str) {
 #[case("flat_nested_flat", "vmsh", "github:mic92/vmsh")]
 #[case("first_nested_node", "vmsh", "github:mic92/vmsh")]
 #[case("comments_before_brace", "vmsh", "github:mic92/vmsh")]
+#[case("all_blanks", "vmsh", "github:mic92/vmsh")]
 fn test_add(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -123,6 +124,7 @@ fn test_add(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
 
 #[rstest]
 #[case("root", "not_a_flake", "github:a-kenji/not_a_flake")]
+#[case("all_blanks", "not_a_flake", "github:a-kenji/not_a_flake")]
 fn test_add_no_flake(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);

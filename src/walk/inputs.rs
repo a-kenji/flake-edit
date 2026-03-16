@@ -385,8 +385,11 @@ fn handle_child_attrpath_value(
         let uri_node = make_url_attr(id, uri);
         let mut offset = 0;
 
-        // Insert whitespace before the new node
-        if let Some(whitespace) = get_sibling_whitespace(child_node) {
+        // Use whitespace from before the last input to preserve blank line patterns.
+        // The first input's preceding whitespace is always just "\n  " (after the
+        // opening brace), but subsequent inputs may have blank lines between them.
+        let ws_reference = last_attr.as_ref().unwrap_or(child_node);
+        if let Some(whitespace) = get_sibling_whitespace(ws_reference) {
             let mut green = parent
                 .green()
                 .insert_child(insert_index, whitespace.green().into());
@@ -397,7 +400,16 @@ fn handle_child_attrpath_value(
 
             if !flake {
                 let no_flake = make_flake_false_attr(id);
-                green = green.insert_child(insert_index + offset, whitespace.green().into());
+                // For flake=false, normalize to single newline + indent
+                // (it belongs to the same input, no blank line separation)
+                let ws_str = whitespace.to_string();
+                let compact_ws = if let Some(last_nl) = ws_str.rfind('\n') {
+                    &ws_str[last_nl..]
+                } else {
+                    &ws_str
+                };
+                let compact_ws_node = parse_node(compact_ws);
+                green = green.insert_child(insert_index + offset, compact_ws_node.green().into());
                 offset += 1;
                 green = green.insert_child(insert_index + offset, no_flake.green().into());
             }

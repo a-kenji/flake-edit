@@ -1,0 +1,30 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/all_blanks.flake.nix"
+    - "--diff"
+    - add
+    - vmsh
+    - "github:mic92/vmsh"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -10,6 +10,8 @@
+     };
+
+     crane.url = "github:ipetkov/crane";
++
++    vmsh.url = "github:mic92/vmsh";
+   };
+
+   outputs = _: { };
+
+----- stderr -----
