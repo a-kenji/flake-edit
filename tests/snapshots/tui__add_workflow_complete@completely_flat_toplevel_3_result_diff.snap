@@ -12,6 +12,4 @@ expression: session.app().pending_diff()
 +  inputs.my-input.url = "github:user/repo";
 
    outputs = _: { };
--}
-+}
-\ No newline at end of file
+ }

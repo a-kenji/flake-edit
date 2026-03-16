@@ -17,11 +17,11 @@ use crate::cache::{Cache, CacheConfig, DEFAULT_URI_TYPES};
 ///
 /// # Supported patterns
 ///
-/// - `github:owner/repo` → `github:owner/`
-/// - `gitlab:owner/repo` → `gitlab:owner/`
-/// - `sourcehut:~owner/repo` → `sourcehut:~owner/`
-/// - `git+https://github.com/owner/repo` → `git+https://github.com/owner/`
-/// - `git+https://gitlab.com/owner/repo` → `git+https://gitlab.com/owner/`
+/// - `github:owner/repo` -> `github:owner/`
+/// - `gitlab:owner/repo` -> `gitlab:owner/`
+/// - `sourcehut:~owner/repo` -> `sourcehut:~owner/`
+/// - `git+https://github.com/owner/repo` -> `git+https://github.com/owner/`
+/// - `git+https://gitlab.com/owner/repo` -> `git+https://gitlab.com/owner/`
 ///
 /// Returns `None` for URIs without an extractable owner (e.g., `path:`, `flake:`).
 fn extract_owner_prefix(uri: &str) -> Option<String> {

@@ -28,7 +28,7 @@ exit_code: 0
      url = "github:nix-community/poetry2nix/master";
    };
 
-@@ -12,9 +9,8 @@
+@@ -12,7 +9,6 @@
    outputs =
      {
        self,
@@ -36,9 +36,5 @@ exit_code: 0
        flake-utils,
        poetry2nix,
      }:
-     { };
--}
-+}
-\ No newline at end of file
 
 ----- stderr -----

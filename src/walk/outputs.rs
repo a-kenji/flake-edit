@@ -53,6 +53,10 @@ pub fn list_outputs(root: &SyntaxNode) -> Result<Outputs, WalkerError> {
 }
 
 /// Change the outputs attribute in a flake.nix root node.
+///
+/// Builds modifications bottom-up (output -> lambda -> toplevel -> attr_set)
+/// then uses `attr_set.replace_with()` to propagate to NODE_ROOT,
+/// preserving any leading comments/trivia.
 pub fn change_outputs(
     root: &SyntaxNode,
     change: OutputChange,
@@ -61,7 +65,9 @@ pub fn change_outputs(
         return Err(WalkerError::NotARoot(root.kind()));
     }
 
-    for toplevel in root.first_child().unwrap().children() {
+    let attr_set = root.first_child().unwrap();
+
+    for toplevel in attr_set.children() {
         if toplevel.kind() == SyntaxKind::NODE_ATTRPATH_VALUE
             && let Some(outputs_node) = toplevel
                 .children()
@@ -111,11 +117,10 @@ pub fn change_outputs(
                                 outputs_lambda.index(),
                                 changed_outputs_lambda.into(),
                             );
-                            let result = root
-                                .first_child()
-                                .unwrap()
+                            let changed_attr_set = attr_set
                                 .green()
                                 .replace_child(toplevel.index(), changed_toplevel.into());
+                            let result = attr_set.replace_with(changed_attr_set);
                             return Ok(Some(parse_node(&result.to_string())));
                         }
 
@@ -142,11 +147,10 @@ pub fn change_outputs(
                                     outputs_lambda.index(),
                                     changed_outputs_lambda.into(),
                                 );
-                                let result = root
-                                    .first_child()
-                                    .unwrap()
+                                let changed_attr_set = attr_set
                                     .green()
                                     .replace_child(toplevel.index(), changed_toplevel.into());
+                                let result = attr_set.replace_with(changed_attr_set);
                                 return Ok(Some(parse_node(&result.to_string())));
                             }
                         }

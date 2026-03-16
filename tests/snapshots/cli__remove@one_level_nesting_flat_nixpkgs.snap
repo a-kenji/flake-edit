@@ -38,12 +38,5 @@ exit_code: 0
        flake-utils,
        flake-utelinos,
        rust-overlay,
-@@ -23,4 +19,4 @@
-       crane,
-     }:
-     { };
--}
-+}
-\ No newline at end of file
 
 ----- stderr -----

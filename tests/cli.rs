@@ -102,6 +102,7 @@ fn test_list_format(#[case] fixture: &str, #[case] format: &str) {
 #[case("one_level_nesting_flat", "vmsh", "github:mic92/vmsh")]
 #[case("flat_nested_flat", "vmsh", "github:mic92/vmsh")]
 #[case("first_nested_node", "vmsh", "github:mic92/vmsh")]
+#[case("comments_before_brace", "vmsh", "github:mic92/vmsh")]
 fn test_add(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -217,6 +218,7 @@ fn test_add_infer_id(#[case] fixture: &str) {
 #[case("one_level_nesting_flat", "nixpkgs")]
 #[case("flat_nested_flat", "nixpkgs")]
 #[case("first_nested_node", "nixpkgs")]
+#[case("comments_before_brace", "nixpkgs")]
 #[case("root", "rust-overlay")]
 fn test_remove(#[case] fixture: &str, #[case] id: &str) {
     let mut settings = insta::Settings::clone_current();

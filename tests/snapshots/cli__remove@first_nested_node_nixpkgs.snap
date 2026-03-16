@@ -26,7 +26,7 @@ exit_code: 0
      utils.url = "github:numtide/flake-utils";
      flake-compat = {
        url = "github:edolstra/flake-compat";
-@@ -17,10 +15,9 @@
+@@ -17,7 +15,6 @@
    outputs =
      {
        self,
@@ -34,10 +34,5 @@ exit_code: 0
        utils,
        naersk,
        flake-compat,
-     }:
-     { };
--}
-+}
-\ No newline at end of file
 
 ----- stderr -----

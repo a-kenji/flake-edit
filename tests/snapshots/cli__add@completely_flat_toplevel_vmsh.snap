@@ -24,8 +24,6 @@ exit_code: 0
 +  inputs.vmsh.url = "github:mic92/vmsh";
 
    outputs = _: { };
--}
-+}
-\ No newline at end of file
+ }
 
 ----- stderr -----
