@@ -80,7 +80,6 @@ pub fn change_outputs(
                 for output in outputs_lambda.children() {
                     if SyntaxKind::NODE_PATTERN == output.kind() {
                         if let OutputChange::Add(ref add) = change {
-                            let count = output.children().count();
                             // Find the closing brace to insert before,
                             // accounting for any @-binding after the brace.
                             let r_brace_index = output
@@ -89,11 +88,17 @@ pub fn change_outputs(
                                 .expect("pattern must have closing brace");
                             let last_node = r_brace_index - 1;
 
-                            // Adjust the addition for trailing commas
+                            // Adjust the addition for trailing commas.
+                            // Use the last NODE_PAT_ENTRY specifically, not
+                            // the last child (which may be NODE_PAT_BIND for
+                            // `@inputs` patterns).
+                            let last_pat_entry = output
+                                .children()
+                                .filter(|c| c.kind() == SyntaxKind::NODE_PAT_ENTRY)
+                                .last();
                             let has_trailing_comma = matches!(
-                                output
-                                    .children()
-                                    .last()
+                                last_pat_entry
+                                    .as_ref()
                                     .and_then(|last| last.next_sibling_or_token())
                                     .map(|last_token| last_token.kind()),
                                 Some(SyntaxKind::TOKEN_COMMA)
@@ -159,11 +164,8 @@ pub fn change_outputs(
                             // a trailing comma - the non-trailing-comma format already
                             // includes `, ` so extra whitespace would produce `x , y`.
                             if has_trailing_comma {
-                                if let Some(prev) = output
-                                    .children()
-                                    .nth(count - 1)
-                                    .unwrap()
-                                    .prev_sibling_or_token()
+                                if let Some(prev) =
+                                    last_pat_entry.as_ref().unwrap().prev_sibling_or_token()
                                     && let SyntaxKind::TOKEN_WHITESPACE = prev.kind()
                                 {
                                     let whitespace =
