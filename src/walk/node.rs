@@ -117,6 +117,24 @@ pub fn make_flake_false_attr(id: &str) -> Node {
     parse_node(&format!("{}.flake = false;", id))
 }
 
+/// Create a nested input URL attribute in attrset style.
+/// Example: `vmsh = {\n    url = "github:mic92/vmsh";\n  };`
+/// The `indent` parameter is the base indentation of the entry (e.g., "  " for 2-space indent).
+pub fn make_attrset_url_attr(id: &str, uri: &str, indent: &str) -> Node {
+    parse_node(&format!(
+        "{} = {{\n{}  url = \"{}\";\n{}}};",
+        id, indent, uri, indent
+    ))
+}
+
+/// Create a nested input URL + flake=false attribute in attrset style.
+pub fn make_attrset_url_flake_false_attr(id: &str, uri: &str, indent: &str) -> Node {
+    parse_node(&format!(
+        "{} = {{\n{}  url = \"{}\";\n{}  flake = false;\n{}}};",
+        id, indent, uri, indent, indent
+    ))
+}
+
 /// Create a nested follows attribute node (inside an input block).
 /// Example: `inputs.nixpkgs.follows = "nixpkgs";`
 pub fn make_nested_follows_attr(input: &str, target: &str) -> Node {

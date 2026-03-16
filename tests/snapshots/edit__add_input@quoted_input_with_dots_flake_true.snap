@@ -19,7 +19,9 @@ info:
     crane = {
       url = "github:ipetkov/crane";
     };
-    vmsh.url = "github:mic92/vmsh";
+    vmsh = {
+      url = "github:mic92/vmsh";
+    };
   };
 
   outputs = { self, nixpkgs, crane, ... }: { };
