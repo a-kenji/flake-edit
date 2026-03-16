@@ -122,3 +122,12 @@ pub fn make_flake_false_attr(id: &str) -> Node {
 pub fn make_nested_follows_attr(input: &str, target: &str) -> Node {
     parse_node(&format!("inputs.{}.follows = \"{}\";", input, target))
 }
+
+/// Create a toplevel follows attribute node.
+/// Example: `inputs.crane.inputs.nixpkgs.follows = "nixpkgs";`
+pub fn make_toplevel_follows_attr(parent_id: &str, nested_id: &str, target: &str) -> Node {
+    parse_node(&format!(
+        "inputs.{}.inputs.{}.follows = \"{}\";",
+        parent_id, nested_id, target
+    ))
+}
