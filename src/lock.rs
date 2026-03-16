@@ -173,7 +173,17 @@ impl FlakeLock {
                 // Get nested inputs of this node
                 if let Some(nested_inputs) = &node.inputs {
                     for (nested_name, nested_ref) in nested_inputs {
-                        let path = format!("{}.{}", top_level_name, nested_name);
+                        let quoted_parent = if top_level_name.contains('.') {
+                            format!("\"{}\"", top_level_name)
+                        } else {
+                            top_level_name.clone()
+                        };
+                        let quoted_nested = if nested_name.contains('.') {
+                            format!("\"{}\"", nested_name)
+                        } else {
+                            nested_name.clone()
+                        };
+                        let path = format!("{}.{}", quoted_parent, quoted_nested);
                         let follows = match nested_ref {
                             Input::Indirect(targets) => Some(targets.join(".")),
                             Input::Direct(_) => None,
@@ -402,5 +412,37 @@ mod tests {
         // Follows path like ["nixpkgs"] should return "nixpkgs"
         let input = Input::Indirect(vec!["nixpkgs".to_string()]);
         assert_eq!("nixpkgs", input.id());
+    }
+
+    #[test]
+    fn nested_input_path_quotes_dots() {
+        // Input names with dots should be quoted in the path
+        let lock = r#"{
+  "nodes": {
+    "hls-1.10": {
+      "inputs": { "nixpkgs": "nixpkgs_2" },
+      "flake": false,
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "abc", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "nixpkgs": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "abc", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "nixpkgs_2": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "def", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "root": {
+      "inputs": { "hls-1.10": "hls-1.10", "nixpkgs": "nixpkgs" }
+    }
+  },
+  "root": "root",
+  "version": 7
+}"#;
+        let parsed = FlakeLock::read_from_str(lock).unwrap();
+        let nested = parsed.nested_inputs();
+        assert_eq!(nested.len(), 1);
+        assert_eq!(nested[0].path, "\"hls-1.10\".nixpkgs");
     }
 }

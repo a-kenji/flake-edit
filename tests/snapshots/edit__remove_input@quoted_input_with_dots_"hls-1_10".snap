@@ -1,0 +1,23 @@
+---
+source: tests/edit.rs
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        ids:
+          - "\"hls-1.10\""
+---
+{
+  description = "Test quoted input names with dots";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    "hls-2.0" = { url = "github:haskell/haskell-language-server/2.0.0.1"; flake = false; };
+    crane = {
+      url = "github:ipetkov/crane";
+    };
+  };
+
+  outputs = { self, nixpkgs, crane, ... }: { };
+}

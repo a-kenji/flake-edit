@@ -350,6 +350,7 @@ fn test_change_nonexistent(#[case] fixture: &str, #[case] id: &str, #[case] uri:
 #[case("mixed_style", "blueprint.systems", "systems")]
 #[case("mixed_style", "mprisd.nixpkgs", "nixpkgs")]
 #[case("mixed_style", "mprisd.flake-parts", "flake-parts")]
+#[case("quoted_dotted_nested", "\"lib-v1.5\".nixpkgs", "nixpkgs")]
 fn test_add_follow(#[case] fixture: &str, #[case] input: &str, #[case] target: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
