@@ -1,5 +1,39 @@
 use crate::walk::Context;
 
+/// Split an input path at the first `.` that is outside double quotes.
+///
+/// Nix attributes containing dots must be quoted (e.g. `"hls-1.10"`).
+/// A naive `split_once('.')` would split inside the quotes, so we skip
+/// any dot that appears between an opening and closing `"`.
+///
+/// Examples:
+///   `"hls-1.10".nixpkgs` -> `("hls-1.10", "nixpkgs")`
+///   `crane.nixpkgs`      -> `("crane", "nixpkgs")`
+///   `"hls-1.10"`         -> `None`
+///   `nixpkgs`            -> `None`
+pub fn split_quoted_path(s: &str) -> Option<(&str, &str)> {
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'"' {
+            // Skip to closing quote
+            i += 1;
+            while i < bytes.len() && bytes[i] != b'"' {
+                i += 1;
+            }
+            // Skip the closing quote itself
+            if i < bytes.len() {
+                i += 1;
+            }
+        } else if bytes[i] == b'.' {
+            return Some((&s[..i], &s[i + 1..]));
+        } else {
+            i += 1;
+        }
+    }
+    None
+}
+
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Change {
     #[default]
@@ -35,12 +69,12 @@ pub struct ChangeId(String);
 impl ChangeId {
     /// Get the part after the dot (e.g., "nixpkgs" from "poetry2nix.nixpkgs").
     pub fn follows(&self) -> Option<&str> {
-        self.0.split_once('.').map(|(_, post)| post)
+        split_quoted_path(&self.0).map(|(_, post)| post)
     }
 
     /// Get the input part (before the dot, or the whole thing if no dot).
     pub fn input(&self) -> &str {
-        self.0.split_once('.').map_or(&self.0, |(pre, _)| pre)
+        split_quoted_path(&self.0).map_or(&self.0, |(pre, _)| pre)
     }
 
     /// Check if this ChangeId matches the given input and optional follows.
@@ -157,5 +191,35 @@ impl Change {
             }
             Change::None => vec![],
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_plain() {
+        assert_eq!(
+            split_quoted_path("crane.nixpkgs"),
+            Some(("crane", "nixpkgs"))
+        );
+        assert_eq!(split_quoted_path("nixpkgs"), None);
+    }
+
+    #[test]
+    fn split_quoted_dot_in_name() {
+        assert_eq!(
+            split_quoted_path("\"hls-1.10\".nixpkgs"),
+            Some(("\"hls-1.10\"", "nixpkgs"))
+        );
+        assert_eq!(split_quoted_path("\"hls-1.10\""), None);
+    }
+
+    #[test]
+    fn change_id_quoted_dot() {
+        let id = ChangeId::from("\"hls-1.10\".nixpkgs".to_string());
+        assert_eq!(id.input(), "\"hls-1.10\"");
+        assert_eq!(id.follows(), Some("nixpkgs"));
     }
 }

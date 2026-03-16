@@ -44,6 +44,7 @@ fn test_flake_edit_list(#[case] fixture: &str) {
 #[case("merged_inputs_flat", true, "github:mic92/vmsh")]
 #[case("all_blanks", true, "github:mic92/vmsh")]
 #[case("all_blanks", false, "github:a-kenji/not_a_flake")]
+#[case("quoted_input_with_dots", true, "github:mic92/vmsh")]
 fn test_add_input(#[case] fixture: &str, #[case] is_flake: bool, #[case] uri: &str) {
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
@@ -127,6 +128,7 @@ fn test_first_nested_node_add_with_list(#[case] is_flake: bool) {
 #[case("outputs_at_remove_only", "nixpkgs-lib")]
 #[case("outputs_at_remove_first", "nixpkgs-lib")]
 #[case("outputs_at_remove_multiline", "nixpkgs-lib")]
+#[case("quoted_input_with_dots", "\"hls-1.10\"")]
 fn test_remove_input(#[case] fixture: &str, #[case] input_id: &str) {
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();

@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/quoted_dotted_nested.flake.nix"
+    - "--diff"
+    - add-follow
+    - "\"lib-v1.5\".nixpkgs"
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -7,6 +7,7 @@
+     };
+     "lib-v1.5" = {
+       url = "github:example/lib";
++      inputs.nixpkgs.follows = "nixpkgs";
+     };
+   };
+
+
+----- stderr -----

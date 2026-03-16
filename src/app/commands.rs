@@ -4,7 +4,7 @@ use nix_uri::urls::UrlWrapper;
 use nix_uri::{FlakeRef, NixUriResult};
 use ropey::Rope;
 
-use crate::change::Change;
+use crate::change::{Change, split_quoted_path};
 use crate::edit::{FlakeEdit, InputMap, sorted_input_ids, sorted_input_ids_owned};
 use crate::error::FlakeEditError;
 use crate::input::Follows;
@@ -900,8 +900,8 @@ fn follow_auto_impl(
         .iter()
         .filter(|nested| nested.follows.is_none())
         .filter_map(|nested| {
-            let nested_name = nested.path.split('.').next_back().unwrap_or(&nested.path);
-            let parent = nested.path.split('.').next().unwrap_or(&nested.path);
+            let (parent, nested_name) =
+                split_quoted_path(&nested.path).unwrap_or((&nested.path, &nested.path));
 
             // Skip ignored inputs (supports both full path and simple name)
             if follow_config.is_ignored(&nested.path, nested_name) {
@@ -1019,8 +1019,8 @@ fn follow_auto_impl(
                     }
                 );
                 for (input_path, target) in &applied {
-                    let nested_name = input_path.split('.').next_back().unwrap_or(input_path);
-                    let parent = input_path.split('.').next().unwrap_or(input_path);
+                    let (parent, nested_name) =
+                        split_quoted_path(input_path).unwrap_or((input_path, input_path));
                     println!("  {}.{} → {}", parent, nested_name, target);
                 }
             }
