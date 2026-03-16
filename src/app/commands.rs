@@ -958,6 +958,10 @@ fn follow_auto_impl(
 
         match temp_flake_edit.apply_change(change) {
             Ok(Some(resulting_text)) => {
+                if resulting_text == current_text {
+                    // No-op: follows already exists with the same target
+                    continue;
+                }
                 let validation = validate::validate(&resulting_text);
                 if validation.is_ok() {
                     current_text = resulting_text;
@@ -1120,7 +1124,6 @@ fn apply_change(
     let original_content = flake_edit.source_text();
     match flake_edit.apply_change(change.clone()) {
         Ok(Some(resulting_change)) => {
-            // Detect no-op: follows already exists with the same target
             if change.is_follows() && resulting_change == original_content {
                 if let Some(id) = change.id() {
                     println!(
