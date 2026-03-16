@@ -84,13 +84,17 @@ pub fn change_outputs(
                             let count = output.children().count();
                             let last_node = token_count - 2;
 
-                            // Adjust the addition for trailing slashes
-                            let addition = if let Some(SyntaxKind::TOKEN_COMMA) = output
-                                .children()
-                                .last()
-                                .and_then(|last| last.next_sibling_or_token())
-                                .map(|last_token| last_token.kind())
-                            {
+                            // Adjust the addition for trailing commas
+                            let has_trailing_comma = matches!(
+                                output
+                                    .children()
+                                    .last()
+                                    .and_then(|last| last.next_sibling_or_token())
+                                    .map(|last_token| last_token.kind()),
+                                Some(SyntaxKind::TOKEN_COMMA)
+                            );
+
+                            let addition = if has_trailing_comma {
                                 parse_node(&format!("{add},"))
                             } else {
                                 parse_node(&format!(", {add}"))
@@ -99,16 +103,22 @@ pub fn change_outputs(
                             let mut green = output
                                 .green()
                                 .insert_child(last_node, addition.green().into());
-                            if let Some(prev) = output
-                                .children()
-                                .nth(count - 1)
-                                .unwrap()
-                                .prev_sibling_or_token()
-                                && let SyntaxKind::TOKEN_WHITESPACE = prev.kind()
-                            {
-                                let whitespace =
-                                    parse_node(prev.as_token().unwrap().green().text());
-                                green = green.insert_child(last_node, whitespace.green().into());
+                            // Only insert whitespace before the addition when there's
+                            // a trailing comma — the non-trailing-comma format already
+                            // includes `, ` so extra whitespace would produce `x , y`.
+                            if has_trailing_comma {
+                                if let Some(prev) = output
+                                    .children()
+                                    .nth(count - 1)
+                                    .unwrap()
+                                    .prev_sibling_or_token()
+                                    && let SyntaxKind::TOKEN_WHITESPACE = prev.kind()
+                                {
+                                    let whitespace =
+                                        parse_node(prev.as_token().unwrap().green().text());
+                                    green =
+                                        green.insert_child(last_node, whitespace.green().into());
+                                }
                             }
                             let changed_outputs_lambda = outputs_lambda
                                 .green()
