@@ -80,9 +80,14 @@ pub fn change_outputs(
                 for output in outputs_lambda.children() {
                     if SyntaxKind::NODE_PATTERN == output.kind() {
                         if let OutputChange::Add(ref add) = change {
-                            let token_count = output.children_with_tokens().count();
                             let count = output.children().count();
-                            let last_node = token_count - 2;
+                            // Find the closing brace to insert before,
+                            // accounting for any @-binding after the brace.
+                            let r_brace_index = output
+                                .children_with_tokens()
+                                .position(|c| c.kind() == SyntaxKind::TOKEN_R_BRACE)
+                                .expect("pattern must have closing brace");
+                            let last_node = r_brace_index - 1;
 
                             // Adjust the addition for trailing commas
                             let has_trailing_comma = matches!(

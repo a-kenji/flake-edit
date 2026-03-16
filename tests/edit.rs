@@ -29,6 +29,8 @@ fn test_flake_edit_list(#[case] fixture: &str) {
 }
 
 #[rstest]
+#[case("outputs_at_no_space", true, "github:mic92/vmsh")]
+#[case("outputs_at_space", true, "github:mic92/vmsh")]
 #[case("root", true, "github:mic92/vmsh")]
 #[case("root", false, "github:a-kenji/not_a_flake")]
 #[case("completely_flat_toplevel", true, "mic92/vmsh")]
