@@ -1,0 +1,22 @@
+---
+source: tests/edit.rs
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Add:
+        id: vmsh
+        uri: "github:mic92/vmsh"
+        flake: true
+---
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    darwin.url = "github:lnl7/nix-darwin";
+    home-manager.url = "github:nix-community/home-manager";
+    vmsh.url = "github:mic92/vmsh";
+  };
+
+  outputs = { self, darwin, home-manager, nixpkgs, vmsh } @inputs:
+    { };
+}

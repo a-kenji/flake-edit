@@ -1,0 +1,30 @@
+---
+source: tests/edit.rs
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Add:
+        id: vmsh
+        uri: "github:mic92/vmsh"
+        flake: true
+---
+{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    vmsh.url = "github:mic92/vmsh";
+  };
+
+  outputs =
+    { self
+    , nixpkgs
+    , fenix
+    , vmsh
+    }@inputs:
+    { };
+}

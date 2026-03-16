@@ -1,0 +1,21 @@
+---
+source: tests/edit.rs
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        ids:
+          - fenix
+---
+{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+  };
+
+  outputs =
+    { self
+    , nixpkgs
+    }@inputs:
+    { };
+}

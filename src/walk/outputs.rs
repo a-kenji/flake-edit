@@ -177,6 +177,20 @@ pub fn change_outputs(
                                             && before_ws.kind() == SyntaxKind::TOKEN_COMMA
                                         {
                                             green = green.remove_child(prev.index() - 1);
+                                            // Leading-comma style: also remove the
+                                            // newline+indent whitespace before the comma.
+                                            if let Some(before_comma) =
+                                                before_ws.prev_sibling_or_token()
+                                                && before_comma.kind()
+                                                    == SyntaxKind::TOKEN_WHITESPACE
+                                                && before_comma
+                                                    .as_token()
+                                                    .unwrap()
+                                                    .text()
+                                                    .contains('\n')
+                                            {
+                                                green = green.remove_child(prev.index() - 2);
+                                            }
                                         } else {
                                             green = green.remove_child(prev.index());
                                         }
