@@ -1,0 +1,34 @@
+---
+source: tests/edit.rs
+expression: flake_edit.list()
+info:
+  flake_nix: ""
+  changes: []
+---
+extra:
+  id: extra
+  flake: true
+  url: "\"github:foo/extra\""
+  follows:
+    - Indirect:
+        - nixpkgs
+        - "\"nixpkgs\""
+  range:
+    start: 234
+    end: 252
+flake-utils:
+  id: flake-utils
+  flake: true
+  url: "\"github:numtide/flake-utils\""
+  follows: []
+  range:
+    start: 159
+    end: 187
+nixpkgs:
+  id: nixpkgs
+  flake: true
+  url: "\"github:NixOS/nixpkgs/nixos-unstable\""
+  follows: []
+  range:
+    start: 98
+    end: 135

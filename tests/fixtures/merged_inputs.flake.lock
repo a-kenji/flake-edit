@@ -1,0 +1,84 @@
+{
+  "nodes": {
+    "home-manager": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1700000000,
+        "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "rev": "0000000000000000000000000000000000000000",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1700000000,
+        "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "0000000000000000000000000000000000000000",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "plugin-a": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1700000000,
+        "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "owner": "foo",
+        "repo": "plugin-a",
+        "rev": "0000000000000000000000000000000000000000",
+        "type": "github"
+      },
+      "original": {
+        "owner": "foo",
+        "ref": "v2.0",
+        "repo": "plugin-a",
+        "type": "github"
+      }
+    },
+    "plugin-b": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1700000000,
+        "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "owner": "foo",
+        "repo": "plugin-b",
+        "rev": "0000000000000000000000000000000000000000",
+        "type": "github"
+      },
+      "original": {
+        "owner": "foo",
+        "ref": "v1.8.2",
+        "repo": "plugin-b",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "home-manager": "home-manager",
+        "nixpkgs": "nixpkgs",
+        "plugin-a": "plugin-a",
+        "plugin-b": "plugin-b"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

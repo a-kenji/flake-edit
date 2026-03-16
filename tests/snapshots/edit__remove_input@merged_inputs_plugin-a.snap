@@ -1,0 +1,32 @@
+---
+source: tests/edit.rs
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        ids:
+          - plugin-a
+---
+{
+  description = "Flake with multiple inputs blocks (merged attrsets)";
+
+  # Common inputs
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+
+  # Project-specific sources
+  inputs = {
+    plugin-b = {
+      url = "github:foo/plugin-b/v1.8.2";
+      flake = false;
+    };
+  };
+
+  outputs = { self, nixpkgs, home-manager, plugin-b, ... }: { };
+}
