@@ -1,0 +1,30 @@
+---
+source: tests/cli.rs
+assertion_line: 456
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/existing_follows_mixed.flake.nix"
+    - "--diff"
+    - add-follow
+    - devenv.flake-utils
+    - flake-utils
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -7,6 +7,7 @@
+     devenv = {
+       url = "github:cachix/devenv";
+       inputs.nixpkgs.follows = "nixpkgs";
++      inputs.flake-utils.follows = "flake-utils";
+     };
+   };
+
+
+----- stderr -----

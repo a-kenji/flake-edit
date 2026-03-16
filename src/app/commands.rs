@@ -1117,8 +1117,22 @@ fn apply_change(
     state: &AppState,
     change: Change,
 ) -> Result<()> {
+    let original_content = flake_edit.source_text();
     match flake_edit.apply_change(change.clone()) {
         Ok(Some(resulting_change)) => {
+            // Detect no-op: follows already exists with the same target
+            if change.is_follows() && resulting_change == original_content {
+                if let Some(id) = change.id() {
+                    println!(
+                        "Already follows: {}.inputs.{}.follows = \"{}\"",
+                        id.input(),
+                        id.follows().unwrap_or("?"),
+                        change.follows_target().unwrap_or(&"?".to_string())
+                    );
+                }
+                return Ok(());
+            }
+
             let validation = validate::validate(&resulting_change);
             if validation.has_errors() {
                 eprintln!("There are errors in the changes:");

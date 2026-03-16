@@ -1,0 +1,21 @@
+---
+source: tests/cli.rs
+assertion_line: 405
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/existing_follows_nested.flake.nix"
+    - "--diff"
+    - add-follow
+    - rust-overlay.nixpkgs
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+Already follows: rust-overlay.inputs.nixpkgs.follows = "nixpkgs"
+
+----- stderr -----
