@@ -185,6 +185,83 @@ pub fn walk_inputs(
             _ => {}
         }
     }
+
+    // Handle Add into an empty `inputs = { }` attr set.
+    // Derive indentation from the whitespace preceding the parent `inputs`
+    // attrpath-value node, then indent contents one level deeper.
+    if node.kind() == SyntaxKind::NODE_ATTR_SET
+        && ctx.is_none()
+        && let Change::Add {
+            id: Some(id),
+            uri: Some(uri),
+            flake,
+        } = change
+        && !node
+            .children()
+            .any(|c| c.kind() == SyntaxKind::NODE_ATTRPATH_VALUE)
+    {
+        // Derive indentation: look at the whitespace before the parent
+        // `inputs = { }` node to get the base indent, then add one level.
+        let base_indent = node
+            .parent()
+            .and_then(|p| p.prev_sibling_or_token())
+            .filter(|t| t.kind() == SyntaxKind::TOKEN_WHITESPACE)
+            .map(|t| {
+                let ws = t.to_string();
+                ws.rfind('\n')
+                    .map(|i| &ws[i + 1..])
+                    .unwrap_or(&ws)
+                    .to_string()
+            })
+            .unwrap_or_else(|| "  ".to_string());
+        let entry_indent = format!("\n{}  ", base_indent);
+        let closing_indent = format!("\n{}", base_indent);
+
+        let uri_node = make_url_attr(id, uri);
+
+        // Remove any existing whitespace between braces in the empty set,
+        // then rebuild from a clean string representation.
+        let ws_index = node
+            .children_with_tokens()
+            .find(|t| t.kind() == SyntaxKind::TOKEN_WHITESPACE)
+            .map(|t| t.index());
+
+        let mut green = if let Some(idx) = ws_index {
+            node.green().remove_child(idx)
+        } else {
+            node.green().into_owned()
+        };
+
+        // Find closing brace position after potential whitespace removal
+        let brace_index = green
+            .children()
+            .position(|c| c.as_token().map(|t| t.text() == "}").unwrap_or(false))
+            .unwrap_or(green.children().count());
+
+        green = green.insert_child(brace_index, uri_node.green().into());
+        green = green.insert_child(brace_index, parse_node(&entry_indent).green().into());
+
+        let mut offset = 2;
+        if !flake {
+            let no_flake = make_flake_false_attr(id);
+            green = green.insert_child(
+                brace_index + offset,
+                parse_node(&entry_indent).green().into(),
+            );
+            offset += 1;
+            green = green.insert_child(brace_index + offset, no_flake.green().into());
+            offset += 1;
+        }
+
+        // Add closing indent before the brace
+        green = green.insert_child(
+            brace_index + offset,
+            parse_node(&closing_indent).green().into(),
+        );
+
+        return Some(parse_node(&green.to_string()));
+    }
+
     None
 }
 
