@@ -7,9 +7,10 @@ use crate::input::Input;
 
 use super::context::Context;
 use super::node::{
-    adjacent_whitespace_index, empty_node, get_sibling_whitespace, make_flake_false_attr,
-    make_nested_follows_attr, make_quoted_string, make_url_attr, parse_node, should_remove_input,
-    should_remove_nested_input, substitute_child,
+    adjacent_whitespace_index, empty_node, get_sibling_whitespace, make_attrset_url_attr,
+    make_attrset_url_flake_false_attr, make_flake_false_attr, make_nested_follows_attr,
+    make_quoted_string, make_url_attr, parse_node, should_remove_input, should_remove_nested_input,
+    substitute_child,
 };
 
 /// Remove a child node along with its adjacent whitespace.
@@ -407,6 +408,55 @@ fn handle_child_ident(
     None
 }
 
+/// Detect whether inputs predominantly use attrset style (`foo = { url = "..."; };`)
+/// or flat style (`foo.url = "...";`).
+/// Returns true if attrset style is more common among input declarations.
+fn uses_attrset_style(parent: &SyntaxNode) -> bool {
+    let mut attrset_count = 0usize;
+    let mut flat_url_count = 0usize;
+
+    for child in parent.children() {
+        if child.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
+            continue;
+        }
+
+        if child
+            .children()
+            .any(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
+        {
+            attrset_count += 1;
+            continue;
+        }
+
+        if let Some(attrpath) = child
+            .children()
+            .find(|c| c.kind() == SyntaxKind::NODE_ATTRPATH)
+        {
+            let idents: Vec<_> = attrpath.children().collect();
+            if idents.len() >= 2
+                && idents
+                    .last()
+                    .map(|i| i.to_string() == "url")
+                    .unwrap_or(false)
+            {
+                flat_url_count += 1;
+            }
+        }
+    }
+
+    attrset_count > flat_url_count
+}
+
+/// Extract the indentation string from a whitespace node.
+/// Given whitespace like `\n    `, returns `    ` (everything after the last newline).
+fn extract_indent(ws_str: &str) -> &str {
+    if let Some(last_nl) = ws_str.rfind('\n') {
+        &ws_str[last_nl + 1..]
+    } else {
+        ws_str
+    }
+}
+
 /// Handle a NODE_ATTRPATH_VALUE child node during input walking.
 /// Returns Some(node) if a modification was made, None otherwise.
 fn handle_child_attrpath_value(
@@ -466,8 +516,7 @@ fn handle_child_attrpath_value(
             })
             .unwrap_or(child.index());
 
-        let uri_node = make_url_attr(id, uri);
-        let mut offset = 0;
+        let use_attrset = uses_attrset_style(parent);
 
         // Use whitespace from before the last input, but normalize to a single
         // newline + indentation.  Copying the raw inter-entry whitespace would
@@ -484,29 +533,39 @@ fn handle_child_attrpath_value(
             let mut green = parent
                 .green()
                 .insert_child(insert_index, ws_node.green().into());
-            offset += 1;
+            let mut offset = 1;
 
-            green = green.insert_child(insert_index + offset, uri_node.green().into());
-            offset += 1;
-
-            if !flake {
-                let no_flake = make_flake_false_attr(id);
-                // For flake=false, normalize to single newline + indent
-                // (it belongs to the same input, no blank line separation)
-                let ws_str = whitespace.to_string();
-                let compact_ws = if let Some(last_nl) = ws_str.rfind('\n') {
-                    &ws_str[last_nl..]
+            if use_attrset {
+                let indent = extract_indent(&ws_str);
+                let uri_node = if *flake {
+                    make_attrset_url_attr(id, uri, indent)
                 } else {
-                    &ws_str
+                    make_attrset_url_flake_false_attr(id, uri, indent)
                 };
-                let compact_ws_node = parse_node(compact_ws);
-                green = green.insert_child(insert_index + offset, compact_ws_node.green().into());
+                green = green.insert_child(insert_index + offset, uri_node.green().into());
+            } else {
+                let uri_node = make_url_attr(id, uri);
+                green = green.insert_child(insert_index + offset, uri_node.green().into());
                 offset += 1;
-                green = green.insert_child(insert_index + offset, no_flake.green().into());
+
+                if !flake {
+                    let no_flake = make_flake_false_attr(id);
+                    let compact_ws = if let Some(last_nl) = ws_str.rfind('\n') {
+                        &ws_str[last_nl..]
+                    } else {
+                        &ws_str
+                    };
+                    let compact_ws_node = parse_node(compact_ws);
+                    green =
+                        green.insert_child(insert_index + offset, compact_ws_node.green().into());
+                    offset += 1;
+                    green = green.insert_child(insert_index + offset, no_flake.green().into());
+                }
             }
             return Some(parse_node(&green.to_string()));
         }
 
+        let uri_node = make_url_attr(id, uri);
         let mut green = parent
             .green()
             .insert_child(insert_index, uri_node.green().into());
