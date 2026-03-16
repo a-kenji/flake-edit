@@ -17,14 +17,14 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -2,6 +2,7 @@
-   description = "test file";
-
-   inputs = {
+@@ -12,6 +12,7 @@
+       url = "github:edolstra/flake-compat";
+       flake = false;
+     };
 +    vmsh.url = "github:mic92/vmsh";
-     naersk = {
-       url = "github:nix-community/naersk/master";
-       inputs.nixpkgs.follows = "nixpkgs";
+   };
+
+   outputs =
 @@ -21,6 +22,7 @@
        utils,
        naersk,

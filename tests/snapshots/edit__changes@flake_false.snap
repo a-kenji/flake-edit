@@ -9,8 +9,6 @@ info:
   description = "test file";
 
   inputs = {
-    not_a_flake.url = "github:a-kenji/not_a_flake";
-    not_a_flake.flake = false;
     naersk = {
       url = "github:nix-community/naersk/master";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -21,6 +19,8 @@ info:
       url = "github:edolstra/flake-compat";
       flake = false;
     };
+    not_a_flake.url = "github:a-kenji/not_a_flake";
+    not_a_flake.flake = false;
   };
 
   outputs =

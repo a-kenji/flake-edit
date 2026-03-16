@@ -9,7 +9,6 @@ info:
   description = "test file";
 
   inputs = {
-    vmsh.url = "mic92/vmsh";
     naersk = {
       url = "github:nix-community/naersk/master";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -20,6 +19,7 @@ info:
       url = "github:edolstra/flake-compat";
       flake = false;
     };
+    vmsh.url = "mic92/vmsh";
   };
 
   outputs =

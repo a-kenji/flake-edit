@@ -17,14 +17,14 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -2,6 +2,7 @@
-   description = "Edit your flake inputs with ease";
-
-   inputs = {
+@@ -11,6 +11,7 @@
+     crane.inputs.nixpkgs.follows = "nixpkgs";
+     crane.inputs.rust-overlay.follows = "rust-overlay";
+     crane.inputs.flake-utils.follows = "flake-utils";
 +    vmsh.url = "github:mic92/vmsh";
-     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-     flake-utelinos.url = "github:numtide/flake-utils";
-     rust-overlay.url = "github:oxalica/rust-overlay";
+   };
+
+   outputs =
 @@ -21,6 +22,7 @@
        flake-utelinos,
        rust-overlay,

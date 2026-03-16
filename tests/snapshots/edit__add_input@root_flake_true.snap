@@ -13,7 +13,6 @@ info:
   description = "Manage your flake inputs comfortably.";
 
   inputs = {
-    vmsh.url = "github:mic92/vmsh";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     flake-utils.url = "github:numtide/flake-utils";
@@ -29,6 +28,7 @@ info:
       inputs.rust-overlay.follows = "rust-overlay";
       inputs.flake-utils.follows = "flake-utils";
     };
+    vmsh.url = "github:mic92/vmsh";
   };
 
   outputs = _: { };

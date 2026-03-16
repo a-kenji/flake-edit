@@ -13,8 +13,6 @@ info:
   description = "Manage your flake inputs comfortably.";
 
   inputs = {
-    not_a_flake.url = "github:a-kenji/not_a_flake";
-    not_a_flake.flake = false;
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     flake-utils.url = "github:numtide/flake-utils";
@@ -30,6 +28,8 @@ info:
       inputs.rust-overlay.follows = "rust-overlay";
       inputs.flake-utils.follows = "flake-utils";
     };
+    not_a_flake.url = "github:a-kenji/not_a_flake";
+    not_a_flake.flake = false;
   };
 
   outputs = _: { };
