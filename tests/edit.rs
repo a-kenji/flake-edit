@@ -50,6 +50,7 @@ fn test_flake_edit_list(#[case] fixture: &str) {
 #[case("outputs_at_leading_comma", true, "github:mic92/vmsh")]
 #[case("outputs_at_space_args", true, "github:mic92/vmsh")]
 #[case("multiline_no_trailing_comma_outputs", true, "github:mic92/vmsh")]
+#[case("outputs_at_trailing_comma_multi", true, "github:mic92/vmsh")]
 #[case("empty_inputs", true, "github:mic92/vmsh")]
 #[case("empty_inputs", false, "github:a-kenji/not_a_flake")]
 fn test_add_input(#[case] fixture: &str, #[case] is_flake: bool, #[case] uri: &str) {

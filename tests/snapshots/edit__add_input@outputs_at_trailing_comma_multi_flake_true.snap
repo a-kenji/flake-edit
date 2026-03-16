@@ -1,0 +1,29 @@
+---
+source: tests/edit.rs
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Add:
+        id: vmsh
+        uri: "github:mic92/vmsh"
+        flake: true
+---
+{
+  description = "multi-line trailing comma with @inputs style";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    home-manager.url = "github:nix-community/home-manager";
+    vmsh.url = "github:mic92/vmsh";
+  };
+
+  outputs =
+    {
+      self,
+      nixpkgs,
+      home-manager,
+      vmsh,
+    }@inputs:
+    { };
+}
