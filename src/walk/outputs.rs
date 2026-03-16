@@ -118,10 +118,36 @@ pub fn change_outputs(
                                 result
                             };
 
+                            // Detect multi-line trailing-comma style without
+                            // trailing comma on the last entry: commas followed
+                            // by whitespace containing newlines.
+                            let multiline_trailing_ws = if !has_trailing_comma
+                                && leading_comma_ws.is_none()
+                            {
+                                let tokens: Vec<_> = output.children_with_tokens().collect();
+                                let mut result = None;
+                                for i in 0..tokens.len() {
+                                    if tokens[i].kind() == SyntaxKind::TOKEN_COMMA
+                                        && i + 1 < tokens.len()
+                                        && tokens[i + 1].kind() == SyntaxKind::TOKEN_WHITESPACE
+                                        && tokens[i + 1].as_token().unwrap().text().contains('\n')
+                                    {
+                                        result = Some(
+                                            tokens[i + 1].as_token().unwrap().text().to_string(),
+                                        );
+                                    }
+                                }
+                                result
+                            } else {
+                                None
+                            };
+
                             let addition = if has_trailing_comma {
                                 parse_node(&format!("{add},"))
                             } else if let Some(ref ws) = leading_comma_ws {
                                 parse_node(&format!("{ws}, {add}"))
+                            } else if let Some(ref ws) = multiline_trailing_ws {
+                                parse_node(&format!(",{ws}{add}"))
                             } else {
                                 parse_node(&format!(", {add}"))
                             };
