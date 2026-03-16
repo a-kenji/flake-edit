@@ -369,21 +369,48 @@ fn handle_child_attrpath_value(
             flake,
         } = change
     {
+        // Find the last NODE_ATTRPATH_VALUE child to append after it
+        let last_attr = parent
+            .children()
+            .filter(|c| c.kind() == SyntaxKind::NODE_ATTRPATH_VALUE)
+            .last();
+        let insert_index = last_attr
+            .as_ref()
+            .map(|c| {
+                let elem: rnix::SyntaxElement = c.clone().into();
+                elem.index() + 1
+            })
+            .unwrap_or(child.index());
+
         let uri_node = make_url_attr(id, uri);
+        let mut offset = 0;
+
+        // Insert whitespace before the new node
+        if let Some(whitespace) = get_sibling_whitespace(child_node) {
+            let mut green = parent
+                .green()
+                .insert_child(insert_index, whitespace.green().into());
+            offset += 1;
+
+            green = green.insert_child(insert_index + offset, uri_node.green().into());
+            offset += 1;
+
+            if !flake {
+                let no_flake = make_flake_false_attr(id);
+                green = green.insert_child(insert_index + offset, whitespace.green().into());
+                offset += 1;
+                green = green.insert_child(insert_index + offset, no_flake.green().into());
+            }
+            return Some(parse_node(&green.to_string()));
+        }
+
         let mut green = parent
             .green()
-            .insert_child(child.index(), uri_node.green().into());
-
-        if let Some(whitespace) = get_sibling_whitespace(child_node) {
-            green = green.insert_child(child.index() + 1, whitespace.green().into());
-        }
+            .insert_child(insert_index, uri_node.green().into());
 
         if !flake {
             let no_flake = make_flake_false_attr(id);
-            green = green.insert_child(child.index() + 2, no_flake.green().into());
-            if let Some(whitespace) = get_sibling_whitespace(child_node) {
-                green = green.insert_child(child.index() + 3, whitespace.green().into());
-            }
+            green = green.insert_child(insert_index + 1, no_flake.green().into());
         }
         return Some(parse_node(&green.to_string()));
     }

@@ -13,7 +13,6 @@ info:
   description = "Manage your flake inputs comfortably.";
 
   inputs = {
-    home-manager.url = "github:nix-community/home-manager/release-24.05";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     flake-utils.url = "github:numtide/flake-utils";
@@ -29,6 +28,7 @@ info:
       inputs.rust-overlay.follows = "rust-overlay";
       inputs.flake-utils.follows = "flake-utils";
     };
+    home-manager.url = "github:nix-community/home-manager/release-24.05";
   };
 
   outputs = _: { };

@@ -20,13 +20,13 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -2,6 +2,7 @@
-   description = "Manage your flake inputs comfortably.";
-
-   inputs = {
+@@ -17,6 +17,7 @@
+       inputs.rust-overlay.follows = "rust-overlay";
+       inputs.flake-utils.follows = "flake-utils";
+     };
 +    shallow_ref_input.url = "github:foo/bar/main?shallow=1";
-     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+   };
 
-     flake-utils.url = "github:numtide/flake-utils";
+   outputs = _: { };
 
 ----- stderr -----
