@@ -1,0 +1,20 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/completely_flat_toplevel.flake.nix"
+    - "--diff"
+    - add-follow
+    - rust-overlay.nixpkgs
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+Already follows: rust-overlay.inputs.nixpkgs.follows = "nixpkgs"
+
+----- stderr -----

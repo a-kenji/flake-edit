@@ -1,0 +1,30 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/flat_toplevel_existing_follows.flake.nix"
+    - "--diff"
+    - add-follow
+    - crane.nixpkgs
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -4,7 +4,7 @@
+   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+   inputs.nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-24.11";
+   inputs.crane.url = "github:ipetkov/crane";
+-  inputs.crane.inputs.nixpkgs.follows = "nixpkgs-stable";
++  inputs.crane.inputs.nixpkgs.follows = "nixpkgs";
+
+   outputs = _: { };
+ }
+
+----- stderr -----

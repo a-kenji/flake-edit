@@ -19,7 +19,9 @@ pub use error::WalkerError;
 
 use inputs::walk_inputs;
 use node::{
-    adjacent_whitespace_index, make_toplevel_flake_false_attr, make_toplevel_url_attr, parse_node,
+    adjacent_whitespace_index, get_sibling_whitespace, make_quoted_string,
+    make_toplevel_flake_false_attr, make_toplevel_follows_attr, make_toplevel_url_attr, parse_node,
+    substitute_child,
 };
 
 #[derive(Debug, Clone)]
@@ -114,6 +116,119 @@ impl<'a> Walker {
                 }
             }
         }
+
+        // Handle follows for toplevel flat-style inputs (inputs.X.url = "...")
+        if let Change::Follows { input, target } = change
+            && let Some(nested_id) = input.follows()
+        {
+            let parent_id = input.input();
+            if self.inputs.contains_key(parent_id) {
+                return self.handle_follows_flat_toplevel(&attr_set, parent_id, nested_id, target);
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Handle adding follows to a toplevel flat-style input.
+    ///
+    /// Converts `inputs.crane.url = "github:...";` into:
+    /// ```nix
+    /// inputs.crane.url = "github:...";
+    /// inputs.crane.inputs.nixpkgs.follows = "nixpkgs";
+    /// ```
+    fn handle_follows_flat_toplevel(
+        &self,
+        attr_set: &SyntaxNode,
+        parent_id: &str,
+        nested_id: &str,
+        target: &str,
+    ) -> Result<Option<SyntaxNode>, WalkerError> {
+        let mut last_parent_attr: Option<SyntaxNode> = None;
+        let mut has_nested_block = false;
+
+        for toplevel in attr_set.children() {
+            if toplevel.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
+                continue;
+            }
+            let Some(attrpath) = toplevel
+                .children()
+                .find(|c| c.kind() == SyntaxKind::NODE_ATTRPATH)
+            else {
+                continue;
+            };
+            let idents: Vec<String> = attrpath.children().map(|c| c.to_string()).collect();
+
+            // Detect `inputs.{parent_id} = { ... }` block style
+            if idents.len() == 2
+                && idents[0] == "inputs"
+                && idents[1] == parent_id
+                && toplevel
+                    .children()
+                    .any(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
+            {
+                has_nested_block = true;
+            }
+
+            // Check for existing follows: inputs.{parent_id}.inputs.{nested_id}.follows
+            if idents.len() == 5
+                && idents[0] == "inputs"
+                && idents[1] == parent_id
+                && idents[2] == "inputs"
+                && idents[3] == nested_id
+                && idents[4] == "follows"
+            {
+                let value_node = attrpath.next_sibling();
+                let current_target = value_node
+                    .as_ref()
+                    .map(|v| v.to_string().trim_matches('"').to_string())
+                    .unwrap_or_default();
+
+                if current_target == target {
+                    // Same target, no-op
+                    return Ok(Some(parse_node(&attr_set.parent().unwrap().to_string())));
+                }
+                // Different target, retarget
+                if let Some(value) = value_node {
+                    let new_value = make_quoted_string(target);
+                    let new_toplevel = substitute_child(&toplevel, value.index(), &new_value);
+                    let green = attr_set
+                        .green()
+                        .replace_child(toplevel.index(), new_toplevel.green().into());
+                    return Ok(Some(parse_node(&attr_set.replace_with(green).to_string())));
+                }
+            }
+
+            // Track last inputs.{parent_id}.* attribute
+            if idents.len() >= 2 && idents[0] == "inputs" && idents[1] == parent_id {
+                last_parent_attr = Some(toplevel.clone());
+            }
+        }
+
+        // No existing follows, insert after the last parent attribute
+        // Only for flat-style inputs (not block-style which should be handled elsewhere)
+        if !has_nested_block && let Some(ref_child) = last_parent_attr {
+            let follows_node = make_toplevel_follows_attr(parent_id, nested_id, target);
+            let insert_index = ref_child.index() + 1;
+
+            let mut green = attr_set
+                .green()
+                .insert_child(insert_index, follows_node.green().into());
+
+            if let Some(whitespace) = get_sibling_whitespace(&ref_child) {
+                let ws_str = whitespace.to_string();
+                let normalized = if let Some(last_nl) = ws_str.rfind('\n') {
+                    &ws_str[last_nl..]
+                } else {
+                    &ws_str
+                };
+                let ws_node = parse_node(normalized);
+                green = green.insert_child(insert_index, ws_node.green().into());
+            }
+
+            return Ok(Some(parse_node(&attr_set.replace_with(green).to_string())));
+        }
+
         Ok(None)
     }
 

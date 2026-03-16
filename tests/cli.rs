@@ -372,6 +372,8 @@ fn test_add_follow(#[case] fixture: &str, #[case] input: &str, #[case] target: &
 #[rstest]
 #[case("one_level_nesting_flat", "rust-overlay.flake-compat", "flake-compat")]
 #[case("mixed_style", "harmonia.nixpkgs", "nixpkgs")]
+#[case("flat_toplevel_no_follows", "crane.nixpkgs", "nixpkgs")]
+#[case("flat_toplevel_no_follows", "fenix.nixpkgs", "nixpkgs")]
 fn test_add_follow_flat(#[case] fixture: &str, #[case] input: &str, #[case] target: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -396,6 +398,8 @@ fn test_add_follow_flat(#[case] fixture: &str, #[case] input: &str, #[case] targ
 #[case("existing_follows_nested", "devenv.nixpkgs", "nixpkgs")]
 #[case("existing_follows_flat", "rust-overlay.nixpkgs", "nixpkgs")]
 #[case("existing_follows_flat", "naersk.nixpkgs", "nixpkgs")]
+#[case("completely_flat_toplevel", "crane.nixpkgs", "nixpkgs")]
+#[case("completely_flat_toplevel", "rust-overlay.nixpkgs", "nixpkgs")]
 fn test_add_follow_existing_same(#[case] fixture: &str, #[case] input: &str, #[case] target: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -418,6 +422,7 @@ fn test_add_follow_existing_same(#[case] fixture: &str, #[case] input: &str, #[c
 #[rstest]
 #[case("existing_follows_nested_retarget", "rust-overlay.nixpkgs", "nixpkgs")]
 #[case("existing_follows_flat_retarget", "rust-overlay.nixpkgs", "nixpkgs")]
+#[case("flat_toplevel_existing_follows", "crane.nixpkgs", "nixpkgs")]
 fn test_add_follow_retarget(#[case] fixture: &str, #[case] input: &str, #[case] target: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
