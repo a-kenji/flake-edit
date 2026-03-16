@@ -1,0 +1,29 @@
+---
+source: tests/edit.rs
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Add:
+        id: not_a_flake
+        uri: "github:a-kenji/not_a_flake"
+        flake: false
+---
+{
+  description = "Fixture with blank lines between every input.";
+
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    crane.url = "github:ipetkov/crane";
+    not_a_flake.url = "github:a-kenji/not_a_flake";
+    not_a_flake.flake = false;
+  };
+
+  outputs = _: { };
+}

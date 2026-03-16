@@ -6,25 +6,23 @@ info:
   changes:
     - Add:
         id: vmsh
-        uri: mic92/vmsh
+        uri: "github:mic92/vmsh"
         flake: true
 ---
 {
+  description = "Fixture with blank lines between every input.";
+
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     fenix = {
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    vmsh.url = "mic92/vmsh";
+
+    crane.url = "github:ipetkov/crane";
+    vmsh.url = "github:mic92/vmsh";
   };
 
-  outputs =
-    { self
-    , nixpkgs
-    , fenix
-    , vmsh
-    }:
-    { };
+  outputs = _: { };
 }
