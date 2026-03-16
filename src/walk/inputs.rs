@@ -114,6 +114,13 @@ pub fn walk_inputs(
 
             // Only use flat-style if the input exists AND doesn't have a nested block
             if parent_exists && !has_nested_block {
+                // Check if follows for this nested_id already exists (flat style)
+                if let Some(result) =
+                    find_existing_flat_follows(&node, parent_id, nested_id, target)
+                {
+                    return result;
+                }
+
                 // Add a flat-style follows attribute to this attr set
                 let follows_node = parse_node(&format!(
                     "{}.inputs.{}.follows = \"{}\";",
@@ -618,6 +625,110 @@ fn handle_input_attrpath(
     None
 }
 
+/// Check if a nested follows attribute already exists in an attr set.
+/// For example, inside `devenv = { ... inputs.nixpkgs.follows = "nixpkgs"; ... }`,
+/// check if `inputs.{nested_id}.follows` is already present.
+///
+/// Returns:
+/// - `Some(Some(node))` if follows exists (same target = unchanged node, different = retargeted)
+/// - `None` if no matching follows found
+fn find_existing_nested_follows(
+    node: &SyntaxNode,
+    attr_set: &SyntaxNode,
+    nested_id: &str,
+    target: &str,
+) -> Option<Option<SyntaxNode>> {
+    for attr in attr_set.children() {
+        if attr.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
+            continue;
+        }
+        let Some(attrpath) = attr
+            .children()
+            .find(|c| c.kind() == SyntaxKind::NODE_ATTRPATH)
+        else {
+            continue;
+        };
+        let idents: Vec<String> = attrpath.children().map(|c| c.to_string()).collect();
+
+        // Match `inputs.{nested_id}.follows`
+        if idents.len() == 3
+            && idents[0] == "inputs"
+            && idents[1] == nested_id
+            && idents[2] == "follows"
+        {
+            let value_node = attrpath.next_sibling();
+            let current_target = value_node
+                .as_ref()
+                .map(|v| v.to_string().trim_matches('"').to_string())
+                .unwrap_or_default();
+
+            if current_target == target {
+                // Same target — return unchanged node (no-op but treated as success)
+                return Some(Some(node.clone()));
+            }
+            // Different target — replace the value
+            if let Some(value) = value_node {
+                let new_value = make_quoted_string(target);
+                let new_attr = substitute_child(&attr, value.index(), &new_value);
+                let new_child = substitute_child(attr_set, attr.index(), &new_attr);
+                return Some(Some(substitute_child(node, attr_set.index(), &new_child)));
+            }
+        }
+    }
+    None
+}
+
+/// Check if a flat-style follows attribute already exists.
+/// For example, `devenv.inputs.nixpkgs.follows = "nixpkgs"` in the top-level attr set.
+///
+/// Returns:
+/// - `Some(Some(node))` if follows exists (same target = unchanged node, different = retargeted)
+/// - `None` if no matching follows found
+fn find_existing_flat_follows(
+    node: &SyntaxNode,
+    parent_id: &str,
+    nested_id: &str,
+    target: &str,
+) -> Option<Option<SyntaxNode>> {
+    for child in node.children() {
+        if child.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
+            continue;
+        }
+        let Some(attrpath) = child
+            .children()
+            .find(|c| c.kind() == SyntaxKind::NODE_ATTRPATH)
+        else {
+            continue;
+        };
+        let idents: Vec<String> = attrpath.children().map(|c| c.to_string()).collect();
+
+        // Match `{parent_id}.inputs.{nested_id}.follows`
+        if idents.len() == 4
+            && idents[0] == parent_id
+            && idents[1] == "inputs"
+            && idents[2] == nested_id
+            && idents[3] == "follows"
+        {
+            let value_node = attrpath.next_sibling();
+            let current_target = value_node
+                .as_ref()
+                .map(|v| v.to_string().trim_matches('"').to_string())
+                .unwrap_or_default();
+
+            if current_target == target {
+                // Same target — return unchanged node (no-op but treated as success)
+                return Some(Some(node.clone()));
+            }
+            if let Some(value) = value_node {
+                let new_value = make_quoted_string(target);
+                let new_attr = substitute_child(&child, value.index(), &new_value);
+                return Some(Some(substitute_child(node, child.index(), &new_attr)));
+            }
+        }
+    }
+    None
+}
+
 /// Handle NODE_ATTR_SET within an input node.
 /// Processes nested attribute sets containing url and inputs.
 fn handle_input_attr_set(
@@ -681,6 +792,11 @@ fn handle_input_attr_set(
             && id_node.to_string() == parent_id
             && let Some(nested_id) = nested_id
         {
+            // Check if follows for this nested_id already exists in the attr set
+            if let Some(result) = find_existing_nested_follows(node, child, nested_id, target) {
+                return result;
+            }
+
             // Insert the follows attribute into this attr set
             let follows_node = make_nested_follows_attr(nested_id, target);
 

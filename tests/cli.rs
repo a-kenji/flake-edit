@@ -390,6 +390,77 @@ fn test_add_follow_flat(#[case] fixture: &str, #[case] input: &str, #[case] targ
     });
 }
 
+/// Test add-follow when follows already exists (should be no-op for same target)
+#[rstest]
+#[case("existing_follows_nested", "rust-overlay.nixpkgs", "nixpkgs")]
+#[case("existing_follows_nested", "devenv.nixpkgs", "nixpkgs")]
+#[case("existing_follows_flat", "rust-overlay.nixpkgs", "nixpkgs")]
+#[case("existing_follows_flat", "naersk.nixpkgs", "nixpkgs")]
+fn test_add_follow_existing_same(#[case] fixture: &str, #[case] input: &str, #[case] target: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    let suffix = format!("{fixture}_{}", input.replace('.', "_"));
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .arg("add-follow")
+                .arg(input)
+                .arg(target)
+        );
+    });
+}
+
+/// Test add-follow when follows exists with different target (should retarget)
+#[rstest]
+#[case("existing_follows_nested_retarget", "rust-overlay.nixpkgs", "nixpkgs")]
+#[case("existing_follows_flat_retarget", "rust-overlay.nixpkgs", "nixpkgs")]
+fn test_add_follow_retarget(#[case] fixture: &str, #[case] input: &str, #[case] target: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    let suffix = format!("{fixture}_{}", input.replace('.', "_"));
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .arg("add-follow")
+                .arg(input)
+                .arg(target)
+        );
+    });
+}
+
+/// Test add-follow on input that already has a *different* follows (should add new one)
+#[rstest]
+#[case("existing_follows_mixed", "devenv.flake-utils", "flake-utils")]
+fn test_add_follow_existing_different_input(
+    #[case] fixture: &str,
+    #[case] input: &str,
+    #[case] target: &str,
+) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    let suffix = format!("{fixture}_{}", input.replace('.', "_"));
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .arg("add-follow")
+                .arg(input)
+                .arg(target)
+        );
+    });
+}
+
 /// Test the add-follow command with non-existent parent input
 #[rstest]
 #[case("root", "nonexistent.nixpkgs", "nixpkgs")]

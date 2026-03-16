@@ -1,0 +1,31 @@
+---
+source: tests/cli.rs
+assertion_line: 431
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/existing_follows_flat_retarget.flake.nix"
+    - "--diff"
+    - add-follow
+    - rust-overlay.nixpkgs
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -5,7 +5,7 @@
+     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+     nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-24.11";
+     rust-overlay.url = "github:oxalica/rust-overlay";
+-    rust-overlay.inputs.nixpkgs.follows = "nixpkgs-stable";
++    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+   };
+
+   outputs =
+
+----- stderr -----

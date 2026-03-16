@@ -65,6 +65,10 @@ impl FlakeEdit {
         self.changes.push(change);
     }
 
+    pub fn source_text(&self) -> String {
+        self.walker.root.to_string()
+    }
+
     pub fn curr_list(&self) -> &InputMap {
         &self.walker.inputs
     }
