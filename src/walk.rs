@@ -19,8 +19,7 @@ pub use error::WalkerError;
 
 use inputs::walk_inputs;
 use node::{
-    adjacent_whitespace_index, get_sibling_whitespace, make_toplevel_flake_false_attr,
-    make_toplevel_url_attr, parse_node,
+    adjacent_whitespace_index, make_toplevel_flake_false_attr, make_toplevel_url_attr, parse_node,
 };
 
 #[derive(Debug, Clone)]

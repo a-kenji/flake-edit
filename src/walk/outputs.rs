@@ -130,7 +130,7 @@ pub fn change_outputs(
                                 .green()
                                 .insert_child(last_node, addition.green().into());
                             // Only insert whitespace before the addition when there's
-                            // a trailing comma — the non-trailing-comma format already
+                            // a trailing comma - the non-trailing-comma format already
                             // includes `, ` so extra whitespace would produce `x , y`.
                             if has_trailing_comma {
                                 if let Some(prev) = output
@@ -169,7 +169,17 @@ pub fn change_outputs(
                                 if let Some(prev) = child.prev_sibling_or_token() {
                                     if let SyntaxKind::TOKEN_WHITESPACE = prev.kind() {
                                         green = green.remove_child(prev.index());
-                                        green = green.remove_child(prev.index() - 1);
+                                        // Only remove the element before the whitespace
+                                        // if it's a comma (non-first entry). When the
+                                        // entry is first, the element before is `{` -
+                                        // remove the trailing comma instead.
+                                        if let Some(before_ws) = prev.prev_sibling_or_token()
+                                            && before_ws.kind() == SyntaxKind::TOKEN_COMMA
+                                        {
+                                            green = green.remove_child(prev.index() - 1);
+                                        } else {
+                                            green = green.remove_child(prev.index());
+                                        }
                                     }
                                 } else if let Some(next) = child.next_sibling_or_token()
                                     && let SyntaxKind::TOKEN_WHITESPACE = next.kind()
