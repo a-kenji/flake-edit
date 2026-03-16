@@ -9,7 +9,7 @@ info:
         uri: mic92/vmsh
         flake: true
 ---
-{ 
+{
   description = "flat nested flat test";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

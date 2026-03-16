@@ -110,8 +110,7 @@ impl<'a> Walker {
                 }
 
                 if child_str == "outputs"
-                    && let Some(result) =
-                        self.handle_add_at_outputs(&root, &toplevel, &child, change)
+                    && let Some(result) = self.handle_add_at_outputs(&root, &toplevel, change)
                 {
                     return Ok(Some(result));
                 }
@@ -172,7 +171,6 @@ impl<'a> Walker {
         &mut self,
         root: &SyntaxNode,
         toplevel: &SyntaxNode,
-        child: &SyntaxNode,
         change: &Change,
     ) -> Option<SyntaxNode> {
         if !self.add_toplevel {
@@ -216,14 +214,6 @@ impl<'a> Walker {
             {
                 green = green.insert_child(toplevel.index() + 1, whitespace.green().into());
             }
-        }
-
-        // Preserve whitespace after outputs
-        if let Some(next) = child.next_sibling_or_token()
-            && next.kind() == SyntaxKind::TOKEN_WHITESPACE
-        {
-            let whitespace = parse_node(next.as_token().unwrap().green().text());
-            green = green.insert_child(child.index() + 1, whitespace.green().into());
         }
 
         Some(parse_node(&green.to_string()))

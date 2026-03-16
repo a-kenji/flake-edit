@@ -17,12 +17,6 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -1,4 +1,4 @@
--{
-+{ 
-   description = "flat nested flat test";
-
-   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 @@ -8,6 +8,7 @@
      inputs.nixpkgs.follows = "nixpkgs";
      url = "github:nix-community/poetry2nix/master";

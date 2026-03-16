@@ -17,12 +17,6 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -1,4 +1,4 @@
--{
-+{ 
-   description = "Edit your flake inputs with ease";
-
-   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 @@ -10,6 +10,7 @@
    inputs.crane.inputs.nixpkgs.follows = "nixpkgs";
    inputs.crane.inputs.rust-overlay.follows = "rust-overlay";
