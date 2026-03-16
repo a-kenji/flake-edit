@@ -200,6 +200,28 @@ impl<'a> Walker {
             return None;
         }
 
+        // Find normalized whitespace (single newline + indent) by walking back
+        // from `outputs` through tokens. This handles comments between the last
+        // input and outputs correctly.
+        let ws_node = {
+            let mut ws: Option<SyntaxNode> = None;
+            let mut cursor = toplevel.prev_sibling_or_token();
+            while let Some(ref tok) = cursor {
+                if tok.kind() == SyntaxKind::TOKEN_WHITESPACE {
+                    let ws_str = tok.to_string();
+                    let normalized = if let Some(last_nl) = ws_str.rfind('\n') {
+                        &ws_str[last_nl..]
+                    } else {
+                        &ws_str
+                    };
+                    ws = Some(parse_node(normalized));
+                    break;
+                }
+                cursor = tok.prev_sibling_or_token();
+            }
+            ws
+        };
+
         let addition = make_toplevel_url_attr(id, uri);
         let insert_pos = toplevel.index() - 1;
 
@@ -207,13 +229,8 @@ impl<'a> Walker {
             .green()
             .insert_child(insert_pos, addition.green().into());
 
-        // Add whitespace before the new input
-        if let Some(prev_child) = attr_set
-            .children()
-            .find(|c| c.index() == toplevel.index() - 2)
-            && let Some(whitespace) = get_sibling_whitespace(&prev_child)
-        {
-            green = green.insert_child(insert_pos, whitespace.green().into());
+        if let Some(ref ws) = ws_node {
+            green = green.insert_child(insert_pos, ws.green().into());
         }
 
         // Add flake=false if needed
@@ -221,12 +238,8 @@ impl<'a> Walker {
             let no_flake = make_toplevel_flake_false_attr(id);
             green = green.insert_child(toplevel.index() + 1, no_flake.green().into());
 
-            if let Some(prev_child) = attr_set
-                .children()
-                .find(|c| c.index() == toplevel.index() - 2)
-                && let Some(whitespace) = get_sibling_whitespace(&prev_child)
-            {
-                green = green.insert_child(toplevel.index() + 1, whitespace.green().into());
+            if let Some(ref ws) = ws_node {
+                green = green.insert_child(toplevel.index() + 1, ws.green().into());
             }
         }
 

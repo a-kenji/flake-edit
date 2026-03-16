@@ -17,12 +17,12 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -16,5 +16,7 @@
+@@ -15,6 +15,7 @@
+     inputs.rust-overlay.follows = "rust-overlay";
      inputs.flake-utils.follows = "flake-utils";
    };
-
 +  inputs.vmsh.url = "github:mic92/vmsh";
-+
+
    outputs = _: { };
  }
 
