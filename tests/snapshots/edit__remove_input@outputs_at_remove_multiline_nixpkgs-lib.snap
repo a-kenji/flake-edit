@@ -1,0 +1,21 @@
+---
+source: tests/edit.rs
+assertion_line: 144
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        ids:
+          - nixpkgs-lib
+---
+{
+  inputs = {
+  };
+
+  outputs =
+    inputs@{
+      ...
+    }:
+    { };
+}

@@ -124,6 +124,9 @@ fn test_first_nested_node_add_with_list(#[case] is_flake: bool) {
 #[case("merged_inputs_flat", "extra")]
 #[case("merged_inputs_flat", "nixpkgs")]
 #[case("merged_inputs", "plugin-a")]
+#[case("outputs_at_remove_only", "nixpkgs-lib")]
+#[case("outputs_at_remove_first", "nixpkgs-lib")]
+#[case("outputs_at_remove_multiline", "nixpkgs-lib")]
 fn test_remove_input(#[case] fixture: &str, #[case] input_id: &str) {
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
