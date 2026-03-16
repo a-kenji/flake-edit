@@ -385,14 +385,21 @@ fn handle_child_attrpath_value(
         let uri_node = make_url_attr(id, uri);
         let mut offset = 0;
 
-        // Use whitespace from before the last input to preserve blank line patterns.
-        // The first input's preceding whitespace is always just "\n  " (after the
-        // opening brace), but subsequent inputs may have blank lines between them.
+        // Use whitespace from before the last input, but normalize to a single
+        // newline + indentation.  Copying the raw inter-entry whitespace would
+        // duplicate blank lines when the closing brace already has one.
         let ws_reference = last_attr.as_ref().unwrap_or(child_node);
         if let Some(whitespace) = get_sibling_whitespace(ws_reference) {
+            let ws_str = whitespace.to_string();
+            let normalized = if let Some(last_nl) = ws_str.rfind('\n') {
+                &ws_str[last_nl..]
+            } else {
+                &ws_str
+            };
+            let ws_node = parse_node(normalized);
             let mut green = parent
                 .green()
-                .insert_child(insert_index, whitespace.green().into());
+                .insert_child(insert_index, ws_node.green().into());
             offset += 1;
 
             green = green.insert_child(insert_index + offset, uri_node.green().into());

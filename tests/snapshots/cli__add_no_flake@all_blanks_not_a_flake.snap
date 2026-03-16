@@ -18,11 +18,10 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -10,6 +10,9 @@
+@@ -10,6 +10,8 @@
      };
 
      crane.url = "github:ipetkov/crane";
-+
 +    not_a_flake.url = "github:a-kenji/not_a_flake";
 +    not_a_flake.flake = false;
    };

@@ -42,6 +42,8 @@ fn test_flake_edit_list(#[case] fixture: &str) {
 #[case("leading_comma_outputs", true, "mic92/vmsh")]
 #[case("merged_inputs", true, "github:mic92/vmsh")]
 #[case("merged_inputs_flat", true, "github:mic92/vmsh")]
+#[case("all_blanks", true, "github:mic92/vmsh")]
+#[case("all_blanks", false, "github:a-kenji/not_a_flake")]
 fn test_add_input(#[case] fixture: &str, #[case] is_flake: bool, #[case] uri: &str) {
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();

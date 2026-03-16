@@ -17,11 +17,10 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -10,6 +10,8 @@
+@@ -10,6 +10,7 @@
      };
 
      crane.url = "github:ipetkov/crane";
-+
 +    vmsh.url = "github:mic92/vmsh";
    };
 
