@@ -17,12 +17,6 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -1,4 +1,4 @@
--{
-+{ 
-   description = "toplevel nesting";
-
-   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 @@ -16,5 +16,7 @@
      inputs.flake-utils.follows = "flake-utils";
    };

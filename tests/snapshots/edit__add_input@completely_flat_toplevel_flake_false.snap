@@ -9,7 +9,7 @@ info:
         uri: "github:a-kenji/not_a_flake"
         flake: false
 ---
-{ 
+{
   description = "Edit your flake inputs with ease";
 
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";

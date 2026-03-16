@@ -9,7 +9,7 @@ info:
         uri: mic92/vmsh
         flake: true
 ---
-{ 
+{
   description = "Edit your flake inputs with ease";
 
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
