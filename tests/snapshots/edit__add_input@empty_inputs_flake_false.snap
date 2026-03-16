@@ -1,0 +1,24 @@
+---
+source: tests/edit.rs
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Add:
+        id: not_a_flake
+        uri: "github:a-kenji/not_a_flake"
+        flake: false
+---
+{
+  description = "A project with empty inputs";
+
+  inputs = {
+    not_a_flake.url = "github:a-kenji/not_a_flake";
+    not_a_flake.flake = false;
+  };
+
+  outputs =
+    { ... }:
+    {
+    };
+}
