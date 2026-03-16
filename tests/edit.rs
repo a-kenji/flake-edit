@@ -35,6 +35,7 @@ fn test_flake_edit_list(#[case] fixture: &str) {
 #[case("completely_flat_toplevel", false, "github:a-kenji/not_a_flake")]
 #[case("flat_nested_flat", true, "mic92/vmsh")]
 #[case("flat_nested_flat", false, "github:a-kenji/not_a_flake")]
+#[case("leading_comma_outputs", true, "mic92/vmsh")]
 fn test_add_input(#[case] fixture: &str, #[case] is_flake: bool, #[case] uri: &str) {
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();

@@ -94,8 +94,29 @@ pub fn change_outputs(
                                 Some(SyntaxKind::TOKEN_COMMA)
                             );
 
+                            // Detect leading-comma style: commas appear before
+                            // entries, preceded by whitespace containing a newline.
+                            let leading_comma_ws = {
+                                let tokens: Vec<_> = output.children_with_tokens().collect();
+                                let mut result = None;
+                                for i in 0..tokens.len() {
+                                    if tokens[i].kind() == SyntaxKind::TOKEN_COMMA
+                                        && i > 0
+                                        && tokens[i - 1].kind() == SyntaxKind::TOKEN_WHITESPACE
+                                        && tokens[i - 1].as_token().unwrap().text().contains('\n')
+                                    {
+                                        result = Some(
+                                            tokens[i - 1].as_token().unwrap().text().to_string(),
+                                        );
+                                    }
+                                }
+                                result
+                            };
+
                             let addition = if has_trailing_comma {
                                 parse_node(&format!("{add},"))
+                            } else if let Some(ref ws) = leading_comma_ws {
+                                parse_node(&format!("{ws}, {add}"))
                             } else {
                                 parse_node(&format!(", {add}"))
                             };
