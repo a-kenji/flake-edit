@@ -165,15 +165,12 @@ impl FlakeEdit {
 
                 Ok(res.map(|n| n.to_string()))
             }
-            Change::Follows { .. } => {
+            Change::Follows { ref input, .. } => {
                 self.ensure_inputs_populated()?;
 
-                // Validate that the parent input exists
-                if let Some(input_id) = change.id() {
-                    let parent_input = input_id.input();
-                    if !self.walker.inputs.contains_key(parent_input) {
-                        return Err(FlakeEditError::InputNotFound(parent_input.to_string()));
-                    }
+                let parent_id = input.input();
+                if !self.walker.inputs.contains_key(parent_id) {
+                    return Err(FlakeEditError::InputNotFound(parent_id.to_string()));
                 }
 
                 if let Some(maybe_changed_node) = self.walker.walk(&change)? {
@@ -231,5 +228,58 @@ impl FlakeEdit {
             }
         }
         orphaned
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn already_follows_is_noop() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+  outputs = { ... }: { };
+}"#;
+        let mut fe = FlakeEdit::from_text(flake).unwrap();
+        let original = fe.source_text();
+        let change = Change::Follows {
+            input: "crane.nixpkgs".to_string().into(),
+            target: "nixpkgs".to_string(),
+        };
+        let result = fe.apply_change(change).unwrap();
+        // Walker returns the unchanged text; caller detects the no-op
+        match result {
+            Some(text) => assert_eq!(text, original, "text should be unchanged"),
+            None => {} // also acceptable
+        }
+    }
+
+    #[test]
+    fn new_follows_succeeds() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    crane = {
+      url = "github:ipetkov/crane";
+    };
+  };
+  outputs = { ... }: { };
+}"#;
+        let mut fe = FlakeEdit::from_text(flake).unwrap();
+        let change = Change::Follows {
+            input: "crane.nixpkgs".to_string().into(),
+            target: "nixpkgs".to_string(),
+        };
+        let result = fe.apply_change(change);
+        assert!(result.is_ok(), "expected Ok, got: {:?}", result);
+        let text = result.unwrap().unwrap();
+        assert!(text.contains("inputs.nixpkgs.follows = \"nixpkgs\""));
     }
 }
