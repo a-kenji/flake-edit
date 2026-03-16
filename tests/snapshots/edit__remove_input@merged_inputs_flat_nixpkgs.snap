@@ -1,0 +1,25 @@
+---
+source: tests/edit.rs
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        ids:
+          - nixpkgs
+---
+{
+  description = "Flake with multiple flat-style inputs blocks";
+
+  inputs = {
+    flake-utils.url = "github:numtide/flake-utils";
+  };
+
+  inputs = {
+    extra = {
+      url = "github:foo/extra";
+    };
+  };
+
+  outputs = { self, flake-utils, extra, ... }: { };
+}

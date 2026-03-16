@@ -100,6 +100,12 @@ fn extract_attrpath(attrpath: &SyntaxNode) -> String {
         .join(".")
 }
 
+/// Check whether a `NODE_ATTRPATH_VALUE` node has a `NODE_ATTR_SET` as its value.
+fn value_is_attrset(node: &SyntaxNode) -> bool {
+    node.children()
+        .any(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
+}
+
 impl Validator {
     /// Create a new validator for the given source.
     pub fn new(source: &str) -> Self {
@@ -189,8 +195,22 @@ impl Validator {
     }
 
     /// Check an attribute set for duplicate attributes.
+    ///
+    /// Nix allows duplicate attribute names when both values are attribute sets
+    /// (they get merged). For example:
+    /// ```nix
+    /// {
+    ///   inputs = { nixpkgs.url = "..."; };
+    ///   inputs = { flake-utils.url = "..."; };
+    /// }
+    /// ```
+    /// is equivalent to a single `inputs` with both entries. We allow this but
+    /// still check the merged contents for true conflicts.
     fn check_attr_set(&self, attr_set: &SyntaxNode, errors: &mut Vec<ValidationError>) {
-        let mut seen: HashMap<String, Location> = HashMap::new();
+        // Track first occurrence: path -> (location, is_attrset, node)
+        let mut seen: HashMap<String, (Location, bool, SyntaxNode)> = HashMap::new();
+        // Track all attrset-valued nodes for a given path so we can cross-check
+        let mut merged_attrsets: HashMap<String, Vec<SyntaxNode>> = HashMap::new();
 
         for child in attr_set.children() {
             if child.kind() == SyntaxKind::NODE_ATTRPATH_VALUE
@@ -200,17 +220,71 @@ impl Validator {
             {
                 let path = extract_attrpath(&attrpath);
                 let location = self.range_to_location(attrpath.text_range());
+                let is_attrset = value_is_attrset(&child);
 
-                match seen.entry(path) {
+                match seen.entry(path.clone()) {
                     Entry::Occupied(entry) => {
-                        errors.push(ValidationError::DuplicateAttribute(DuplicateAttr {
-                            path: entry.key().clone(),
-                            first: entry.get().clone(),
-                            duplicate: location,
-                        }));
+                        let (ref first_loc, first_is_attrset, _) = *entry.get();
+                        if first_is_attrset && is_attrset {
+                            // Both are attrsets — valid Nix merge. Collect for
+                            // cross-checking.
+                            merged_attrsets.entry(path).or_default().push(child.clone());
+                        } else {
+                            // Not both attrsets — true duplicate conflict.
+                            errors.push(ValidationError::DuplicateAttribute(DuplicateAttr {
+                                path: entry.key().clone(),
+                                first: first_loc.clone(),
+                                duplicate: location,
+                            }));
+                        }
                     }
                     Entry::Vacant(entry) => {
-                        entry.insert(location);
+                        if is_attrset {
+                            merged_attrsets.entry(path).or_default().push(child.clone());
+                        }
+                        entry.insert((location, is_attrset, child.clone()));
+                    }
+                }
+            }
+        }
+
+        // Cross-check merged attrsets for duplicate attrs across blocks.
+        for (_path, nodes) in &merged_attrsets {
+            if nodes.len() < 2 {
+                continue;
+            }
+            // Collect all attrs across all blocks and check for duplicates.
+            let mut cross_seen: HashMap<String, Location> = HashMap::new();
+            for node in nodes {
+                // Find the NODE_ATTR_SET child to iterate its attrs.
+                for attrset_child in node.children() {
+                    if attrset_child.kind() != SyntaxKind::NODE_ATTR_SET {
+                        continue;
+                    }
+                    for inner in attrset_child.children() {
+                        if inner.kind() == SyntaxKind::NODE_ATTRPATH_VALUE
+                            && let Some(inner_path_node) = inner
+                                .children()
+                                .find(|c| c.kind() == SyntaxKind::NODE_ATTRPATH)
+                        {
+                            let inner_path = extract_attrpath(&inner_path_node);
+                            let inner_loc = self.range_to_location(inner_path_node.text_range());
+
+                            match cross_seen.entry(inner_path) {
+                                Entry::Occupied(e) => {
+                                    errors.push(ValidationError::DuplicateAttribute(
+                                        DuplicateAttr {
+                                            path: e.key().clone(),
+                                            first: e.get().clone(),
+                                            duplicate: inner_loc,
+                                        },
+                                    ));
+                                }
+                                Entry::Vacant(e) => {
+                                    e.insert(inner_loc);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -372,5 +446,98 @@ mod tests {
             &result.errors[0],
             ValidationError::ParseError { .. }
         ));
+    }
+
+    #[test]
+    fn mergeable_attrsets_valid() {
+        // Two `inputs = { }` blocks with distinct attrs — valid Nix merge
+        let source = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs";
+  };
+  inputs = {
+    flake-utils.url = "github:numtide/flake-utils";
+  };
+}"#;
+        let result = validate(source);
+        assert!(
+            result.is_ok(),
+            "expected no errors, got: {:?}",
+            result.errors
+        );
+    }
+
+    #[test]
+    fn mergeable_attrsets_with_comments() {
+        // autofirma-nix pattern: comment-separated input groups
+        let source = r#"{
+  # Common inputs
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    home-manager.url = "github:nix-community/home-manager";
+  };
+
+  # Autofirma sources
+  inputs = {
+    jmulticard-src = {
+      url = "github:ctt-gob-es/jmulticard/v2.0";
+      flake = false;
+    };
+  };
+
+  outputs = { self, nixpkgs, ... }: { };
+}"#;
+        let result = validate(source);
+        assert!(
+            result.is_ok(),
+            "expected no errors, got: {:?}",
+            result.errors
+        );
+    }
+
+    #[test]
+    fn mergeable_attrsets_cross_duplicate() {
+        // Same attr in two merged blocks — true conflict
+        let source = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs";
+  };
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/unstable";
+  };
+}"#;
+        let result = validate(source);
+        assert!(result.has_errors());
+        assert_eq!(result.errors.len(), 1);
+
+        let dup = expect_duplicate(&result.errors[0]);
+        assert_eq!(dup.path, "nixpkgs.url");
+    }
+
+    #[test]
+    fn non_attrset_duplicate_still_errors() {
+        // One is attrset, other is not — true conflict
+        let source = r#"{ a = { x = 1; }; a = 2; }"#;
+        let result = validate(source);
+        assert!(result.has_errors());
+        assert_eq!(result.errors.len(), 1);
+
+        let dup = expect_duplicate(&result.errors[0]);
+        assert_eq!(dup.path, "a");
+    }
+
+    #[test]
+    fn three_mergeable_attrsets() {
+        let source = r#"{
+  inputs = { a.url = "a"; };
+  inputs = { b.url = "b"; };
+  inputs = { c.url = "c"; };
+}"#;
+        let result = validate(source);
+        assert!(
+            result.is_ok(),
+            "expected no errors, got: {:?}",
+            result.errors
+        );
     }
 }

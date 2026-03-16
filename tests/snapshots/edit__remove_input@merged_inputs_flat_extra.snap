@@ -1,0 +1,23 @@
+---
+source: tests/edit.rs
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        ids:
+          - extra
+---
+{
+  description = "Flake with multiple flat-style inputs blocks";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+  };
+
+  inputs = {
+  };
+
+  outputs = { self, nixpkgs, flake-utils, ... }: { };
+}
