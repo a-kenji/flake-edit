@@ -688,8 +688,12 @@ pub fn pin(
     let input_ids = sorted_input_ids_owned(&inputs);
 
     if let Some(id) = id {
-        let lock = FlakeLock::from_default_path().map_err(|e| CommandError::LockFileError {
-            path: "flake.lock".to_string(),
+        let lock = load_flake_lock(state).map_err(|e| CommandError::LockFileError {
+            path: state
+                .lock_file
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "flake.lock".to_string()),
             source: e,
         })?;
         let target_rev = if let Some(rev) = rev {
@@ -709,8 +713,12 @@ pub fn pin(
         if input_ids.is_empty() {
             return Err(CommandError::NoInputs);
         }
-        let lock = FlakeLock::from_default_path().map_err(|e| CommandError::LockFileError {
-            path: "flake.lock".to_string(),
+        let lock = load_flake_lock(state).map_err(|e| CommandError::LockFileError {
+            path: state
+                .lock_file
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "flake.lock".to_string()),
             source: e,
         })?;
 

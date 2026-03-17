@@ -725,3 +725,24 @@ fn test_follow_current_directory() {
         );
     });
 }
+
+/// Test that `pin` respects `--lock-file` flag instead of reading `./flake.lock` from CWD.
+#[rstest]
+#[case("root")]
+fn test_pin_with_lock_file(#[case] fixture: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    settings.set_snapshot_suffix(fixture);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--lock-file")
+                .arg(fixture_lock_path(fixture))
+                .arg("--diff")
+                .arg("pin")
+                .arg("nixpkgs")
+        );
+    });
+}
