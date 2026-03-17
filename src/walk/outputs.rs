@@ -236,7 +236,53 @@ pub fn change_outputs(
                                                 green = green.remove_child(prev.index() - 2);
                                             }
                                         } else {
-                                            green = green.remove_child(prev.index());
+                                            // First entry in leading-comma style:
+                                            // remove the comma that belongs to
+                                            // the next entry, along with the
+                                            // whitespace between `{` and that
+                                            // next entry.
+                                            // After the two removals above,
+                                            // prev.index() points to what was
+                                            // right after the entry. Walk forward
+                                            // from there and remove whitespace +
+                                            // comma tokens until we hit the next
+                                            // entry.
+                                            let idx = prev.index();
+                                            let children: Vec<_> = green.children().collect();
+                                            let is_leading_comma = idx < children.len()
+                                                && children[idx].kind().0
+                                                    == SyntaxKind::TOKEN_WHITESPACE as u16;
+                                            drop(children);
+                                            if is_leading_comma {
+                                                // Leading-comma style first entry:
+                                                // remove whitespace, comma, and
+                                                // whitespace that belong to the
+                                                // next entry, then re-insert a
+                                                // space after `{`.
+                                                loop {
+                                                    let children: Vec<_> =
+                                                        green.children().collect();
+                                                    if idx >= children.len() {
+                                                        break;
+                                                    }
+                                                    let raw_kind = children[idx].kind().0;
+                                                    if raw_kind
+                                                        == SyntaxKind::TOKEN_WHITESPACE as u16
+                                                        || raw_kind
+                                                            == SyntaxKind::TOKEN_COMMA as u16
+                                                    {
+                                                        green = green.remove_child(idx);
+                                                    } else {
+                                                        break;
+                                                    }
+                                                }
+                                                let ws = parse_node(" ");
+                                                green = green.insert_child(idx, ws.green().into());
+                                            } else {
+                                                // Trailing-comma style first entry:
+                                                // just remove the trailing comma.
+                                                green = green.remove_child(idx);
+                                            }
                                         }
                                     }
                                 } else if let Some(next) = child.next_sibling_or_token()
