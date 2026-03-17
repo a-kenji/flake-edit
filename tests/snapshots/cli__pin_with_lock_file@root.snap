@@ -1,0 +1,31 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/root.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/root.flake.lock"
+    - "--diff"
+    - pin
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -2,7 +2,7 @@
+   description = "Manage your flake inputs comfortably.";
+
+   inputs = {
+-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
++    nixpkgs.url = "github:nixos/nixpkgs/81e8f48ebdecf07aab321182011b067aafc78896";
+
+     flake-utils.url = "github:numtide/flake-utils";
+
+
+----- stderr -----
