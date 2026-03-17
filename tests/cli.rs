@@ -222,6 +222,7 @@ fn test_add_infer_id(#[case] fixture: &str) {
 #[case("first_nested_node", "nixpkgs")]
 #[case("comments_before_brace", "nixpkgs")]
 #[case("root", "rust-overlay")]
+#[case("outputs_leading_comma_remove_first", "nixpkgs-unstable")]
 fn test_remove(#[case] fixture: &str, #[case] id: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);

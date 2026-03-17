@@ -1,0 +1,38 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/outputs_leading_comma_remove_first.flake.nix"
+    - "--diff"
+    - rm
+    - nixpkgs-unstable
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -2,8 +2,7 @@
+   description = "leading comma outputs";
+
+   outputs =
+-    { nixpkgs-unstable
+-    , pre-commit-nix
++    { pre-commit-nix
+     , ...
+     }:
+     {
+@@ -10,7 +9,6 @@
+     };
+
+   inputs = {
+-    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+     pre-commit-nix.url = "github:cachix/pre-commit-hooks.nix";
+   };
+ }
+
+----- stderr -----
