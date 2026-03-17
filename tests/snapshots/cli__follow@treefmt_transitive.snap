@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/treefmt_transitive.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/treefmt_transitive.flake.lock"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -4,6 +4,7 @@
+   inputs = {
+     treefmt-nix.url = "github:numtide/treefmt-nix";
+     treefmt.url = "github:numtide/treefmt";
++    treefmt.inputs.treefmt-nix.follows = "treefmt-nix";
+   };
+
+   outputs =
+
+----- stderr -----
