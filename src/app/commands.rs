@@ -1201,8 +1201,8 @@ fn follow_auto_impl(
     }
 
     let mut follow_changes: Vec<(String, String)> = Vec::new();
-    follow_changes.extend(toplevel_follows.into_iter());
-    follow_changes.extend(to_follow.into_iter());
+    follow_changes.extend(toplevel_follows);
+    follow_changes.extend(to_follow);
 
     for (input_path, target) in &follow_changes {
         let change = Change::Follows {
