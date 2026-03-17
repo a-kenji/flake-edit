@@ -86,7 +86,7 @@ pub fn change_outputs(
                                 .children_with_tokens()
                                 .position(|c| c.kind() == SyntaxKind::TOKEN_R_BRACE)
                                 .expect("pattern must have closing brace");
-                            let last_node = r_brace_index - 1;
+                            let mut last_node = r_brace_index - 1;
 
                             // Adjust the addition for trailing commas.
                             // Use the last NODE_PAT_ENTRY specifically, not
@@ -122,6 +122,22 @@ pub fn change_outputs(
                                 }
                                 result
                             };
+
+                            // For leading-comma style, insert after the last
+                            // entry rather than before `}`. This avoids double
+                            // commas when there is a standalone trailing comma
+                            // (e.g. `, flake-utils\n    ,\n    }`).
+                            if leading_comma_ws.is_some() {
+                                let mut last_entry_pos = None;
+                                for (i, c) in output.children_with_tokens().enumerate() {
+                                    if c.kind() == SyntaxKind::NODE_PAT_ENTRY {
+                                        last_entry_pos = Some(i);
+                                    }
+                                }
+                                if let Some(pos) = last_entry_pos {
+                                    last_node = pos + 1;
+                                }
+                            }
 
                             // Detect multi-line trailing-comma style without
                             // trailing comma on the last entry: commas followed
