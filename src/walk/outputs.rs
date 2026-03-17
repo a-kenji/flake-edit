@@ -179,16 +179,14 @@ pub fn change_outputs(
                             // Only insert whitespace before the addition when there's
                             // a trailing comma - the non-trailing-comma format already
                             // includes `, ` so extra whitespace would produce `x , y`.
-                            if has_trailing_comma {
-                                if let Some(prev) =
+                            if has_trailing_comma
+                                && let Some(prev) =
                                     last_pat_entry.as_ref().unwrap().prev_sibling_or_token()
-                                    && let SyntaxKind::TOKEN_WHITESPACE = prev.kind()
-                                {
-                                    let whitespace =
-                                        parse_node(prev.as_token().unwrap().green().text());
-                                    green =
-                                        green.insert_child(last_node, whitespace.green().into());
-                                }
+                                && let SyntaxKind::TOKEN_WHITESPACE = prev.kind()
+                            {
+                                let whitespace =
+                                    parse_node(prev.as_token().unwrap().green().text());
+                                green = green.insert_child(last_node, whitespace.green().into());
                             }
                             let changed_outputs_lambda = outputs_lambda
                                 .green()

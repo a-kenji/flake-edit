@@ -249,7 +249,7 @@ impl Validator {
         }
 
         // Cross-check merged attrsets for duplicate attrs across blocks.
-        for (_path, nodes) in &merged_attrsets {
+        for nodes in merged_attrsets.values() {
             if nodes.len() < 2 {
                 continue;
             }
