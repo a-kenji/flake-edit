@@ -43,11 +43,11 @@ pub struct Node {
 
 impl Node {
     fn rev(&self) -> Result<String, FlakeEditError> {
-        Ok(self
+        self
             .locked
             .as_ref()
             .ok_or_else(|| FlakeEditError::LockError("Node has no locked information.".into()))?
-            .rev()?)
+            .rev()
     }
 }
 
