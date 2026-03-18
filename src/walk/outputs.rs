@@ -5,6 +5,19 @@ use crate::edit::{OutputChange, Outputs};
 use super::error::WalkerError;
 use super::node::parse_node;
 
+/// Unwrap parentheses around a node, returning the inner node.
+/// If the node is not NODE_PAREN, returns a clone of the original.
+fn unwrap_parens(node: &SyntaxNode) -> SyntaxNode {
+    if node.kind() == SyntaxKind::NODE_PAREN {
+        if let Some(inner) = node.children().find(|c| {
+            c.kind() != SyntaxKind::TOKEN_L_PAREN && c.kind() != SyntaxKind::TOKEN_R_PAREN
+        }) {
+            return inner;
+        }
+    }
+    node.clone()
+}
+
 /// List the outputs from a flake.nix root node.
 pub fn list_outputs(root: &SyntaxNode) -> Result<Outputs, WalkerError> {
     let mut outputs: Vec<String> = vec![];
@@ -22,8 +35,11 @@ pub fn list_outputs(root: &SyntaxNode) -> Result<Outputs, WalkerError> {
         {
             assert!(outputs_node.kind() == SyntaxKind::NODE_ATTRPATH);
 
-            if let Some(outputs_lambda) = outputs_node.next_sibling() {
-                assert!(outputs_lambda.kind() == SyntaxKind::NODE_LAMBDA);
+            if let Some(next_sibling) = outputs_node.next_sibling() {
+                let outputs_lambda = unwrap_parens(&next_sibling);
+                if outputs_lambda.kind() != SyntaxKind::NODE_LAMBDA {
+                    continue;
+                }
                 if let Some(output) = outputs_lambda
                     .children()
                     .find(|n| n.kind() == SyntaxKind::NODE_PATTERN)
@@ -75,8 +91,11 @@ pub fn change_outputs(
         {
             assert!(outputs_node.kind() == SyntaxKind::NODE_ATTRPATH);
 
-            if let Some(outputs_lambda) = outputs_node.next_sibling() {
-                assert!(outputs_lambda.kind() == SyntaxKind::NODE_LAMBDA);
+            if let Some(next_sibling) = outputs_node.next_sibling() {
+                let outputs_lambda = unwrap_parens(&next_sibling);
+                if outputs_lambda.kind() != SyntaxKind::NODE_LAMBDA {
+                    continue;
+                }
                 for output in outputs_lambda.children() {
                     if SyntaxKind::NODE_PATTERN == output.kind() {
                         if let OutputChange::Add(ref add) = change {
@@ -191,10 +210,21 @@ pub fn change_outputs(
                             let changed_outputs_lambda = outputs_lambda
                                 .green()
                                 .replace_child(output.index(), green.into());
-                            let changed_toplevel = toplevel.green().replace_child(
-                                outputs_lambda.index(),
-                                changed_outputs_lambda.into(),
-                            );
+                            let changed_toplevel = if next_sibling.kind() == SyntaxKind::NODE_PAREN
+                            {
+                                let changed_paren = next_sibling.green().replace_child(
+                                    outputs_lambda.index(),
+                                    changed_outputs_lambda.into(),
+                                );
+                                toplevel
+                                    .green()
+                                    .replace_child(next_sibling.index(), changed_paren.into())
+                            } else {
+                                toplevel.green().replace_child(
+                                    outputs_lambda.index(),
+                                    changed_outputs_lambda.into(),
+                                )
+                            };
                             let changed_attr_set = attr_set
                                 .green()
                                 .replace_child(toplevel.index(), changed_toplevel.into());
@@ -291,10 +321,22 @@ pub fn change_outputs(
                                 let changed_outputs_lambda = outputs_lambda
                                     .green()
                                     .replace_child(output.index(), green.into());
-                                let changed_toplevel = toplevel.green().replace_child(
-                                    outputs_lambda.index(),
-                                    changed_outputs_lambda.into(),
-                                );
+                                let changed_toplevel = if next_sibling.kind()
+                                    == SyntaxKind::NODE_PAREN
+                                {
+                                    let changed_paren = next_sibling.green().replace_child(
+                                        outputs_lambda.index(),
+                                        changed_outputs_lambda.into(),
+                                    );
+                                    toplevel
+                                        .green()
+                                        .replace_child(next_sibling.index(), changed_paren.into())
+                                } else {
+                                    toplevel.green().replace_child(
+                                        outputs_lambda.index(),
+                                        changed_outputs_lambda.into(),
+                                    )
+                                };
                                 let changed_attr_set = attr_set
                                     .green()
                                     .replace_child(toplevel.index(), changed_toplevel.into());
