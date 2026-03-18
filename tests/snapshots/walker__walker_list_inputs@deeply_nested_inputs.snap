@@ -1,0 +1,26 @@
+---
+source: tests/walker.rs
+expression: walker.inputs
+info:
+  flake_nix: ""
+  changes: []
+---
+disko:
+  id: disko
+  flake: true
+  url: "\"github:nix-community/disko\""
+  follows:
+    - Indirect:
+        - nixpkgs
+        - "\"nixpkgs\""
+  range:
+    start: 148
+    end: 176
+nixpkgs:
+  id: nixpkgs
+  flake: true
+  url: "\"github:nixos/nixpkgs/nixos-unstable\""
+  follows: []
+  range:
+    start: 82
+    end: 119

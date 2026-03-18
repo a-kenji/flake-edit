@@ -13,6 +13,7 @@ use rstest::rstest;
 #[case("completely_flat_toplevel_alt")]
 #[case("one_level_nesting_flat")]
 #[case("flat_nested_flat")]
+#[case("deeply_nested_inputs")]
 fn test_walker_list_inputs(#[case] fixture: &str) {
     let content = load_flake(fixture);
     let mut walker = Walker::new(&content);

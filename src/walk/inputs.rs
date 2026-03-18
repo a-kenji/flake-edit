@@ -718,22 +718,53 @@ fn handle_url_attr(
         && SyntaxKind::NODE_ATTR_SET == attr_set.kind()
     {
         for nested_attr in attr_set.children() {
-            let is_follows = nested_attr
-                .first_child()
-                .unwrap()
-                .first_child()
-                .unwrap()
-                .next_sibling()
-                .unwrap();
+            let Some(attrpath) = nested_attr.first_child() else {
+                continue;
+            };
+            let Some(first_ident) = attrpath.first_child() else {
+                continue;
+            };
 
-            if is_follows.to_string() == "follows" {
-                let id = is_follows.prev_sibling().unwrap();
-                let follows = nested_attr.first_child().unwrap().next_sibling().unwrap();
-                let input =
-                    Input::with_url(id.to_string(), follows.to_string(), follows.text_range());
-                insert_with_ctx(inputs, id.to_string(), input, ctx);
-                if should_remove_nested_input(change, ctx, &follows.to_string()) {
-                    return Some(empty_node());
+            if let Some(follows_ident) = first_ident.next_sibling() {
+                // Flat attrpath style: `nixpkgs.follows = "nixpkgs"`
+                if follows_ident.to_string() == "follows" {
+                    let id = &first_ident;
+                    let Some(follows) = attrpath.next_sibling() else {
+                        continue;
+                    };
+                    let input =
+                        Input::with_url(id.to_string(), follows.to_string(), follows.text_range());
+                    insert_with_ctx(inputs, id.to_string(), input, ctx);
+                    if should_remove_nested_input(change, ctx, &follows.to_string()) {
+                        return Some(empty_node());
+                    }
+                }
+            } else if let Some(value_node) = attrpath.next_sibling()
+                && SyntaxKind::NODE_ATTR_SET == value_node.kind()
+            {
+                // Deeply nested attrset style: `nixpkgs = { follows = "nixpkgs"; }`
+                let id = &first_ident;
+                for inner_attr in value_node.children() {
+                    let Some(inner_path) = inner_attr.first_child() else {
+                        continue;
+                    };
+                    let Some(inner_ident) = inner_path.first_child() else {
+                        continue;
+                    };
+                    if inner_ident.to_string() == "follows" {
+                        let Some(follows) = inner_path.next_sibling() else {
+                            continue;
+                        };
+                        let input = Input::with_url(
+                            id.to_string(),
+                            follows.to_string(),
+                            follows.text_range(),
+                        );
+                        insert_with_ctx(inputs, id.to_string(), input, ctx);
+                        if should_remove_nested_input(change, ctx, &follows.to_string()) {
+                            return Some(empty_node());
+                        }
+                    }
                 }
             }
         }

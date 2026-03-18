@@ -61,6 +61,7 @@ fn stderr_path_filters(settings: &mut insta::Settings) {
 #[case("one_level_nesting_flat")]
 #[case("flat_nested_flat")]
 #[case("first_nested_node")]
+#[case("deeply_nested_inputs")]
 #[case("follows_cycle")]
 fn test_list(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
@@ -104,6 +105,7 @@ fn test_list_format(#[case] fixture: &str, #[case] format: &str) {
 #[case("first_nested_node", "vmsh", "github:mic92/vmsh")]
 #[case("comments_before_brace", "vmsh", "github:mic92/vmsh")]
 #[case("all_blanks", "vmsh", "github:mic92/vmsh")]
+#[case("deeply_nested_inputs", "vmsh", "github:mic92/vmsh")]
 fn test_add(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -221,6 +223,7 @@ fn test_add_infer_id(#[case] fixture: &str) {
 #[case("flat_nested_flat", "nixpkgs")]
 #[case("first_nested_node", "nixpkgs")]
 #[case("comments_before_brace", "nixpkgs")]
+#[case("deeply_nested_inputs", "nixpkgs")]
 #[case("root", "rust-overlay")]
 #[case("outputs_leading_comma_remove_first", "nixpkgs-unstable")]
 fn test_remove(#[case] fixture: &str, #[case] id: &str) {
@@ -261,6 +264,7 @@ fn test_remove(#[case] fixture: &str, #[case] id: &str) {
 )]
 #[case("flat_nested_flat", "nixpkgs", "github:nixos/nixpkgs/nixos-24.05")]
 #[case("first_nested_node", "nixpkgs", "github:nixos/nixpkgs/nixos-24.05")]
+#[case("deeply_nested_inputs", "nixpkgs", "github:nixos/nixpkgs/nixos-24.05")]
 fn test_change(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
