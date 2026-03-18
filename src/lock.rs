@@ -141,6 +141,7 @@ impl FlakeLock {
     }
     /// Query the lock file for a specific rev.
     pub fn rev_for(&self, id: &str) -> Result<String, FlakeEditError> {
+        let id = id.trim_matches('"');
         let root = self.root();
         let resolved_root = self
             .nodes
@@ -456,6 +457,19 @@ mod tests {
         let parsed_lock =
             FlakeLock::read_from_str(minimal_lock).expect("Should be parsed correctly.");
         assert!(parsed_lock.rev_for("browseros.nixpkgs").is_err());
+    }
+
+    #[test]
+    fn rev_for_quoted_id() {
+        // Quoted attribute names like `"nixpkgs-24.11"` from `list --format simple`
+        // should be stripped before lock lookup.
+        let minimal_lock = minimal_lock();
+        let parsed_lock =
+            FlakeLock::read_from_str(minimal_lock).expect("Should be parsed correctly.");
+        assert_eq!(
+            parsed_lock.rev_for("nixpkgs").unwrap(),
+            parsed_lock.rev_for("\"nixpkgs\"").unwrap(),
+        );
     }
 
     #[test]
