@@ -105,7 +105,26 @@ pub fn change_outputs(
                                 .children_with_tokens()
                                 .position(|c| c.kind() == SyntaxKind::TOKEN_R_BRACE)
                                 .expect("pattern must have closing brace");
-                            let mut last_node = r_brace_index - 1;
+                            // Insert before `}`, but if the token
+                            // immediately before `}` is an entry or
+                            // ellipsis (no whitespace gap), insert at
+                            // `r_brace_index` so we go after it.
+                            let before_brace = output
+                                .children_with_tokens()
+                                .nth(r_brace_index - 1)
+                                .map(|c| c.kind());
+                            let mut last_node = if matches!(
+                                before_brace,
+                                Some(
+                                    SyntaxKind::NODE_PAT_ENTRY
+                                        | SyntaxKind::TOKEN_ELLIPSIS
+                                        | SyntaxKind::TOKEN_COMMA
+                                )
+                            ) {
+                                r_brace_index
+                            } else {
+                                r_brace_index - 1
+                            };
 
                             // Adjust the addition for trailing commas.
                             // Use the last NODE_PAT_ENTRY specifically, not
@@ -238,85 +257,96 @@ pub fn change_outputs(
                                 && child.to_string() == *id
                             {
                                 let mut green = output.green().remove_child(child.index());
-                                if let Some(prev) = child.prev_sibling_or_token() {
-                                    if let SyntaxKind::TOKEN_WHITESPACE = prev.kind() {
-                                        green = green.remove_child(prev.index());
-                                        // Only remove the element before the whitespace
-                                        // if it's a comma (non-first entry). When the
-                                        // entry is first, the element before is `{` -
-                                        // remove the trailing comma instead.
-                                        if let Some(before_ws) = prev.prev_sibling_or_token()
-                                            && before_ws.kind() == SyntaxKind::TOKEN_COMMA
+                                if let Some(prev) = child.prev_sibling_or_token()
+                                    && let SyntaxKind::TOKEN_WHITESPACE = prev.kind()
+                                {
+                                    green = green.remove_child(prev.index());
+                                    // Only remove the element before the whitespace
+                                    // if it's a comma (non-first entry). When the
+                                    // entry is first, the element before is `{` -
+                                    // remove the trailing comma instead.
+                                    if let Some(before_ws) = prev.prev_sibling_or_token()
+                                        && before_ws.kind() == SyntaxKind::TOKEN_COMMA
+                                    {
+                                        green = green.remove_child(prev.index() - 1);
+                                        // Leading-comma style: also remove the
+                                        // newline+indent whitespace before the comma.
+                                        if let Some(before_comma) =
+                                            before_ws.prev_sibling_or_token()
+                                            && before_comma.kind() == SyntaxKind::TOKEN_WHITESPACE
+                                            && before_comma
+                                                .as_token()
+                                                .unwrap()
+                                                .text()
+                                                .contains('\n')
                                         {
-                                            green = green.remove_child(prev.index() - 1);
-                                            // Leading-comma style: also remove the
-                                            // newline+indent whitespace before the comma.
-                                            if let Some(before_comma) =
-                                                before_ws.prev_sibling_or_token()
-                                                && before_comma.kind()
-                                                    == SyntaxKind::TOKEN_WHITESPACE
-                                                && before_comma
-                                                    .as_token()
-                                                    .unwrap()
-                                                    .text()
-                                                    .contains('\n')
-                                            {
-                                                green = green.remove_child(prev.index() - 2);
-                                            }
-                                        } else {
-                                            // First entry in leading-comma style:
-                                            // remove the comma that belongs to
-                                            // the next entry, along with the
-                                            // whitespace between `{` and that
-                                            // next entry.
-                                            // After the two removals above,
-                                            // prev.index() points to what was
-                                            // right after the entry. Walk forward
-                                            // from there and remove whitespace +
-                                            // comma tokens until we hit the next
-                                            // entry.
-                                            let idx = prev.index();
-                                            let children: Vec<_> = green.children().collect();
-                                            let is_leading_comma = idx < children.len()
-                                                && children[idx].kind().0
-                                                    == SyntaxKind::TOKEN_WHITESPACE as u16;
-                                            drop(children);
-                                            if is_leading_comma {
-                                                // Leading-comma style first entry:
-                                                // remove whitespace, comma, and
-                                                // whitespace that belong to the
-                                                // next entry, then re-insert a
-                                                // space after `{`.
-                                                loop {
-                                                    let children: Vec<_> =
-                                                        green.children().collect();
-                                                    if idx >= children.len() {
-                                                        break;
-                                                    }
-                                                    let raw_kind = children[idx].kind().0;
-                                                    if raw_kind
-                                                        == SyntaxKind::TOKEN_WHITESPACE as u16
-                                                        || raw_kind
-                                                            == SyntaxKind::TOKEN_COMMA as u16
-                                                    {
-                                                        green = green.remove_child(idx);
-                                                    } else {
-                                                        break;
-                                                    }
+                                            green = green.remove_child(prev.index() - 2);
+                                        }
+                                    } else {
+                                        // First entry in leading-comma style:
+                                        // remove the comma that belongs to
+                                        // the next entry, along with the
+                                        // whitespace between `{` and that
+                                        // next entry.
+                                        // After the two removals above,
+                                        // prev.index() points to what was
+                                        // right after the entry. Walk forward
+                                        // from there and remove whitespace +
+                                        // comma tokens until we hit the next
+                                        // entry.
+                                        let idx = prev.index();
+                                        let children: Vec<_> = green.children().collect();
+                                        let is_leading_comma = idx < children.len()
+                                            && children[idx].kind().0
+                                                == SyntaxKind::TOKEN_WHITESPACE as u16;
+                                        drop(children);
+                                        if is_leading_comma {
+                                            // Leading-comma style first entry:
+                                            // remove whitespace, comma, and
+                                            // whitespace that belong to the
+                                            // next entry, then re-insert a
+                                            // space after `{`.
+                                            loop {
+                                                let children: Vec<_> = green.children().collect();
+                                                if idx >= children.len() {
+                                                    break;
                                                 }
-                                                let ws = parse_node(" ");
-                                                green = green.insert_child(idx, ws.green().into());
-                                            } else {
-                                                // Trailing-comma style first entry:
-                                                // just remove the trailing comma.
-                                                green = green.remove_child(idx);
+                                                let raw_kind = children[idx].kind().0;
+                                                if raw_kind == SyntaxKind::TOKEN_WHITESPACE as u16
+                                                    || raw_kind == SyntaxKind::TOKEN_COMMA as u16
+                                                {
+                                                    green = green.remove_child(idx);
+                                                } else {
+                                                    break;
+                                                }
                                             }
+                                            let ws = parse_node(" ");
+                                            green = green.insert_child(idx, ws.green().into());
+                                        } else {
+                                            // Trailing-comma style first entry:
+                                            // just remove the trailing comma.
+                                            green = green.remove_child(idx);
                                         }
                                     }
-                                } else if let Some(next) = child.next_sibling_or_token()
-                                    && let SyntaxKind::TOKEN_WHITESPACE = next.kind()
-                                {
-                                    green = green.remove_child(next.index());
+                                } else {
+                                    // No whitespace before the entry (prev is
+                                    // `{` or absent). Remove trailing comma
+                                    // and whitespace after the entry.
+                                    let idx = child.index();
+                                    loop {
+                                        let children: Vec<_> = green.children().collect();
+                                        if idx >= children.len() {
+                                            break;
+                                        }
+                                        let raw_kind = children[idx].kind().0;
+                                        if raw_kind == SyntaxKind::TOKEN_COMMA as u16
+                                            || raw_kind == SyntaxKind::TOKEN_WHITESPACE as u16
+                                        {
+                                            green = green.remove_child(idx);
+                                        } else {
+                                            break;
+                                        }
+                                    }
                                 }
                                 let changed_outputs_lambda = outputs_lambda
                                     .green()

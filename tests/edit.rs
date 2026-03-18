@@ -45,6 +45,7 @@ fn test_flake_edit_list(#[case] fixture: &str) {
 #[case("all_blanks", true, "github:mic92/vmsh")]
 #[case("all_blanks", false, "github:a-kenji/not_a_flake")]
 #[case("quoted_input_with_dots", true, "github:mic92/vmsh")]
+#[case("outputs_no_space_add", false, "github:a-kenji/not_a_flake")]
 #[case("outputs_at_no_space_multi", true, "github:mic92/vmsh")]
 #[case("outputs_at_space_multi", true, "github:mic92/vmsh")]
 #[case("outputs_at_leading_comma", true, "github:mic92/vmsh")]
@@ -55,6 +56,7 @@ fn test_flake_edit_list(#[case] fixture: &str) {
 #[case("empty_inputs", true, "github:mic92/vmsh")]
 #[case("empty_inputs", false, "github:a-kenji/not_a_flake")]
 #[case("outputs_paren", true, "github:mic92/vmsh")]
+#[case("outputs_no_space_add", true, "github:mic92/vmsh")]
 fn test_add_input(#[case] fixture: &str, #[case] is_flake: bool, #[case] uri: &str) {
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
@@ -142,6 +144,7 @@ fn test_first_nested_node_add_with_list(#[case] is_flake: bool) {
 #[case("leading_comma_outputs", "fenix")]
 #[case("outputs_paren", "flake-parts")]
 #[case("quoted_input_with_dots", "\"hls-1.10\"")]
+#[case("outputs_no_space_remove", "flake-parts")]
 fn test_remove_input(#[case] fixture: &str, #[case] input_id: &str) {
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
