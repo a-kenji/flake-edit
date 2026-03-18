@@ -19,7 +19,7 @@ pub use error::WalkerError;
 
 use inputs::walk_inputs;
 use node::{
-    adjacent_whitespace_index, get_sibling_whitespace, make_quoted_string,
+    adjacent_whitespace_index, get_sibling_whitespace, insertion_index_after, make_quoted_string,
     make_toplevel_flake_false_attr, make_toplevel_nested_follows_attr, make_toplevel_url_attr,
     parse_node, substitute_child,
 };
@@ -209,7 +209,7 @@ impl<'a> Walker {
         // Only for flat-style inputs (not block-style which should be handled elsewhere)
         if !has_nested_block && let Some(ref_child) = last_parent_attr {
             let follows_node = make_toplevel_nested_follows_attr(parent_id, nested_id, target);
-            let insert_index = ref_child.index() + 1;
+            let insert_index = insertion_index_after(&ref_child);
 
             let mut green = attr_set
                 .green()
