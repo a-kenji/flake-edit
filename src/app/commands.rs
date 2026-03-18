@@ -57,6 +57,9 @@ pub enum CommandError {
     #[error("Input not found: {0}")]
     InputNotFound(String),
 
+    #[error("Input '{0}' has no pinnable URL (it may use follows or a non-standard format)")]
+    InputNotPinnable(String),
+
     #[error("The input could not be removed: {0}")]
     CouldNotRemove(String),
 }
@@ -707,7 +710,9 @@ pub fn pin(
                 .map_err(|_| CommandError::InputNotFound(id.clone()))?
         };
         let mut updater = updater(editor, inputs);
-        updater.pin_input_to_ref(&id, &target_rev);
+        updater
+            .pin_input_to_ref(&id, &target_rev)
+            .map_err(CommandError::InputNotPinnable)?;
         let change = updater.get_changes();
         editor.apply_or_diff(&change, state)?;
         if !state.diff {
@@ -737,7 +742,9 @@ pub fn pin(
                     .rev_for(id)
                     .map_err(|_| CommandError::InputNotFound(id.to_string()))?;
                 let mut updater = updater(editor, inputs.clone());
-                updater.pin_input_to_ref(id, &target_rev);
+                updater
+                    .pin_input_to_ref(id, &target_rev)
+                    .map_err(CommandError::InputNotPinnable)?;
                 Ok((updater.get_changes(), target_rev))
             },
             |id, target_rev| println!("Pinned input: {} to {}", id, target_rev),
@@ -760,7 +767,9 @@ pub fn unpin(
 
     if let Some(id) = id {
         let mut updater = updater(editor, inputs);
-        updater.unpin_input(&id);
+        updater
+            .unpin_input(&id)
+            .map_err(CommandError::InputNotPinnable)?;
         let change = updater.get_changes();
         editor.apply_or_diff(&change, state)?;
         if !state.diff {
@@ -779,7 +788,9 @@ pub fn unpin(
             input_ids,
             |id| {
                 let mut updater = updater(editor, inputs.clone());
-                updater.unpin_input(id);
+                updater
+                    .unpin_input(id)
+                    .map_err(CommandError::InputNotPinnable)?;
                 Ok((updater.get_changes(), ()))
             },
             |id, ()| println!("Unpinned input: {}", id),
