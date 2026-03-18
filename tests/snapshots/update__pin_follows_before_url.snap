@@ -1,0 +1,14 @@
+---
+source: tests/update.rs
+expression: updater.get_changes()
+---
+{
+  inputs = {
+    myInput = {
+      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:foo/bar/abc123";
+    };
+  };
+
+  outputs = { self, myInput }: { };
+}

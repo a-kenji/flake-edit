@@ -54,6 +54,7 @@ pub fn insert_with_ctx(
         if let Some(node) = inputs.get_mut(&id) {
             if !input.url.to_string().is_empty() {
                 node.url = input.url;
+                node.range = input.range;
             }
             if !input.flake {
                 node.flake = input.flake;
@@ -380,7 +381,7 @@ fn handle_nested_input(
         for binding in attr.children() {
             if binding.to_string() == "url" {
                 let url = binding.next_sibling().unwrap();
-                let input = Input::with_url(id_str.clone(), url.to_string(), input_id.text_range());
+                let input = Input::with_url(id_str.clone(), url.to_string(), url.text_range());
                 insert_with_ctx(inputs, id_str.clone(), input, ctx);
             }
             if should_remove_input(change, ctx, &id_str) {
