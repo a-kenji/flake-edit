@@ -20,8 +20,8 @@ crane:
         - rust-overlay
         - "\"rust-overlay\""
   range:
-    start: 272
-    end: 277
+    start: 292
+    end: 314
 nixpkgs:
   id: nixpkgs
   flake: true
@@ -42,5 +42,5 @@ rust-overlay:
         - nixpkgs
         - "\"nixpkgs\""
   range:
-    start: 111
-    end: 123
+    start: 138
+    end: 167

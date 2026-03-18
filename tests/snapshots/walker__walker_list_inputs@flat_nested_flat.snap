@@ -33,5 +33,5 @@ poetry2nix:
         - nixpkgs
         - "\"nixpkgs\""
   range:
-    start: 0
-    end: 0
+    start: 292
+    end: 332

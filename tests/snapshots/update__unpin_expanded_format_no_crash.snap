@@ -1,0 +1,17 @@
+---
+source: tests/update.rs
+expression: updater.get_changes()
+---
+{
+  inputs = {
+    myInput = {
+      type = "github";
+      owner = "NixOS";
+      repo = "nixpkgs";
+      ref = "nixos-25.11";
+    };
+    pinned.url = "github:foo/bar";
+  };
+
+  outputs = { self, myInput, pinned }: { };
+}

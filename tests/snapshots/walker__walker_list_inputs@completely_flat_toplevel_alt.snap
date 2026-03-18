@@ -20,8 +20,8 @@ crane:
         - rust-overlay
         - "\"rust-overlay\""
   range:
-    start: 0
-    end: 0
+    start: 466
+    end: 488
 flake-utelinos:
   id: flake-utelinos
   flake: true
@@ -50,5 +50,5 @@ rust-overlay:
         - nixpkgs
         - "\"nixpkgs\""
   range:
-    start: 0
-    end: 0
+    start: 256
+    end: 285

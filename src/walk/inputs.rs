@@ -54,6 +54,7 @@ pub fn insert_with_ctx(
         if let Some(node) = inputs.get_mut(&id) {
             if !input.url.to_string().is_empty() {
                 node.url = input.url;
+                node.range = input.range;
             }
             if !input.flake {
                 node.flake = input.flake;
@@ -380,7 +381,7 @@ fn handle_nested_input(
         for binding in attr.children() {
             if binding.to_string() == "url" {
                 let url = binding.next_sibling().unwrap();
-                let input = Input::with_url(id_str.clone(), url.to_string(), input_id.text_range());
+                let input = Input::with_url(id_str.clone(), url.to_string(), url.text_range());
                 insert_with_ctx(inputs, id_str.clone(), input, ctx);
             }
             if should_remove_input(change, ctx, &id_str) {
@@ -1001,8 +1002,9 @@ fn handle_input_attr_set(
                 // `inputs = { nixpkgs = { follows = "nixpkgs"; }; }`
                 if leaf.to_string() == "inputs"
                     && change.is_remove()
-                    && let Some(inputs_attrset) =
-                        attr.children().find(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
+                    && let Some(inputs_attrset) = attr
+                        .children()
+                        .find(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
                 {
                     for nested_entry in inputs_attrset.children() {
                         if nested_entry.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
@@ -1014,11 +1016,7 @@ fn handle_input_attr_set(
                         let Some(nested_id) = nested_path.first_child() else {
                             continue;
                         };
-                        if should_remove_nested_input(
-                            change,
-                            &ctx_some,
-                            &nested_id.to_string(),
-                        ) {
+                        if should_remove_nested_input(change, &ctx_some, &nested_id.to_string()) {
                             let new_inputs_attrset = remove_child_with_whitespace(
                                 &inputs_attrset,
                                 &nested_entry,
