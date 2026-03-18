@@ -189,26 +189,26 @@ impl Updater {
             offset: 0,
         }
     }
-    fn get_index(&self, id: &str) -> usize {
-        self.inputs.iter().position(|n| n.input.id == id).unwrap()
+    fn get_index(&self, id: &str) -> Option<usize> {
+        self.inputs.iter().position(|n| n.input.id == id)
     }
     /// Pin an input based on it's id to a specific rev.
-    pub fn pin_input_to_ref(&mut self, id: &str, rev: &str) {
+    pub fn pin_input_to_ref(&mut self, id: &str, rev: &str) -> Result<(), String> {
         self.sort();
-        let inputs = self.inputs.clone();
-        if let Some(input) = inputs.get(self.get_index(id)) {
-            tracing::debug!("Input: {:?}", input);
-            self.change_input_to_rev(input, rev);
-        }
+        let idx = self.get_index(id).ok_or_else(|| id.to_string())?;
+        let input = self.inputs[idx].clone();
+        tracing::debug!("Input: {:?}", input);
+        self.change_input_to_rev(&input, rev);
+        Ok(())
     }
     /// Remove any ?ref= or ?rev= parameters from a specific input.
-    pub fn unpin_input(&mut self, id: &str) {
+    pub fn unpin_input(&mut self, id: &str) -> Result<(), String> {
         self.sort();
-        let inputs = self.inputs.clone();
-        if let Some(input) = inputs.get(self.get_index(id)) {
-            tracing::debug!("Input: {:?}", input);
-            self.remove_ref_and_rev(input);
-        }
+        let idx = self.get_index(id).ok_or_else(|| id.to_string())?;
+        let input = self.inputs[idx].clone();
+        tracing::debug!("Input: {:?}", input);
+        self.remove_ref_and_rev(&input);
+        Ok(())
     }
     /// Update all inputs to a specific semver release,
     /// if a specific input is given, just update the single input.
