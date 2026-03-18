@@ -267,6 +267,9 @@ Arguments:
           Flake.nix paths to process. If empty, runs on current directory
 
 Options:
+      --transitive [<TRANSITIVE>]
+          Enable transitive follows deduplication, promoting shared nested inputs to top-level when they appear at least N times. Defaults to 2 if no value is given. Overrides the config file's `follow.transitive_min`
+
       --config <CONFIG>
           Path to a custom configuration file
 
