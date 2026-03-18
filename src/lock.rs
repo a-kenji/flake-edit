@@ -138,26 +138,89 @@ impl FlakeLock {
     pub fn root(&self) -> &str {
         &self.root
     }
+    /// Split an input path into segments, respecting quoted names.
+    /// E.g. `"hls-1.10".nixpkgs` -> `["hls-1.10", "nixpkgs"]`
+    /// E.g. `browseros.nixpkgs` -> `["browseros", "nixpkgs"]`
+    fn split_input_path(path: &str) -> Vec<&str> {
+        let mut segments = Vec::new();
+        let mut rest = path;
+        while !rest.is_empty() {
+            if rest.starts_with('"') {
+                // Quoted segment: find closing quote
+                if let Some(end) = rest[1..].find('"') {
+                    segments.push(&rest[1..end + 1]);
+                    rest = &rest[end + 2..];
+                    // Skip the dot separator if present
+                    rest = rest.strip_prefix('.').unwrap_or(rest);
+                } else {
+                    // Malformed: no closing quote, treat rest as one segment
+                    segments.push(rest.trim_matches('"'));
+                    break;
+                }
+            } else if let Some(dot) = rest.find('.') {
+                segments.push(&rest[..dot]);
+                rest = &rest[dot + 1..];
+            } else {
+                segments.push(rest);
+                break;
+            }
+        }
+        segments
+    }
+
+    /// Resolve an input path to a node name by walking the lock tree.
+    fn resolve_input_path(&self, segments: &[&str]) -> Result<String, FlakeEditError> {
+        let mut current_node = self
+            .nodes
+            .get(self.root())
+            .ok_or(FlakeEditError::LockMissingRoot)?;
+
+        for (i, segment) in segments.iter().enumerate() {
+            let inputs = current_node.inputs.as_ref().ok_or_else(|| {
+                if i == 0 {
+                    FlakeEditError::LockError("Could not resolve root.".into())
+                } else {
+                    FlakeEditError::LockError(format!(
+                        "Input '{}' has no sub-inputs.",
+                        segments[..i].join(".")
+                    ))
+                }
+            })?;
+
+            let resolved = inputs.get(*segment).ok_or_else(|| {
+                FlakeEditError::LockError(format!(
+                    "Input '{}' not found in lock file.",
+                    segments[..=i].join(".")
+                ))
+            })?;
+
+            let node_name = resolved.id();
+
+            if i < segments.len() - 1 {
+                // Intermediate segment: move to the next node
+                current_node = self.nodes.get(&node_name).ok_or_else(|| {
+                    FlakeEditError::LockError(format!(
+                        "Could not find node '{}' for input '{}'.",
+                        node_name,
+                        segments[..=i].join(".")
+                    ))
+                })?;
+            } else {
+                // Final segment: return the node name
+                return Ok(node_name);
+            }
+        }
+
+        Err(FlakeEditError::LockError("Empty input path.".into()))
+    }
+
     /// Query the lock file for a specific rev.
     pub fn rev_for(&self, id: &str) -> Result<String, FlakeEditError> {
-        let id = id.trim_matches('"');
-        let root = self.root();
-        let resolved_root = self
-            .nodes
-            .get(root)
-            .ok_or(FlakeEditError::LockMissingRoot)?;
-        let binding = resolved_root
-            .inputs
-            .clone()
-            .ok_or_else(|| FlakeEditError::LockError("Could not resolve root.".into()))?;
-        let resolved_id = binding
-            .get(id)
-            .ok_or_else(|| FlakeEditError::LockError("Could not resolve id.".into()))?;
-        let id = resolved_id.id();
-        let node = self
-            .nodes
-            .get(&id)
-            .ok_or_else(|| FlakeEditError::LockError("Could not find node with id.".into()))?;
+        let segments = Self::split_input_path(id);
+        let node_name = self.resolve_input_path(&segments)?;
+        let node = self.nodes.get(&node_name).ok_or_else(|| {
+            FlakeEditError::LockError(format!("Could not find node '{node_name}'."))
+        })?;
         node.rev()
     }
 
@@ -449,13 +512,38 @@ mod tests {
     }
 
     #[test]
-    fn rev_for_sub_input_path_returns_error() {
-        // Sub-input paths like "browseros.nixpkgs" don't exist as top-level
-        // lock nodes — rev_for should return an error, not panic.
+    fn rev_for_sub_input_path_missing_parent_returns_error() {
+        // Sub-input paths where the parent doesn't exist should error.
         let minimal_lock = minimal_lock();
         let parsed_lock =
             FlakeLock::read_from_str(minimal_lock).expect("Should be parsed correctly.");
         assert!(parsed_lock.rev_for("browseros.nixpkgs").is_err());
+    }
+
+    #[test]
+    fn rev_for_sub_input_path_resolves() {
+        // Sub-input paths like "treefmt-nix.nixpkgs" should traverse the lock tree.
+        let lock = minimal_independent_lock_no_overrides();
+        let parsed = FlakeLock::read_from_str(lock).expect("Should be parsed correctly.");
+        assert_eq!(
+            "2741b4b489b55df32afac57bc4bfd220e8bf617e",
+            parsed
+                .rev_for("treefmt-nix.nixpkgs")
+                .expect("Should resolve sub-input path")
+        );
+    }
+
+    #[test]
+    fn rev_for_sub_input_follows_resolves() {
+        // Sub-input that follows the root input should resolve to the same rev.
+        let lock = minimal_independent_lock_nixpkgs_overridden();
+        let parsed = FlakeLock::read_from_str(lock).expect("Should be parsed correctly.");
+        assert_eq!(
+            parsed.rev_for("nixpkgs").unwrap(),
+            parsed
+                .rev_for("treefmt-nix.nixpkgs")
+                .expect("Should resolve followed sub-input")
+        );
     }
 
     #[test]
@@ -540,5 +628,60 @@ mod tests {
         let nested = parsed.nested_inputs();
         assert_eq!(nested.len(), 1);
         assert_eq!(nested[0].path, "\"hls-1.10\".nixpkgs");
+    }
+
+    #[test]
+    fn rev_for_quoted_sub_input_path() {
+        // Quoted input names with dots like "hls-1.10".nixpkgs should resolve
+        let lock = r#"{
+  "nodes": {
+    "hls-1.10": {
+      "inputs": { "nixpkgs": "nixpkgs_2" },
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "abc", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "nixpkgs": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "abc", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "nixpkgs_2": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "def", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "root": {
+      "inputs": { "hls-1.10": "hls-1.10", "nixpkgs": "nixpkgs" }
+    }
+  },
+  "root": "root",
+  "version": 7
+}"#;
+        let parsed = FlakeLock::read_from_str(lock).unwrap();
+        assert_eq!(
+            "def",
+            parsed
+                .rev_for("\"hls-1.10\".nixpkgs")
+                .expect("Should resolve quoted sub-input path")
+        );
+    }
+
+    #[test]
+    fn split_input_path_simple() {
+        assert_eq!(FlakeLock::split_input_path("nixpkgs"), vec!["nixpkgs"]);
+    }
+
+    #[test]
+    fn split_input_path_dotted() {
+        assert_eq!(
+            FlakeLock::split_input_path("treefmt-nix.nixpkgs"),
+            vec!["treefmt-nix", "nixpkgs"]
+        );
+    }
+
+    #[test]
+    fn split_input_path_quoted() {
+        assert_eq!(
+            FlakeLock::split_input_path("\"hls-1.10\".nixpkgs"),
+            vec!["hls-1.10", "nixpkgs"]
+        );
     }
 }

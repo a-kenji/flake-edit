@@ -190,7 +190,11 @@ impl Updater {
         }
     }
     fn get_index(&self, id: &str) -> Option<usize> {
-        self.inputs.iter().position(|n| n.input.id == id)
+        let bare = id
+            .strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap_or(id);
+        self.inputs.iter().position(|n| n.input.bare_id() == bare)
     }
     /// Pin an input based on it's id to a specific rev.
     pub fn pin_input_to_ref(&mut self, id: &str, rev: &str) -> Result<(), String> {

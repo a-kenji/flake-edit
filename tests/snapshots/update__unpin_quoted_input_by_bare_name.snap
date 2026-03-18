@@ -1,0 +1,12 @@
+---
+source: tests/update.rs
+assertion_line: 133
+expression: updater.get_changes()
+---
+{
+  inputs = {
+    "nixpkgs-24.11".url = "github:nixos/nixpkgs";
+  };
+
+  outputs = { self, ... }: { };
+}

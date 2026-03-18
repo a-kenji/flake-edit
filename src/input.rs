@@ -66,6 +66,16 @@ impl Input {
     pub fn id(&self) -> &str {
         self.id.as_ref()
     }
+    /// Return the id with surrounding double-quotes stripped.
+    ///
+    /// AST-extracted identifiers preserve Nix quoting (e.g. `"nixpkgs-24.11"`),
+    /// but user-facing output and comparisons need the bare name.
+    pub fn bare_id(&self) -> &str {
+        self.id
+            .strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap_or(&self.id)
+    }
     pub fn url(&self) -> &str {
         self.url.as_ref()
     }
