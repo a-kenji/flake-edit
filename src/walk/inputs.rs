@@ -991,11 +991,45 @@ fn handle_input_attr_set(
 
             if leaf.to_string().starts_with("inputs") {
                 let id = child.prev_sibling().unwrap();
-                let context = id.to_string().into();
-                if let Some(replacement) =
-                    walk_inputs(inputs, child.clone(), &Some(context), change)
-                {
+                let context: Context = id.to_string().into();
+                let ctx_some = Some(context);
+                if let Some(replacement) = walk_inputs(inputs, child.clone(), &ctx_some, change) {
                     return Some(substitute_child(node, child.index(), &replacement));
+                }
+
+                // Handle deeply nested inputs attrset removal:
+                // `inputs = { nixpkgs = { follows = "nixpkgs"; }; }`
+                if leaf.to_string() == "inputs"
+                    && change.is_remove()
+                    && let Some(inputs_attrset) = attr
+                        .children()
+                        .find(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
+                {
+                    for nested_entry in inputs_attrset.children() {
+                        if nested_entry.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
+                            continue;
+                        }
+                        let Some(nested_path) = nested_entry.first_child() else {
+                            continue;
+                        };
+                        let Some(nested_id) = nested_path.first_child() else {
+                            continue;
+                        };
+                        if should_remove_nested_input(change, &ctx_some, &nested_id.to_string()) {
+                            let new_inputs_attrset = remove_child_with_whitespace(
+                                &inputs_attrset,
+                                &nested_entry,
+                                nested_entry.index(),
+                            );
+                            let new_attr = substitute_child(
+                                &attr,
+                                inputs_attrset.index(),
+                                &new_inputs_attrset,
+                            );
+                            let new_child = substitute_child(child, attr.index(), &new_attr);
+                            return Some(substitute_child(node, child.index(), &new_child));
+                        }
+                    }
                 }
             }
         }

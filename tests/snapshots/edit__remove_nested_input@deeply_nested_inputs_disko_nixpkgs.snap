@@ -1,0 +1,25 @@
+---
+source: tests/edit.rs
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        ids:
+          - disko.nixpkgs
+---
+{
+  description = "Deeply nested inputs attrset";
+
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+    disko = {
+      url = "github:nix-community/disko";
+      inputs = {
+      };
+    };
+  };
+
+  outputs = _: { };
+}
