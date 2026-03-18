@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.4] - 2026-03-18
+
+### 🚀 Features
+
+- *(config)* Make config flag global
+- Use `replace_with` for natural root propagation
+
+### 🐛 Bug Fixes
+
+- Update `ParseError` import path for rnix `0.13.0`
+- Append new inputs at the end
+- Remove toplevel whitespace
+
+### 💼 Other
+
+- Change `projectRootFile`
+- Fix whitespace in trailing slashes
+- Try to preserve grouping
+- Fix insertion index for @-binding patterns
+- Communicate no-op to the user
+- Remove leading blank line
+- Insert into empty `inputs = { }` block
+- Support multi-line output style
+- Adjust for `NODE_PAT_ENTRY` for trailing comma detection
+- Fix double comma when leading-comma style has trailing comma
+- Add transitive dependencies to the top-level
+- Fix removal of first entry in leading-comma
+- Properly respect `--lock-file`
+- Normalize quoted follow attributes
+- Handle deeply nested inputs
+- Support removal of deeply nested follows
+- Skip inputs without url
+- Handle spacing
+- Add `--transitive` flag
+
 ## [0.3.3] - 2026-01-19
 
 ### 🚀 Features
