@@ -201,10 +201,10 @@ pub fn change_outputs(
                                 None
                             };
 
-                            let addition = if has_trailing_comma {
-                                parse_node(&format!("{add},"))
-                            } else if let Some(ref ws) = leading_comma_ws {
+                            let addition = if let Some(ref ws) = leading_comma_ws {
                                 parse_node(&format!("{ws}, {add}"))
+                            } else if has_trailing_comma {
+                                parse_node(&format!("{add},"))
                             } else if let Some(ref ws) = multiline_trailing_ws {
                                 parse_node(&format!(",{ws}{add}"))
                             } else {
@@ -215,9 +215,11 @@ pub fn change_outputs(
                                 .green()
                                 .insert_child(last_node, addition.green().into());
                             // Only insert whitespace before the addition when there's
-                            // a trailing comma - the non-trailing-comma format already
-                            // includes `, ` so extra whitespace would produce `x , y`.
+                            // a trailing comma without leading-comma style — the
+                            // leading-comma and non-trailing-comma formats already
+                            // include whitespace so extra would produce `x , y`.
                             if has_trailing_comma
+                                && leading_comma_ws.is_none()
                                 && let Some(prev) =
                                     last_pat_entry.as_ref().unwrap().prev_sibling_or_token()
                                 && let SyntaxKind::TOKEN_WHITESPACE = prev.kind()

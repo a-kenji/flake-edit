@@ -53,6 +53,7 @@ fn test_flake_edit_list(#[case] fixture: &str) {
 #[case("multiline_no_trailing_comma_outputs", true, "github:mic92/vmsh")]
 #[case("outputs_at_trailing_comma_multi", true, "github:mic92/vmsh")]
 #[case("leading_comma_trailing_comma_outputs", true, "github:mic92/vmsh")]
+#[case("outputs_at_leading_comma_trailing_comma", true, "github:mic92/vmsh")]
 #[case("empty_inputs", true, "github:mic92/vmsh")]
 #[case("empty_inputs", false, "github:a-kenji/not_a_flake")]
 #[case("outputs_paren", true, "github:mic92/vmsh")]
