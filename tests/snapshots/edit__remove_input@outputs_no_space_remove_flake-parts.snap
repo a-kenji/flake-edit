@@ -1,0 +1,17 @@
+---
+source: tests/edit.rs
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        ids:
+          - flake-parts
+---
+{
+  inputs = {
+  };
+
+  outputs = inputs@{...}:
+    { };
+}
