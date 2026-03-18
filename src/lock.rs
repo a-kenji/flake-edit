@@ -42,8 +42,12 @@ pub struct Node {
 }
 
 impl Node {
-    fn rev(&self) -> String {
-        self.locked.clone().unwrap().rev().to_string()
+    fn rev(&self) -> Result<String, FlakeEditError> {
+        Ok(self
+            .locked
+            .as_ref()
+            .ok_or_else(|| FlakeEditError::LockError("Node has no locked information.".into()))?
+            .rev()?)
     }
 }
 
@@ -78,8 +82,10 @@ pub struct Locked {
 }
 
 impl Locked {
-    fn rev(&self) -> String {
-        self.rev.clone().unwrap()
+    fn rev(&self) -> Result<String, FlakeEditError> {
+        self.rev
+            .clone()
+            .ok_or_else(|| FlakeEditError::LockError("Locked node has no rev.".into()))
     }
 }
 
@@ -152,7 +158,7 @@ impl FlakeLock {
             .nodes
             .get(&id)
             .ok_or_else(|| FlakeEditError::LockError("Could not find node with id.".into()))?;
-        Ok(node.rev())
+        node.rev()
     }
 
     /// Get all nested input paths for shell completions.
@@ -440,6 +446,55 @@ mod tests {
         // Follows path like ["nixpkgs"] should return "nixpkgs"
         let input = Input::Indirect(vec!["nixpkgs".to_string()]);
         assert_eq!("nixpkgs", input.id());
+    }
+
+    #[test]
+    fn rev_for_sub_input_path_returns_error() {
+        // Sub-input paths like "browseros.nixpkgs" don't exist as top-level
+        // lock nodes — rev_for should return an error, not panic.
+        let minimal_lock = minimal_lock();
+        let parsed_lock =
+            FlakeLock::read_from_str(minimal_lock).expect("Should be parsed correctly.");
+        assert!(parsed_lock.rev_for("browseros.nixpkgs").is_err());
+    }
+
+    #[test]
+    fn rev_for_node_without_locked_returns_error() {
+        // A node that exists but has no "locked" field should error, not panic.
+        let lock = r#"{
+  "nodes": {
+    "root": {
+      "inputs": { "bare": "bare" }
+    },
+    "bare": {
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    }
+  },
+  "root": "root",
+  "version": 7
+}"#;
+        let parsed = FlakeLock::read_from_str(lock).unwrap();
+        assert!(parsed.rev_for("bare").is_err());
+    }
+
+    #[test]
+    fn rev_for_node_without_rev_returns_error() {
+        // A locked node without a "rev" field should error, not panic.
+        let lock = r#"{
+  "nodes": {
+    "root": {
+      "inputs": { "norev": "norev" }
+    },
+    "norev": {
+      "locked": { "lastModified": 1, "narHash": "", "type": "path" },
+      "original": { "type": "path" }
+    }
+  },
+  "root": "root",
+  "version": 7
+}"#;
+        let parsed = FlakeLock::read_from_str(lock).unwrap();
+        assert!(parsed.rev_for("norev").is_err());
     }
 
     #[test]
