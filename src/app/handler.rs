@@ -220,10 +220,10 @@ fn list_simple(inputs: &InputMap) {
         if !buf.is_empty() {
             buf.push('\n');
         }
-        buf.push_str(input.id());
+        buf.push_str(input.bare_id());
         for follows in input.follows() {
             if let Follows::Indirect(id, _) = follows {
-                let id = format!("{}.{}", input.id(), id);
+                let id = format!("{}.{}", input.bare_id(), id);
                 if !buf.is_empty() {
                     buf.push('\n');
                 }

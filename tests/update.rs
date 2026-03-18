@@ -90,6 +90,50 @@ fn unpin_expanded_format_no_crash() {
 }
 
 #[test]
+fn pin_quoted_input_by_bare_name() {
+    let flake = r#"{
+  inputs = {
+    "nixpkgs-24.11".url = "github:nixos/nixpkgs/nixos-24.11";
+  };
+
+  outputs = { self, ... }: { };
+}
+"#
+    .to_string();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let inputs = flake_edit.list().clone();
+    let mut updater = Updater::new(Rope::from_str(&flake), inputs);
+
+    updater
+        .pin_input_to_ref("nixpkgs-24.11", "abc123")
+        .expect("bare name should match quoted input");
+
+    insta::assert_snapshot!(updater.get_changes());
+}
+
+#[test]
+fn unpin_quoted_input_by_bare_name() {
+    let flake = r#"{
+  inputs = {
+    "nixpkgs-24.11".url = "github:nixos/nixpkgs/nixos-24.11?rev=deadbeef";
+  };
+
+  outputs = { self, ... }: { };
+}
+"#
+    .to_string();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let inputs = flake_edit.list().clone();
+    let mut updater = Updater::new(Rope::from_str(&flake), inputs);
+
+    updater
+        .unpin_input("nixpkgs-24.11")
+        .expect("bare name should match quoted input");
+
+    insta::assert_snapshot!(updater.get_changes());
+}
+
+#[test]
 fn pin_follows_before_url() {
     let flake = r#"{
   inputs = {
