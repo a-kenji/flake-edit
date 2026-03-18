@@ -380,6 +380,8 @@ fn test_add_follow(#[case] fixture: &str, #[case] input: &str, #[case] target: &
 #[case("mixed_style", "harmonia.nixpkgs", "nixpkgs")]
 #[case("flat_toplevel_no_follows", "crane.nixpkgs", "nixpkgs")]
 #[case("flat_toplevel_no_follows", "fenix.nixpkgs", "nixpkgs")]
+#[case("flat_toplevel_comments", "crane.nixpkgs", "nixpkgs")]
+#[case("flat_toplevel_comments", "fenix.nixpkgs", "nixpkgs")]
 fn test_add_follow_flat(#[case] fixture: &str, #[case] input: &str, #[case] target: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);

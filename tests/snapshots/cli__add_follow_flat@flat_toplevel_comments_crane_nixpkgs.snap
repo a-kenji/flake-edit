@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/flat_toplevel_comments.flake.nix"
+    - "--diff"
+    - add-follow
+    - crane.nixpkgs
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -3,6 +3,7 @@
+
+   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+   inputs.crane.url = "github:ipetkov/crane"; # build tool
++  inputs.crane.inputs.nixpkgs.follows = "nixpkgs";
+   inputs.fenix.url = "github:nix-community/fenix"; # rust toolchains
+
+   outputs = _: { };
+
+----- stderr -----

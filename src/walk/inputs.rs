@@ -7,10 +7,10 @@ use crate::input::Input;
 
 use super::context::Context;
 use super::node::{
-    adjacent_whitespace_index, empty_node, get_sibling_whitespace, make_attrset_url_attr,
-    make_attrset_url_flake_false_attr, make_flake_false_attr, make_follows_attr,
-    make_nested_follows_attr, make_quoted_string, make_toplevel_follows_attr, make_url_attr,
-    parse_node, should_remove_input, should_remove_nested_input, substitute_child,
+    adjacent_whitespace_index, empty_node, get_sibling_whitespace, insertion_index_after,
+    make_attrset_url_attr, make_attrset_url_flake_false_attr, make_flake_false_attr,
+    make_follows_attr, make_nested_follows_attr, make_quoted_string, make_toplevel_follows_attr,
+    make_url_attr, parse_node, should_remove_input, should_remove_nested_input, substitute_child,
 };
 
 /// Remove a child node along with its adjacent whitespace.
@@ -144,7 +144,7 @@ pub fn walk_inputs(
                 // Use the found position, or fall back to end of inputs
                 let reference_child = insert_after.or(children.last());
                 if let Some(ref_child) = reference_child {
-                    let insert_index = ref_child.index() + 1;
+                    let insert_index = insertion_index_after(ref_child);
 
                     let mut green = node
                         .green()
@@ -200,7 +200,7 @@ pub fn walk_inputs(
 
                 let reference_child = insert_after.or(children.last());
                 if let Some(ref_child) = reference_child {
-                    let insert_index = ref_child.index() + 1;
+                    let insert_index = insertion_index_after(ref_child);
                     let mut green = node
                         .green()
                         .insert_child(insert_index, follows_node.green().into());
@@ -1085,7 +1085,7 @@ fn handle_input_attr_set(
                     let follows_node = make_follows_attr(target);
                     let children: Vec<_> = child.children().collect();
                     if let Some(last_child) = children.last() {
-                        let insert_index = last_child.index() + 1;
+                        let insert_index = insertion_index_after(last_child);
                         let mut green = child
                             .green()
                             .insert_child(insert_index, follows_node.green().into());

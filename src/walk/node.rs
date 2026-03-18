@@ -41,6 +41,32 @@ pub fn get_sibling_whitespace(node: &SyntaxNode) -> Option<Node> {
     None
 }
 
+/// Find the insertion index after a reference node, skipping past any trailing
+/// inline whitespace and comments on the same line.
+/// This prevents displacing trailing comments when inserting new nodes.
+pub fn insertion_index_after(node: &SyntaxNode) -> usize {
+    let element: rnix::SyntaxElement = node.clone().into();
+    let mut cursor = element.next_sibling_or_token();
+    let mut last_index = node.index() + 1;
+    while let Some(ref tok) = cursor {
+        match tok.kind() {
+            SyntaxKind::TOKEN_WHITESPACE => {
+                let text = tok.to_string();
+                if text.contains('\n') {
+                    break;
+                }
+                last_index = tok.index() + 1;
+            }
+            SyntaxKind::TOKEN_COMMENT => {
+                last_index = tok.index() + 1;
+            }
+            _ => break,
+        }
+        cursor = tok.next_sibling_or_token();
+    }
+    last_index
+}
+
 /// Find the index of adjacent whitespace to strip after removing/replacing a child.
 /// Returns the index of whitespace before the child if present, otherwise after.
 pub fn adjacent_whitespace_index(child: &rnix::SyntaxElement) -> Option<usize> {

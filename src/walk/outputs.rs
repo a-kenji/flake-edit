@@ -8,12 +8,12 @@ use super::node::parse_node;
 /// Unwrap parentheses around a node, returning the inner node.
 /// If the node is not NODE_PAREN, returns a clone of the original.
 fn unwrap_parens(node: &SyntaxNode) -> SyntaxNode {
-    if node.kind() == SyntaxKind::NODE_PAREN {
-        if let Some(inner) = node.children().find(|c| {
+    if node.kind() == SyntaxKind::NODE_PAREN
+        && let Some(inner) = node.children().find(|c| {
             c.kind() != SyntaxKind::TOKEN_L_PAREN && c.kind() != SyntaxKind::TOKEN_R_PAREN
-        }) {
-            return inner;
-        }
+        })
+    {
+        return inner;
     }
     node.clone()
 }
