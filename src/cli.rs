@@ -182,6 +182,12 @@ pub enum Command {
     /// `flake.lock` file exists in the same directory.
     #[clap(alias = "f")]
     Follow {
+        /// Enable transitive follows deduplication, promoting shared nested
+        /// inputs to top-level when they appear at least N times.
+        /// Defaults to 2 if no value is given. Overrides the config file's
+        /// `follow.transitive_min`.
+        #[arg(long, num_args = 0..=1, default_missing_value = "2")]
+        transitive: Option<usize>,
         /// Flake.nix paths to process. If empty, runs on current directory.
         #[arg(trailing_var_arg = true, num_args = 0..)]
         paths: Vec<std::path::PathBuf>,

@@ -549,6 +549,50 @@ fn test_follow_with_config(#[case] fixture: &str, #[case] config: &str) {
     });
 }
 
+/// Test the follow command with --transitive flag (overrides config)
+#[rstest]
+#[case("treefmt_transitive", 2)] // Same as config-based test but via CLI flag
+fn test_follow_with_transitive_flag(#[case] fixture: &str, #[case] min: usize) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    let suffix = format!("{fixture}_{min}");
+    settings.set_snapshot_suffix(suffix);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--lock-file")
+                .arg(fixture_lock_path(fixture))
+                .arg("--diff")
+                .arg("follow")
+                .arg("--transitive")
+                .arg(min.to_string())
+        );
+    });
+}
+
+/// Test the follow command with --transitive flag without explicit value (defaults to 2)
+#[rstest]
+#[case("treefmt_transitive")]
+fn test_follow_with_transitive_flag_default(#[case] fixture: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    settings.set_snapshot_suffix(fixture);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--lock-file")
+                .arg(fixture_lock_path(fixture))
+                .arg("--diff")
+                .arg("follow")
+                .arg("--transitive")
+        );
+    });
+}
+
 /// Test behavior with a malformed config file (returns error with line info)
 #[rstest]
 #[case("centerpiece", "malformed")] // Malformed TOML shows parse error with line number

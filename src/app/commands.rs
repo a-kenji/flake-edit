@@ -1373,7 +1373,11 @@ fn follow_auto_impl(
 /// Each file is processed independently with its own Editor/AppState.
 /// Errors are collected and reported at the end, but processing continues
 /// for all files. Returns error if any file failed.
-pub fn follow_auto_batch(paths: &[std::path::PathBuf], args: &crate::cli::CliArgs) -> Result<()> {
+pub fn follow_auto_batch(
+    paths: &[std::path::PathBuf],
+    transitive: Option<usize>,
+    args: &crate::cli::CliArgs,
+) -> Result<()> {
     use std::path::PathBuf;
 
     let mut errors: Vec<(PathBuf, CommandError)> = Vec::new();
@@ -1400,7 +1404,7 @@ pub fn follow_auto_batch(paths: &[std::path::PathBuf], args: &crate::cli::CliArg
             }
         };
 
-        let state = match AppState::new(
+        let mut state = match AppState::new(
             editor.text(),
             flake_path.clone(),
             args.config().map(PathBuf::from),
@@ -1417,6 +1421,10 @@ pub fn follow_auto_batch(paths: &[std::path::PathBuf], args: &crate::cli::CliArg
                 continue;
             }
         };
+
+        if let Some(min) = transitive {
+            state.config.follow.transitive_min = min;
+        }
 
         if let Err(e) = follow_auto_impl(&editor, &mut flake_edit, &state, true) {
             errors.push((flake_path.clone(), e));
