@@ -1,0 +1,21 @@
+---
+source: tests/edit.rs
+expression: result
+info:
+  flake_nix: ""
+  changes:
+    - Remove:
+        ids:
+          - treefmt-nix
+---
+{
+  description = "Test flake with follows-only inputs in nested block";
+
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    harmonia.url = "github:nix-community/harmonia";
+    sizelint.follows = "nixpkgs";
+  };
+
+  outputs = _: { };
+}

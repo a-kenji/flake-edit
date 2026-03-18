@@ -806,7 +806,9 @@ fn handle_follows_attr(
     let follows = attr.parent().unwrap().next_sibling().unwrap();
     let input = Input::with_url(id.to_string(), follows.to_string(), follows.text_range());
     insert_with_ctx(inputs, id.to_string(), input.clone(), ctx);
-    if ctx.is_some() && should_remove_nested_input(change, ctx, input.id()) {
+    if should_remove_input(change, ctx, input.id())
+        || should_remove_nested_input(change, ctx, input.id())
+    {
         return Some(empty_node());
     }
     None

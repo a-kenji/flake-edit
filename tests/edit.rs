@@ -145,6 +145,10 @@ fn test_first_nested_node_add_with_list(#[case] is_flake: bool) {
 #[case("outputs_paren", "flake-parts")]
 #[case("quoted_input_with_dots", "\"hls-1.10\"")]
 #[case("outputs_no_space_remove", "flake-parts")]
+#[case("follows_only_toplevel", "sizelint")]
+#[case("follows_only_toplevel", "treefmt-nix")]
+#[case("follows_only_nested", "sizelint")]
+#[case("follows_only_nested", "treefmt-nix")]
 fn test_remove_input(#[case] fixture: &str, #[case] input_id: &str) {
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
