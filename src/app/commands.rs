@@ -86,12 +86,16 @@ fn is_follows_reference_to_parent(url: &str, parent: &str) -> bool {
 }
 
 /// Collect nested follows paths already declared in flake.nix.
+///
+/// Paths are normalised so that they can be compared against lock-file
+/// paths regardless of whether the Nix source quotes the attribute names.
 fn collect_existing_follows(inputs: &InputMap) -> HashSet<String> {
     let mut existing = HashSet::new();
     for (input_id, input) in inputs {
         for follows in input.follows() {
             if let Follows::Indirect(nested_name, _target) = follows {
-                existing.insert(format!("{}.{}", input_id, nested_name));
+                let raw = format!("{}.{}", input_id, nested_name);
+                existing.insert(normalize_nested_path(&raw));
             }
         }
     }
@@ -867,18 +871,49 @@ pub fn add_follow(
     apply_change(editor, flake_edit, state, change)
 }
 
+/// Strip surrounding double-quotes from a Nix attribute name.
+///
+/// AST-extracted identifiers may carry quotes (e.g. `"nixpkgs"`), while
+/// lock-file paths only quote names that contain dots.  Stripping quotes
+/// before comparison prevents false mismatches.
+fn strip_attr_quotes(s: &str) -> &str {
+    s.strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .unwrap_or(s)
+}
+
+/// Normalise a `parent.nested` path into the canonical form used by the
+/// lock file: each segment is quoted only when it contains a dot.
+fn normalize_nested_path(path: &str) -> String {
+    let (parent, child) = split_quoted_path(path).unwrap_or((path, path));
+    let p = strip_attr_quotes(parent);
+    let c = strip_attr_quotes(child);
+    let fmt_segment = |s: &str| -> String {
+        if s.contains('.') {
+            format!("\"{}\"", s)
+        } else {
+            s.to_string()
+        }
+    };
+    format!("{}.{}", fmt_segment(p), fmt_segment(c))
+}
+
 /// Collect follows declarations that reference nested inputs
 /// no longer present in the lock file.
 fn collect_stale_follows(
     inputs: &InputMap,
     existing_nested_paths: &HashSet<String>,
 ) -> Vec<String> {
+    let normalized_existing: HashSet<String> = existing_nested_paths
+        .iter()
+        .map(|p| normalize_nested_path(p))
+        .collect();
     let mut stale = Vec::new();
     for (input_id, input) in inputs {
         for follows in input.follows() {
             if let Follows::Indirect(nested_name, _target) = follows {
                 let nested_path = format!("{}.{}", input_id, nested_name);
-                if !existing_nested_paths.contains(&nested_path) {
+                if !normalized_existing.contains(&normalize_nested_path(&nested_path)) {
                     stale.push(nested_path);
                 }
             }
@@ -944,7 +979,7 @@ fn follow_auto_impl(
             }
 
             // Skip if already configured in flake.nix
-            if existing_follows.contains(&nested.path) {
+            if existing_follows.contains(&normalize_nested_path(&nested.path)) {
                 tracing::debug!("Skipping {}: already follows in flake.nix", nested.path);
                 return None;
             }
@@ -991,7 +1026,9 @@ fn follow_auto_impl(
                 continue;
             }
 
-            if existing_follows.contains(&nested.path) || seen_nested.contains(&nested.path) {
+            if existing_follows.contains(&normalize_nested_path(&nested.path))
+                || seen_nested.contains(&nested.path)
+            {
                 continue;
             }
 
@@ -1064,7 +1101,9 @@ fn follow_auto_impl(
                 continue;
             }
 
-            if existing_follows.contains(&nested.path) || seen_nested.contains(&nested.path) {
+            if existing_follows.contains(&normalize_nested_path(&nested.path))
+                || seen_nested.contains(&nested.path)
+            {
                 continue;
             }
 
@@ -1512,5 +1551,60 @@ mod tests {
 
         // Edge case: just quotes
         assert!(!is_follows_reference_to_parent("\"\"", "clan-core"));
+    }
+
+    #[test]
+    fn test_strip_attr_quotes() {
+        assert_eq!(strip_attr_quotes("\"nixpkgs\""), "nixpkgs");
+        assert_eq!(strip_attr_quotes("nixpkgs"), "nixpkgs");
+        assert_eq!(strip_attr_quotes("\"hls-1.10\""), "hls-1.10");
+        assert_eq!(strip_attr_quotes(""), "");
+    }
+
+    #[test]
+    fn test_normalize_nested_path() {
+        // Unquoted segments stay unquoted
+        assert_eq!(normalize_nested_path("crane.nixpkgs"), "crane.nixpkgs");
+
+        // Unnecessarily quoted segments get stripped
+        assert_eq!(
+            normalize_nested_path("\"home-manager\".nixpkgs"),
+            "home-manager.nixpkgs"
+        );
+        assert_eq!(
+            normalize_nested_path("\"home-manager\".\"nixpkgs\""),
+            "home-manager.nixpkgs"
+        );
+
+        // Segments with dots stay quoted
+        assert_eq!(
+            normalize_nested_path("\"hls-1.10\".nixpkgs"),
+            "\"hls-1.10\".nixpkgs"
+        );
+    }
+
+    #[test]
+    fn test_collect_stale_follows_quoted_attrs() {
+        use crate::input::Input;
+
+        // Simulate: flake.nix has `"home-manager".inputs.nixpkgs.follows = "nixpkgs"`
+        // Lock file reports the nested path as `home-manager.nixpkgs`.
+        let mut inputs = InputMap::new();
+        let mut hm_input = Input::new("\"home-manager\"".to_string());
+        hm_input.follows.push(Follows::Indirect(
+            "nixpkgs".to_string(),
+            "nixpkgs".to_string(),
+        ));
+        inputs.insert("\"home-manager\"".to_string(), hm_input);
+
+        // Lock file paths (no unnecessary quotes)
+        let existing: HashSet<String> = ["home-manager.nixpkgs".to_string()].into_iter().collect();
+
+        let stale = collect_stale_follows(&inputs, &existing);
+        assert!(
+            stale.is_empty(),
+            "Expected no stale follows, but got: {:?}",
+            stale
+        );
     }
 }
