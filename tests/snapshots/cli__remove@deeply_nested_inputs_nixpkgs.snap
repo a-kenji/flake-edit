@@ -16,7 +16,7 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -2,7 +2,6 @@
+@@ -2,14 +2,10 @@
    description = "Deeply nested inputs attrset";
 
    inputs = {
@@ -24,5 +24,12 @@ exit_code: 0
 
      disko = {
        url = "github:nix-community/disko";
+       inputs = {
+-        nixpkgs = {
+-          follows = "nixpkgs";
+-        };
+       };
+     };
+   };
 
 ----- stderr -----

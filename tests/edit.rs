@@ -185,6 +185,7 @@ fn test_remove_input_walker(#[case] fixture: &str, #[case] input_id: &str) {
 #[case("root", "rust-overlay.flake-utils")]
 #[case("completely_flat_toplevel", "crane.rust-overlay")]
 #[case("one_level_nesting_flat", "rust-overlay.flake-utils")]
+#[case("deeply_nested_inputs", "disko.nixpkgs")]
 fn test_remove_nested_input(#[case] fixture: &str, #[case] input_id: &str) {
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
