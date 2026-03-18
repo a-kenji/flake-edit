@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/deeply_nested_inputs.flake.nix"
+    - "--diff"
+    - add
+    - vmsh
+    - "github:mic92/vmsh"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -12,6 +12,7 @@
+         };
+       };
+     };
++    vmsh.url = "github:mic92/vmsh";
+   };
+
+   outputs = _: { };
+
+----- stderr -----

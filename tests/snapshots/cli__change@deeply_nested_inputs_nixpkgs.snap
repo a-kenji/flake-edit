@@ -1,0 +1,30 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/deeply_nested_inputs.flake.nix"
+    - "--diff"
+    - change
+    - nixpkgs
+    - "github:nixos/nixpkgs/nixos-24.05"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -2,7 +2,7 @@
+   description = "Deeply nested inputs attrset";
+
+   inputs = {
+-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
++    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+
+     disko = {
+       url = "github:nix-community/disko";
+
+----- stderr -----
