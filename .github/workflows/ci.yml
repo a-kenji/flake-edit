@@ -22,7 +22,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v16
+      - uses: cachix/cachix-action@v17
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -42,7 +42,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v16
+      - uses: cachix/cachix-action@v17
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -63,7 +63,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v16
+      - uses: cachix/cachix-action@v17
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -84,7 +84,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v16
+      - uses: cachix/cachix-action@v17
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -105,7 +105,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v16
+      - uses: cachix/cachix-action@v17
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -126,7 +126,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v16
+      - uses: cachix/cachix-action@v17
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -147,7 +147,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v16
+      - uses: cachix/cachix-action@v17
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -168,7 +168,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v16
+      - uses: cachix/cachix-action@v17
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
