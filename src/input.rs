@@ -23,6 +23,10 @@ impl Range {
             end: text_range.end().into(),
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.start == 0 && self.end == 0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize, Serialize, PartialOrd, Ord)]
@@ -81,5 +85,9 @@ impl Input {
     }
     pub fn follows(&self) -> &Vec<Follows> {
         self.follows.as_ref()
+    }
+
+    pub fn has_editable_url(&self) -> bool {
+        !self.url.is_empty() && !self.range.is_empty()
     }
 }

@@ -53,7 +53,19 @@ pub fn run(args: CliArgs) -> Result<()> {
 
     // Find flake.nix path
     let flake_path = if let Some(flake) = args.flake() {
-        PathBuf::from(flake)
+        let path = PathBuf::from(flake);
+        if path.is_dir() {
+            let flake_nix = path.join("flake.nix");
+            if !flake_nix.exists() {
+                return Err(HandlerError::Io(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("No `flake.nix` found in directory: {}", path.display()),
+                )));
+            }
+            flake_nix
+        } else {
+            path
+        }
     } else {
         let path = PathBuf::from("flake.nix");
         let binding = root::Root::from_path(path).map_err(|_| HandlerError::FlakeNotFound)?;

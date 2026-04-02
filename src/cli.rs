@@ -8,7 +8,7 @@ use clap::{Parser, Subcommand};
 #[command(next_line_help = true)]
 /// Edit your flake inputs with ease
 pub struct CliArgs {
-    /// Location of the `flake.nix` file, that will be used.
+    /// Path to `flake.nix`, or a directory containing `flake.nix`.
     /// Defaults to `flake.nix` in the current directory.
     #[arg(long)]
     flake: Option<String>,

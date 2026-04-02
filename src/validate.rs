@@ -226,11 +226,8 @@ impl Validator {
                     Entry::Occupied(entry) => {
                         let (ref first_loc, first_is_attrset, _) = *entry.get();
                         if first_is_attrset && is_attrset {
-                            // Both are attrsets — valid Nix merge. Collect for
-                            // cross-checking.
                             merged_attrsets.entry(path).or_default().push(child.clone());
                         } else {
-                            // Not both attrsets — true duplicate conflict.
                             errors.push(ValidationError::DuplicateAttribute(DuplicateAttr {
                                 path: entry.key().clone(),
                                 first: first_loc.clone(),
@@ -450,7 +447,6 @@ mod tests {
 
     #[test]
     fn mergeable_attrsets_valid() {
-        // Two `inputs = { }` blocks with distinct attrs — valid Nix merge
         let source = r#"{
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs";
@@ -497,7 +493,6 @@ mod tests {
 
     #[test]
     fn mergeable_attrsets_cross_duplicate() {
-        // Same attr in two merged blocks — true conflict
         let source = r#"{
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs";
@@ -516,7 +511,6 @@ mod tests {
 
     #[test]
     fn non_attrset_duplicate_still_errors() {
-        // One is attrset, other is not — true conflict
         let source = r#"{ a = { x = 1; }; a = 2; }"#;
         let result = validate(source);
         assert!(result.has_errors());
