@@ -176,9 +176,7 @@ impl Updater {
     pub fn new(text: Rope, map: InputMap) -> Self {
         let mut inputs = vec![];
         for (_id, input) in map {
-            // Skip inputs without a URL (e.g. expanded type/owner/repo/ref format
-            // or follows-only stubs) — there is no quoted URL value to modify.
-            if input.url.is_empty() || input.range.start == 0 && input.range.end == 0 {
+            if !input.has_editable_url() {
                 continue;
             }
             inputs.push(UpdateInput { input });

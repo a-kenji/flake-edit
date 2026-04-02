@@ -885,10 +885,8 @@ fn find_existing_nested_follows(
                 .unwrap_or_default();
 
             if current_target == target {
-                // Same target — return unchanged node (no-op but treated as success)
                 return Some(Some(node.clone()));
             }
-            // Different target — replace the value
             if let Some(value) = value_node {
                 let new_value = make_quoted_string(target);
                 let new_attr = substitute_child(&attr, value.index(), &new_value);
@@ -938,7 +936,6 @@ fn find_existing_flat_follows(
                 .unwrap_or_default();
 
             if current_target == target {
-                // Same target — return unchanged node (no-op but treated as success)
                 return Some(Some(node.clone()));
             }
             if let Some(value) = value_node {

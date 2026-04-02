@@ -214,10 +214,9 @@ pub fn change_outputs(
                             let mut green = output
                                 .green()
                                 .insert_child(last_node, addition.green().into());
-                            // Only insert whitespace before the addition when there's
-                            // a trailing comma without leading-comma style — the
-                            // leading-comma and non-trailing-comma formats already
-                            // include whitespace so extra would produce `x , y`.
+                            // Insert whitespace here only for trailing-comma style
+                            // without leading commas. Other formats already include
+                            // spacing, and adding more would produce `x , y`.
                             if has_trailing_comma
                                 && leading_comma_ws.is_none()
                                 && let Some(prev) =
