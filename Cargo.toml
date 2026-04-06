@@ -50,7 +50,7 @@ nix-uri = "0.1.10"
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 rnix = "0.14.0"
 ropey = { version = "1.6.1" }
-semver = "1.0.27"
+semver = "1.0.28"
 serde = { version = "1.0.228", default-features = false, features = [
   "derive",
   "alloc",
