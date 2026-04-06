@@ -114,7 +114,7 @@ opt-level = 3
 [dev-dependencies]
 criterion = "0.8.2"
 divan = "0.1.21"
-insta = { version = "1.47.1", features = ["yaml", "filters", "redactions"] }
+insta = { version = "1.47.2", features = ["yaml", "filters", "redactions"] }
 insta-cmd = "0.6"
 rstest = "0.26"
 tempfile = "3"
