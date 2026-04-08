@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/toplevel_block_nested_follows.flake.nix"
+    - "--diff"
+    - add-follow
+    - blocky.flake-parts
+    - flake-parts
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -6,6 +6,7 @@
+   inputs.blocky = {
+     url = "github:example/blocky";
+     inputs.nixpkgs.follows = "nixpkgs";
++    inputs.flake-parts.follows = "flake-parts";
+   };
+
+   outputs = _: { };
+
+----- stderr -----

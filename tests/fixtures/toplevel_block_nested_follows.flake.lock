@@ -1,0 +1,72 @@
+{
+  "nodes": {
+    "blocky": {
+      "inputs": {
+        "flake-parts": "flake-parts_2",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "owner": "example",
+        "repo": "blocky",
+        "rev": "1111111111111111111111111111111111111111",
+        "type": "github"
+      },
+      "original": {
+        "owner": "example",
+        "repo": "blocky",
+        "type": "github"
+      }
+    },
+    "flake-parts": {
+      "locked": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "2222222222222222222222222222222222222222",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "flake-parts_2": {
+      "locked": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "3333333333333333333333333333333333333333",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "4444444444444444444444444444444444444444",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "blocky": "blocky",
+        "flake-parts": "flake-parts",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
