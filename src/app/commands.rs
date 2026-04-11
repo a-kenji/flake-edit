@@ -776,7 +776,20 @@ pub fn unpin(
             println!("Unpinned input: {}", id);
         }
     } else if state.interactive {
-        if input_ids.is_empty() {
+        let pinned_ids: Vec<String> = input_ids
+            .into_iter()
+            .filter(|id| {
+                inputs[id]
+                    .url()
+                    .trim_matches('"')
+                    .parse::<FlakeRef>()
+                    .ok()
+                    .and_then(|f| f.get_ref_or_rev())
+                    .is_some_and(|v| !v.is_empty())
+            })
+            .collect();
+
+        if pinned_ids.is_empty() {
             return Err(CommandError::NoInputs);
         }
 
@@ -784,8 +797,8 @@ pub fn unpin(
             editor,
             state,
             "Unpin",
-            "Select input",
-            input_ids,
+            "Select pinned input",
+            pinned_ids,
             |id| {
                 let mut updater = updater(editor, inputs.clone());
                 updater
