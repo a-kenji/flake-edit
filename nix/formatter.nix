@@ -11,6 +11,8 @@
       programs.rustfmt.enable = true;
       programs.taplo.enable = true;
       programs.fish_indent.enable = true;
+      programs.shellcheck.enable = true;
+      programs.shfmt.enable = true;
 
       settings.excludes = [
         "tests/fixtures/**"
