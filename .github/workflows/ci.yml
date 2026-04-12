@@ -177,3 +177,22 @@ jobs:
           diagnostic-endpoint: ""
       - name: "build devshells"
         run: nix develop .#full -Lvv --no-update-lock-file
+  all:
+    name: All checks passed
+    if: always()
+    runs-on: ubuntu-latest
+    needs: ['formatting', 'dependencies', 'tests', 'docs', 'clippy', 'flake-edit', 'nixos-test', 'devshells']
+    steps:
+      - name: "verify all jobs passed"
+        run: |
+          if [[ "${{ needs.formatting.result }}" != "success" ]] || \
+             [[ "${{ needs.dependencies.result }}" != "success" ]] || \
+             [[ "${{ needs.tests.result }}" != "success" ]] || \
+             [[ "${{ needs.docs.result }}" != "success" ]] || \
+             [[ "${{ needs.clippy.result }}" != "success" ]] || \
+             [[ "${{ needs.flake-edit.result }}" != "success" ]] || \
+             [[ "${{ needs.nixos-test.result }}" != "success" ]] || \
+             [[ "${{ needs.devshells.result }}" != "success" ]]; then
+            echo "Some checks failed"
+            exit 1
+          fi
