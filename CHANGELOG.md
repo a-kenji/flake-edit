@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.5] - 2026-04-15
+
+### 🐛 Bug Fixes
+
+- *(follow)* Support block-style top-level input follow
+
+### 💼 Other
+
+- Filter interactive menu
+
+### ⚙️ Miscellaneous Tasks
+
+- CI: init an all check
+
 ## [0.3.4] - 2026-03-18
 
 ### 🚀 Features
