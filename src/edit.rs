@@ -254,10 +254,10 @@ mod tests {
             target: "nixpkgs".to_string(),
         };
         let result = fe.apply_change(change).unwrap();
-        // Walker returns the unchanged text; caller detects the no-op
-        match result {
-            Some(text) => assert_eq!(text, original, "text should be unchanged"),
-            None => {} // also acceptable
+        // Walker signals a no-op as either the unchanged text or `None`;
+        // both are acceptable here.
+        if let Some(text) = result {
+            assert_eq!(text, original, "text should be unchanged");
         }
     }
 

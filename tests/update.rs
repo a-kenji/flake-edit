@@ -22,7 +22,9 @@ fn unpin_removes_ref_param() {
     let inputs = flake_edit.list().clone();
     let mut updater = Updater::new(flake.into(), inputs);
 
-    updater.unpin_input("nixpkgs").expect("unpin should succeed");
+    updater
+        .unpin_input("nixpkgs")
+        .expect("unpin should succeed");
 
     insta::assert_snapshot!(updater.get_changes());
 }
@@ -88,9 +90,7 @@ fn unpin_expanded_format_no_crash() {
     let mut updater = Updater::new(Rope::from_str(&flake), inputs);
 
     // Should not crash even though myInput has no url
-    updater
-        .unpin_input("pinned")
-        .expect("unpin should succeed");
+    updater.unpin_input("pinned").expect("unpin should succeed");
 
     insta::assert_snapshot!(updater.get_changes());
 }
