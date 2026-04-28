@@ -182,6 +182,10 @@ impl Config {
     }
 }
 
+fn default_transitive_min() -> usize {
+    0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -273,8 +277,4 @@ mod tests {
         // but not the reverse
         assert!(!config.can_follow("nixpkgs", "nixpkgs-lib"));
     }
-}
-
-fn default_transitive_min() -> usize {
-    0
 }
