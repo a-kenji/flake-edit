@@ -6,7 +6,7 @@
     in
     {
       devShells = {
-        default = pkgs.mkShellNoCC {
+        default = pkgs.mkShell {
           name = "flake-edit";
           inputsFrom = [ self'.packages.default ];
           packages = [
@@ -19,7 +19,7 @@
           ];
           inherit env;
         };
-        full = pkgs.mkShellNoCC {
+        full = pkgs.mkShell {
           inputsFrom = [ self'.devShells.default ];
           packages = [
             pkgs.cargo-deny
