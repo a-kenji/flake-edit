@@ -75,3 +75,19 @@ exit_code: 0
      easytier.flake = false;
 
 ----- stderr -----
+warning: stale-lock follows at line 52, column 26: buildbot-nix.flake-parts -> flake-parts (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 30, column 21: clan-core.disko -> disko (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 30, column 21: clan-core.flake-parts -> flake-parts (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 40, column 17: envfs.flake-parts -> flake-parts (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 49, column 24: hyprspace.flake-parts -> flake-parts (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 22, column 15: nil.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 25, column 15: nix.flake-compat -> flake-compat (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 25, column 15: nix.flake-parts -> flake-parts (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 25, column 15: nix.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 29, column 20: nix-lazy.flake-compat -> flake-compat (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 29, column 20: nix-lazy.flake-parts -> flake-parts (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 29, column 20: nix-lazy.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 33, column 21: nix-multi.flake-compat -> flake-compat (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 33, column 21: nix-multi.flake-parts -> flake-parts (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 33, column 21: nix-multi.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 64, column 18: nixvim.flake-parts -> flake-parts (flake.lock resolves to <none>; run `nix flake lock`)

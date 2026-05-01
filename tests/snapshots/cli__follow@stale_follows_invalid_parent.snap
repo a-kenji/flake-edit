@@ -17,15 +17,16 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -1,8 +1,8 @@
- {
+@@ -2,8 +2,7 @@
    inputs = {
      treefmt-nix.url = "github:numtide/treefmt-nix";
-+    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
      nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
 -    nixpkgs.inputs.treefmt-nix.follows = "treefmt-nix";
    };
 
-   outputs = { self, nixpkgs , treefmt-nix }: { };
+-  outputs = { self, nixpkgs , treefmt-nix }: { };
++  outputs = { self , treefmt-nix }: { };
+ }
 
 ----- stderr -----
+warning: stale follows at line 4, column 19: nixpkgs.treefmt-nix -> treefmt-nix (source no longer present in flake.lock)

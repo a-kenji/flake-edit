@@ -497,6 +497,95 @@ fn test_add_follow_nonexistent(#[case] fixture: &str, #[case] input: &str, #[cas
     });
 }
 
+/// `add-follow` with a 3+ segment dot path (e.g. `a.b.c`) used to silently
+/// emit malformed Nix because only the first `.` was treated as the
+/// `inputs.` separator. Reject these up front with a depth error.
+#[test]
+fn add_follow_rejects_three_segment_dot_path() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    error_filters(&mut settings);
+    let output = cli()
+        .arg("--flake")
+        .arg(fixture_path("root"))
+        .arg("--diff")
+        .arg("add-follow")
+        .arg("neovim.nixvim.flake-parts")
+        .arg("flake-parts")
+        .output()
+        .expect("run flake-edit");
+    assert!(!output.status.success(), "expected non-zero exit");
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(
+        stderr.contains("depth") || stderr.contains("3 segments"),
+        "stderr should mention depth or segment count, got:\n{stderr}",
+    );
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("root"))
+                .arg("--diff")
+                .arg("add-follow")
+                .arg("neovim.nixvim.flake-parts")
+                .arg("flake-parts")
+        );
+    });
+}
+
+/// Slash-separated input paths are not a recognized syntax: the whole string
+/// becomes a single segment and the existing `Input not found` error must
+/// remain intact (regression guard against accidentally widening the parser).
+#[test]
+fn add_follow_rejects_slash_form_unrecognized() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    error_filters(&mut settings);
+    let output = cli()
+        .arg("--flake")
+        .arg(fixture_path("root"))
+        .arg("--diff")
+        .arg("add-follow")
+        .arg("neovim/nixvim/flake-parts")
+        .arg("flake-parts")
+        .output()
+        .expect("run flake-edit");
+    assert!(!output.status.success(), "expected non-zero exit");
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(
+        stderr.contains("not found"),
+        "slash-form must hit the existing 'not found' error, got:\n{stderr}",
+    );
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("root"))
+                .arg("--diff")
+                .arg("add-follow")
+                .arg("neovim/nixvim/flake-parts")
+                .arg("flake-parts")
+        );
+    });
+}
+
+#[test]
+fn add_follow_accepts_two_segment_dot_path_unchanged() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("root"))
+                .arg("--diff")
+                .arg("add-follow")
+                .arg("rust-overlay.flake-compat")
+                .arg("flake-utils")
+        );
+    });
+}
+
 /// Test the follow command to automatically follow matching inputs
 #[rstest]
 #[case("centerpiece")] // Two nested nixpkgs inputs that can follow top-level nixpkgs
@@ -510,6 +599,15 @@ fn test_add_follow_nonexistent(#[case] fixture: &str, #[case] input: &str, #[cas
 #[case("stale_follows")] // Stale follows: crane.flake-compat no longer exists in lock
 #[case("stale_follows_invalid_parent")] // Stale follows: nixpkgs.treefmt-nix doesn't exist
 #[case("treefmt_transitive")] // treefmt has treefmt-nix as transitive input that matches top-level
+#[case("multi_hop_cycle")] // multi-hop a -> b -> c declared chain
+#[case("dot_ancestor_cycle")] // dot-named participant in a multi-hop chain
+#[case("lockfile_only_cycle")] // cycle closes only through resolved lockfile edges
+#[case("stale_lockfile_only")] // stale-edge detection alongside the resolver
+#[case("split_inputs_block_and_flat")] // some inputs in a block, neovim flat outside
+#[case("stale_lock")] // declared follows the lockfile didn't apply
+#[case("transitive_grandchild")] // baseline: depth-2 candidate, default max_depth=1 ignores it
+#[case("transitive_grandchild_existing")] // baseline: handwritten depth-2 follows, no-op
+#[case("transitive_grandchild_cycle")] // baseline: depth-2 candidate skipped (cycle)
 fn test_follow(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -531,6 +629,9 @@ fn test_follow(#[case] fixture: &str) {
 #[rstest]
 #[case("centerpiece", "ignore_treefmt")] // Config ignores treefmt-nix.nixpkgs, only home-manager follows
 #[case("treefmt_transitive", "transitive")] // Transitive follows with transitive_min = 2
+#[case("transitive_grandchild", "deep_follows_2")] // max_depth=2 emits depth-2 follows
+#[case("transitive_grandchild_existing", "deep_follows_2")] // handwritten depth-2 already present, no-op
+#[case("transitive_grandchild_cycle", "deep_follows_2")] // depth-2 candidate skipped due to cycle
 fn test_follow_with_config(#[case] fixture: &str, #[case] config: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);

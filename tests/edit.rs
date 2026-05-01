@@ -1,6 +1,7 @@
 mod common;
 
 use common::{Info, load_flake};
+use flake_edit::app::handler::ListOutput;
 use flake_edit::change::Change;
 use flake_edit::edit::FlakeEdit;
 use flake_edit::walk::Walker;
@@ -17,6 +18,10 @@ use rstest::rstest;
 #[case("one_level_nesting_flat_not_a_flake")]
 #[case("merged_inputs")]
 #[case("merged_inputs_flat")]
+#[case("multi_hop_cycle")]
+#[case("dot_ancestor_cycle")]
+#[case("lockfile_only_cycle")]
+#[case("stale_lockfile_only")]
 fn test_flake_edit_list(#[case] fixture: &str) {
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
@@ -26,7 +31,7 @@ fn test_flake_edit_list(#[case] fixture: &str) {
         info => &info,
         snapshot_suffix => fixture
     }, {
-        insta::assert_yaml_snapshot!(flake_edit.list());
+        insta::assert_yaml_snapshot!(ListOutput::from(flake_edit.list()));
     });
 }
 
@@ -68,7 +73,7 @@ fn test_add_input(#[case] fixture: &str, #[case] is_flake: bool, #[case] uri: &s
         flake: is_flake,
     };
     let info = Info::with_change(change.clone());
-    let result = flake_edit.apply_change(change).unwrap().unwrap();
+    let result = flake_edit.apply_change(change).unwrap().text.unwrap();
     let suffix = format!("{}_flake_{}", fixture, is_flake);
     insta::with_settings!({
         sort_maps => true,
@@ -90,7 +95,7 @@ fn test_add_with_ref_or_rev() {
     };
     let info = Info::with_change(change.clone());
     insta::with_settings!({sort_maps => true, info => &info}, {
-        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().unwrap());
+        insta::assert_snapshot!(flake_edit.apply_change(change).unwrap().text.unwrap());
     });
 }
 
@@ -117,14 +122,14 @@ fn test_first_nested_node_add_with_list(#[case] is_flake: bool) {
         info => &info,
         snapshot_suffix => suffix.clone()
     }, {
-        insta::assert_snapshot!("changes", flake_edit.apply_change(change).unwrap().unwrap());
+        insta::assert_snapshot!("changes", flake_edit.apply_change(change).unwrap().text.unwrap());
     });
     insta::with_settings!({
         sort_maps => true,
         info => &info,
         snapshot_suffix => suffix
     }, {
-        insta::assert_yaml_snapshot!("list", flake_edit.curr_list());
+        insta::assert_yaml_snapshot!("list", ListOutput::from(flake_edit.curr_list()));
     });
 }
 
@@ -154,10 +159,10 @@ fn test_remove_input(#[case] fixture: &str, #[case] input_id: &str) {
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Remove {
-        ids: vec![input_id.to_owned().into()],
+        ids: vec![flake_edit::change::ChangeId::parse(input_id).unwrap()],
     };
     let info = Info::with_change(change.clone());
-    let result = flake_edit.apply_change(change).unwrap().unwrap();
+    let result = flake_edit.apply_change(change).unwrap().text.unwrap();
     let suffix = format!("{}_{}", fixture, input_id.replace('.', "_"));
     insta::with_settings!({
         sort_maps => true,
@@ -177,7 +182,7 @@ fn test_remove_input_walker(#[case] fixture: &str, #[case] input_id: &str) {
     let content = load_flake(fixture);
     let mut walker = Walker::new(&content);
     let change = Change::Remove {
-        ids: vec![input_id.to_owned().into()],
+        ids: vec![flake_edit::change::ChangeId::parse(input_id).unwrap()],
     };
     let info = Info::with_change(change.clone());
     let result = walker.walk(&change).unwrap().unwrap();
@@ -200,10 +205,10 @@ fn test_remove_nested_input(#[case] fixture: &str, #[case] input_id: &str) {
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Remove {
-        ids: vec![input_id.to_owned().into()],
+        ids: vec![flake_edit::change::ChangeId::parse(input_id).unwrap()],
     };
     let info = Info::with_change(change.clone());
-    let result = flake_edit.apply_change(change).unwrap().unwrap();
+    let result = flake_edit.apply_change(change).unwrap().text.unwrap();
     let suffix = format!("{}_{}", fixture, input_id.replace('.', "_"));
     insta::with_settings!({
         sort_maps => true,
@@ -222,10 +227,10 @@ fn test_remove_not_a_flake_input(#[case] fixture: &str, #[case] input_id: &str) 
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Remove {
-        ids: vec![input_id.to_owned().into()],
+        ids: vec![flake_edit::change::ChangeId::parse(input_id).unwrap()],
     };
     let info = Info::with_change(change.clone());
-    let result = flake_edit.apply_change(change).unwrap().unwrap();
+    let result = flake_edit.apply_change(change).unwrap().text.unwrap();
     insta::with_settings!({
         sort_maps => true,
         info => &info,
@@ -242,7 +247,7 @@ fn test_first_nested_node_remove_with_list(#[case] input_id: &str) {
     let content = load_flake("first_nested_node");
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Remove {
-        ids: vec![input_id.to_owned().into()],
+        ids: vec![flake_edit::change::ChangeId::parse(input_id).unwrap()],
     };
     let info = Info::with_change(change.clone());
     insta::with_settings!({
@@ -250,14 +255,14 @@ fn test_first_nested_node_remove_with_list(#[case] input_id: &str) {
         info => &info,
         snapshot_suffix => input_id
     }, {
-        insta::assert_snapshot!("changes", flake_edit.apply_change(change).unwrap().unwrap());
+        insta::assert_snapshot!("changes", flake_edit.apply_change(change).unwrap().text.unwrap());
     });
     insta::with_settings!({
         sort_maps => true,
         info => &info,
         snapshot_suffix => input_id
     }, {
-        insta::assert_yaml_snapshot!("list", flake_edit.list());
+        insta::assert_yaml_snapshot!("list", ListOutput::from(flake_edit.list()));
     });
 }
 
@@ -291,7 +296,7 @@ fn test_change_url(#[case] fixture: &str, #[case] input_id: &str, #[case] new_ur
         ref_or_rev: None,
     };
     let info = Info::with_change(change.clone());
-    let result = flake_edit.apply_change(change).unwrap().unwrap();
+    let result = flake_edit.apply_change(change).unwrap().text.unwrap();
     let suffix = format!("{}_{}", fixture, input_id.replace('.', "_"));
     insta::with_settings!({
         sort_maps => true,
@@ -324,9 +329,9 @@ fn test_remove_nonexistent_input_panics() {
     let content = load_flake("completely_flat_toplevel_not_a_flake");
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Remove {
-        ids: vec!["not-an-input-at-all".to_owned().into()],
+        ids: vec![flake_edit::change::ChangeId::parse("not-an-input-at-all").unwrap()],
     };
-    flake_edit.apply_change(change).unwrap().unwrap();
+    flake_edit.apply_change(change).unwrap().text.unwrap();
 }
 
 #[rstest]
@@ -342,6 +347,6 @@ fn test_walker_inputs(#[case] fixture: &str) {
         info => &info,
         snapshot_suffix => fixture
     }, {
-        insta::assert_yaml_snapshot!(walker.inputs);
+        insta::assert_yaml_snapshot!(ListOutput::from(&walker.inputs));
     });
 }

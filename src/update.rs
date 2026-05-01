@@ -163,8 +163,11 @@ impl Updater {
             let _ = parsed.set_ref(Some(final_change.clone()));
             let updated_uri = parsed.to_string();
 
-            if !Self::print_update_status(&input.input.id, &parsed_ref.previous_ref, &final_change)
-            {
+            if !Self::print_update_status(
+                input.input.id.as_str(),
+                &parsed_ref.previous_ref,
+                &final_change,
+            ) {
                 return;
             }
 
@@ -192,7 +195,9 @@ impl Updater {
             .strip_prefix('"')
             .and_then(|s| s.strip_suffix('"'))
             .unwrap_or(id);
-        self.inputs.iter().position(|n| n.input.bare_id() == bare)
+        self.inputs
+            .iter()
+            .position(|n| n.input.id().as_str() == bare)
     }
     /// Pin an input based on it's id to a specific rev.
     pub fn pin_input_to_ref(&mut self, id: &str, rev: &str) -> Result<(), String> {
@@ -219,7 +224,7 @@ impl Updater {
         let inputs = self.inputs.clone();
         for input in inputs.iter() {
             if let Some(ref input_id) = id {
-                if input.input.id == *input_id {
+                if input.input.id.as_str() == input_id.as_str() {
                     self.query_and_update_all_inputs(input, init);
                 }
             } else {
@@ -323,7 +328,10 @@ impl Updater {
         let current_ref = parsed.get_ref_or_rev().unwrap_or_default();
 
         if current_ref.is_empty() {
-            tracing::debug!("Skipping unpinned channel input: {}", input.input.id);
+            tracing::debug!(
+                "Skipping unpinned channel input: {}",
+                input.input.id.as_str()
+            );
             return;
         }
 
@@ -345,7 +353,7 @@ impl Updater {
         let _ = parsed.set_ref(Some(final_ref.clone()));
         let updated_uri = parsed.to_string();
 
-        if Self::print_update_status(&input.input.id, &current_ref, &final_ref) {
+        if Self::print_update_status(input.input.id.as_str(), &current_ref, &final_ref) {
             self.update_input(input.clone(), &updated_uri);
         }
     }

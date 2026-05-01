@@ -161,9 +161,7 @@ pub fn populate_cache_from_inputs<'a>(
 /// If `no_cache` is true, this function does nothing.
 pub fn populate_cache_from_input_map(inputs: &crate::edit::InputMap, no_cache: bool) {
     populate_cache_from_inputs(
-        inputs
-            .iter()
-            .map(|(id, input)| (id.as_str(), input.url().trim_matches('"'))),
+        inputs.iter().map(|(id, input)| (id.as_str(), input.url())),
         no_cache,
     );
 }

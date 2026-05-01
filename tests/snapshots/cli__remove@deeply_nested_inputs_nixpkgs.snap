@@ -16,14 +16,14 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -2,14 +2,10 @@
+@@ -2,14 +2,9 @@
    description = "Deeply nested inputs attrset";
 
    inputs = {
 -    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
      disko = {
-       url = "github:nix-community/disko";
+-      url = "github:nix-community/disko";
        inputs = {
 -        nixpkgs = {
 -          follows = "nixpkgs";

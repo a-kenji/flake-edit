@@ -1,0 +1,94 @@
+{
+  "nodes": {
+    "flake-parts": {
+      "locked": {
+        "lastModified": 1742669843,
+        "narHash": "sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "1111111111111111111111111111111111111111",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "flake-parts_2": {
+      "locked": {
+        "lastModified": 1742669844,
+        "narHash": "sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "2222222222222222222222222222222222222222",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "neovim": {
+      "inputs": {
+        "flake-parts": "flake-parts_2",
+        "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1742669845,
+        "narHash": "sha256-ccccccccccccccccccccccccccccccccccccccccccc=",
+        "owner": "nix-community",
+        "repo": "neovim-nightly-overlay",
+        "rev": "3333333333333333333333333333333333333333",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "neovim-nightly-overlay",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1742669846,
+        "narHash": "sha256-ddddddddddddddddddddddddddddddddddddddddddd=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "4444444444444444444444444444444444444444",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1742669848,
+        "narHash": "sha256-fffffffffffffffffffffffffffffffffffffffffff=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "6666666666666666666666666666666666666666",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "flake-parts": "flake-parts",
+        "neovim": "neovim",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

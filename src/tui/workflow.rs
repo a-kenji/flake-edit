@@ -37,16 +37,16 @@ pub enum ConfirmResultAction {
     Exit,
 }
 
-/// Phase within the Add workflow
+/// Step within the Add workflow.
 #[derive(Debug, Clone, PartialEq)]
-pub enum AddPhase {
+pub enum AddStep {
     Uri,
     Id,
 }
 
-/// Phase within the Follow workflow
+/// Step within the Follow workflow.
 #[derive(Debug, Clone, PartialEq)]
-pub enum FollowPhase {
+pub enum FollowStep {
     /// Select the nested input path (e.g., "crane.nixpkgs")
     SelectInput,
     /// Select the target to follow (e.g., "nixpkgs")
@@ -81,7 +81,7 @@ pub enum AppResult {
 #[derive(Debug, Clone)]
 pub enum WorkflowData {
     Add {
-        phase: AddPhase,
+        step: AddStep,
         uri: Option<String>,
         id: Option<String>,
     },
@@ -105,7 +105,7 @@ pub enum WorkflowData {
         action: Option<ConfirmResultAction>,
     },
     Follow {
-        phase: FollowPhase,
+        step: FollowStep,
         /// The selected nested input path (e.g., "crane.nixpkgs")
         selected_input: Option<String>,
         /// The selected target to follow (e.g., "nixpkgs")
@@ -142,7 +142,10 @@ impl WorkflowData {
                     Change::None
                 } else {
                     Change::Remove {
-                        ids: selected_inputs.iter().map(|s| s.clone().into()).collect(),
+                        ids: selected_inputs
+                            .iter()
+                            .filter_map(|s| crate::change::ChangeId::parse(s).ok())
+                            .collect(),
                     }
                 }
             }
@@ -156,9 +159,16 @@ impl WorkflowData {
                 ..
             } => {
                 if let (Some(input), Some(target)) = (selected_input, selected_target) {
-                    Change::Follows {
-                        input: input.clone().into(),
-                        target: target.clone(),
+                    let parsed = crate::change::ChangeId::parse(input)
+                        .ok()
+                        .zip(crate::follows::AttrPath::parse(target).ok());
+                    if let Some((change_id, target_path)) = parsed {
+                        Change::Follows {
+                            input: change_id,
+                            target: target_path,
+                        }
+                    } else {
+                        Change::None
                     }
                 } else {
                     Change::None
@@ -199,8 +209,7 @@ pub fn compute_diff(flake_text: &str, change: &Change) -> String {
     };
 
     let new_text = match edit.apply_change(change.clone()) {
-        Ok(Some(text)) => text,
-        Ok(None) => flake_text.to_string(),
+        Ok(outcome) => outcome.text.unwrap_or_else(|| flake_text.to_string()),
         Err(e) => return format!("Error: {e}"),
     };
 

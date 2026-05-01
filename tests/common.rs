@@ -59,6 +59,17 @@ pub const FIXTURES: &[&str] = &[
     "one_level_nesting_flat_not_a_flake",
     "flat_nested_flat",
     "first_nested_node",
+    // multi-hop / dot-ancestor / lockfile-only cycle resolver fixtures
+    "multi_hop_cycle",
+    "dot_ancestor_cycle",
+    "lockfile_only_cycle",
+    "stale_lockfile_only",
+    "split_inputs_block_and_flat",
+    "stale_lock",
+    // depth-2 follows fixtures
+    "transitive_grandchild",
+    "transitive_grandchild_existing",
+    "transitive_grandchild_cycle",
 ];
 
 /// Create a Walker from a fixture name.

@@ -29,3 +29,4 @@ exit_code: 0
 
 
 ----- stderr -----
+warning: stale-lock follows at line 6, column 24: home-manager.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)

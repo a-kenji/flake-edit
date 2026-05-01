@@ -1,0 +1,69 @@
+{
+  "nodes": {
+    "helper": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHA=",
+        "owner": "example",
+        "repo": "helper",
+        "rev": "1111111111111111111111111111111111111111",
+        "type": "github"
+      },
+      "original": {
+        "owner": "example",
+        "repo": "helper",
+        "type": "github"
+      }
+    },
+    "hls-1.10": {
+      "inputs": {
+        "helper": [
+          "helper"
+        ]
+      },
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLA=",
+        "owner": "example",
+        "repo": "hls",
+        "rev": "2222222222222222222222222222222222222222",
+        "type": "github"
+      },
+      "original": {
+        "owner": "example",
+        "repo": "hls",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNA=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "3333333333333333333333333333333333333333",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "helper": "helper",
+        "hls-1.10": "hls-1.10",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

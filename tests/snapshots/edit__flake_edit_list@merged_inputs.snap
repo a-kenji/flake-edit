@@ -1,42 +1,29 @@
 ---
 source: tests/edit.rs
-expression: flake_edit.list()
+expression: "ListOutput::from(flake_edit.list())"
 info:
   flake_nix: ""
   changes: []
 ---
-home-manager:
-  id: home-manager
-  flake: true
-  url: "\"github:nix-community/home-manager\""
-  follows:
-    - Indirect:
-        - nixpkgs
-        - "\"nixpkgs\""
-  range:
-    start: 195
-    end: 230
-nixpkgs:
-  id: nixpkgs
-  flake: true
-  url: "\"github:NixOS/nixpkgs/nixos-unstable\""
-  follows: []
-  range:
-    start: 123
-    end: 160
-plugin-a:
-  id: plugin-a
-  flake: true
-  url: "\"github:foo/plugin-a/v2.0\""
-  follows: []
-  range:
-    start: 358
-    end: 384
-plugin-b:
-  id: plugin-b
-  flake: true
-  url: "\"github:foo/plugin-b/v1.8.2\""
-  follows: []
-  range:
-    start: 443
-    end: 471
+inputs:
+  home-manager:
+    id: home-manager
+    url: "github:nix-community/home-manager"
+    flake: true
+  nixpkgs:
+    id: nixpkgs
+    url: "github:NixOS/nixpkgs/nixos-unstable"
+    flake: true
+  plugin-a:
+    id: plugin-a
+    url: "github:foo/plugin-a/v2.0"
+    flake: true
+  plugin-b:
+    id: plugin-b
+    url: "github:foo/plugin-b/v1.8.2"
+    flake: true
+follows:
+  - parent: home-manager
+    nested: nixpkgs
+    target: nixpkgs
+    kind: indirect

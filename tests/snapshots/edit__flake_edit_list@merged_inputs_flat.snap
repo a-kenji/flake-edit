@@ -1,34 +1,25 @@
 ---
 source: tests/edit.rs
-expression: flake_edit.list()
+expression: "ListOutput::from(flake_edit.list())"
 info:
   flake_nix: ""
   changes: []
 ---
-extra:
-  id: extra
-  flake: true
-  url: "\"github:foo/extra\""
-  follows:
-    - Indirect:
-        - nixpkgs
-        - "\"nixpkgs\""
-  range:
-    start: 234
-    end: 252
-flake-utils:
-  id: flake-utils
-  flake: true
-  url: "\"github:numtide/flake-utils\""
-  follows: []
-  range:
-    start: 159
-    end: 187
-nixpkgs:
-  id: nixpkgs
-  flake: true
-  url: "\"github:NixOS/nixpkgs/nixos-unstable\""
-  follows: []
-  range:
-    start: 98
-    end: 135
+inputs:
+  extra:
+    id: extra
+    url: "github:foo/extra"
+    flake: true
+  flake-utils:
+    id: flake-utils
+    url: "github:numtide/flake-utils"
+    flake: true
+  nixpkgs:
+    id: nixpkgs
+    url: "github:NixOS/nixpkgs/nixos-unstable"
+    flake: true
+follows:
+  - parent: extra
+    nested: nixpkgs
+    target: nixpkgs
+    kind: indirect

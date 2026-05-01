@@ -25,5 +25,14 @@ exit_code: 0
 
      # This top-level input exists but is no longer used by crane
      flake-compat.url = "github:edolstra/flake-compat";
+@@ -18,7 +17,6 @@
+     {
+       self,
+       nixpkgs,
+-      crane,
+       flake-compat,
+     }:
+     { };
 
 ----- stderr -----
+warning: stale follows at line 8, column 17: crane.flake-compat -> flake-compat (source no longer present in flake.lock)

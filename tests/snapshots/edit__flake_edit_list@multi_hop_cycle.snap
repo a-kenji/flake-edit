@@ -1,0 +1,29 @@
+---
+source: tests/edit.rs
+expression: "ListOutput::from(flake_edit.list())"
+info:
+  flake_nix: ""
+  changes: []
+---
+inputs:
+  a:
+    id: a
+    url: "github:example/a"
+    flake: true
+  b:
+    id: b
+    url: "github:example/b"
+    flake: true
+  c:
+    id: c
+    url: "github:example/c"
+    flake: true
+follows:
+  - parent: a
+    nested: b
+    target: b
+    kind: indirect
+  - parent: b
+    nested: c
+    target: c
+    kind: indirect

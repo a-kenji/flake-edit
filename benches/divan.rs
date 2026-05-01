@@ -44,7 +44,7 @@ fn add_input() {
 fn remove_input() {
     let mut walker = Walker::new(INPUTS);
     let change = Change::Remove {
-        ids: vec!["nixpkgs".to_owned().into()],
+        ids: vec![flake_edit::change::ChangeId::parse("nixpkgs").unwrap()],
     };
     let _ = walker.walk(&change);
     // a simple sanity check

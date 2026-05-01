@@ -55,3 +55,17 @@ exit_code: 0
 
 
 ----- stderr -----
+warning: stale-lock follows at line 15, column 13: blueprint.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 13, column 59: blueprint.systems -> systems (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 10, column 20: harmonia.crane -> crane (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 10, column 20: harmonia.flake-parts -> flake-parts (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 10, column 20: harmonia.nix -> nix (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 10, column 20: harmonia.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 10, column 20: harmonia.treefmt-nix -> treefmt-nix (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 26, column 13: mprisd.crane -> crane (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 26, column 13: mprisd.flake-parts -> flake-parts (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 26, column 13: mprisd.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 23, column 26: mprisd.treefmt-nix -> treefmt-nix (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 7, column 15: nix.flake-parts -> flake-parts (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 7, column 15: nix.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 18, column 36: nix-index-database.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)

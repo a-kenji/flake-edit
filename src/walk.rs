@@ -12,6 +12,7 @@ use rnix::{Root, SyntaxKind, SyntaxNode};
 
 use crate::change::Change;
 use crate::edit::{OutputChange, Outputs};
+use crate::follows::{AttrPath, Segment};
 use crate::input::Input;
 
 pub use context::Context;
@@ -19,10 +20,53 @@ pub use error::WalkerError;
 
 use inputs::walk_inputs;
 use node::{
-    adjacent_whitespace_index, get_sibling_whitespace, insertion_index_after,
-    make_nested_follows_attr, make_quoted_string, make_toplevel_flake_false_attr,
-    make_toplevel_nested_follows_attr, make_toplevel_url_attr, parse_node, substitute_child,
+    FollowsKind, adjacent_whitespace_index, get_sibling_whitespace, insertion_index_after,
+    make_quoted_string, make_toplevel_flake_false_attr, make_toplevel_url_attr, parse_node,
+    substitute_child,
 };
+
+/// Strip outer `"..."` quotes from a CST identifier or string token.
+fn unquote_str(s: &str) -> &str {
+    s.strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .unwrap_or(s)
+}
+
+/// Build expected idents for a top-level flat follows attrpath of any depth:
+/// `inputs.<S0>.inputs.<S1>...inputs.<SN>.follows`.
+fn expected_toplevel_flat_idents(path: &AttrPath) -> Vec<&str> {
+    let mut out: Vec<&str> = Vec::with_capacity(path.len() * 2 + 2);
+    for seg in path.segments() {
+        out.push("inputs");
+        out.push(seg.as_str());
+    }
+    out.push("follows");
+    out
+}
+
+/// Build expected idents for the block-style follows attrpath that lives
+/// inside a parent input's `{ ... }` block, of any depth:
+/// `inputs.<R0>.inputs.<R1>...inputs.<RN>.follows`.
+fn expected_block_follows_idents(rest: &[Segment]) -> Vec<&str> {
+    let mut out: Vec<&str> = Vec::with_capacity(rest.len() * 2 + 1);
+    for seg in rest.iter() {
+        out.push("inputs");
+        out.push(seg.as_str());
+    }
+    out.push("follows");
+    out
+}
+
+/// Compare a CST attrpath (whose idents may carry surrounding `"..."`) to an
+/// unquoted expected slice. Length and per-element equality required.
+fn idents_match(have: &[String], expected: &[&str]) -> bool {
+    if have.len() != expected.len() {
+        return false;
+    }
+    have.iter()
+        .zip(expected.iter())
+        .all(|(h, e)| unquote_str(h) == *e)
+}
 
 #[derive(Debug, Clone)]
 pub struct Walker {
@@ -118,12 +162,14 @@ impl<'a> Walker {
         }
 
         // Handle follows for toplevel flat-style inputs (inputs.X.url = "...")
-        if let Change::Follows { input, target } = change
-            && let Some(nested_id) = input.follows()
-        {
-            let parent_id = input.input();
-            if self.inputs.contains_key(parent_id) {
-                return self.handle_follows_flat_toplevel(&attr_set, parent_id, nested_id, target);
+        if let Change::Follows { input, target } = change {
+            let path = input.path();
+            if path.len() >= 2 {
+                let parent_id = input.input();
+                if self.inputs.contains_key(parent_id.as_str()) {
+                    let target_str = target.to_string();
+                    return self.handle_follows_flat_toplevel(&attr_set, path, &target_str);
+                }
             }
         }
 
@@ -140,10 +186,13 @@ impl<'a> Walker {
     fn handle_follows_flat_toplevel(
         &self,
         attr_set: &SyntaxNode,
-        parent_id: &str,
-        nested_id: &str,
+        path: &AttrPath,
         target: &str,
     ) -> Result<Option<SyntaxNode>, WalkerError> {
+        let parent_id = path.first();
+        // The toplevel-flat shape is `inputs.S0.inputs.S1...inputs.SN.follows`,
+        // i.e. `2 * len + 1` idents.
+        let expected_flat = expected_toplevel_flat_idents(path);
         let mut last_parent_attr: Option<SyntaxNode> = None;
         let mut block_parent: Option<(SyntaxNode, SyntaxNode)> = None;
 
@@ -162,7 +211,7 @@ impl<'a> Walker {
             // Detect `inputs.{parent_id} = { ... }` block style
             if idents.len() == 2
                 && idents[0] == "inputs"
-                && idents[1] == parent_id
+                && unquote_str(&idents[1]) == parent_id.as_str()
                 && let Some(block_attr_set) = toplevel
                     .children()
                     .find(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
@@ -170,18 +219,12 @@ impl<'a> Walker {
                 block_parent = Some((toplevel.clone(), block_attr_set));
             }
 
-            // Check for existing follows: inputs.{parent_id}.inputs.{nested_id}.follows
-            if idents.len() == 5
-                && idents[0] == "inputs"
-                && idents[1] == parent_id
-                && idents[2] == "inputs"
-                && idents[3] == nested_id
-                && idents[4] == "follows"
-            {
+            // Check for existing follows: inputs.S0.inputs.S1...inputs.SN.follows
+            if idents_match(&idents, &expected_flat) {
                 let value_node = attrpath.next_sibling();
                 let current_target = value_node
                     .as_ref()
-                    .map(|v| v.to_string().trim_matches('"').to_string())
+                    .map(|v| unquote_str(&v.to_string()).to_string())
                     .unwrap_or_default();
 
                 if current_target == target {
@@ -200,24 +243,28 @@ impl<'a> Walker {
             }
 
             // Track last inputs.{parent_id}.* attribute
-            if idents.len() >= 2 && idents[0] == "inputs" && idents[1] == parent_id {
+            if idents.len() >= 2
+                && idents[0] == "inputs"
+                && unquote_str(&idents[1]) == parent_id.as_str()
+            {
                 last_parent_attr = Some(toplevel.clone());
             }
         }
 
         if let Some((toplevel, block_attr_set)) = block_parent {
+            let rest: Vec<Segment> = path.segments()[1..].to_vec();
             return self.handle_follows_block_toplevel(
                 attr_set,
                 &toplevel,
                 &block_attr_set,
-                nested_id,
+                &rest,
                 target,
             );
         }
 
         // No existing follows, insert after the last parent attribute
         if let Some(ref_child) = last_parent_attr {
-            let follows_node = make_toplevel_nested_follows_attr(parent_id, nested_id, target);
+            let follows_node = FollowsKind::TopLevelNested { path, target }.emit();
             let insert_index = insertion_index_after(&ref_child);
 
             let mut green = attr_set
@@ -246,9 +293,10 @@ impl<'a> Walker {
         attr_set: &SyntaxNode,
         toplevel: &SyntaxNode,
         block_attr_set: &SyntaxNode,
-        nested_id: &str,
+        rest: &[Segment],
         target: &str,
     ) -> Result<Option<SyntaxNode>, WalkerError> {
+        let expected_block = expected_block_follows_idents(rest);
         for attr in block_attr_set.children() {
             if attr.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
                 continue;
@@ -261,15 +309,11 @@ impl<'a> Walker {
             };
             let idents: Vec<String> = attrpath.children().map(|c| c.to_string()).collect();
 
-            if idents.len() == 3
-                && idents[0] == "inputs"
-                && idents[1] == nested_id
-                && idents[2] == "follows"
-            {
+            if idents_match(&idents, &expected_block) {
                 let value_node = attrpath.next_sibling();
                 let current_target = value_node
                     .as_ref()
-                    .map(|v| v.to_string().trim_matches('"').to_string())
+                    .map(|v| unquote_str(&v.to_string()).to_string())
                     .unwrap_or_default();
 
                 if current_target == target {
@@ -290,7 +334,7 @@ impl<'a> Walker {
             }
         }
 
-        let follows_node = make_nested_follows_attr(nested_id, target);
+        let follows_node = FollowsKind::BlockNested { rest, target }.emit();
         let children: Vec<_> = block_attr_set.children().collect();
         if let Some(last_child) = children.last() {
             let insert_index = last_child.index() + 1;

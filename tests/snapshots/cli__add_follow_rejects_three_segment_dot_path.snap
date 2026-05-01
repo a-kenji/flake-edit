@@ -1,0 +1,23 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/root.flake.nix"
+    - "--diff"
+    - add-follow
+    - neovim.nixvim.flake-parts
+    - flake-parts
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+Error: 
+   0: Follows path 'neovim.nixvim.flake-parts' has 3 segments; only depth-1 paths of the form `parent.child` are currently supported.
+
+      Follows declarations of depth > 1 (e.g. `a.inputs.b.inputs.c.follows`) are not currently supported; use plain `parent.child` form.

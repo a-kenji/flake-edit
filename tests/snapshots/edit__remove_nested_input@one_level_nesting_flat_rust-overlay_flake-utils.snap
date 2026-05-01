@@ -5,7 +5,8 @@ info:
   flake_nix: ""
   changes:
     - Remove:
-        id: rust-overlay.flake-utils
+        ids:
+          - rust-overlay.flake-utils
 ---
 {
   description = "Edit your flake inputs with ease";
@@ -17,7 +18,6 @@ info:
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     crane.url = "github:ipetkov/crane";
     crane.inputs.nixpkgs.follows = "nixpkgs";
-    crane.inputs.rust-overlay.follows = "rust-overlay";
     crane.inputs.flake-utils.follows = "flake-utils";
   };
 
@@ -27,7 +27,6 @@ info:
       nixpkgs,
       flake-utils,
       flake-utelinos,
-      rust-overlay,
       crane,
     }:
     { };

@@ -27,7 +27,7 @@ exit_code: 0
      treefmt.url = "github:numtide/treefmt";
 +    treefmt.inputs.treefmt-nix.follows = "treefmt-nix";
 +    treefmt.inputs.nixpkgs.follows = "nixpkgs";
-+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
++    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
    };
 
    outputs =
@@ -41,3 +41,5 @@ exit_code: 0
  }
 
 ----- stderr -----
+warning: stale-lock follows at line 6, column 19: treefmt.treefmt-nix -> treefmt-nix (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 6, column 19: treefmt.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)

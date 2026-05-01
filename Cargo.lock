@@ -689,6 +689,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "smallvec",
  "tempfile",
  "thiserror",
  "toml",

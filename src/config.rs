@@ -49,6 +49,14 @@ pub struct FollowConfig {
     /// e.g., nixpkgs = ["nixpkgs-lib"] means nixpkgs-lib can follow nixpkgs
     #[serde(default)]
     pub aliases: HashMap<String, Vec<String>>,
+
+    /// Maximum depth of follows declarations to write.
+    ///
+    /// `1` (default) writes depth-1 only:
+    /// `parent.nested.follows = "target"`. `2` or higher also writes deeper
+    /// paths such as `parent.middle.grandchild.follows = "target"`.
+    #[serde(default = "default_max_depth")]
+    pub max_depth: usize,
 }
 
 impl Default for FollowConfig {
@@ -57,6 +65,7 @@ impl Default for FollowConfig {
             ignore: Vec::new(),
             transitive_min: default_transitive_min(),
             aliases: HashMap::new(),
+            max_depth: default_max_depth(),
         }
     }
 }
@@ -186,6 +195,10 @@ fn default_transitive_min() -> usize {
     0
 }
 
+fn default_max_depth() -> usize {
+    1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,6 +210,19 @@ mod tests {
         assert!(config.follow.ignore.is_empty());
         assert_eq!(config.follow.transitive_min, 0);
         assert!(config.follow.aliases.is_empty());
+        assert_eq!(config.follow.max_depth, 1);
+    }
+
+    #[test]
+    fn max_depth_defaults_to_one() {
+        let cfg = FollowConfig::default();
+        assert_eq!(cfg.max_depth, 1);
+    }
+
+    #[test]
+    fn max_depth_parses_from_toml() {
+        let cfg: Config = toml::from_str("[follow]\nmax_depth = 2\n").unwrap();
+        assert_eq!(cfg.follow.max_depth, 2);
     }
 
     #[test]

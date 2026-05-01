@@ -1,38 +1,5 @@
+use crate::follows::{AttrPath, AttrPathParseError, Segment};
 use crate::walk::Context;
-
-/// Split an input path at the first `.` that is outside double quotes.
-///
-/// Nix attributes containing dots must be quoted (e.g. `"hls-1.10"`).
-/// A naive `split_once('.')` would split inside the quotes, so we skip
-/// any dot that appears between an opening and closing `"`.
-///
-/// Examples:
-///   `"hls-1.10".nixpkgs` -> `("hls-1.10", "nixpkgs")`
-///   `crane.nixpkgs`      -> `("crane", "nixpkgs")`
-///   `"hls-1.10"`         -> `None`
-///   `nixpkgs`            -> `None`
-pub fn split_quoted_path(s: &str) -> Option<(&str, &str)> {
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'"' {
-            // Skip to closing quote
-            i += 1;
-            while i < bytes.len() && bytes[i] != b'"' {
-                i += 1;
-            }
-            // Skip the closing quote itself
-            if i < bytes.len() {
-                i += 1;
-            }
-        } else if bytes[i] == b'.' {
-            return Some((&s[..i], &s[i + 1..]));
-        } else {
-            i += 1;
-        }
-    }
-    None
-}
 
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Change {
@@ -56,29 +23,46 @@ pub enum Change {
     /// Example: `flake-edit follow rust-overlay.nixpkgs nixpkgs`
     /// Creates: `rust-overlay.inputs.nixpkgs.follows = "nixpkgs";`
     Follows {
-        /// The input path (e.g., "rust-overlay.nixpkgs" for rust-overlay's nixpkgs input)
+        /// The input path (e.g., `rust-overlay.nixpkgs` for rust-overlay's
+        /// `nixpkgs` input).
         input: ChangeId,
-        /// The target input to follow (e.g., "nixpkgs")
-        target: String,
+        /// The target input to follow.
+        target: AttrPath,
     },
 }
 
-#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
-pub struct ChangeId(String);
+/// Identifier for an input or nested-input target of a [`Change`].
+///
+/// `ChangeId(AttrPath)` carries the same grammar as any flake-side attribute
+/// path: a non-empty sequence of segments, each stored unquoted.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ChangeId(AttrPath);
 
 impl ChangeId {
-    /// Get the part after the dot (e.g., "nixpkgs" from "poetry2nix.nixpkgs").
-    pub fn follows(&self) -> Option<&str> {
-        split_quoted_path(&self.0).map(|(_, post)| post)
+    pub fn new(path: AttrPath) -> Self {
+        ChangeId(path)
     }
 
-    /// Get the input part (before the dot, or the whole thing if no dot).
-    pub fn input(&self) -> &str {
-        split_quoted_path(&self.0).map_or(&self.0, |(pre, _)| pre)
+    pub fn parse(s: &str) -> Result<Self, AttrPathParseError> {
+        Ok(ChangeId(AttrPath::parse(s)?))
     }
 
-    /// Check if this ChangeId matches the given input and optional follows.
-    fn matches(&self, input: &str, follows: Option<&str>) -> bool {
+    pub fn path(&self) -> &AttrPath {
+        &self.0
+    }
+
+    /// Top-level input segment (the part before the first dot, or the whole
+    /// path if it has only one segment).
+    pub fn input(&self) -> &Segment {
+        self.0.first()
+    }
+
+    /// Nested-input segment, if the path has more than one segment.
+    pub fn follows(&self) -> Option<&Segment> {
+        self.0.child()
+    }
+
+    fn matches(&self, input: &Segment, follows: Option<&Segment>) -> bool {
         if self.input() != input {
             return false;
         }
@@ -89,13 +73,14 @@ impl ChangeId {
         }
     }
 
-    pub fn matches_with_follows(&self, input: &str, follows: Option<String>) -> bool {
-        self.matches(input, follows.as_deref())
+    pub fn matches_with_follows(&self, input: &Segment, follows: Option<&Segment>) -> bool {
+        self.matches(input, follows)
     }
 
-    /// Match against context. The context carries the input attribute.
-    pub fn matches_with_ctx(&self, follows: &str, ctx: Option<Context>) -> bool {
-        let ctx_input = ctx.and_then(|f| f.level().first().cloned());
+    /// Match against the surrounding walker [`Context`], which carries the
+    /// enclosing top-level input.
+    pub fn matches_with_ctx(&self, follows: &Segment, ctx: Option<Context>) -> bool {
+        let ctx_input = ctx.and_then(|c| c.first().cloned());
         match ctx_input {
             Some(input) => self.matches(&input, Some(follows)),
             None => self.input() == follows,
@@ -109,9 +94,31 @@ impl std::fmt::Display for ChangeId {
     }
 }
 
-impl From<String> for ChangeId {
-    fn from(value: String) -> Self {
+impl TryFrom<String> for ChangeId {
+    type Error = AttrPathParseError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        ChangeId::parse(&value)
+    }
+}
+
+impl TryFrom<&str> for ChangeId {
+    type Error = AttrPathParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        ChangeId::parse(value)
+    }
+}
+
+impl From<AttrPath> for ChangeId {
+    fn from(value: AttrPath) -> Self {
         ChangeId(value)
+    }
+}
+
+impl From<Segment> for ChangeId {
+    fn from(value: Segment) -> Self {
+        ChangeId(AttrPath::new(value))
     }
 }
 
@@ -119,9 +126,9 @@ impl Change {
     pub fn id(&self) -> Option<ChangeId> {
         match self {
             Change::None => None,
-            Change::Add { id, .. } => id.clone().map(|id| id.into()),
+            Change::Add { id, .. } => id.clone().and_then(|id| ChangeId::parse(&id).ok()),
             Change::Remove { ids } => ids.first().cloned(),
-            Change::Change { id, .. } => id.clone().map(|id| id.into()),
+            Change::Change { id, .. } => id.clone().and_then(|id| ChangeId::parse(&id).ok()),
             Change::Follows { input, .. } => Some(input.clone()),
         }
     }
@@ -154,7 +161,7 @@ impl Change {
             _ => None,
         }
     }
-    pub fn follows_target(&self) -> Option<&String> {
+    pub fn follows_target(&self) -> Option<&AttrPath> {
         match self {
             Change::Follows { target, .. } => Some(target),
             _ => None,
@@ -182,21 +189,24 @@ impl Change {
                 )]
             }
             Change::Follows { input, target } => {
-                let msg = if let Some(nested) = input.follows() {
-                    format!(
-                        "Added follows: {}.inputs.{}.follows = \"{}\"",
-                        input.input(),
-                        nested,
-                        target
-                    )
+                // Per-segment interleave: `[a, b, c]` renders as
+                // `a.inputs.b.inputs.c`; length-1 paths get an `inputs.` prefix.
+                let segments = input.path().segments();
+                let path = if segments.len() == 1 {
+                    format!("inputs.{}", segments[0].render())
                 } else {
-                    format!(
-                        "Added follows: inputs.{}.follows = \"{}\"",
-                        input.input(),
-                        target
-                    )
+                    let mut out = String::new();
+                    for (i, seg) in segments.iter().enumerate() {
+                        if i == 0 {
+                            out.push_str(&seg.render());
+                        } else {
+                            out.push_str(".inputs.");
+                            out.push_str(&seg.render());
+                        }
+                    }
+                    out
                 };
-                vec![msg]
+                vec![format!("Added follows: {}.follows = \"{}\"", path, target)]
             }
             Change::None => vec![],
         }
@@ -208,27 +218,57 @@ mod tests {
     use super::*;
 
     #[test]
-    fn split_plain() {
-        assert_eq!(
-            split_quoted_path("crane.nixpkgs"),
-            Some(("crane", "nixpkgs"))
-        );
-        assert_eq!(split_quoted_path("nixpkgs"), None);
-    }
-
-    #[test]
-    fn split_quoted_dot_in_name() {
-        assert_eq!(
-            split_quoted_path("\"hls-1.10\".nixpkgs"),
-            Some(("\"hls-1.10\"", "nixpkgs"))
-        );
-        assert_eq!(split_quoted_path("\"hls-1.10\""), None);
-    }
-
-    #[test]
     fn change_id_quoted_dot() {
-        let id = ChangeId::from("\"hls-1.10\".nixpkgs".to_string());
-        assert_eq!(id.input(), "\"hls-1.10\"");
-        assert_eq!(id.follows(), Some("nixpkgs"));
+        let id = ChangeId::parse("\"hls-1.10\".nixpkgs").unwrap();
+        assert_eq!(id.input().as_str(), "hls-1.10");
+        assert_eq!(id.follows().unwrap().as_str(), "nixpkgs");
+    }
+
+    #[test]
+    fn change_id_single_segment_no_follows() {
+        let id = ChangeId::parse("nixpkgs").unwrap();
+        assert_eq!(id.input().as_str(), "nixpkgs");
+        assert!(id.follows().is_none());
+    }
+
+    #[test]
+    fn success_message_depth_three_has_two_inputs_separators() {
+        let change = Change::Follows {
+            input: ChangeId::parse("neovim.nixvim.flake-parts").unwrap(),
+            target: AttrPath::parse("flake-parts").unwrap(),
+        };
+        let msgs = change.success_messages();
+        assert_eq!(msgs.len(), 1);
+        let msg = &msgs[0];
+        let inputs_count = msg.matches(".inputs.").count();
+        assert_eq!(
+            inputs_count, 2,
+            "depth-3 message should contain exactly two `.inputs.` separators, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn success_message_depth_two_has_one_inputs_separator() {
+        let change = Change::Follows {
+            input: ChangeId::parse("crane.nixpkgs").unwrap(),
+            target: AttrPath::parse("nixpkgs").unwrap(),
+        };
+        let msgs = change.success_messages();
+        let msg = &msgs[0];
+        assert_eq!(msg.matches(".inputs.").count(), 1);
+    }
+
+    #[test]
+    fn success_message_depth_one_uses_inputs_prefix() {
+        let change = Change::Follows {
+            input: ChangeId::parse("nixpkgs").unwrap(),
+            target: AttrPath::parse("foo").unwrap(),
+        };
+        let msgs = change.success_messages();
+        let msg = &msgs[0];
+        assert!(
+            msg.starts_with("Added follows: inputs.nixpkgs.follows ="),
+            "depth-1 message should start with `inputs.<id>.follows =`, got: {msg}"
+        );
     }
 }

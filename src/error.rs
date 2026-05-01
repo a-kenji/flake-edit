@@ -23,6 +23,10 @@ pub enum FlakeEditError {
         "Input '{0}' not found in the flake.\n\nTo add it:\n  flake-edit add {0} <flakeref>\n\nTo see all current inputs: flake-edit list"
     )]
     InputNotFound(String),
+    #[error(
+        "Follows path '{path}' has {segments} segments; only depth-1 paths of the form `parent.child` are currently supported.\n\nFollows declarations of depth > 1 (e.g. `a.inputs.b.inputs.c.follows`) are not currently supported; use plain `parent.child` form."
+    )]
+    UnsupportedFollowsDepth { path: String, segments: usize },
     #[error("Validation error in flake.nix:\n{}", format_validation_errors(.0))]
     Validation(Vec<ValidationError>),
 }

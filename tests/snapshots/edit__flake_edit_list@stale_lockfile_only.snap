@@ -1,0 +1,25 @@
+---
+source: tests/edit.rs
+expression: "ListOutput::from(flake_edit.list())"
+info:
+  flake_nix: ""
+  changes: []
+---
+inputs:
+  foo:
+    id: foo
+    url: "github:example/foo"
+    flake: true
+  nixpkgs:
+    id: nixpkgs
+    url: "github:NixOS/nixpkgs/nixos-unstable"
+    flake: true
+follows:
+  - parent: foo
+    nested: bar
+    target: nixpkgs
+    kind: indirect
+  - parent: foo
+    nested: baz
+    target: nixpkgs
+    kind: indirect
