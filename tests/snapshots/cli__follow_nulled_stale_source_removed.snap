@@ -1,0 +1,32 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/nulled_stale_source_removed.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/nulled_stale_source_removed.flake.lock"
+    - "--diff"
+    - follow
+    - "--transitive"
+    - "--depth"
+    - "6"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -4,7 +4,6 @@
+     crane.url = "github:ipetkov/crane";
+     crane.inputs.nixpkgs.follows = "nixpkgs";
+     # `crane.gone` is absent from the lockfile.
+-    crane.inputs.gone.follows = "";
+   };
+
+   outputs =
+
+----- stderr -----

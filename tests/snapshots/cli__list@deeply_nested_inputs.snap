@@ -12,8 +12,8 @@ info:
 success: true
 exit_code: 0
 ----- stdout -----
-· disko - "github:nix-community/disko"
-     nixpkgs => "nixpkgs"
-· nixpkgs - "github:nixos/nixpkgs/nixos-unstable"
+· disko - github:nix-community/disko
+     nixpkgs => nixpkgs
+· nixpkgs - github:nixos/nixpkgs/nixos-unstable
 
 ----- stderr -----

@@ -29,3 +29,4 @@ exit_code: 0
    outputs = { self, nixpkgs , treefmt-nix }: { };
 
 ----- stderr -----
+warning: stale follows at line 4, column 19: nixpkgs.treefmt-nix -> treefmt-nix (source no longer present in flake.lock)

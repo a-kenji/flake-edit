@@ -16,22 +16,66 @@ exit_code: 0
 ----- stdout -----
 {
     "crane": Input {
-        id: "crane",
+        id: Segment(
+            "crane",
+        ),
         flake: true,
-        url: "\"github:ipetkov/crane\"",
+        url: "github:ipetkov/crane",
         follows: [
-            Indirect(
-                "flake-utils",
-                "\"flake-utils\"",
-            ),
-            Indirect(
-                "nixpkgs",
-                "\"nixpkgs\"",
-            ),
-            Indirect(
-                "rust-overlay",
-                "\"rust-overlay\"",
-            ),
+            Indirect {
+                path: AttrPath(
+                    [
+                        Segment(
+                            "flake-utils",
+                        ),
+                    ],
+                ),
+                target: Some(
+                    AttrPath(
+                        [
+                            Segment(
+                                "flake-utils",
+                            ),
+                        ],
+                    ),
+                ),
+            },
+            Indirect {
+                path: AttrPath(
+                    [
+                        Segment(
+                            "nixpkgs",
+                        ),
+                    ],
+                ),
+                target: Some(
+                    AttrPath(
+                        [
+                            Segment(
+                                "nixpkgs",
+                            ),
+                        ],
+                    ),
+                ),
+            },
+            Indirect {
+                path: AttrPath(
+                    [
+                        Segment(
+                            "rust-overlay",
+                        ),
+                    ],
+                ),
+                target: Some(
+                    AttrPath(
+                        [
+                            Segment(
+                                "rust-overlay",
+                            ),
+                        ],
+                    ),
+                ),
+            },
         ],
         range: Range {
             start: 373,
@@ -39,9 +83,11 @@ exit_code: 0
         },
     },
     "flake-utils": Input {
-        id: "flake-utils",
+        id: Segment(
+            "flake-utils",
+        ),
         flake: true,
-        url: "\"github:numtide/flake-utils\"",
+        url: "github:numtide/flake-utils",
         follows: [],
         range: Range {
             start: 153,
@@ -49,9 +95,11 @@ exit_code: 0
         },
     },
     "nixpkgs": Input {
-        id: "nixpkgs",
+        id: Segment(
+            "nixpkgs",
+        ),
         flake: true,
-        url: "\"github:nixos/nixpkgs/nixos-unstable\"",
+        url: "github:nixos/nixpkgs/nixos-unstable",
         follows: [],
         range: Range {
             start: 91,
@@ -59,18 +107,48 @@ exit_code: 0
         },
     },
     "rust-overlay": Input {
-        id: "rust-overlay",
+        id: Segment(
+            "rust-overlay",
+        ),
         flake: true,
-        url: "\"github:oxalica/rust-overlay\"",
+        url: "github:oxalica/rust-overlay",
         follows: [
-            Indirect(
-                "flake-utils",
-                "\"flake-utils\"",
-            ),
-            Indirect(
-                "nixpkgs",
-                "\"nixpkgs\"",
-            ),
+            Indirect {
+                path: AttrPath(
+                    [
+                        Segment(
+                            "flake-utils",
+                        ),
+                    ],
+                ),
+                target: Some(
+                    AttrPath(
+                        [
+                            Segment(
+                                "flake-utils",
+                            ),
+                        ],
+                    ),
+                ),
+            },
+            Indirect {
+                path: AttrPath(
+                    [
+                        Segment(
+                            "nixpkgs",
+                        ),
+                    ],
+                ),
+                target: Some(
+                    AttrPath(
+                        [
+                            Segment(
+                                "nixpkgs",
+                            ),
+                        ],
+                    ),
+                ),
+            },
         ],
         range: Range {
             start: 217,

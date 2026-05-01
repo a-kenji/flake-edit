@@ -17,3 +17,8 @@
 # Example: if nested input is "nixpkgs-lib" and top-level "nixpkgs" exists,
 # follow will suggest: poetry2nix.nixpkgs-lib -> nixpkgs
 # aliases = { nixpkgs = ["nixpkgs-lib"] }
+
+# Maximum depth of follows declarations to write.
+#   1: depth-1 only, e.g. `parent.nested.follows = "target"`
+#   2: also depth-2, e.g. `parent.middle.grandchild.follows = "target"`
+# max_depth = 1

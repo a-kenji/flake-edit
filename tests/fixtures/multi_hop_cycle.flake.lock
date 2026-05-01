@@ -1,0 +1,86 @@
+{
+  "nodes": {
+    "a": {
+      "inputs": {
+        "b": [
+          "b"
+        ]
+      },
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "owner": "example",
+        "repo": "a",
+        "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "example",
+        "repo": "a",
+        "type": "github"
+      }
+    },
+    "b": {
+      "inputs": {
+        "c": [
+          "c"
+        ]
+      },
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA=",
+        "owner": "example",
+        "repo": "b",
+        "rev": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "example",
+        "repo": "b",
+        "type": "github"
+      }
+    },
+    "c": {
+      "inputs": {
+        "a": "c-a"
+      },
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCA=",
+        "owner": "example",
+        "repo": "c",
+        "rev": "cccccccccccccccccccccccccccccccccccccccc",
+        "type": "github"
+      },
+      "original": {
+        "owner": "example",
+        "repo": "c",
+        "type": "github"
+      }
+    },
+    "c-a": {
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-CACACACACACACACACACACACACACACACACACACACA=",
+        "owner": "example",
+        "repo": "a",
+        "rev": "1111111111111111111111111111111111111111",
+        "type": "github"
+      },
+      "original": {
+        "owner": "example",
+        "repo": "a",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "a": "a",
+        "b": "b",
+        "c": "c"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

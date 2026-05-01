@@ -1,13 +1,13 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
+use std::path::PathBuf;
 
 use nix_uri::urls::UrlWrapper;
 use nix_uri::{FlakeRef, NixUriResult};
 use ropey::Rope;
 
-use crate::change::{Change, split_quoted_path};
+use crate::change::{Change, ChangeId};
 use crate::edit::{FlakeEdit, InputMap, sorted_input_ids, sorted_input_ids_owned};
 use crate::error::FlakeEditError;
-use crate::input::Follows;
 use crate::lock::{FlakeLock, NestedInput};
 use crate::tui;
 use crate::update::Updater;
@@ -62,10 +62,25 @@ pub enum CommandError {
 
     #[error("The input could not be removed: {0}")]
     CouldNotRemove(String),
+
+    /// Aggregated failures from a `follow [PATHS...]` batch. Each entry
+    /// pairs the offending path with the error processing it produced.
+    #[error("{} file(s) failed during batch processing:\n{}", failures.len(), format_batch_failures(failures))]
+    Batch {
+        failures: Vec<(PathBuf, CommandError)>,
+    },
 }
 
-/// Load the flake.lock file, using the path from state if provided.
-fn load_flake_lock(state: &AppState) -> std::result::Result<FlakeLock, FlakeEditError> {
+fn format_batch_failures(failures: &[(PathBuf, CommandError)]) -> String {
+    failures
+        .iter()
+        .map(|(path, err)| format!("  - {}: {}", path.display(), err))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Load `flake.lock`, using the path from `state` if provided.
+pub(super) fn load_flake_lock(state: &AppState) -> std::result::Result<FlakeLock, FlakeEditError> {
     if let Some(lock_path) = &state.lock_file {
         FlakeLock::from_file(lock_path)
     } else {
@@ -73,49 +88,15 @@ fn load_flake_lock(state: &AppState) -> std::result::Result<FlakeLock, FlakeEdit
     }
 }
 
-struct FollowContext {
-    nested_inputs: Vec<NestedInput>,
-    top_level_inputs: HashSet<String>,
-    /// Full input map for checking URLs (needed for cycle detection)
-    inputs: crate::edit::InputMap,
-}
-
-/// Check if a top-level input's URL is a follows reference to a specific parent input.
-/// For example, `treefmt-nix.follows = "clan-core/treefmt-nix"` has URL `"clan-core/treefmt-nix"`
-/// which is a follows reference to the `clan-core` parent.
-fn is_follows_reference_to_parent(url: &str, parent: &str) -> bool {
-    let url_trimmed = url.trim_matches('"');
-    url_trimmed.starts_with(&format!("{}/", parent))
-}
-
-/// Collect nested follows paths already declared in flake.nix.
-///
-/// Paths are normalised so that they can be compared against lock-file
-/// paths regardless of whether the Nix source quotes the attribute names.
-fn collect_existing_follows(inputs: &InputMap) -> HashSet<String> {
-    let mut existing = HashSet::new();
-    for (input_id, input) in inputs {
-        for follows in input.follows() {
-            if let Follows::Indirect(nested_name, _target) = follows {
-                let raw = format!("{}.{}", input_id, nested_name);
-                existing.insert(normalize_nested_path(&raw));
-            }
-        }
-    }
-    existing
-}
-
-/// Convert a lockfile follows path like "parent.child" to flake follows syntax "parent/child".
-fn lock_follows_to_flake_target(target: &str) -> String {
-    if target.contains('.') {
-        target.replace('.', "/")
-    } else {
-        target.to_string()
-    }
+pub(super) struct FollowContext {
+    pub(super) nested_inputs: Vec<NestedInput>,
+    pub(super) top_level_inputs: HashSet<String>,
+    /// Full input map. Cycle detection needs URLs.
+    pub(super) inputs: crate::edit::InputMap,
 }
 
 /// Load nested inputs from lockfile and top-level inputs from flake.nix.
-fn load_follow_context(
+pub(super) fn load_follow_context(
     flake_edit: &mut FlakeEdit,
     state: &AppState,
 ) -> Result<Option<FollowContext>> {
@@ -141,8 +122,12 @@ fn load_follow_context(
     let inputs = flake_edit.list().clone();
     let top_level_inputs: HashSet<String> = inputs.keys().cloned().collect();
 
+    // Inputless flakes (templates, NUR-style overlays, outputs-only
+    // libraries) are legitimate; treat them as a no-op rather than an
+    // error so batch invocations don't abort on the first one.
+    // Symmetric with the `nested_inputs.is_empty()` short-circuit above.
     if top_level_inputs.is_empty() {
-        return Err(CommandError::NoInputs);
+        return Ok(None);
     }
 
     Ok(Some(FollowContext {
@@ -152,7 +137,7 @@ fn load_follow_context(
     }))
 }
 
-/// Result of running the confirm-or-apply workflow.
+/// Outcome of [`confirm_or_apply`].
 enum ConfirmResult {
     /// Change was applied successfully.
     Applied,
@@ -162,11 +147,11 @@ enum ConfirmResult {
     Back,
 }
 
-/// Run an interactive single-select loop with confirmation.
+/// Interactive single-select loop with confirmation.
 ///
 /// 1. Show selection screen
 /// 2. User selects an item
-/// 3. Create change based on selection
+/// 3. Build a change from the selection
 /// 4. Show confirmation (with diff if requested)
 /// 5. Apply or go back
 fn interactive_single_select<F, OnApplied, ExtraData>(
@@ -205,7 +190,7 @@ where
     Ok(())
 }
 
-/// Like `interactive_single_select` but for multi-selection.
+/// Multi-select counterpart of [`interactive_single_select`].
 fn interactive_multi_select<F>(
     editor: &Editor,
     state: &AppState,
@@ -241,9 +226,6 @@ where
 ///
 /// If `show_diff` is true, shows a confirmation screen with the diff.
 /// Otherwise applies the change directly.
-///
-/// Returns `Back` if user wants to go back to selection, `Applied` if the
-/// change was applied, or `Cancelled` if the user cancelled.
 fn confirm_or_apply(
     editor: &Editor,
     state: &AppState,
@@ -273,7 +255,7 @@ fn confirm_or_apply(
     }
 }
 
-/// Apply URI options (ref_or_rev, shallow) to a FlakeRef.
+/// Apply `ref_or_rev` and `shallow` options to a [`FlakeRef`].
 fn apply_uri_options(
     mut flake_ref: FlakeRef,
     ref_or_rev: Option<&str>,
@@ -295,11 +277,10 @@ fn apply_uri_options(
     Ok(flake_ref)
 }
 
-/// Transform a URI string by applying ref_or_rev and shallow options if specified.
+/// Apply `ref_or_rev` and `shallow` to a URI string.
 ///
-/// Always validates the URI through nix-uri parsing.
-/// If neither option is set, returns the original URI unchanged after validation.
-/// Otherwise, applies the options and returns the transformed string.
+/// Always validates the URI through `nix-uri` parsing. If neither option
+/// is set, returns the original URI unchanged.
 fn transform_uri(uri: String, ref_or_rev: Option<&str>, shallow: bool) -> Result<String> {
     let flake_ref: FlakeRef = uri
         .parse()
@@ -330,15 +311,14 @@ pub fn add(
     opts: UriOptions<'_>,
 ) -> Result<()> {
     let change = match (id, uri, state.interactive) {
-        // Both ID and URI provided - non-interactive add
+        // Both ID and URI provided: non-interactive add.
         (Some(id_val), Some(uri_str), _) => add_with_id_and_uri(id_val, uri_str, &opts)?,
-        // Interactive mode - show TUI (with or without prefill)
+        // Interactive: show TUI (with or without prefill).
         (id, None, true) | (None, id, true) => {
             add_interactive(editor, state, id.as_deref(), &opts)?
         }
-        // Non-interactive with only one arg (could be in id or uri position) - infer ID
+        // Non-interactive with only one positional arg: infer ID from URI.
         (Some(uri), None, false) | (None, Some(uri), false) => add_infer_id(uri, &opts)?,
-        // No arguments and non-interactive
         (None, None, false) => {
             return Err(CommandError::NoUri);
         }
@@ -364,11 +344,11 @@ fn add_interactive(
 ) -> Result<Change> {
     let tui_app = tui::App::add("Add", editor.text(), prefill_uri, state.cache_config());
     let Some(tui::AppResult::Change(tui_change)) = tui::run(tui_app)? else {
-        // User cancelled - return a no-op change
+        // User cancelled.
         return Ok(Change::None);
     };
 
-    // Apply CLI options to the TUI result
+    // CLI options override the TUI result.
     if let Change::Add { id, uri, flake } = tui_change {
         let final_uri = uri
             .map(|u| transform_uri(u, opts.ref_or_rev, opts.shallow))
@@ -383,7 +363,7 @@ fn add_interactive(
     }
 }
 
-/// Add with only URI provided, inferring ID from the flake reference.
+/// Add with only URI: infer ID from the parsed flake reference.
 fn add_infer_id(uri: String, opts: &UriOptions<'_>) -> Result<Change> {
     let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(&uri);
 
@@ -416,51 +396,55 @@ pub fn remove(
     state: &AppState,
     id: Option<String>,
 ) -> Result<()> {
-    let change = if let Some(id) = id {
-        Change::Remove {
-            ids: vec![id.into()],
-        }
-    } else if state.interactive {
-        let inputs = flake_edit.list();
-        let mut removable: Vec<String> = Vec::new();
-        for input_id in sorted_input_ids(inputs) {
-            let input = &inputs[input_id];
-            removable.push(input_id.clone());
-            for follows in input.follows() {
-                if let crate::input::Follows::Indirect(from, to) = follows {
-                    removable.push(format!("{}.{} => {}", input_id, from, to));
+    let change =
+        if let Some(id) = id {
+            Change::Remove {
+                ids: vec![ChangeId::parse(&id).map_err(|e| {
+                    CommandError::InvalidUri(format!("invalid input id `{id}`: {e}"))
+                })?],
+            }
+        } else if state.interactive {
+            let inputs = flake_edit.list();
+            let mut removable: Vec<String> = Vec::new();
+            for input_id in sorted_input_ids(inputs) {
+                let input = &inputs[input_id];
+                removable.push(input_id.clone());
+                for follows in input.follows() {
+                    if let crate::input::Follows::Indirect { path, target } = follows {
+                        let target_str = match target {
+                            Some(t) => t.to_string(),
+                            None => "\"\"".to_string(),
+                        };
+                        removable.push(format!("{}.{} => {}", input_id, path, target_str));
+                    }
                 }
             }
-        }
-        if removable.is_empty() {
-            return Err(CommandError::NoInputs);
-        }
+            if removable.is_empty() {
+                return Err(CommandError::NoInputs);
+            }
 
-        let tui_app = tui::App::remove("Remove", editor.text(), removable);
-        let Some(tui::AppResult::Change(tui_change)) = tui::run(tui_app)? else {
-            return Ok(());
-        };
+            let tui_app = tui::App::remove("Remove", editor.text(), removable);
+            let Some(tui::AppResult::Change(tui_change)) = tui::run(tui_app)? else {
+                return Ok(());
+            };
 
-        // Strip " => target" suffix for follows entries
-        if let Change::Remove { ids } = tui_change {
-            let stripped_ids: Vec<_> = ids
-                .iter()
-                .map(|id| {
-                    id.to_string()
-                        .split(" => ")
-                        .next()
-                        .unwrap_or(&id.to_string())
-                        .to_string()
-                        .into()
-                })
-                .collect();
-            Change::Remove { ids: stripped_ids }
+            // Strip the " => target" suffix on follows entries.
+            if let Change::Remove { ids } = tui_change {
+                let stripped_ids: Vec<_> = ids
+                    .iter()
+                    .filter_map(|id| {
+                        let s = id.to_string();
+                        let stripped = s.split(" => ").next().unwrap_or(&s);
+                        ChangeId::parse(stripped).ok()
+                    })
+                    .collect();
+                Change::Remove { ids: stripped_ids }
+            } else {
+                tui_change
+            }
         } else {
-            tui_change
-        }
-    } else {
-        return Err(CommandError::NoId);
-    };
+            return Err(CommandError::NoId);
+        };
 
     apply_change(editor, flake_edit, state, change)
 }
@@ -477,24 +461,23 @@ pub fn change(
     let inputs = flake_edit.list();
 
     let change = match (id, uri, state.interactive) {
-        // Full interactive: select input, then enter URI
-        // Also handles case where only URI provided interactively (need to select input)
+        // Full interactive: select input, then enter URI. Also covers the
+        // case where only URI was provided interactively (need to select input).
         (None, None, true) | (None, Some(_), true) => {
             change_full_interactive(editor, state, inputs, ref_or_rev, shallow)?
         }
-        // ID provided, no URI, interactive: show URI input for that ID
+        // ID provided, no URI, interactive: show URI input for that ID.
         (Some(id), None, true) => {
             change_uri_interactive(editor, state, inputs, &id, ref_or_rev, shallow)?
         }
-        // Both ID and URI provided - non-interactive
+        // Both ID and URI provided: non-interactive.
         (Some(id_val), Some(uri_str), _) => {
             change_with_id_and_uri(id_val, uri_str, ref_or_rev, shallow)?
         }
-        // Only one positional arg (in id position), infer ID from URI
+        // Only one positional arg: infer ID from URI.
         (Some(uri), None, false) | (None, Some(uri), false) => {
             change_infer_id(uri, ref_or_rev, shallow)?
         }
-        // No arguments and non-interactive
         (None, None, false) => {
             return Err(CommandError::NoId);
         }
@@ -503,7 +486,7 @@ pub fn change(
     apply_change(editor, flake_edit, state, change)
 }
 
-/// Full interactive change: select input from list, then enter new URI.
+/// Interactive change: pick an input from the list, then enter the new URI.
 fn change_full_interactive(
     editor: &Editor,
     state: &AppState,
@@ -525,7 +508,7 @@ fn change_full_interactive(
         return Ok(Change::None);
     };
 
-    // Apply CLI options to the TUI result
+    // CLI options override the TUI result.
     if let Change::Change { id, uri, .. } = tui_change {
         let final_uri = uri
             .map(|u| transform_uri(u, ref_or_rev, shallow))
@@ -540,7 +523,7 @@ fn change_full_interactive(
     }
 }
 
-/// Interactive change with ID already known: show URI input.
+/// Interactive change with the ID already known: show only the URI input.
 fn change_uri_interactive(
     editor: &Editor,
     state: &AppState,
@@ -563,7 +546,7 @@ fn change_uri_interactive(
         return Ok(Change::None);
     };
 
-    // Apply CLI options to the TUI result
+    // CLI options override the TUI result.
     if let Change::Change {
         uri: Some(new_uri), ..
     } = tui_change
@@ -593,7 +576,7 @@ fn change_with_id_and_uri(
     })
 }
 
-/// Change with only URI provided, inferring ID from the flake reference.
+/// Change with only URI: infer ID from the parsed flake reference.
 fn change_infer_id(uri: String, ref_or_rev: Option<&str>, shallow: bool) -> Result<Change> {
     let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(&uri);
 
@@ -660,7 +643,7 @@ pub fn update(
             "Space select, U all, ^D diff",
             display_items,
             |selected| {
-                // Strip version suffix from display strings to get IDs
+                // Strip the trailing version suffix from each display string.
                 let ids: Vec<String> = selected
                     .iter()
                     .map(|s| s.split(" - ").next().unwrap_or(s).to_string())
@@ -821,7 +804,7 @@ pub fn list(flake_edit: &mut FlakeEdit, format: &crate::cli::ListFormat) -> Resu
     Ok(())
 }
 
-/// Handle the `config` subcommand.
+/// Handler for the `config` subcommand.
 pub fn config(print_default: bool, path: bool) -> Result<()> {
     use crate::config::{Config, DEFAULT_CONFIG_TOML};
 
@@ -831,7 +814,6 @@ pub fn config(print_default: bool, path: bool) -> Result<()> {
     }
 
     if path {
-        // Show where config would be loaded from
         let project_path = Config::project_config_path();
         let user_path = Config::user_config_path();
 
@@ -857,662 +839,17 @@ pub fn config(print_default: bool, path: bool) -> Result<()> {
     Ok(())
 }
 
-/// Manually add a single follows declaration.
-pub fn add_follow(
-    editor: &Editor,
-    flake_edit: &mut FlakeEdit,
-    state: &AppState,
-    input: Option<String>,
-    target: Option<String>,
-) -> Result<()> {
-    let change = if let (Some(input_val), Some(target_val)) = (input.clone(), target) {
-        // Both provided - non-interactive
-        Change::Follows {
-            input: input_val.into(),
-            target: target_val,
-        }
-    } else if state.interactive {
-        // Interactive mode
-        let Some(ctx) = load_follow_context(flake_edit, state)? else {
-            return Ok(());
-        };
-        let top_level_vec: Vec<String> = ctx.top_level_inputs.into_iter().collect();
-
-        let tui_app = if let Some(input_val) = input {
-            tui::App::follow_target("Follow", editor.text(), input_val, top_level_vec)
-        } else {
-            tui::App::follow("Follow", editor.text(), ctx.nested_inputs, top_level_vec)
-        };
-
-        let Some(tui::AppResult::Change(tui_change)) = tui::run(tui_app)? else {
-            return Ok(());
-        };
-        tui_change
-    } else {
-        return Err(CommandError::NoId);
-    };
-
-    apply_change(editor, flake_edit, state, change)
-}
-
-/// Strip surrounding double-quotes from a Nix attribute name.
-///
-/// AST-extracted identifiers may carry quotes (e.g. `"nixpkgs"`), while
-/// lock-file paths only quote names that contain dots.  Stripping quotes
-/// before comparison prevents false mismatches.
-fn strip_attr_quotes(s: &str) -> &str {
-    s.strip_prefix('"')
-        .and_then(|s| s.strip_suffix('"'))
-        .unwrap_or(s)
-}
-
-/// Normalise a `parent.nested` path into the canonical form used by the
-/// lock file: each segment is quoted only when it contains a dot.
-fn normalize_nested_path(path: &str) -> String {
-    let (parent, child) = split_quoted_path(path).unwrap_or((path, path));
-    let p = strip_attr_quotes(parent);
-    let c = strip_attr_quotes(child);
-    let fmt_segment = |s: &str| -> String {
-        if s.contains('.') {
-            format!("\"{}\"", s)
-        } else {
-            s.to_string()
-        }
-    };
-    format!("{}.{}", fmt_segment(p), fmt_segment(c))
-}
-
-/// Collect follows declarations that reference nested inputs
-/// no longer present in the lock file.
-fn collect_stale_follows(
-    inputs: &InputMap,
-    existing_nested_paths: &HashSet<String>,
-) -> Vec<String> {
-    let normalized_existing: HashSet<String> = existing_nested_paths
-        .iter()
-        .map(|p| normalize_nested_path(p))
-        .collect();
-    let mut stale = Vec::new();
-    for (input_id, input) in inputs {
-        for follows in input.follows() {
-            if let Follows::Indirect(nested_name, _target) = follows {
-                let nested_path = format!("{}.{}", input_id, nested_name);
-                if !normalized_existing.contains(&normalize_nested_path(&nested_path)) {
-                    stale.push(nested_path);
-                }
-            }
-        }
-    }
-    stale
-}
-
-/// Automatically follow inputs based on lockfile information.
-///
-/// For each nested input (e.g., "crane.nixpkgs"), if there's a matching
-/// top-level input with the same name (e.g., "nixpkgs"), create a follows
-/// relationship. Skips inputs that already have follows set.
-/// Also removes stale follows declarations that reference nested inputs
-/// no longer present in the lock file.
-///
-/// The config file controls behavior:
-/// - `follow.ignore`: List of input names to skip
-/// - `follow.aliases`: Map of canonical names to alternatives (e.g., nixpkgs = ["nixpkgs-lib"])
-/// - `follow.transitive_min`: Minimum number of matching transitive follows before adding a
-///   top-level follows input (set to 0 to disable)
-pub fn follow_auto(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) -> Result<()> {
-    follow_auto_impl(editor, flake_edit, state, false)
-}
-
-/// Internal implementation with quiet flag for batch processing.
-fn follow_auto_impl(
-    editor: &Editor,
-    flake_edit: &mut FlakeEdit,
-    state: &AppState,
-    quiet: bool,
-) -> Result<()> {
-    let Some(ctx) = load_follow_context(flake_edit, state)? else {
-        if !quiet {
-            println!("Nothing to deduplicate.");
-        }
-        return Ok(());
-    };
-
-    let existing_nested_paths: HashSet<String> = load_flake_lock(state)
-        .map(|l| l.nested_input_paths().into_iter().collect())
-        .unwrap_or_default();
-
-    let to_unfollow = collect_stale_follows(&ctx.inputs, &existing_nested_paths);
-
-    let follow_config = &state.config.follow;
-    let existing_follows = collect_existing_follows(&ctx.inputs);
-    let transitive_min = follow_config.transitive_min();
-    let mut seen_nested: HashSet<String> = HashSet::new();
-
-    // Collect candidates: nested inputs that match a top-level input
-    let mut to_follow: Vec<(String, String)> = ctx
-        .nested_inputs
-        .iter()
-        .filter_map(|nested| {
-            let (parent, nested_name) =
-                split_quoted_path(&nested.path).unwrap_or((&nested.path, &nested.path));
-
-            // Skip ignored inputs (supports both full path and simple name)
-            if follow_config.is_ignored(&nested.path, nested_name) {
-                tracing::debug!("Skipping {}: ignored by config", nested.path);
-                return None;
-            }
-
-            // Skip if already configured in flake.nix
-            if existing_follows.contains(&normalize_nested_path(&nested.path)) {
-                tracing::debug!("Skipping {}: already follows in flake.nix", nested.path);
-                return None;
-            }
-
-            // Find matching top-level input (direct match or via alias)
-            let matching_top_level = ctx
-                .top_level_inputs
-                .iter()
-                .find(|top| follow_config.can_follow(nested_name, top));
-
-            let target = matching_top_level?;
-
-            // Skip if target already follows from parent (would create cycle)
-            // e.g., treefmt-nix.follows = "clan-core/treefmt-nix" means we can't
-            // add clan-core.inputs.treefmt-nix.follows = "treefmt-nix"
-            if let Some(target_input) = ctx.inputs.get(target.as_str())
-                && is_follows_reference_to_parent(target_input.url(), parent)
-            {
-                tracing::debug!(
-                    "Skipping {} -> {}: would create cycle (target follows {}/...)",
-                    nested.path,
-                    target,
-                    parent
-                );
-                return None;
-            }
-
-            Some((nested.path.clone(), target.clone()))
-        })
-        .collect();
-
-    for (nested_path, _target) in &to_follow {
-        seen_nested.insert(nested_path.clone());
-    }
-
-    let mut transitive_groups: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
-
-    if transitive_min > 0 {
-        for nested in ctx.nested_inputs.iter() {
-            let nested_name = nested.path.split('.').next_back().unwrap_or(&nested.path);
-            let parent = nested.path.split('.').next().unwrap_or(&nested.path);
-
-            if follow_config.is_ignored(&nested.path, nested_name) {
-                continue;
-            }
-
-            if existing_follows.contains(&normalize_nested_path(&nested.path))
-                || seen_nested.contains(&nested.path)
-            {
-                continue;
-            }
-
-            let matching_top_level = ctx
-                .top_level_inputs
-                .iter()
-                .find(|top| follow_config.can_follow(nested_name, top));
-
-            if matching_top_level.is_some() {
-                continue;
-            }
-
-            let Some(transitive_target) = nested.follows.as_ref() else {
-                continue;
-            };
-
-            // Only consider transitive follows (path with a parent segment).
-            if !transitive_target.contains('.') {
-                continue;
-            }
-
-            // Avoid self-follow situations.
-            if transitive_target == nested_name {
-                continue;
-            }
-
-            let top_level_name = follow_config
-                .resolve_alias(nested_name)
-                .unwrap_or(nested_name)
-                .to_string();
-
-            // Skip if a top-level input already exists with that name.
-            if ctx.top_level_inputs.contains(&top_level_name) {
-                continue;
-            }
-
-            // Skip if target already follows from parent (would create cycle)
-            if let Some(target_input) = ctx.inputs.get(transitive_target.as_str())
-                && is_follows_reference_to_parent(target_input.url(), parent)
-            {
-                continue;
-            }
-
-            transitive_groups
-                .entry(top_level_name)
-                .or_default()
-                .entry(transitive_target.clone())
-                .or_default()
-                .push(nested.path.clone());
-        }
-    }
-
-    // Pass 2b: Group Direct references (follows: None) by canonical name.
-    // These are nested inputs that point to separate lock nodes rather than
-    // following an existing path. When multiple parents share the same
-    // dependency (e.g., treefmt.nixpkgs and treefmt-nix.nixpkgs), we can
-    // promote one to top-level and have the others follow it.
-    // Each entry: canonical_name -> Vec<(path, url)>
-    let mut direct_groups: HashMap<String, Vec<(String, Option<String>)>> = HashMap::new();
-
-    if transitive_min > 0 {
-        for nested in ctx.nested_inputs.iter() {
-            let nested_name = nested.path.split('.').next_back().unwrap_or(&nested.path);
-
-            if nested.follows.is_some() {
-                continue;
-            }
-
-            if follow_config.is_ignored(&nested.path, nested_name) {
-                continue;
-            }
-
-            if existing_follows.contains(&normalize_nested_path(&nested.path))
-                || seen_nested.contains(&nested.path)
-            {
-                continue;
-            }
-
-            let matching_top_level = ctx
-                .top_level_inputs
-                .iter()
-                .find(|top| follow_config.can_follow(nested_name, top));
-
-            if matching_top_level.is_some() {
-                continue;
-            }
-
-            let canonical_name = follow_config
-                .resolve_alias(nested_name)
-                .unwrap_or(nested_name)
-                .to_string();
-
-            if ctx.top_level_inputs.contains(&canonical_name) {
-                continue;
-            }
-
-            direct_groups
-                .entry(canonical_name)
-                .or_default()
-                .push((nested.path.clone(), nested.url.clone()));
-        }
-    }
-
-    let mut toplevel_follows: Vec<(String, String)> = Vec::new();
-    let mut toplevel_adds: Vec<(String, String)> = Vec::new();
-
-    if transitive_min > 0 {
-        for (top_name, targets) in transitive_groups {
-            let mut eligible: Vec<(String, Vec<String>)> = targets
-                .into_iter()
-                .filter(|(_, paths)| paths.len() >= transitive_min)
-                .collect();
-
-            if eligible.len() != 1 {
-                continue;
-            }
-
-            let (target_path, paths) = eligible.pop().unwrap();
-            let follow_target = lock_follows_to_flake_target(&target_path);
-
-            if follow_target == top_name {
-                continue;
-            }
-
-            toplevel_follows.push((top_name.clone(), follow_target));
-
-            for path in paths {
-                if seen_nested.insert(path.clone()) {
-                    to_follow.push((path, top_name.clone()));
-                }
-            }
-        }
-
-        // Promote Direct reference groups: add a new top-level input with the
-        // URL from one of the nested references, then have all paths follow it.
-        // Only promote if at least one follows can actually be applied.
-        let mut direct_groups_sorted: Vec<_> = direct_groups.into_iter().collect();
-        direct_groups_sorted.sort_by(|a, b| a.0.cmp(&b.0));
-        for (canonical_name, mut entries) in direct_groups_sorted {
-            if entries.len() < transitive_min {
-                continue;
-            }
-
-            entries.sort_by(|a, b| a.0.cmp(&b.0));
-
-            let url = entries.iter().find_map(|(_, u)| u.clone());
-            let Some(url) = url else {
-                continue;
-            };
-
-            // Dry-run: check that at least one follows can be applied.
-            let can_follow = entries.iter().any(|(path, _)| {
-                let change = Change::Follows {
-                    input: path.clone().into(),
-                    target: canonical_name.clone(),
-                };
-                FlakeEdit::from_text(&editor.text())
-                    .ok()
-                    .and_then(|mut fe| fe.apply_change(change).ok().flatten())
-                    .is_some()
-            });
-            if !can_follow {
-                continue;
-            }
-
-            toplevel_adds.push((canonical_name.clone(), url));
-
-            for (path, _) in &entries {
-                if seen_nested.insert(path.clone()) {
-                    to_follow.push((path.clone(), canonical_name.clone()));
-                }
-            }
-        }
-    }
-
-    if to_follow.is_empty()
-        && to_unfollow.is_empty()
-        && toplevel_follows.is_empty()
-        && toplevel_adds.is_empty()
-    {
-        if !quiet {
-            println!("All inputs are already deduplicated.");
-        }
-        return Ok(());
-    }
-
-    // Apply all changes in memory
-    let mut current_text = editor.text();
-    let mut applied: Vec<(&str, &str)> = Vec::new();
-
-    // First, add new top-level inputs (from Direct reference promotion).
-    // These must be added before follows declarations that reference them.
-    for (id, url) in &toplevel_adds {
-        let change = Change::Add {
-            id: Some(id.clone()),
-            uri: Some(url.clone()),
-            flake: true,
-        };
-
-        let mut temp_flake_edit =
-            FlakeEdit::from_text(&current_text).map_err(CommandError::FlakeEdit)?;
-
-        match temp_flake_edit.apply_change(change) {
-            Ok(Some(resulting_text)) => {
-                let validation = validate::validate(&resulting_text);
-                if validation.is_ok() {
-                    current_text = resulting_text;
-                } else {
-                    for err in validation.errors {
-                        eprintln!("Error adding top-level input {}: {}", id, err);
-                    }
-                }
-            }
-            Ok(None) => eprintln!("Could not add top-level input {}", id),
-            Err(e) => eprintln!("Error adding top-level input {}: {}", id, e),
-        }
-    }
-
-    let mut follow_changes: Vec<(String, String)> = Vec::new();
-    follow_changes.extend(toplevel_follows);
-    follow_changes.extend(to_follow);
-
-    for (input_path, target) in &follow_changes {
-        let change = Change::Follows {
-            input: input_path.clone().into(),
-            target: target.clone(),
-        };
-
-        let mut temp_flake_edit =
-            FlakeEdit::from_text(&current_text).map_err(CommandError::FlakeEdit)?;
-
-        match temp_flake_edit.apply_change(change) {
-            Ok(Some(resulting_text)) => {
-                if resulting_text == current_text {
-                    // No-op: follows already exists with the same target
-                    continue;
-                }
-                let validation = validate::validate(&resulting_text);
-                if validation.is_ok() {
-                    current_text = resulting_text;
-                    applied.push((input_path, target));
-                } else {
-                    for err in validation.errors {
-                        eprintln!("Error applying follows for {}: {}", input_path, err);
-                    }
-                }
-            }
-            Ok(None) => eprintln!("Could not create follows for {}", input_path),
-            Err(e) => eprintln!("Error applying follows for {}: {}", input_path, e),
-        }
-    }
-
-    let mut unfollowed: Vec<&str> = Vec::new();
-
-    for nested_path in &to_unfollow {
-        let change = Change::Remove {
-            ids: vec![nested_path.clone().into()],
-        };
-
-        let mut temp_flake_edit =
-            FlakeEdit::from_text(&current_text).map_err(CommandError::FlakeEdit)?;
-
-        match temp_flake_edit.apply_change(change) {
-            Ok(Some(resulting_text)) => {
-                let validation = validate::validate(&resulting_text);
-                if validation.is_ok() {
-                    current_text = resulting_text;
-                    unfollowed.push(nested_path);
-                }
-            }
-            Ok(None) => {}
-            Err(e) => eprintln!("Error removing stale follows for {}: {}", nested_path, e),
-        }
-    }
-
-    if applied.is_empty() && unfollowed.is_empty() {
-        return Ok(());
-    }
-
-    if state.diff {
-        let original = editor.text();
-        let diff = crate::diff::Diff::new(&original, &current_text);
-        diff.compare();
-    } else {
-        editor.apply_or_diff(&current_text, state)?;
-
-        if !quiet {
-            if !applied.is_empty() {
-                println!(
-                    "Deduplicated {} {}.",
-                    applied.len(),
-                    if applied.len() == 1 {
-                        "input"
-                    } else {
-                        "inputs"
-                    }
-                );
-                for (input_path, target) in &applied {
-                    if input_path.contains('.') {
-                        let (parent, nested_name) =
-                            split_quoted_path(input_path).unwrap_or((input_path, input_path));
-                        println!("  {}.{} → {}", parent, nested_name, target);
-                    } else {
-                        println!("  {} → {}", input_path, target);
-                    }
-                }
-            }
-
-            if !unfollowed.is_empty() {
-                println!(
-                    "Removed {} stale follows {}.",
-                    unfollowed.len(),
-                    if unfollowed.len() == 1 {
-                        "declaration"
-                    } else {
-                        "declarations"
-                    }
-                );
-                for path in &unfollowed {
-                    println!("  {} (input no longer exists)", path);
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
-/// Process multiple flake files in batch mode.
-///
-/// Each file is processed independently with its own Editor/AppState.
-/// Errors are collected and reported at the end, but processing continues
-/// for all files. Returns error if any file failed.
-pub fn follow_auto_batch(
-    paths: &[std::path::PathBuf],
-    transitive: Option<usize>,
-    args: &crate::cli::CliArgs,
-) -> Result<()> {
-    use std::path::PathBuf;
-
-    let mut errors: Vec<(PathBuf, CommandError)> = Vec::new();
-
-    for flake_path in paths {
-        let lock_path = flake_path
-            .parent()
-            .map(|p| p.join("flake.lock"))
-            .unwrap_or_else(|| PathBuf::from("flake.lock"));
-
-        let editor = match Editor::from_path(flake_path.clone()) {
-            Ok(e) => e,
-            Err(e) => {
-                errors.push((flake_path.clone(), e.into()));
-                continue;
-            }
-        };
-
-        let mut flake_edit = match editor.create_flake_edit() {
-            Ok(fe) => fe,
-            Err(e) => {
-                errors.push((flake_path.clone(), e.into()));
-                continue;
-            }
-        };
-
-        let mut state = match AppState::new(
-            editor.text(),
-            flake_path.clone(),
-            args.config().map(PathBuf::from),
-        ) {
-            Ok(s) => s
-                .with_diff(args.diff())
-                .with_no_lock(args.no_lock())
-                .with_interactive(false)
-                .with_lock_file(Some(lock_path))
-                .with_no_cache(args.no_cache())
-                .with_cache_path(args.cache().map(PathBuf::from)),
-            Err(e) => {
-                errors.push((flake_path.clone(), e.into()));
-                continue;
-            }
-        };
-
-        if let Some(min) = transitive {
-            state.config.follow.transitive_min = min;
-        }
-
-        if let Err(e) = follow_auto_impl(&editor, &mut flake_edit, &state, true) {
-            errors.push((flake_path.clone(), e));
-        }
-    }
-
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        for (path, err) in &errors {
-            eprintln!("Error processing {}: {}", path.display(), err);
-        }
-        // Return the first error
-        Err(errors.into_iter().next().unwrap().1)
-    }
-}
-
-fn apply_change(
+pub(super) fn apply_change(
     editor: &Editor,
     flake_edit: &mut FlakeEdit,
     state: &AppState,
     change: Change,
 ) -> Result<()> {
     let original_content = flake_edit.source_text();
-    match flake_edit.apply_change(change.clone()) {
-        Ok(Some(resulting_change)) => {
-            if change.is_follows() && resulting_change == original_content {
-                if let Some(id) = change.id() {
-                    println!(
-                        "Already follows: {}.inputs.{}.follows = \"{}\"",
-                        id.input(),
-                        id.follows().unwrap_or("?"),
-                        change.follows_target().unwrap_or(&"?".to_string())
-                    );
-                }
-                return Ok(());
-            }
-
-            let validation = validate::validate(&resulting_change);
-            if validation.has_errors() {
-                eprintln!("There are errors in the changes:");
-                for e in &validation.errors {
-                    tracing::error!("Error: {e}");
-                }
-                eprintln!("{}", resulting_change);
-                eprintln!("There were errors in the changes, the changes have not been applied.");
-                std::process::exit(1);
-            }
-
-            editor.apply_or_diff(&resulting_change, state)?;
-
-            if !state.diff {
-                // Cache added entries for future completions
-                if let Change::Add {
-                    id: Some(id),
-                    uri: Some(uri),
-                    ..
-                } = &change
-                {
-                    let mut cache = crate::cache::Cache::load();
-                    cache.add_entry(id.clone(), uri.clone());
-                    if let Err(e) = cache.commit() {
-                        tracing::debug!("Could not write to cache: {}", e);
-                    }
-                }
-
-                for msg in change.success_messages() {
-                    println!("{}", msg);
-                }
-            }
-        }
-        Err(e) => {
-            return Err(e.into());
-        }
-        Ok(None) => {
+    let outcome = flake_edit.apply_change(change.clone())?;
+    let resulting_change = match outcome.text {
+        Some(t) => t,
+        None => {
             if change.is_remove() {
                 return Err(CommandError::CouldNotRemove(
                     change.id().map(|id| id.to_string()).unwrap_or_default(),
@@ -1529,6 +866,60 @@ fn apply_change(
                 std::process::exit(1);
             }
             println!("Nothing changed.");
+            return Ok(());
+        }
+    };
+
+    if change.is_follows() && resulting_change == original_content {
+        if let Some(id) = change.id() {
+            let follows_str = id
+                .follows()
+                .map(|s| s.render())
+                .unwrap_or_else(|| "?".to_string());
+            let target_str = change
+                .follows_target()
+                .map(|t| t.to_string())
+                .unwrap_or_else(|| "?".to_string());
+            println!(
+                "Already follows: {}.inputs.{}.follows = \"{}\"",
+                id.input().render(),
+                follows_str,
+                target_str,
+            );
+        }
+        return Ok(());
+    }
+
+    let validation = validate::validate(&resulting_change);
+    if validation.has_errors() {
+        eprintln!("There are errors in the changes:");
+        for e in &validation.errors {
+            tracing::error!("Error: {e}");
+        }
+        eprintln!("{}", resulting_change);
+        eprintln!("There were errors in the changes, the changes have not been applied.");
+        std::process::exit(1);
+    }
+
+    editor.apply_or_diff(&resulting_change, state)?;
+
+    if !state.diff {
+        // Cache added entries for future completions.
+        if let Change::Add {
+            id: Some(id),
+            uri: Some(uri),
+            ..
+        } = &change
+        {
+            let mut cache = crate::cache::Cache::load();
+            cache.add_entry(id.clone(), uri.clone());
+            if let Err(e) = cache.commit() {
+                tracing::debug!("Could not write to cache: {}", e);
+            }
+        }
+
+        for msg in change.success_messages() {
+            println!("{}", msg);
         }
     }
 
@@ -1538,105 +929,27 @@ fn apply_change(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::follows::AttrPath;
 
     #[test]
-    fn test_is_follows_reference_to_parent() {
-        // Test case: treefmt-nix.follows = "clan-core/treefmt-nix"
-        // The URL would be stored as "\"clan-core/treefmt-nix\""
-        assert!(is_follows_reference_to_parent(
-            "\"clan-core/treefmt-nix\"",
-            "clan-core"
-        ));
+    fn existing_follows_via_graph_handles_quoted_attrs() {
+        use crate::follows::{FollowsGraph, Segment};
+        use crate::input::{Follows, Input};
 
-        // Also test without surrounding quotes (defensive)
-        assert!(is_follows_reference_to_parent(
-            "clan-core/treefmt-nix",
-            "clan-core"
-        ));
-
-        // Test with different parent
-        assert!(is_follows_reference_to_parent(
-            "\"some-input/nixpkgs\"",
-            "some-input"
-        ));
-
-        // Negative test: regular URL should not match
-        assert!(!is_follows_reference_to_parent(
-            "\"github:nixos/nixpkgs\"",
-            "clan-core"
-        ));
-
-        // Negative test: URL that contains the parent but doesn't start with it
-        assert!(!is_follows_reference_to_parent(
-            "\"github:foo/clan-core-utils\"",
-            "clan-core"
-        ));
-
-        // Negative test: parent name matches but not followed by /
-        assert!(!is_follows_reference_to_parent(
-            "\"clan-core-extended\"",
-            "clan-core"
-        ));
-
-        // Edge case: empty URL
-        assert!(!is_follows_reference_to_parent("", "clan-core"));
-
-        // Edge case: just quotes
-        assert!(!is_follows_reference_to_parent("\"\"", "clan-core"));
-    }
-
-    #[test]
-    fn test_strip_attr_quotes() {
-        assert_eq!(strip_attr_quotes("\"nixpkgs\""), "nixpkgs");
-        assert_eq!(strip_attr_quotes("nixpkgs"), "nixpkgs");
-        assert_eq!(strip_attr_quotes("\"hls-1.10\""), "hls-1.10");
-        assert_eq!(strip_attr_quotes(""), "");
-    }
-
-    #[test]
-    fn test_normalize_nested_path() {
-        // Unquoted segments stay unquoted
-        assert_eq!(normalize_nested_path("crane.nixpkgs"), "crane.nixpkgs");
-
-        // Unnecessarily quoted segments get stripped
-        assert_eq!(
-            normalize_nested_path("\"home-manager\".nixpkgs"),
-            "home-manager.nixpkgs"
-        );
-        assert_eq!(
-            normalize_nested_path("\"home-manager\".\"nixpkgs\""),
-            "home-manager.nixpkgs"
-        );
-
-        // Segments with dots stay quoted
-        assert_eq!(
-            normalize_nested_path("\"hls-1.10\".nixpkgs"),
-            "\"hls-1.10\".nixpkgs"
-        );
-    }
-
-    #[test]
-    fn test_collect_stale_follows_quoted_attrs() {
-        use crate::input::Input;
-
-        // Simulate: flake.nix has `"home-manager".inputs.nixpkgs.follows = "nixpkgs"`
-        // Lock file reports the nested path as `home-manager.nixpkgs`.
+        // `"home-manager".inputs.nixpkgs.follows = "nixpkgs"` must resolve to
+        // a typed-AttrPath edge sourced at `home-manager.nixpkgs`, not at the
+        // quoted form.
         let mut inputs = InputMap::new();
-        let mut hm_input = Input::new("\"home-manager\"".to_string());
-        hm_input.follows.push(Follows::Indirect(
-            "nixpkgs".to_string(),
-            "nixpkgs".to_string(),
-        ));
-        inputs.insert("\"home-manager\"".to_string(), hm_input);
+        let hm_seg = Segment::from_unquoted("home-manager").unwrap();
+        let mut hm_input = Input::new(hm_seg.clone());
+        hm_input.follows.push(Follows::Indirect {
+            path: AttrPath::new(Segment::from_unquoted("nixpkgs").unwrap()),
+            target: Some(AttrPath::parse("nixpkgs").unwrap()),
+        });
+        inputs.insert("home-manager".to_string(), hm_input);
 
-        // Lock file paths (no unnecessary quotes)
-        let existing: HashSet<String> = ["home-manager.nixpkgs".to_string()].into_iter().collect();
-
-        let stale = collect_stale_follows(&inputs, &existing);
-        assert!(
-            stale.is_empty(),
-            "Expected no stale follows, but got: {:?}",
-            stale
-        );
+        let graph = FollowsGraph::from_declared(&inputs);
+        let sources: HashSet<AttrPath> = graph.edges().map(|e| e.source.clone()).collect();
+        assert!(sources.contains(&AttrPath::parse("home-manager.nixpkgs").unwrap()));
     }
 }

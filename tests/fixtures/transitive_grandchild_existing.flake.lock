@@ -1,0 +1,65 @@
+{
+  "nodes": {
+    "flake-parts": {
+      "locked": {
+        "lastModified": 1700000000,
+        "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "1111111111111111111111111111111111111111",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "neovim": {
+      "inputs": {
+        "nixvim": "nixvim"
+      },
+      "locked": {
+        "lastModified": 1700000002,
+        "narHash": "sha256-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCA=",
+        "owner": "nix-community",
+        "repo": "neovim-nightly-overlay",
+        "rev": "3333333333333333333333333333333333333333",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "neovim-nightly-overlay",
+        "type": "github"
+      }
+    },
+    "nixvim": {
+      "inputs": {
+        "flake-parts": [
+          "flake-parts"
+        ]
+      },
+      "locked": {
+        "lastModified": 1700000003,
+        "narHash": "sha256-DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDA=",
+        "owner": "nix-community",
+        "repo": "nixvim",
+        "rev": "4444444444444444444444444444444444444444",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "nixvim",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "flake-parts": "flake-parts",
+        "neovim": "neovim"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

@@ -1,0 +1,23 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/root.flake.nix"
+    - "--diff"
+    - add-follow
+    - neovim.nixvim.flake-parts
+    - flake-parts
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+Error: 
+   0: `add-follow` accepts only depth-1 paths of the form `parent.child`; got 'neovim.nixvim.flake-parts' (3 segments).
+
+      Use `flake-edit follow` for deeper paths (depth bounded by `follow.max_depth` in your config).

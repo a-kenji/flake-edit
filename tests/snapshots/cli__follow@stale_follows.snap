@@ -1,5 +1,6 @@
 ---
 source: tests/cli.rs
+assertion_line: 616
 info:
   program: flake-edit
   args:
@@ -27,3 +28,4 @@ exit_code: 0
      flake-compat.url = "github:edolstra/flake-compat";
 
 ----- stderr -----
+warning: stale follows at line 8, column 17: crane.flake-compat -> flake-compat (source no longer present in flake.lock)

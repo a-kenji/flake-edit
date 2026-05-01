@@ -1,0 +1,30 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/split_inputs_block_and_flat.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/split_inputs_block_and_flat.flake.lock"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -7,6 +7,8 @@
+   };
+
+   inputs.neovim.url = "github:nix-community/neovim-nightly-overlay";
++  inputs.neovim.inputs.flake-parts.follows = "flake-parts";
++  inputs.neovim.inputs.nixpkgs.follows = "nixpkgs";
+
+   outputs = { self, ... }: { };
+ }
+
+----- stderr -----

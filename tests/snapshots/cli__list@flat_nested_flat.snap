@@ -12,10 +12,10 @@ info:
 success: true
 exit_code: 0
 ----- stdout -----
-· flake-utils - "github:numtide/flake-utils/master"
-· nixpkgs - "github:NixOS/nixpkgs/nixos-unstable"
-· poetry2nix - "github:nix-community/poetry2nix/master"
-     flake-utils => "flake-utils"
-     nixpkgs => "nixpkgs"
+· flake-utils - github:numtide/flake-utils/master
+· nixpkgs - github:NixOS/nixpkgs/nixos-unstable
+· poetry2nix - github:nix-community/poetry2nix/master
+     flake-utils => flake-utils
+     nixpkgs => nixpkgs
 
 ----- stderr -----

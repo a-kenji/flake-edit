@@ -1,0 +1,44 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/transitive_promote_unlocks_deeper.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/transitive_promote_unlocks_deeper.flake.lock"
+    - "--config"
+    - "[FIXTURES]/transitive_promote_unlocks_deeper.config.toml"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -4,8 +4,12 @@
+   inputs = {
+     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+     alpha.url = "github:example/alpha";
++    alpha.inputs.flake-compat.follows = "flake-compat";
+     beta.url = "github:example/beta";
++    beta.inputs.flake-compat.follows = "flake-compat";
+     gamma.url = "github:example/gamma";
++    gamma.inputs.helper.inputs.flake-compat.follows = "flake-compat";
++    flake-compat.url = "github:edolstra/flake-compat";
+   };
+
+   outputs =
+@@ -15,6 +19,7 @@
+       alpha,
+       beta,
+       gamma,
++      flake-compat,
+     }:
+     { };
+ }
+
+----- stderr -----

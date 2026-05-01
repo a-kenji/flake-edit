@@ -1,33 +1,24 @@
 ---
 source: tests/edit.rs
-expression: flake_edit.list()
+expression: "ListOutput::from(flake_edit.list())"
 info:
   flake_nix: ""
   changes:
     - Remove:
-        id: naersk
+        ids:
+          - naersk
 ---
-flake-compat:
-  id: flake-compat
-  flake: true
-  url: "\"github:edolstra/flake-compat\""
-  follows: []
-  range:
-    start: 183
-    end: 213
-nixpkgs:
-  id: nixpkgs
-  flake: true
-  url: "\"github:NixOS/nixpkgs/nixpkgs-unstable\""
-  follows: []
-  range:
-    start: 63
-    end: 102
-utils:
-  id: utils
-  flake: true
-  url: "\"github:numtide/flake-utils\""
-  follows: []
-  range:
-    start: 120
-    end: 148
+inputs:
+  flake-compat:
+    id: flake-compat
+    url: "github:edolstra/flake-compat"
+    flake: true
+  nixpkgs:
+    id: nixpkgs
+    url: "github:NixOS/nixpkgs/nixpkgs-unstable"
+    flake: true
+  utils:
+    id: utils
+    url: "github:numtide/flake-utils"
+    flake: true
+follows: []

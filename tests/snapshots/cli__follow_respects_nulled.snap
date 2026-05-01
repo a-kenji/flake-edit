@@ -1,0 +1,23 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/follow_respects_nulled.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/follow_respects_nulled.flake.lock"
+    - "--diff"
+    - follow
+    - "--transitive"
+    - "--depth"
+    - "6"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+All inputs are already deduplicated.
+
+----- stderr -----

@@ -1,0 +1,64 @@
+{
+  "nodes": {
+    "cl-nix-lite": {
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-cccccccccccccccccccccccccccccccccccccccccc=",
+        "owner": "verymucho",
+        "repo": "cl-nix-lite",
+        "rev": "1111111111111111111111111111111111111111",
+        "type": "github"
+      },
+      "original": {
+        "owner": "verymucho",
+        "repo": "cl-nix-lite",
+        "type": "github"
+      }
+    },
+    "mac-app-util": {
+      "inputs": {
+        "cl-nix-lite": "cl-nix-lite",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm=",
+        "owner": "hraban",
+        "repo": "mac-app-util",
+        "rev": "2222222222222222222222222222222222222222",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hraban",
+        "repo": "mac-app-util",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "3333333333333333333333333333333333333333",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "mac-app-util": "mac-app-util",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

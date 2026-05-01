@@ -1,0 +1,22 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/prune_empty_intermediate_inputs.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/prune_empty_intermediate_inputs.flake.lock"
+    - "--config"
+    - "[FIXTURES]/prune_empty_intermediate_inputs.config.toml"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+All inputs are already deduplicated.
+
+----- stderr -----

@@ -1,0 +1,86 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1700000000,
+        "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "1111111111111111111111111111111111111111",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "flake-edit": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "nested-helper": "nested-helper"
+      },
+      "locked": {
+        "lastModified": 1700000001,
+        "narHash": "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA=",
+        "owner": "a-kenji",
+        "repo": "flake-edit",
+        "rev": "2222222222222222222222222222222222222222",
+        "type": "github"
+      },
+      "original": {
+        "owner": "a-kenji",
+        "repo": "flake-edit",
+        "type": "github"
+      }
+    },
+    "nested-helper": {
+      "inputs": {
+        "nixpkgs": [
+          "flake-edit",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1700000002,
+        "narHash": "sha256-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCA=",
+        "owner": "a-kenji",
+        "repo": "nested-helper",
+        "rev": "3333333333333333333333333333333333333333",
+        "type": "github"
+      },
+      "original": {
+        "owner": "a-kenji",
+        "repo": "nested-helper",
+        "type": "github"
+      }
+    },
+    "tui-term": {
+      "locked": {
+        "lastModified": 1700000003,
+        "narHash": "sha256-DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDA=",
+        "owner": "a-kenji",
+        "repo": "tui-term",
+        "rev": "4444444444444444444444444444444444444444",
+        "type": "github"
+      },
+      "original": {
+        "owner": "a-kenji",
+        "repo": "tui-term",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "flake-edit": "flake-edit",
+        "tui-term": "tui-term"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

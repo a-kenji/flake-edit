@@ -1,0 +1,81 @@
+{
+  "nodes": {
+    "X": {
+      "locked": {
+        "lastModified": 1700000000,
+        "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "owner": "owner",
+        "repo": "X",
+        "rev": "1111111111111111111111111111111111111111",
+        "type": "github"
+      },
+      "original": {
+        "owner": "owner",
+        "repo": "X",
+        "type": "github"
+      }
+    },
+    "X_2": {
+      "locked": {
+        "lastModified": 1700000001,
+        "narHash": "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA=",
+        "owner": "owner",
+        "repo": "X",
+        "rev": "2222222222222222222222222222222222222222",
+        "type": "github"
+      },
+      "original": {
+        "owner": "owner",
+        "repo": "X",
+        "type": "github"
+      }
+    },
+    "Y": {
+      "inputs": {
+        "Z": [
+          "Z"
+        ]
+      },
+      "locked": {
+        "lastModified": 1700000002,
+        "narHash": "sha256-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCA=",
+        "owner": "owner",
+        "repo": "Y",
+        "rev": "3333333333333333333333333333333333333333",
+        "type": "github"
+      },
+      "original": {
+        "owner": "owner",
+        "repo": "Y",
+        "type": "github"
+      }
+    },
+    "Z": {
+      "inputs": {
+        "X": "X_2"
+      },
+      "locked": {
+        "lastModified": 1700000003,
+        "narHash": "sha256-DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDA=",
+        "owner": "owner",
+        "repo": "Z",
+        "rev": "4444444444444444444444444444444444444444",
+        "type": "github"
+      },
+      "original": {
+        "owner": "owner",
+        "repo": "Z",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "X": "X",
+        "Y": "Y",
+        "Z": "Z"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

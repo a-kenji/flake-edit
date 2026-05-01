@@ -12,14 +12,14 @@ info:
 success: true
 exit_code: 0
 ----- stdout -----
-· crane - "github:ipetkov/crane"
-     flake-utils => "flake-utils"
-     nixpkgs => "nixpkgs"
-     rust-overlay => "rust-overlay"
-· flake-utelinos - "github:numtide/flake-utils"
-· nixpkgs - "github:nixos/nixpkgs/nixos-unstable"
-· rust-overlay - "github:oxalica/rust-overlay"
-     flake-utils => "flake-utils"
-     nixpkgs => "nixpkgs"
+· crane - github:ipetkov/crane
+     flake-utils => flake-utils
+     nixpkgs => nixpkgs
+     rust-overlay => rust-overlay
+· flake-utelinos - github:numtide/flake-utils
+· nixpkgs - github:nixos/nixpkgs/nixos-unstable
+· rust-overlay - github:oxalica/rust-overlay
+     flake-utils => flake-utils
+     nixpkgs => nixpkgs
 
 ----- stderr -----

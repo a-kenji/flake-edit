@@ -15,9 +15,7 @@ exit_code: 1
 ----- stdout -----
 
 ----- stderr -----
-Error processing [FIXTURES]/centerpiece.flake.nix: Could not read lock file '[FIXTURES]/flake.lock': IoError: No such file or directory (os error 2)
-Error processing [FIXTURES]/first_nested_node.flake.nix: Could not read lock file '[FIXTURES]/flake.lock': IoError: No such file or directory (os error 2)
 Error: 
-   0: Could not read lock file '[FIXTURES]/flake.lock': IoError: No such file or directory (os error 2)
-   1: IoError: No such file or directory (os error 2)
-   2: No such file or directory (os error 2)
+   0: 2 file(s) failed during batch processing:
+        - [FIXTURES]/centerpiece.flake.nix: Could not read lock file '[FIXTURES]/flake.lock': IoError: No such file or directory (os error 2)
+        - [FIXTURES]/first_nested_node.flake.nix: Could not read lock file '[FIXTURES]/flake.lock': IoError: No such file or directory (os error 2)

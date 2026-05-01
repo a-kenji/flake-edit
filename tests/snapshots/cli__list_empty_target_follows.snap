@@ -1,0 +1,22 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/follows_empty_target.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/follows_empty_target.flake.lock"
+    - list
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+· nix - github:NixOS/nix
+     flake-compat => ""
+     nixpkgs => nixpkgs
+· nixpkgs - github:NixOS/nixpkgs/nixos-unstable
+
+----- stderr -----

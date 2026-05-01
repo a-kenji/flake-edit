@@ -21,13 +21,15 @@ pub enum Outputs {
 
 pub type InputMap = HashMap<String, Input>;
 
+/// Sorted input ids from `inputs`.
 pub fn sorted_input_ids(inputs: &InputMap) -> Vec<&String> {
     let mut keys: Vec<_> = inputs.keys().collect();
     keys.sort();
     keys
 }
 
-/// Returns owned strings, for contexts where references won't work.
+/// Sorted input ids as owned strings, for callers that can't hold a borrow on
+/// `inputs`.
 pub fn sorted_input_ids_owned(inputs: &InputMap) -> Vec<String> {
     let mut keys: Vec<String> = inputs.keys().cloned().collect();
     keys.sort();
@@ -40,6 +42,15 @@ pub enum OutputChange {
     None,
     Add(String),
     Remove(String),
+}
+
+/// Result of applying a [`Change`].
+///
+/// `text` is the new flake source, or `None` for a no-op (e.g. an
+/// already-existing follows declaration).
+#[derive(Debug, Default)]
+pub struct ApplyOutcome {
+    pub text: Option<String>,
 }
 
 impl FlakeEdit {
@@ -73,17 +84,31 @@ impl FlakeEdit {
         &self.walker.inputs
     }
 
-    /// Will walk and then list the inputs, for listing the current inputs,
-    /// use `curr_list()`.
+    /// Re-walk the source and return the freshly populated input map. Use
+    /// [`Self::curr_list`] to read the cached map without re-walking.
     pub fn list(&mut self) -> &InputMap {
         self.walker.inputs.clear();
         // Walk returns Ok(None) when no changes are made (expected for listing)
         assert!(self.walker.walk(&Change::None).ok().flatten().is_none());
         &self.walker.inputs
     }
-    /// Apply a specific change to a walker, on some inputs it will need to walk
-    /// multiple times, will error, if the edit could not be applied successfully.
-    pub fn apply_change(&mut self, change: Change) -> Result<Option<String>, FlakeEditError> {
+    /// Apply `change` and return the resulting [`ApplyOutcome`].
+    ///
+    /// Some edits require multiple walker passes. This method drives them all.
+    /// A fatal validation failure surfaces as
+    /// [`FlakeEditError::Validation`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FlakeEditError`] if the underlying walker fails or the change
+    /// is rejected (e.g. [`FlakeEditError::DuplicateInput`],
+    /// [`FlakeEditError::InputNotFound`]).
+    pub fn apply_change(&mut self, change: Change) -> Result<ApplyOutcome, FlakeEditError> {
+        let text = self.apply_change_text(change)?;
+        Ok(ApplyOutcome { text })
+    }
+
+    fn apply_change_text(&mut self, change: Change) -> Result<Option<String>, FlakeEditError> {
         match change {
             Change::None => Ok(None),
             Change::Add { .. } => {
@@ -91,7 +116,7 @@ impl FlakeEdit {
                 if let Some(input_id) = change.id() {
                     self.ensure_inputs_populated()?;
 
-                    let input_id_string = input_id.to_string();
+                    let input_id_string = input_id.input().as_str().to_string();
                     if self.walker.inputs.contains_key(&input_id_string) {
                         return Err(FlakeEditError::DuplicateInput(input_id_string));
                     }
@@ -101,7 +126,7 @@ impl FlakeEdit {
                     let outputs = self.walker.list_outputs()?;
                     match outputs {
                         Outputs::Multiple(out) => {
-                            let id = change.id().unwrap().to_string();
+                            let id = change.id().unwrap().input().as_str().to_string();
                             if !out.contains(&id) {
                                 self.walker.root = maybe_changed_node.clone();
                                 if let Some(maybe_changed_node) =
@@ -123,7 +148,14 @@ impl FlakeEdit {
             Change::Remove { .. } => {
                 self.ensure_inputs_populated()?;
 
-                let removed_id = change.id().unwrap().to_string();
+                let id = change.id().unwrap();
+                // Outputs-lambda strip and orphan-follows scrubbing only
+                // run for a top-level input remove. A depth-N follows id
+                // shares its first segment with a still-present input;
+                // running the cleanup there would strip that input from
+                // the outputs lambda.
+                let is_toplevel_remove = id.follows().is_none();
+                let removed_id = id.input().as_str().to_string();
 
                 // If we remove a node, it could be a flat structure,
                 // we want to remove all of the references to its toplevel.
@@ -135,31 +167,32 @@ impl FlakeEdit {
                     res = Some(changed_node.clone());
                     self.walker.root = changed_node.clone();
                 }
-                // Removed nodes should be removed from the outputs
-                let outputs = self.walker.list_outputs()?;
-                match outputs {
-                    Outputs::Multiple(out) | Outputs::Any(out) => {
-                        if out.contains(&removed_id)
-                            && let Some(changed_node) = self
-                                .walker
-                                .change_outputs(OutputChange::Remove(removed_id.clone()))?
-                        {
+
+                if is_toplevel_remove {
+                    let outputs = self.walker.list_outputs()?;
+                    match outputs {
+                        Outputs::Multiple(out) | Outputs::Any(out) => {
+                            if out.contains(&removed_id)
+                                && let Some(changed_node) = self
+                                    .walker
+                                    .change_outputs(OutputChange::Remove(removed_id.clone()))?
+                            {
+                                res = Some(changed_node.clone());
+                                self.walker.root = changed_node.clone();
+                            }
+                        }
+                        Outputs::None => {}
+                    }
+
+                    let orphaned_follows = self.collect_orphaned_follows(&removed_id);
+                    for orphan_change in orphaned_follows {
+                        while let Some(changed_node) = self.walker.walk(&orphan_change)? {
+                            if res == Some(changed_node.clone()) {
+                                break;
+                            }
                             res = Some(changed_node.clone());
                             self.walker.root = changed_node.clone();
                         }
-                    }
-                    Outputs::None => {}
-                }
-
-                // Remove orphaned follows references that point to the removed input
-                let orphaned_follows = self.collect_orphaned_follows(&removed_id);
-                for orphan_change in orphaned_follows {
-                    while let Some(changed_node) = self.walker.walk(&orphan_change)? {
-                        if res == Some(changed_node.clone()) {
-                            break;
-                        }
-                        res = Some(changed_node.clone());
-                        self.walker.root = changed_node.clone();
                     }
                 }
 
@@ -168,7 +201,7 @@ impl FlakeEdit {
             Change::Follows { ref input, .. } => {
                 self.ensure_inputs_populated()?;
 
-                let parent_id = input.input();
+                let parent_id = input.input().as_str();
                 if !self.walker.inputs.contains_key(parent_id) {
                     return Err(FlakeEditError::InputNotFound(parent_id.to_string()));
                 }
@@ -183,7 +216,7 @@ impl FlakeEdit {
                 if let Some(input_id) = change.id() {
                     self.ensure_inputs_populated()?;
 
-                    let input_id_string = input_id.to_string();
+                    let input_id_string = input_id.input().as_str().to_string();
                     if !self.walker.inputs.contains_key(&input_id_string) {
                         return Err(FlakeEditError::InputNotFound(input_id_string));
                     }
@@ -202,7 +235,7 @@ impl FlakeEdit {
         &self.walker
     }
 
-    /// Ensure the inputs map is populated by walking if empty.
+    /// Walk once if the inputs map is empty.
     fn ensure_inputs_populated(&mut self) -> Result<(), FlakeEditError> {
         if self.walker.inputs.is_empty() {
             let _ = self.walker.walk(&Change::None)?;
@@ -210,18 +243,28 @@ impl FlakeEdit {
         Ok(())
     }
 
-    /// Collect follows references that point to a removed input.
-    /// Returns a list of Change::Remove for orphaned follows.
+    /// Collect [`Change::Remove`]s for follows declarations whose target
+    /// top-level segment matches `removed_id`.
     fn collect_orphaned_follows(&self, removed_id: &str) -> Vec<Change> {
         let mut orphaned = Vec::new();
         for (input_id, input) in &self.walker.inputs {
             for follows in input.follows() {
-                if let Follows::Indirect(follows_name, target) = follows {
-                    // target is the RHS of `follows = "target"`
-                    if target.trim_matches('"') == removed_id {
-                        let nested_id = format!("{}.{}", input_id, follows_name);
+                if let Follows::Indirect {
+                    path,
+                    target: Some(target),
+                } = follows
+                {
+                    // target is the RHS of `follows = "..."`. Match when its
+                    // top-level segment is the removed input. Empty targets
+                    // (`follows = ""`) have nothing to follow and cannot
+                    // dangle.
+                    if target.first().as_str() == removed_id {
+                        let path_str = format!("{}.{}", input_id, path);
+                        let Ok(change_id) = crate::change::ChangeId::parse(&path_str) else {
+                            continue;
+                        };
                         orphaned.push(Change::Remove {
-                            ids: vec![nested_id.into()],
+                            ids: vec![change_id],
                         });
                     }
                 }
@@ -250,13 +293,13 @@ mod tests {
         let mut fe = FlakeEdit::from_text(flake).unwrap();
         let original = fe.source_text();
         let change = Change::Follows {
-            input: "crane.nixpkgs".to_string().into(),
-            target: "nixpkgs".to_string(),
+            input: crate::change::ChangeId::parse("crane.nixpkgs").unwrap(),
+            target: crate::follows::AttrPath::parse("nixpkgs").unwrap(),
         };
         let result = fe.apply_change(change).unwrap();
-        // Walker signals a no-op as either the unchanged text or `None`;
-        // both are acceptable here.
-        if let Some(text) = result {
+        // Walker signals a no-op as either the unchanged text or `None`.
+        // Both are acceptable here.
+        if let Some(text) = result.text {
             assert_eq!(text, original, "text should be unchanged");
         }
     }
@@ -274,12 +317,12 @@ mod tests {
 }"#;
         let mut fe = FlakeEdit::from_text(flake).unwrap();
         let change = Change::Follows {
-            input: "crane.nixpkgs".to_string().into(),
-            target: "nixpkgs".to_string(),
+            input: crate::change::ChangeId::parse("crane.nixpkgs").unwrap(),
+            target: crate::follows::AttrPath::parse("nixpkgs").unwrap(),
         };
         let result = fe.apply_change(change);
         assert!(result.is_ok(), "expected Ok, got: {:?}", result);
-        let text = result.unwrap().unwrap();
+        let text = result.unwrap().text.unwrap();
         assert!(text.contains("inputs.nixpkgs.follows = \"nixpkgs\""));
     }
 }

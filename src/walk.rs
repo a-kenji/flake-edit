@@ -1,4 +1,4 @@
-//! AST walking and manipulation for flake.nix files.
+//! CST walking and mutation for `flake.nix` files.
 
 mod context;
 mod error;
@@ -12,6 +12,7 @@ use rnix::{Root, SyntaxKind, SyntaxNode};
 
 use crate::change::Change;
 use crate::edit::{OutputChange, Outputs};
+use crate::follows::{AttrPath, Segment, strip_outer_quotes};
 use crate::input::Input;
 
 pub use context::Context;
@@ -19,10 +20,45 @@ pub use error::WalkerError;
 
 use inputs::walk_inputs;
 use node::{
-    adjacent_whitespace_index, get_sibling_whitespace, insertion_index_after,
-    make_nested_follows_attr, make_quoted_string, make_toplevel_flake_false_attr,
-    make_toplevel_nested_follows_attr, make_toplevel_url_attr, parse_node, substitute_child,
+    FollowsKind, adjacent_whitespace_index, get_sibling_whitespace, insertion_index_after,
+    make_quoted_string, make_toplevel_flake_false_attr, make_toplevel_url_attr, parse_node,
+    substitute_child,
 };
+
+/// Expected idents for a top-level flat follows attrpath of any depth:
+/// `inputs.<S0>.inputs.<S1>...inputs.<SN>.follows`.
+fn expected_toplevel_flat_idents(path: &AttrPath) -> Vec<&str> {
+    let mut out: Vec<&str> = Vec::with_capacity(path.len() * 2 + 2);
+    for seg in path.segments() {
+        out.push("inputs");
+        out.push(seg.as_str());
+    }
+    out.push("follows");
+    out
+}
+
+/// Expected idents for a block-style follows attrpath inside a parent input's
+/// `{ ... }` block: `inputs.<R0>.inputs.<R1>...inputs.<RN>.follows`.
+fn expected_block_follows_idents(rest: &[Segment]) -> Vec<&str> {
+    let mut out: Vec<&str> = Vec::with_capacity(rest.len() * 2 + 1);
+    for seg in rest.iter() {
+        out.push("inputs");
+        out.push(seg.as_str());
+    }
+    out.push("follows");
+    out
+}
+
+/// Whether a CST attrpath (idents may carry surrounding `"..."`) matches `expected`
+/// pairwise after unquoting.
+fn idents_match(have: &[String], expected: &[&str]) -> bool {
+    if have.len() != expected.len() {
+        return false;
+    }
+    have.iter()
+        .zip(expected.iter())
+        .all(|(h, e)| strip_outer_quotes(h) == *e)
+}
 
 #[derive(Debug, Clone)]
 pub struct Walker {
@@ -41,11 +77,11 @@ impl<'a> Walker {
         }
     }
 
-    /// Traverse the toplevel `flake.nix` file.
-    /// It should consist of three attribute keys:
-    /// - description
-    /// - inputs
-    /// - outputs
+    /// Apply `change` to the parsed `flake.nix`, returning the rebuilt root if
+    /// the tree was modified.
+    ///
+    /// Expects the parsed root to be an attrset with `description`, `inputs`, and
+    /// `outputs` keys.
     pub fn walk(&mut self, change: &Change) -> Result<Option<SyntaxNode>, WalkerError> {
         let cst = self.root.clone();
         if cst.kind() != SyntaxKind::NODE_ROOT {
@@ -54,12 +90,12 @@ impl<'a> Walker {
         self.walk_toplevel(cst, None, change)
     }
 
-    /// Only walk the outputs attribute
+    /// List the `outputs` arguments without touching `inputs`.
     pub(crate) fn list_outputs(&mut self) -> Result<Outputs, WalkerError> {
         outputs::list_outputs(&self.root)
     }
 
-    /// Only change the outputs attribute
+    /// Apply an [`OutputChange`] to the `outputs` attribute alone.
     pub(crate) fn change_outputs(
         &mut self,
         change: OutputChange,
@@ -67,7 +103,7 @@ impl<'a> Walker {
         outputs::change_outputs(&self.root, change)
     }
 
-    /// Traverse the toplevel `flake.nix` file.
+    /// Walk the top-level attrset, dispatching on `description`/`inputs`/`outputs`.
     fn walk_toplevel(
         &mut self,
         node: SyntaxNode,
@@ -117,20 +153,22 @@ impl<'a> Walker {
             }
         }
 
-        // Handle follows for toplevel flat-style inputs (inputs.X.url = "...")
-        if let Change::Follows { input, target } = change
-            && let Some(nested_id) = input.follows()
-        {
-            let parent_id = input.input();
-            if self.inputs.contains_key(parent_id) {
-                return self.handle_follows_flat_toplevel(&attr_set, parent_id, nested_id, target);
+        // Follows on toplevel flat-style inputs (`inputs.X.url = "..."`).
+        if let Change::Follows { input, target } = change {
+            let path = input.path();
+            if path.len() >= 2 {
+                let parent_id = input.input();
+                if self.inputs.contains_key(parent_id.as_str()) {
+                    let target_str = target.to_string();
+                    return self.handle_follows_flat_toplevel(&attr_set, path, &target_str);
+                }
             }
         }
 
         Ok(None)
     }
 
-    /// Handle adding follows to a toplevel flat-style input.
+    /// Add a follows attribute next to a toplevel flat-style input.
     ///
     /// Converts `inputs.crane.url = "github:...";` into:
     /// ```nix
@@ -140,10 +178,13 @@ impl<'a> Walker {
     fn handle_follows_flat_toplevel(
         &self,
         attr_set: &SyntaxNode,
-        parent_id: &str,
-        nested_id: &str,
+        path: &AttrPath,
         target: &str,
     ) -> Result<Option<SyntaxNode>, WalkerError> {
+        let parent_id = path.first();
+        // Toplevel-flat shape: `inputs.S0.inputs.S1...inputs.SN.follows`
+        // (2 * len + 1 idents).
+        let expected_flat = expected_toplevel_flat_idents(path);
         let mut last_parent_attr: Option<SyntaxNode> = None;
         let mut block_parent: Option<(SyntaxNode, SyntaxNode)> = None;
 
@@ -162,7 +203,7 @@ impl<'a> Walker {
             // Detect `inputs.{parent_id} = { ... }` block style
             if idents.len() == 2
                 && idents[0] == "inputs"
-                && idents[1] == parent_id
+                && strip_outer_quotes(&idents[1]) == parent_id.as_str()
                 && let Some(block_attr_set) = toplevel
                     .children()
                     .find(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
@@ -170,18 +211,12 @@ impl<'a> Walker {
                 block_parent = Some((toplevel.clone(), block_attr_set));
             }
 
-            // Check for existing follows: inputs.{parent_id}.inputs.{nested_id}.follows
-            if idents.len() == 5
-                && idents[0] == "inputs"
-                && idents[1] == parent_id
-                && idents[2] == "inputs"
-                && idents[3] == nested_id
-                && idents[4] == "follows"
-            {
+            // Check for existing follows: inputs.S0.inputs.S1...inputs.SN.follows
+            if idents_match(&idents, &expected_flat) {
                 let value_node = attrpath.next_sibling();
                 let current_target = value_node
                     .as_ref()
-                    .map(|v| v.to_string().trim_matches('"').to_string())
+                    .map(|v| strip_outer_quotes(&v.to_string()).to_string())
                     .unwrap_or_default();
 
                 if current_target == target {
@@ -200,24 +235,28 @@ impl<'a> Walker {
             }
 
             // Track last inputs.{parent_id}.* attribute
-            if idents.len() >= 2 && idents[0] == "inputs" && idents[1] == parent_id {
+            if idents.len() >= 2
+                && idents[0] == "inputs"
+                && strip_outer_quotes(&idents[1]) == parent_id.as_str()
+            {
                 last_parent_attr = Some(toplevel.clone());
             }
         }
 
         if let Some((toplevel, block_attr_set)) = block_parent {
+            let rest: Vec<Segment> = path.segments()[1..].to_vec();
             return self.handle_follows_block_toplevel(
                 attr_set,
                 &toplevel,
                 &block_attr_set,
-                nested_id,
+                &rest,
                 target,
             );
         }
 
         // No existing follows, insert after the last parent attribute
         if let Some(ref_child) = last_parent_attr {
-            let follows_node = make_toplevel_nested_follows_attr(parent_id, nested_id, target);
+            let follows_node = FollowsKind::TopLevelNested { path, target }.emit();
             let insert_index = insertion_index_after(&ref_child);
 
             let mut green = attr_set
@@ -246,9 +285,10 @@ impl<'a> Walker {
         attr_set: &SyntaxNode,
         toplevel: &SyntaxNode,
         block_attr_set: &SyntaxNode,
-        nested_id: &str,
+        rest: &[Segment],
         target: &str,
     ) -> Result<Option<SyntaxNode>, WalkerError> {
+        let expected_block = expected_block_follows_idents(rest);
         for attr in block_attr_set.children() {
             if attr.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
                 continue;
@@ -261,15 +301,11 @@ impl<'a> Walker {
             };
             let idents: Vec<String> = attrpath.children().map(|c| c.to_string()).collect();
 
-            if idents.len() == 3
-                && idents[0] == "inputs"
-                && idents[1] == nested_id
-                && idents[2] == "follows"
-            {
+            if idents_match(&idents, &expected_block) {
                 let value_node = attrpath.next_sibling();
                 let current_target = value_node
                     .as_ref()
-                    .map(|v| v.to_string().trim_matches('"').to_string())
+                    .map(|v| strip_outer_quotes(&v.to_string()).to_string())
                     .unwrap_or_default();
 
                 if current_target == target {
@@ -290,7 +326,7 @@ impl<'a> Walker {
             }
         }
 
-        let follows_node = make_nested_follows_attr(nested_id, target);
+        let follows_node = FollowsKind::BlockNested { rest, target }.emit();
         let children: Vec<_> = block_attr_set.children().collect();
         if let Some(last_child) = children.last() {
             let insert_index = last_child.index() + 1;
@@ -314,10 +350,10 @@ impl<'a> Walker {
         Ok(None)
     }
 
-    /// Handle `inputs = { ... }` attribute.
+    /// Apply `change` to the `inputs = { ... }` attribute.
     ///
-    /// `toplevel.replace_with()` propagates through NODE_ATTR_SET up to
-    /// NODE_ROOT, preserving any leading comments/trivia.
+    /// `toplevel.replace_with()` propagates through `NODE_ATTR_SET` up to `NODE_ROOT`,
+    /// preserving leading comments and trivia.
     fn handle_inputs_attr(
         &mut self,
         toplevel: &SyntaxNode,
@@ -335,11 +371,10 @@ impl<'a> Walker {
         Some(parse_node(&green.to_string()))
     }
 
-    /// Handle flat-style `inputs.foo.url = "..."` attributes.
+    /// Apply `change` to flat-style `inputs.foo.url = "..."` attributes.
     ///
-    /// For removals, builds the modified attr_set green and uses
-    /// `replace_with()` to propagate to NODE_ROOT.
-    /// For replacements, `toplevel.replace_with()` propagates naturally.
+    /// Removals rebuild the parent attrset green and `replace_with()` propagates to
+    /// `NODE_ROOT`. Replacements rely on `toplevel.replace_with()` to propagate.
     fn handle_inputs_flat(
         &mut self,
         attr_set: &SyntaxNode,
@@ -350,7 +385,7 @@ impl<'a> Walker {
     ) -> Option<SyntaxNode> {
         let replacement = walk_inputs(&mut self.inputs, child.clone(), ctx, change)?;
 
-        // If replacement is empty, remove the entire toplevel node and
+        // Empty replacement means we remove the entire toplevel node and
         // propagate through attr_set to NODE_ROOT.
         if replacement.to_string().is_empty() {
             let element: rnix::SyntaxElement = toplevel.clone().into();
@@ -369,10 +404,10 @@ impl<'a> Walker {
         Some(parse_node(&green.to_string()))
     }
 
-    /// Handle adding inputs when we've reached `outputs` but have no inputs yet.
+    /// Add a new input just before `outputs` when no `inputs` block exists yet.
     ///
-    /// Builds the modified attr_set green and uses `replace_with()` to
-    /// propagate to NODE_ROOT, preserving leading comments.
+    /// Rebuilds the parent attrset green. `replace_with()` propagates to `NODE_ROOT`
+    /// while preserving leading comments.
     fn handle_add_at_outputs(
         &mut self,
         attr_set: &SyntaxNode,
@@ -396,9 +431,9 @@ impl<'a> Walker {
             return None;
         }
 
-        // Find normalized whitespace (single newline + indent) by walking back
-        // from `outputs` through tokens. This handles comments between the last
-        // input and outputs correctly.
+        // Walk back from `outputs` through tokens to find a whitespace run, then
+        // normalize it to a single newline + indent. Walking through tokens (not
+        // siblings) lets us skip past comments between the last input and `outputs`.
         let ws_node = {
             let mut ws: Option<SyntaxNode> = None;
             let mut cursor = toplevel.prev_sibling_or_token();
@@ -429,7 +464,7 @@ impl<'a> Walker {
             green = green.insert_child(insert_pos, ws.green().into());
         }
 
-        // Add flake=false if needed
+        // Append `inputs.<id>.flake = false;` when the new input opts out of flake mode.
         if !flake {
             let no_flake = make_toplevel_flake_false_attr(id);
             green = green.insert_child(toplevel.index() + 1, no_flake.green().into());

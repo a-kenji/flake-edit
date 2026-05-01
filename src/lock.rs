@@ -1,41 +1,48 @@
 use crate::error::FlakeEditError;
-use serde::{Deserialize, Serialize};
+use crate::follows::{AttrPath, Segment};
+use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-/// A nested input path with optional existing follows target.
+/// A nested input discovered in `flake.lock` with its existing follows
+/// target, if any.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NestedInput {
-    /// The path to the nested input (e.g., "crane.nixpkgs")
-    pub path: String,
-    /// The target this input follows, if any (e.g., "nixpkgs")
-    pub follows: Option<String>,
-    /// The original flake URL for Direct references (e.g., "github:nixos/nixpkgs/nixos-unstable")
+    /// Dotted path to the nested input (e.g. `crane.nixpkgs`).
+    pub path: AttrPath,
+    /// Existing follows target, if the input is redirected.
+    pub follows: Option<AttrPath>,
+    /// Original flake URL for `Direct` references (e.g.
+    /// `github:nixos/nixpkgs/nixos-unstable`). `None` for follows-only
+    /// references.
     pub url: Option<String>,
 }
 
 impl NestedInput {
-    /// Format for display: "path\tfollows_target" or just "path".
-    /// The tab separator allows the UI to parse and style the parts differently.
+    /// Render as `path\tfollows_target` (or just `path` when the input has no
+    /// follows target). The tab separator lets the UI style each side
+    /// independently.
     pub fn to_display_string(&self) -> String {
         match &self.follows {
             Some(target) => format!("{}\t{}", self.path, target),
-            None => self.path.clone(),
+            None => self.path.to_string(),
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+/// Parsed `flake.lock`. Loaded with [`Self::from_default_path`],
+/// [`Self::from_file`], or [`Self::read_from_str`].
+#[derive(Debug, Deserialize)]
 pub struct FlakeLock {
     nodes: HashMap<String, Node>,
     root: String,
-    version: u8,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Node {
+/// A single entry in the lockfile's `nodes` map.
+#[derive(Debug, Deserialize)]
+pub(crate) struct Node {
     inputs: Option<HashMap<String, Input>>,
     locked: Option<Locked>,
     original: Option<Original>,
@@ -50,34 +57,98 @@ impl Node {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(untagged)]
+/// Reference from a node's `inputs` map.
+///
+/// Lockfile shape:
+/// - `"name"` is a direct reference to another node, parsed as
+///   [`Self::Direct`].
+/// - `["a", "b", ...]` is a follows path with a target, parsed as
+///   `Indirect(Some(path))`.
+/// - `[]` is a follows declaration with no target (Nix emits this when an
+///   upstream chain has overridden the input to nothing, e.g. a lockfile
+///   whose source `flake.nix` carries
+///   `nix.inputs.flake-compat.follows = "";`), parsed as `Indirect(None)`.
+#[derive(Debug, Clone)]
 pub enum Input {
     Direct(String),
-    Indirect(Vec<String>),
+    Indirect(Option<AttrPath>),
 }
 
 impl Input {
-    /// Get the target node name for this input.
-    /// For Direct inputs, returns the node name directly.
-    /// For Indirect inputs (follows paths), returns the final target in the path.
+    /// Target node name. For [`Self::Direct`], the wrapped name. For
+    /// `Indirect(Some(path))`, the last segment of the follows path. For
+    /// `Indirect(None)` (empty `[]` in the lockfile), an empty string.
+    /// Resolution paths in [`FlakeLock`] are built from validated
+    /// [`AttrPath`] segments and can never contain `""`, so a lookup on
+    /// this id falls through to a [`FlakeEditError::LockError`].
     fn id(&self) -> String {
         match self {
             Input::Direct(id) => id.to_string(),
-            Input::Indirect(path) => path.last().cloned().unwrap_or_default(),
+            Input::Indirect(Some(path)) => path.last().as_str().to_string(),
+            Input::Indirect(None) => String::new(),
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Locked {
-    owner: Option<String>,
-    repo: Option<String>,
+impl<'de> Deserialize<'de> for Input {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::{Error, SeqAccess, Visitor};
+        use std::fmt;
+
+        struct InputVisitor;
+
+        impl<'de> Visitor<'de> for InputVisitor {
+            type Value = Input;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str(
+                    "a node name string, an empty array, or an array of \
+                     non-empty segment names",
+                )
+            }
+
+            fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(Input::Direct(v.to_string()))
+            }
+
+            fn visit_string<E: Error>(self, v: String) -> Result<Self::Value, E> {
+                Ok(Input::Direct(v))
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                // Empty `[]` is a real lockfile shape: `inputs.X = []`
+                // marks an input whose follows chain has been overridden
+                // away. Surface it as `Indirect(None)` instead of an
+                // error.
+                let Some(first) = seq.next_element::<String>()? else {
+                    return Ok(Input::Indirect(None));
+                };
+                let first_seg = Segment::from_unquoted(first).map_err(A::Error::custom)?;
+                let mut path = AttrPath::new(first_seg);
+                while let Some(raw) = seq.next_element::<String>()? {
+                    let seg = Segment::from_unquoted(raw).map_err(A::Error::custom)?;
+                    path.push(seg);
+                }
+                Ok(Input::Indirect(Some(path)))
+            }
+        }
+
+        deserializer.deserialize_any(InputVisitor)
+    }
+}
+
+/// Locked metadata for a node. Only [`Self::rev`] is consumed by the rest
+/// of the crate; other coordinates from the JSON (`owner`, `repo`, `type`,
+/// `ref`, `narHash`, ...) are ignored on parse.
+#[derive(Debug, Deserialize, Clone)]
+pub(crate) struct Locked {
     rev: Option<String>,
-    #[serde(rename = "type")]
-    node_type: String,
-    #[serde(rename = "ref")]
-    ref_field: Option<String>,
 }
 
 impl Locked {
@@ -88,8 +159,9 @@ impl Locked {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Original {
+/// Original (pre-lock) reference for a node, as written in the source flake.
+#[derive(Debug, Deserialize)]
+pub(crate) struct Original {
     owner: Option<String>,
     repo: Option<String>,
     #[serde(rename = "type")]
@@ -100,8 +172,10 @@ pub struct Original {
 }
 
 impl Original {
-    /// Reconstruct a flake URL from the original reference.
-    pub fn to_flake_url(&self) -> Option<String> {
+    /// Reconstruct a flake URL from the original reference. Returns `None`
+    /// when the type is forge-shaped (`github`, `gitlab`, `sourcehut`) but
+    /// `owner` or `repo` is missing.
+    fn to_flake_url(&self) -> Option<String> {
         match self.node_type.as_str() {
             "github" | "gitlab" | "sourcehut" => {
                 let owner = self.owner.as_deref()?;
@@ -121,54 +195,31 @@ impl Original {
 impl FlakeLock {
     const LOCK: &'static str = "flake.lock";
 
+    /// Load `flake.lock` from the current directory.
     pub fn from_default_path() -> Result<Self, FlakeEditError> {
         let path = PathBuf::from(Self::LOCK);
         Self::from_file(path)
     }
 
+    /// Load and parse a lockfile from `path`.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, FlakeEditError> {
         let mut file = File::open(path)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
         Self::read_from_str(&contents)
     }
+
+    /// Parse lockfile JSON from `str`.
     pub fn read_from_str(str: &str) -> Result<Self, FlakeEditError> {
         Ok(serde_json::from_str(str)?)
     }
+
+    /// Name of the root node.
     pub fn root(&self) -> &str {
         &self.root
     }
-    /// Split an input path into segments, respecting quoted names.
-    /// E.g. `"hls-1.10".nixpkgs` -> `["hls-1.10", "nixpkgs"]`
-    /// E.g. `browseros.nixpkgs` -> `["browseros", "nixpkgs"]`
-    fn split_input_path(path: &str) -> Vec<&str> {
-        let mut segments = Vec::new();
-        let mut rest = path;
-        while !rest.is_empty() {
-            if rest.starts_with('"') {
-                // Quoted segment: find closing quote
-                if let Some(end) = rest[1..].find('"') {
-                    segments.push(&rest[1..end + 1]);
-                    rest = &rest[end + 2..];
-                    // Skip the dot separator if present
-                    rest = rest.strip_prefix('.').unwrap_or(rest);
-                } else {
-                    // Malformed: no closing quote, treat rest as one segment
-                    segments.push(rest.trim_matches('"'));
-                    break;
-                }
-            } else if let Some(dot) = rest.find('.') {
-                segments.push(&rest[..dot]);
-                rest = &rest[dot + 1..];
-            } else {
-                segments.push(rest);
-                break;
-            }
-        }
-        segments
-    }
 
-    /// Resolve an input path to a node name by walking the lock tree.
+    /// Resolve a dotted input path to a node name by walking the lock tree.
     fn resolve_input_path(&self, segments: &[&str]) -> Result<String, FlakeEditError> {
         let mut current_node = self
             .nodes
@@ -197,7 +248,6 @@ impl FlakeLock {
             let node_name = resolved.id();
 
             if i < segments.len() - 1 {
-                // Intermediate segment: move to the next node
                 current_node = self.nodes.get(&node_name).ok_or_else(|| {
                     FlakeEditError::LockError(format!(
                         "Could not find node '{}' for input '{}'.",
@@ -206,7 +256,6 @@ impl FlakeLock {
                     ))
                 })?;
             } else {
-                // Final segment: return the node name
                 return Ok(node_name);
             }
         }
@@ -214,87 +263,139 @@ impl FlakeLock {
         Err(FlakeEditError::LockError("Empty input path.".into()))
     }
 
-    /// Query the lock file for a specific rev.
+    /// Resolve `id` (a dotted attribute path) to its locked revision.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FlakeEditError::LockError`] if `id` is malformed or does not
+    /// resolve to a node with a `rev` field.
     pub fn rev_for(&self, id: &str) -> Result<String, FlakeEditError> {
-        let segments = Self::split_input_path(id);
-        let node_name = self.resolve_input_path(&segments)?;
+        let path = AttrPath::parse(id)
+            .map_err(|e| FlakeEditError::LockError(format!("Invalid input path '{id}': {e}")))?;
+        let owned: Vec<&str> = path.segments().iter().map(|s| s.as_str()).collect();
+        let node_name = self.resolve_input_path(&owned)?;
         let node = self.nodes.get(&node_name).ok_or_else(|| {
             FlakeEditError::LockError(format!("Could not find node '{node_name}'."))
         })?;
         node.rev()
     }
 
-    /// Get all nested input paths for shell completions.
-    /// Returns paths like "naersk.nixpkgs", "naersk.flake-utils", etc.
+    /// Rendered nested input paths (e.g. `naersk.nixpkgs`,
+    /// `naersk.flake-utils`) suitable for shell completion.
     pub fn nested_input_paths(&self) -> Vec<String> {
         self.nested_inputs()
             .into_iter()
-            .map(|input| input.path)
+            .map(|input| input.path.to_string())
             .collect()
     }
 
-    /// Get all nested inputs with their existing follows targets.
+    /// All nested inputs reachable from the root, with their existing
+    /// follows targets.
+    ///
+    /// Walks `flake.lock` recursively from the root, emitting one entry per
+    /// `inputs.X` on any descendant node and building the path
+    /// segment-by-segment. Capped at [`NESTED_INPUTS_MAX_DEPTH`]. Cycles in
+    /// the node graph are broken by a visited set keyed on node name.
+    ///
+    /// Output is sorted by path for stable emission order.
     pub fn nested_inputs(&self) -> Vec<NestedInput> {
         let mut inputs = Vec::new();
-
-        // Get the root node
         let Some(root_node) = self.nodes.get(&self.root) else {
             return inputs;
         };
-
-        // Get top-level inputs from root
         let Some(root_inputs) = &root_node.inputs else {
             return inputs;
         };
 
-        // For each top-level input, find its nested inputs
         for (top_level_name, top_level_ref) in root_inputs {
-            // Resolve the node name (could be different from input name)
             let node_name = match top_level_ref {
                 Input::Direct(name) => name.clone(),
-                Input::Indirect(_) => {
-                    // For indirect inputs (follows), skip - they don't have their own inputs
-                    continue;
-                }
+                // Indirect top-level inputs have no sub-inputs to descend
+                // into. Their follows edges still appear via the recursive
+                // walker on the `Direct` siblings that own them.
+                Input::Indirect(_) => continue,
             };
-
-            // Get the node for this input
-            if let Some(node) = self.nodes.get(&node_name) {
-                // Get nested inputs of this node
-                if let Some(nested_inputs) = &node.inputs {
-                    for (nested_name, nested_ref) in nested_inputs {
-                        let quoted_parent = if top_level_name.contains('.') {
-                            format!("\"{}\"", top_level_name)
-                        } else {
-                            top_level_name.clone()
-                        };
-                        let quoted_nested = if nested_name.contains('.') {
-                            format!("\"{}\"", nested_name)
-                        } else {
-                            nested_name.clone()
-                        };
-                        let path = format!("{}.{}", quoted_parent, quoted_nested);
-                        let (follows, url) = match nested_ref {
-                            Input::Indirect(targets) => (Some(targets.join(".")), None),
-                            Input::Direct(node_name) => {
-                                let url = self
-                                    .nodes
-                                    .get(node_name.as_str())
-                                    .and_then(|n| n.original.as_ref())
-                                    .and_then(|o| o.to_flake_url());
-                                (None, url)
-                            }
-                        };
-                        inputs.push(NestedInput { path, follows, url });
-                    }
-                }
-            }
+            let Ok(parent_seg) = Segment::from_unquoted(top_level_name.clone()) else {
+                continue;
+            };
+            let path = AttrPath::new(parent_seg);
+            let mut visited: HashMap<String, ()> = HashMap::new();
+            visited.insert(node_name.clone(), ());
+            self.collect_nested_inputs_recursive(&node_name, &path, 1, &mut visited, &mut inputs);
         }
 
         inputs.sort_by(|a, b| a.path.cmp(&b.path));
         inputs
     }
+
+    /// Descend through `node_name`, emitting one [`NestedInput`] per declared
+    /// sub-input up to [`NESTED_INPUTS_MAX_DEPTH`].
+    fn collect_nested_inputs_recursive(
+        &self,
+        node_name: &str,
+        parent_path: &AttrPath,
+        depth: usize,
+        visited: &mut HashMap<String, ()>,
+        out: &mut Vec<NestedInput>,
+    ) {
+        if depth >= NESTED_INPUTS_MAX_DEPTH {
+            return;
+        }
+        let Some(node) = self.nodes.get(node_name) else {
+            return;
+        };
+        let Some(node_inputs) = &node.inputs else {
+            return;
+        };
+
+        // Iterate sub-inputs in lex order so emission is deterministic.
+        let mut keys: Vec<&String> = node_inputs.keys().collect();
+        keys.sort();
+        for nested_name in keys {
+            let nested_ref = node_inputs.get(nested_name).unwrap();
+            let Ok(nested_seg) = Segment::from_unquoted(nested_name.clone()) else {
+                continue;
+            };
+            let mut path = parent_path.clone();
+            path.push(nested_seg);
+
+            let (follows, url, descend_into) = match nested_ref {
+                Input::Indirect(Some(target)) => (Some(target.clone()), None, None),
+                // Empty `[]` declarations have no follows target. Emit
+                // the input with `follows: None` so the path is still
+                // visible to the UI.
+                Input::Indirect(None) => (None, None, None),
+                Input::Direct(child_node_name) => {
+                    let url = self
+                        .nodes
+                        .get(child_node_name.as_str())
+                        .and_then(|n| n.original.as_ref())
+                        .and_then(|o| o.to_flake_url());
+                    (None, url, Some(child_node_name.clone()))
+                }
+            };
+
+            out.push(NestedInput {
+                path: path.clone(),
+                follows,
+                url,
+            });
+
+            if let Some(child) = descend_into {
+                if visited.contains_key(&child) {
+                    continue;
+                }
+                visited.insert(child.clone(), ());
+                self.collect_nested_inputs_recursive(&child, &path, depth + 1, visited, out);
+                visited.remove(&child);
+            }
+        }
+    }
 }
+
+/// Maximum recursion depth for [`FlakeLock::nested_inputs`]. Backstops
+/// pathological cycles in malformed lockfiles.
+pub const NESTED_INPUTS_MAX_DEPTH: usize = 64;
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -455,12 +556,17 @@ mod tests {
         let minimal_lock = minimal_lock();
         FlakeLock::read_from_str(minimal_lock).expect("Should be parsed correctly.");
     }
+    /// The lockfile's top-level `"version"` field is not validated. A
+    /// wildly unsupported version (e.g. `99`) must still parse cleanly
+    /// so this crate can read whatever shape Nix produces.
     #[test]
-    fn parse_minimal_version() {
-        let minimal_lock = minimal_lock();
-        let parsed_lock =
-            FlakeLock::read_from_str(minimal_lock).expect("Should be parsed correctly.");
-        assert_eq!(7, parsed_lock.version);
+    fn parse_ignores_unknown_version() {
+        let lock = r#"{
+  "nodes": { "root": { "inputs": {} } },
+  "root": "root",
+  "version": 99
+}"#;
+        FlakeLock::read_from_str(lock).expect("unknown version must still parse");
     }
     #[test]
     fn parse_minimal_root() {
@@ -506,14 +612,23 @@ mod tests {
 
     #[test]
     fn input_indirect_id() {
-        // Follows path like ["nixpkgs"] should return "nixpkgs"
-        let input = Input::Indirect(vec!["nixpkgs".to_string()]);
+        let input = Input::Indirect(Some(AttrPath::new(
+            Segment::from_unquoted("nixpkgs").unwrap(),
+        )));
         assert_eq!("nixpkgs", input.id());
+    }
+
+    /// `Indirect(None)` (empty `[]` in the lockfile) reports an empty
+    /// `id()`, and a resolution lookup that hits `""` produces a
+    /// [`FlakeEditError::LockError`] rather than a panic.
+    #[test]
+    fn input_indirect_none_id_is_empty() {
+        let input = Input::Indirect(None);
+        assert_eq!("", input.id());
     }
 
     #[test]
     fn rev_for_sub_input_path_missing_parent_returns_error() {
-        // Sub-input paths where the parent doesn't exist should error.
         let minimal_lock = minimal_lock();
         let parsed_lock =
             FlakeLock::read_from_str(minimal_lock).expect("Should be parsed correctly.");
@@ -522,7 +637,6 @@ mod tests {
 
     #[test]
     fn rev_for_sub_input_path_resolves() {
-        // Sub-input paths like "treefmt-nix.nixpkgs" should traverse the lock tree.
         let lock = minimal_independent_lock_no_overrides();
         let parsed = FlakeLock::read_from_str(lock).expect("Should be parsed correctly.");
         assert_eq!(
@@ -535,7 +649,6 @@ mod tests {
 
     #[test]
     fn rev_for_sub_input_follows_resolves() {
-        // Sub-input that follows the root input should resolve to the same rev.
         let lock = minimal_independent_lock_nixpkgs_overridden();
         let parsed = FlakeLock::read_from_str(lock).expect("Should be parsed correctly.");
         assert_eq!(
@@ -561,7 +674,6 @@ mod tests {
 
     #[test]
     fn rev_for_node_without_locked_returns_error() {
-        // A node that exists but has no "locked" field should error, not panic.
         let lock = r#"{
   "nodes": {
     "root": {
@@ -580,7 +692,6 @@ mod tests {
 
     #[test]
     fn rev_for_node_without_rev_returns_error() {
-        // A locked node without a "rev" field should error, not panic.
         let lock = r#"{
   "nodes": {
     "root": {
@@ -600,7 +711,6 @@ mod tests {
 
     #[test]
     fn nested_input_path_quotes_dots() {
-        // Input names with dots should be quoted in the path
         let lock = r#"{
   "nodes": {
     "hls-1.10": {
@@ -627,12 +737,89 @@ mod tests {
         let parsed = FlakeLock::read_from_str(lock).unwrap();
         let nested = parsed.nested_inputs();
         assert_eq!(nested.len(), 1);
-        assert_eq!(nested[0].path, "\"hls-1.10\".nixpkgs");
+        assert_eq!(nested[0].path.to_string(), "\"hls-1.10\".nixpkgs");
+    }
+
+    #[test]
+    fn nested_inputs_recurses_to_grandchild() {
+        // The walker descends through `Direct` children, so a depth-2
+        // nested input (root → neovim → nixvim → flake-parts) must be
+        // emitted with a 3-segment path. This exercises the recursive
+        // path-stack code in `collect_nested_inputs_recursive`.
+        let lock = r#"{
+  "nodes": {
+    "flake-parts": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "a", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "flake-parts_2": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "b", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "neovim": {
+      "inputs": { "nixvim": "nixvim" },
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "c", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "nixvim": {
+      "inputs": { "flake-parts": "flake-parts_2" },
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "d", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "root": {
+      "inputs": { "flake-parts": "flake-parts", "neovim": "neovim" }
+    }
+  },
+  "root": "root",
+  "version": 7
+}"#;
+        let parsed = FlakeLock::read_from_str(lock).unwrap();
+        let nested = parsed.nested_inputs();
+        let paths: Vec<String> = nested.iter().map(|n| n.path.to_string()).collect();
+        assert!(
+            paths.contains(&"neovim.nixvim".to_string()),
+            "depth-1 path missing, got: {paths:?}"
+        );
+        assert!(
+            paths.contains(&"neovim.nixvim.flake-parts".to_string()),
+            "depth-2 path missing, got: {paths:?}"
+        );
+    }
+
+    #[test]
+    fn nested_inputs_terminates_on_cyclic_lockfile() {
+        // A pathological lock graph where node A's input recurses back
+        // into A itself must not loop forever. The visited-set in
+        // `collect_nested_inputs_recursive` short-circuits the cycle.
+        let lock = r#"{
+  "nodes": {
+    "a": {
+      "inputs": { "b": "b" },
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "a", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "b": {
+      "inputs": { "a": "a" },
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "b", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "root": { "inputs": { "a": "a" } }
+  },
+  "root": "root",
+  "version": 7
+}"#;
+        let parsed = FlakeLock::read_from_str(lock).unwrap();
+        let nested = parsed.nested_inputs();
+        assert!(!nested.is_empty());
+        assert!(
+            nested
+                .iter()
+                .all(|n| n.path.len() <= NESTED_INPUTS_MAX_DEPTH)
+        );
     }
 
     #[test]
     fn rev_for_quoted_sub_input_path() {
-        // Quoted input names with dots like "hls-1.10".nixpkgs should resolve
         let lock = r#"{
   "nodes": {
     "hls-1.10": {
@@ -664,24 +851,190 @@ mod tests {
         );
     }
 
-    #[test]
-    fn split_input_path_simple() {
-        assert_eq!(FlakeLock::split_input_path("nixpkgs"), vec!["nixpkgs"]);
+    /// Walk every `inputs` map and collect each `Indirect` follows target as
+    /// a vector of segment strings. Used by the fixture parse tests below.
+    fn collect_indirect_targets(lock: &FlakeLock) -> Vec<(String, String, Vec<String>)> {
+        let mut out: Vec<(String, String, Vec<String>)> = Vec::new();
+        for (node_name, node) in &lock.nodes {
+            let Some(inputs) = node.inputs.as_ref() else {
+                continue;
+            };
+            for (input_name, input_ref) in inputs {
+                if let Input::Indirect(Some(path)) = input_ref {
+                    let segs: Vec<String> = path
+                        .segments()
+                        .iter()
+                        .map(|s| s.as_str().to_string())
+                        .collect();
+                    out.push((node_name.clone(), input_name.clone(), segs));
+                }
+            }
+        }
+        out.sort();
+        out
     }
 
+    /// `depth_upstream_redundant_depth3.flake.lock` has three `Indirect`
+    /// entries forming the upstream-propagation chain: `omnibus.nixpkgs`
+    /// follows `["nixpkgs"]`, the depth-2 follows `["omnibus", "nixpkgs"]`,
+    /// and the depth-3 follows `["omnibus", "flops", "nixpkgs"]`.
     #[test]
-    fn split_input_path_dotted() {
+    fn fixture_depth_upstream_redundant_depth3_parses_indirects() {
+        let lock_text =
+            std::fs::read_to_string("tests/fixtures/depth_upstream_redundant_depth3.flake.lock")
+                .expect("fixture present");
+        let lock = FlakeLock::read_from_str(&lock_text).expect("fixture parses");
+        let mut segs_only: Vec<Vec<String>> = collect_indirect_targets(&lock)
+            .into_iter()
+            .map(|(_, _, segs)| segs)
+            .collect();
+        segs_only.sort();
         assert_eq!(
-            FlakeLock::split_input_path("treefmt-nix.nixpkgs"),
-            vec!["treefmt-nix", "nixpkgs"]
+            segs_only,
+            vec![
+                vec!["nixpkgs".to_string()],
+                vec![
+                    "omnibus".to_string(),
+                    "flops".to_string(),
+                    "nixpkgs".to_string()
+                ],
+                vec!["omnibus".to_string(), "nixpkgs".to_string()],
+            ],
+            "Indirect entries must be decoded with their full structural depth",
         );
     }
 
+    /// `depth_upstream_partial.flake.lock` covers a deeper mix of Indirect
+    /// shapes; verify each one is decoded into a non-empty `AttrPath` whose
+    /// segments are valid Nix names (no embedded quotes / control chars).
     #[test]
-    fn split_input_path_quoted() {
+    fn fixture_depth_upstream_partial_parses_indirects() {
+        let lock_text = std::fs::read_to_string("tests/fixtures/depth_upstream_partial.flake.lock")
+            .expect("fixture present");
+        let lock = FlakeLock::read_from_str(&lock_text).expect("fixture parses");
+        let entries = collect_indirect_targets(&lock);
+        assert!(
+            entries.len() >= 3,
+            "fixture has at least three Indirect arrays, got {}",
+            entries.len()
+        );
+        for (node, input, segs) in &entries {
+            assert!(
+                !segs.is_empty(),
+                "{node}.{input}: Indirect path must be non-empty",
+            );
+            for seg in segs {
+                assert!(
+                    !seg.is_empty() && !seg.contains('"'),
+                    "{node}.{input}: segment `{seg}` must be a valid Nix name",
+                );
+            }
+        }
+    }
+
+    /// `dot_ancestor_cycle.flake.lock` exercises the dotted-segment case:
+    /// the lockfile node `hls-1.10` is reachable through the typed
+    /// `AttrPath`, even though a literal dot in the segment forces source-
+    /// form quoting at the `flake.nix` boundary.
+    #[test]
+    fn fixture_dot_ancestor_cycle_parses_indirects_with_dotted_node() {
+        let lock_text = std::fs::read_to_string("tests/fixtures/dot_ancestor_cycle.flake.lock")
+            .expect("fixture present");
+        let lock = FlakeLock::read_from_str(&lock_text).expect("fixture parses");
+        // Direct walk: the dotted node `hls-1.10` exists and its
+        // `Indirect` `["helper"]` entry is decoded as a one-segment path.
+        let hls = lock.nodes.get("hls-1.10").expect("hls-1.10 node");
+        let inputs = hls.inputs.as_ref().expect("hls-1.10 has inputs");
+        match inputs.get("helper").expect("helper input present") {
+            Input::Indirect(Some(path)) => {
+                let segs: Vec<&str> = path.segments().iter().map(|s| s.as_str()).collect();
+                assert_eq!(segs, vec!["helper"]);
+            }
+            Input::Indirect(None) => panic!("expected Indirect(Some), got Indirect(None)"),
+            Input::Direct(name) => panic!("expected Indirect, got Direct({name})"),
+        }
+    }
+
+    /// Empty `[]` follows arrays mark an input whose follows chain has
+    /// been overridden away (e.g. a lockfile entry `inputs.flake-compat
+    /// = []`). The deserializer must accept them and store them as
+    /// `Indirect(None)`.
+    #[test]
+    fn indirect_empty_array_is_accepted_as_none() {
+        let lock = r#"{
+  "nodes": {
+    "child": {
+      "inputs": { "disabled": [] },
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "x", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "root": { "inputs": { "child": "child" } }
+  },
+  "root": "root",
+  "version": 7
+}"#;
+        let parsed = FlakeLock::read_from_str(lock).expect("empty Indirect must parse");
+        let child = parsed.nodes.get("child").expect("child node");
+        let inputs = child.inputs.as_ref().expect("child has inputs");
+        match inputs.get("disabled").expect("disabled input present") {
+            Input::Indirect(None) => {}
+            other => panic!("expected Indirect(None), got {other:?}"),
+        }
+    }
+
+    /// A top-level input (`nix`) whose nested inputs map mixes
+    /// [`Input::Direct`] references, non-empty
+    /// [`Input::Indirect`] arrays (`["nixpkgs"]`), and empty `[]`
+    /// declarations must parse cleanly. [`FlakeLock::nested_inputs`]
+    /// emits one entry per declaration; entries built from `[]` carry
+    /// `follows: None`.
+    #[test]
+    fn nested_inputs_handles_mixed_direct_indirect_and_empty() {
+        let lock = r#"{
+  "nodes": {
+    "flake-parts": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "fp", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "nix": {
+      "inputs": {
+        "flake-compat": [],
+        "flake-parts": "flake-parts",
+        "nixpkgs": ["nixpkgs"]
+      },
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "n", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "nixpkgs": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "np", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "root": { "inputs": { "nix": "nix", "nixpkgs": "nixpkgs" } }
+  },
+  "root": "root",
+  "version": 7
+}"#;
+        let parsed = FlakeLock::read_from_str(lock).expect("mixed-shape lock parses");
+        let nested = parsed.nested_inputs();
+        let by_path: std::collections::HashMap<String, &NestedInput> =
+            nested.iter().map(|n| (n.path.to_string(), n)).collect();
+
+        let disabled = by_path
+            .get("nix.flake-compat")
+            .expect("empty Indirect emitted as nested input");
+        assert!(
+            disabled.follows.is_none(),
+            "empty `[]` must surface as follows: None, got {:?}",
+            disabled.follows
+        );
+
+        let resolved = by_path
+            .get("nix.nixpkgs")
+            .expect("non-empty Indirect emitted as nested input");
         assert_eq!(
-            FlakeLock::split_input_path("\"hls-1.10\".nixpkgs"),
-            vec!["hls-1.10", "nixpkgs"]
+            resolved.follows.as_ref().map(|p| p.to_string()),
+            Some("nixpkgs".to_string()),
+            "non-empty Indirect must surface its follows target",
         );
     }
 }

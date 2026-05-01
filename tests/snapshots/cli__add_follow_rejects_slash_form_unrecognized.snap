@@ -1,0 +1,26 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/root.flake.nix"
+    - "--diff"
+    - add-follow
+    - neovim/nixvim/flake-parts
+    - flake-parts
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+Error: 
+   0: Input 'neovim/nixvim/flake-parts' not found in the flake.
+
+      To add it:
+        flake-edit add neovim/nixvim/flake-parts <flakeref>
+
+      To see all current inputs: flake-edit list

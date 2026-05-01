@@ -1,0 +1,36 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/stale_edge_unblocks_follow.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/stale_edge_unblocks_follow.flake.lock"
+    - "--config"
+    - "[FIXTURES]/stale_edge_unblocks_follow.config.toml"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -3,10 +3,10 @@
+
+   inputs = {
+     X.url = "github:owner/X";
+-    X.inputs.Y.follows = "Y";
+     Y.url = "github:owner/Y";
+     Y.inputs.Z.follows = "Z";
+     Z.url = "github:owner/Z";
++    Z.inputs.X.follows = "X";
+   };
+
+   outputs =
+
+----- stderr -----
+warning: stale follows at line 5, column 13: X.Y -> Y (source no longer present in flake.lock)

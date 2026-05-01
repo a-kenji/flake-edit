@@ -24,9 +24,9 @@ exit_code: 0
      treefmt-nix.url = "github:numtide/treefmt-nix";
 +    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
      treefmt.url = "github:numtide/treefmt";
-+    treefmt.inputs.treefmt-nix.follows = "treefmt-nix";
 +    treefmt.inputs.nixpkgs.follows = "nixpkgs";
-+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
++    treefmt.inputs.treefmt-nix.follows = "treefmt-nix";
++    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
    };
 
    outputs =

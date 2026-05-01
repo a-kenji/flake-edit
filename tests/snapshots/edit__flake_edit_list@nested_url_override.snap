@@ -1,0 +1,22 @@
+---
+source: tests/edit.rs
+assertion_line: 36
+expression: "ListOutput::from(flake_edit.list())"
+info:
+  flake_nix: ""
+  changes: []
+---
+inputs:
+  mac-app-util:
+    id: mac-app-util
+    url: "github:hraban/mac-app-util"
+    flake: true
+  nixpkgs:
+    id: nixpkgs
+    url: "github:NixOS/nixpkgs/nixos-unstable"
+    flake: true
+follows:
+  - parent: mac-app-util
+    nested: nixpkgs
+    target: nixpkgs
+    kind: indirect

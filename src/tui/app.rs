@@ -18,7 +18,7 @@ use super::completions::uri_completion_items;
 use super::components::confirm::ConfirmAction;
 use super::components::input::{Input, InputAction, InputResult, InputState};
 use super::components::list::{ListAction, ListResult, ListState};
-use super::workflow::{AddPhase, ConfirmResultAction, FollowPhase, WorkflowData};
+use super::workflow::{AddStep, ConfirmResultAction, FollowStep, WorkflowData};
 
 // Re-export workflow types that are part of the public API
 pub use super::workflow::{AppResult, MultiSelectResultData, SingleSelectResult, UpdateResult};
@@ -108,7 +108,7 @@ impl App {
                 label: None,
             }),
             data: WorkflowData::Add {
-                phase: AddPhase::Uri,
+                step: AddStep::Uri,
                 uri: None,
                 id: None,
             },
@@ -278,7 +278,7 @@ impl App {
                 false,
             )),
             data: WorkflowData::Follow {
-                phase: FollowPhase::SelectInput,
+                step: FollowStep::SelectInput,
                 selected_input: None,
                 selected_target: None,
                 nested_inputs,
@@ -308,7 +308,7 @@ impl App {
                 false,
             )),
             data: WorkflowData::Follow {
-                phase: FollowPhase::SelectTarget,
+                step: FollowStep::SelectTarget,
                 selected_input: Some(input),
                 selected_target: None,
                 nested_inputs: Vec::<NestedInput>::new(),
@@ -474,13 +474,13 @@ impl App {
                     return Change::None;
                 }
                 match &self.data {
-                    WorkflowData::Add { phase, uri, .. } => match phase {
-                        AddPhase::Uri => Change::Add {
+                    WorkflowData::Add { step, uri, .. } => match step {
+                        AddStep::Uri => Change::Add {
                             id: None,
                             uri: Some(current_text.to_string()),
                             flake: true,
                         },
-                        AddPhase::Id => Change::Add {
+                        AddStep::Id => Change::Add {
                             id: Some(current_text.to_string()),
                             uri: uri.clone(),
                             flake: true,
@@ -506,28 +506,38 @@ impl App {
                 if !selected_items.is_empty() {
                     return match &self.data {
                         WorkflowData::Remove { .. } => Change::Remove {
-                            ids: selected_items.into_iter().map(|s| s.into()).collect(),
+                            ids: selected_items
+                                .into_iter()
+                                .filter_map(|s| crate::change::ChangeId::parse(&s).ok())
+                                .collect(),
                         },
                         WorkflowData::Follow {
-                            phase,
+                            step,
                             selected_input,
                             ..
                         } => {
-                            // During SelectInput phase, we can't preview yet
-                            // During SelectTarget phase, use selected_input + current selection
-                            if *phase == FollowPhase::SelectTarget {
+                            // During SelectInput step, we can't preview yet
+                            // During SelectTarget step, use selected_input + current selection
+                            if *step == FollowStep::SelectTarget {
                                 if let Some(input) = selected_input {
-                                    let target =
+                                    let target_str: String =
                                         selected_items.into_iter().next().unwrap_or_default();
-                                    Change::Follows {
-                                        input: input.clone().into(),
-                                        target,
+                                    let parsed = crate::change::ChangeId::parse(input)
+                                        .ok()
+                                        .zip(crate::follows::AttrPath::parse(&target_str).ok());
+                                    if let Some((change_id, target_path)) = parsed {
+                                        Change::Follows {
+                                            input: change_id,
+                                            target: target_path,
+                                        }
+                                    } else {
+                                        Change::None
                                     }
                                 } else {
                                     Change::None
                                 }
                             } else {
-                                // SelectInput phase - no preview possible
+                                // SelectInput step - no preview possible
                                 Change::None
                             }
                         }
@@ -579,10 +589,10 @@ impl App {
                         InputResult::Submit(text) => self.handle_input_submit(text),
                         InputResult::Cancel => {
                             // In Add workflow, Escape from ID input goes back to URI input
-                            if let WorkflowData::Add { phase, uri, .. } = &mut self.data
-                                && *phase == AddPhase::Id
+                            if let WorkflowData::Add { step, uri, .. } = &mut self.data
+                                && *step == AddStep::Id
                             {
-                                *phase = AddPhase::Uri;
+                                *step = AddStep::Uri;
                                 self.screen = Screen::Input(InputScreen {
                                     state: InputState::with_completions(
                                         uri.as_deref(),
@@ -630,14 +640,14 @@ impl App {
                 ListResult::Cancel => {
                     // For Follow workflow, Escape from SelectTarget goes back to SelectInput
                     if let WorkflowData::Follow {
-                        phase,
+                        step,
                         nested_inputs,
                         ..
                     } = &mut self.data
-                        && *phase == FollowPhase::SelectTarget
+                        && *step == FollowStep::SelectTarget
                         && !nested_inputs.is_empty()
                     {
-                        *phase = FollowPhase::SelectInput;
+                        *step = FollowStep::SelectInput;
                         let display_items: Vec<String> = nested_inputs
                             .iter()
                             .map(|i| i.to_display_string())
@@ -691,11 +701,11 @@ impl App {
 
     fn handle_input_submit(&mut self, text: String) -> UpdateResult {
         match &mut self.data {
-            WorkflowData::Add { phase, uri, id } => match phase {
-                AddPhase::Uri => {
+            WorkflowData::Add { step, uri, id } => match step {
+                AddStep::Uri => {
                     let (inferred_id, normalized_uri) = Self::parse_uri_and_infer_id(&text);
                     *uri = Some(normalized_uri);
-                    *phase = AddPhase::Id;
+                    *step = AddStep::Id;
                     self.screen = Screen::Input(InputScreen {
                         state: InputState::new(inferred_id.as_deref()),
                         prompt: format!("for {}", text),
@@ -703,7 +713,7 @@ impl App {
                     });
                     UpdateResult::Continue
                 }
-                AddPhase::Id => {
+                AddStep::Id => {
                     *id = Some(text);
                     self.transition_to_confirm()
                 }
@@ -758,22 +768,22 @@ impl App {
                 UpdateResult::Done
             }
             WorkflowData::Follow {
-                phase,
+                step,
                 selected_input,
                 selected_target,
                 nested_inputs,
                 top_level_inputs,
             } => {
-                match phase {
-                    FollowPhase::SelectInput => {
+                match step {
+                    FollowStep::SelectInput => {
                         // Use index to look up the path from nested_inputs
                         let index = indices.first().copied().unwrap_or(0);
                         let path = nested_inputs
                             .get(index)
-                            .map(|i| i.path.clone())
+                            .map(|i| i.path.to_string())
                             .unwrap_or_default();
                         *selected_input = Some(path.clone());
-                        *phase = FollowPhase::SelectTarget;
+                        *step = FollowStep::SelectTarget;
                         self.screen = Screen::List(ListScreen::single(
                             top_level_inputs.clone(),
                             format!("Select target for {path}"),
@@ -781,7 +791,7 @@ impl App {
                         ));
                         UpdateResult::Continue
                     }
-                    FollowPhase::SelectTarget => {
+                    FollowStep::SelectTarget => {
                         let item = items.into_iter().next().unwrap_or_default();
                         *selected_target = Some(item);
                         self.transition_to_confirm()
@@ -805,8 +815,8 @@ impl App {
 
     fn go_back(&mut self) {
         match &mut self.data {
-            WorkflowData::Add { phase, id, uri } => {
-                *phase = AddPhase::Id;
+            WorkflowData::Add { step, id, uri } => {
+                *step = AddStep::Id;
                 self.screen = Screen::Input(InputScreen {
                     state: InputState::new(id.as_deref()),
                     prompt: format!("for {}", uri.as_deref().unwrap_or("")),
@@ -835,21 +845,21 @@ impl App {
                 ));
             }
             WorkflowData::Follow {
-                phase,
+                step,
                 nested_inputs,
                 top_level_inputs,
                 ..
             } => {
                 // go_back is called from confirm screen, so we need to go back to
-                // the target selection list (SelectTarget phase)
-                if *phase == FollowPhase::SelectTarget {
+                // the target selection list (SelectTarget step)
+                if *step == FollowStep::SelectTarget {
                     self.screen = Screen::List(ListScreen::single(
                         top_level_inputs.clone(),
                         "Select target to follow",
                         self.show_diff,
                     ));
                 } else if !nested_inputs.is_empty() {
-                    // SelectInput phase - go back to input selection
+                    // SelectInput step - go back to input selection
                     let display_items: Vec<String> = nested_inputs
                         .iter()
                         .map(|i| i.to_display_string())

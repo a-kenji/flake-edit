@@ -1,0 +1,33 @@
+---
+source: tests/cli.rs
+assertion_line: 646
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/depth_upstream_redundant_depth3.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/depth_upstream_redundant_depth3.flake.lock"
+    - "--config"
+    - "[FIXTURES]/depth_upstream_redundant_depth3.config.toml"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -5,7 +5,6 @@
+     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+     omnibus.url = "github:Lehmanator/nix-configs";
+     omnibus.inputs.nixpkgs.follows = "nixpkgs";
+-    omnibus.inputs.flops.inputs.POP.inputs.nixpkgs.follows = "nixpkgs";
+   };
+
+   outputs =
+
+----- stderr -----
+warning: stale-lock follows at line 6, column 19: omnibus.flops.POP.nixpkgs -> nixpkgs (flake.lock resolves to omnibus.flops.nixpkgs; run `nix flake lock`)

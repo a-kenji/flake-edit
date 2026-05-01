@@ -1,0 +1,22 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/follows_empty_target.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/follows_empty_target.flake.lock"
+    - "--diff"
+    - follow
+    - "--depth"
+    - "2"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+All inputs are already deduplicated.
+
+----- stderr -----

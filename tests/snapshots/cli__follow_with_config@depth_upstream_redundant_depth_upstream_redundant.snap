@@ -1,0 +1,23 @@
+---
+source: tests/cli.rs
+assertion_line: 644
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/depth_upstream_redundant.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/depth_upstream_redundant.flake.lock"
+    - "--config"
+    - "[FIXTURES]/depth_upstream_redundant.config.toml"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+All inputs are already deduplicated.
+
+----- stderr -----

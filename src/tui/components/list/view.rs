@@ -218,12 +218,13 @@ mod tests {
 
     #[test]
     fn test_nested_input_display_roundtrip() {
+        use crate::follows::AttrPath;
         use crate::lock::NestedInput;
 
-        // With follows target
+        // With follows target.
         let input = NestedInput {
-            path: "crane.nixpkgs".into(),
-            follows: Some("nixpkgs".into()),
+            path: AttrPath::parse("crane.nixpkgs").unwrap(),
+            follows: Some(AttrPath::parse("nixpkgs").unwrap()),
             url: None,
         };
         let display = input.to_display_string();
@@ -231,9 +232,9 @@ mod tests {
         assert_eq!(path, "crane.nixpkgs");
         assert_eq!(follows, Some("nixpkgs"));
 
-        // Without follows target
+        // Without follows target.
         let input = NestedInput {
-            path: "crane.nixpkgs".into(),
+            path: AttrPath::parse("crane.nixpkgs").unwrap(),
             follows: None,
             url: None,
         };
