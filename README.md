@@ -4,6 +4,17 @@
 [![Documentation](https://img.shields.io/badge/flake_edit-documentation-fc0060?style=flat-square)](https://docs.rs/flake-edit)
 [![Matrix Chat Room](https://img.shields.io/badge/chat-on%20matrix-1d7e64?logo=matrix&style=flat-square)](https://matrix.to/#/#flake-edit:matrix.org)
 
+Since Nix [`flake.nix`](https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html) input attributes are a constrained subset of the Nix language, and don't actually have functions I wanted to have a safe way to programmatically edit them.
+In particular I was interested in two things, that in the flake native way are managed through the `flake.nix` files: [`follow`](#-flake-edit-follow) as well as [`pin`](#-flake-edit-update) and general update management.
+
+Pin management: As a consumer of other sources I might only want to depend on release versions of projects. To solve this problem other projects have set up hosted services to be a proxy between the input and the lock file. Meaning when running `nix flake update flake-edit` the service would give a different path back, depending on the last released version. This functionality should be possible without a specifically hosted middle man service.
+That's what the [`flake-edit update`](#-flake-edit-update) subcommand is for.
+
+Follow management: Flake dependencies are transitive by default - adding an input also adds the inputs of that input. Which can genuinely be useful. But that also means in larger systems and dependency graphs there tends to be an often avoidable duplication of inputs.
+There is a mechanism to deduplicate transitive dependencies: `flake-edit.inputs.nixpkgs.follows = "nixpkgs"`. Here the `nixpkgs` input of `flake-edit` is now the same input as the `nixpkgs` input. This is a common pattern. [`flake-edit follow`](#-flake-edit-follows) will do this automatically.
+
+![flake-edit follow example](https://vhs.charm.sh/vhs-5ZsxM5lx22BY2IuquxCGgk.gif)
+
 <!--toc:start-->
 - [`$ flake-edit` - edit your flake inputs with ease](#flake-edit-edit-your-flake-inputs-with-ease)
   - [`$ flake-edit` - usage](#-flake-edit---usage)
