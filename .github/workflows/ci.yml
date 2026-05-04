@@ -3,12 +3,8 @@ on:
   workflow_dispatch: # allows manual triggering
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**.md'
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
   merge_group:
 jobs:
   dependencies:
