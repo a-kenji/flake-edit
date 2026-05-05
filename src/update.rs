@@ -13,7 +13,8 @@ use crate::version::parse_ref;
 pub struct Updater {
     text: Rope,
     inputs: Vec<UpdateInput>,
-    /// Cumulative byte delta from edits applied earlier in the current pass.
+    /// Cumulative char delta from edits applied earlier in the current pass.
+    /// Measured in *characters*, since ropey indexes by char.
     offset: i32,
 }
 
@@ -186,13 +187,30 @@ impl Updater {
             if !input.has_editable_url() {
                 continue;
             }
-            inputs.push(UpdateInput { input });
+            // `Input::range` carries rnix `TextRange` *byte* offsets, but ropey
+            // indexes by *character*. Convert once against the pristine text so
+            // later in-place edits can use simple char-offset arithmetic.
+            let url_start = text.byte_to_char(input.range.start) + 1;
+            let url_end = text.byte_to_char(input.range.end) - 1;
+            inputs.push(UpdateInput {
+                input,
+                url_start,
+                url_end,
+            });
         }
         Self {
             inputs,
             text,
             offset: 0,
         }
+    }
+
+    /// Char-index range of the URL string *contents* (without the surrounding `"`),
+    /// adjusted for earlier in-place edits.
+    fn url_char_range(&self, input: &UpdateInput) -> (usize, usize) {
+        let start = (input.url_start as i32 + self.offset) as usize;
+        let end = (input.url_end as i32 + self.offset) as usize;
+        (start, end)
     }
     fn get_index(&self, id: &str) -> Option<usize> {
         let bare = id
@@ -255,12 +273,8 @@ impl Updater {
     }
 
     fn get_input_text(&self, input: &UpdateInput) -> String {
-        self.text
-            .slice(
-                ((input.input.range.start as i32) + 1 + self.offset) as usize
-                    ..((input.input.range.end as i32) + self.offset - 1) as usize,
-            )
-            .to_string()
+        let (start, end) = self.url_char_range(input);
+        self.text.slice(start..end).to_string()
     }
 
     /// Rewrite `input`'s URL to pin it to `rev`.
@@ -400,21 +414,11 @@ impl Updater {
         self.inputs.sort();
     }
     fn update_input(&mut self, input: UpdateInput, change: &str) {
-        self.text.remove(
-            (input.input.range.start as i32 + 1 + self.offset) as usize
-                ..(input.input.range.end as i32 - 1 + self.offset) as usize,
-        );
-        self.text.insert(
-            (input.input.range.start as i32 + 1 + self.offset) as usize,
-            change,
-        );
-        self.update_offset(input.clone(), change);
-    }
-    fn update_offset(&mut self, input: UpdateInput, change: &str) {
-        let previous_len = input.input.range.end as i32 - input.input.range.start as i32 - 2;
-        let len = change.len() as i32;
-        let offset = len - previous_len;
-        self.offset += offset;
+        let (start, end) = self.url_char_range(&input);
+        let previous_len = (end - start) as i32;
+        self.text.remove(start..end);
+        self.text.insert(start, change);
+        self.offset += change.chars().count() as i32 - previous_len;
     }
 }
 
@@ -422,17 +426,22 @@ impl Updater {
 #[derive(Debug, Clone)]
 pub struct UpdateInput {
     input: Input,
+    /// Char index of the first URL character (inside the quotes) in the
+    /// original, unmodified text.
+    url_start: usize,
+    /// Char index one past the last URL character in the original text.
+    url_end: usize,
 }
 
 impl Ord for UpdateInput {
     fn cmp(&self, other: &Self) -> Ordering {
-        (self.input.range.start).cmp(&(other.input.range.start))
+        self.url_start.cmp(&other.url_start)
     }
 }
 
 impl PartialEq for UpdateInput {
     fn eq(&self, other: &Self) -> bool {
-        self.input.range.start == other.input.range.start
+        self.url_start == other.url_start
     }
 }
 
