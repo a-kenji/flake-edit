@@ -1,5 +1,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
+use flake_edit::app::follow::auto;
 use flake_edit::change::Change;
+use flake_edit::config::FollowConfig;
 use flake_edit::walk::Walker;
 
 const INPUTS: &str = r#"{
@@ -15,6 +17,15 @@ const INPUTS: &str = r#"{
       };
       }
     "#;
+
+const HYPERCONFIG_FLAKE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/hyperconfig.flake.nix"
+));
+const HYPERCONFIG_LOCK: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/hyperconfig.flake.lock"
+));
 
 fn collect_inputs() {
     let mut walker = Walker::new(INPUTS);
@@ -49,6 +60,23 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("collect_inputs", |b| b.iter(collect_inputs));
     c.bench_function("add_input", |b| b.iter(add_input));
     c.bench_function("remove_input", |b| b.iter(remove_input));
+    c.bench_function("follow_large_fixture", |b| {
+        // Construct the planner config once so only the planner is timed.
+        let follow_config = FollowConfig {
+            transitive_min: 2,
+            max_depth: 8,
+            ..FollowConfig::default()
+        };
+        b.iter(|| {
+            let output = auto::run_in_memory(HYPERCONFIG_FLAKE, HYPERCONFIG_LOCK, &follow_config)
+                .expect("follow benchmark fixture succeeds");
+            assert!(
+                output.is_some(),
+                "hyperconfig fixture should still produce edits"
+            );
+            output
+        });
+    });
 }
 
 criterion_group!(benches, criterion_benchmark);

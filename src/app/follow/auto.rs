@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::change::{Change, ChangeId};
 use crate::config::FollowConfig;
-use crate::edit::FlakeEdit;
+use crate::edit::{FlakeEdit, InputMap};
 use crate::follows::{
     AttrPath, Edge, EdgeOrigin, FollowsGraph, Segment, is_follows_reference_to_parent,
 };
@@ -25,6 +25,45 @@ use super::super::state::AppState;
 /// Entry point for `flake-edit follow` on a single in-memory flake.
 pub fn run(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) -> Result<()> {
     run_impl(editor, flake_edit, state, false)
+}
+
+/// Run auto-follow against in-memory text.
+///
+/// This is exposed for benchmark and library callers that need the same
+/// planner and in-memory edit path as `flake-edit follow` without file I/O.
+#[doc(hidden)]
+pub fn run_in_memory(
+    flake_text: &str,
+    lock_text: &str,
+    follow_config: &FollowConfig,
+) -> Result<Option<String>> {
+    let mut flake_edit = FlakeEdit::from_text(flake_text).map_err(CommandError::FlakeEdit)?;
+    let lock = FlakeLock::read_from_str(lock_text).map_err(CommandError::FlakeEdit)?;
+    let nested_inputs = lock.nested_inputs();
+    if nested_inputs.is_empty() {
+        return Ok(None);
+    }
+
+    let inputs = flake_edit.list().clone();
+    if inputs.is_empty() {
+        return Ok(None);
+    }
+
+    let top_level_inputs: HashSet<String> = inputs.keys().cloned().collect();
+    let graph = FollowsGraph::from_flake(&inputs, &lock);
+    let Some(plan) = build_plan(
+        flake_text,
+        &nested_inputs,
+        top_level_inputs,
+        &inputs,
+        &graph,
+        follow_config,
+    ) else {
+        return Ok(None);
+    };
+
+    let applied = apply_plan_text(flake_text, Some(&lock), &inputs, &plan)?;
+    Ok((applied.current_text != flake_text).then_some(applied.current_text))
 }
 
 /// Entry point for batch mode (`flake-edit follow [PATHS...]`).
@@ -203,6 +242,32 @@ fn run_impl(
         Err(_) => FollowsGraph::from_declared(&ctx.inputs),
     };
 
+    let Some(plan) = build_plan(
+        &editor.text(),
+        &ctx.nested_inputs,
+        ctx.top_level_inputs.clone(),
+        &ctx.inputs,
+        &graph,
+        &state.config.follow,
+    ) else {
+        if !quiet {
+            println!("All inputs are already deduplicated.");
+        }
+        return Ok(());
+    };
+
+    let applied = apply_plan(editor, state, &ctx.inputs, &plan)?;
+    render_summary(editor, state, &applied, quiet)
+}
+
+fn build_plan(
+    source_text: &str,
+    nested_inputs: &[NestedInput],
+    top_level_inputs: HashSet<String>,
+    inputs: &InputMap,
+    graph: &FollowsGraph,
+    follow_config: &FollowConfig,
+) -> Option<FollowPlan> {
     // Filter the merged graph by `EdgeOrigin::Declared` rather than rebuilding
     // a separate declared-only graph. The declared subset is already in
     // `graph`. Use [`FollowsGraph::declared_sources`] (not
@@ -211,7 +276,6 @@ fn run_impl(
     // auto-deduplicator does not silently retarget them.
     let existing_follows: HashSet<AttrPath> = graph.declared_sources();
 
-    let follow_config = &state.config.follow;
     let transitive_min = follow_config.transitive_min();
     let max_depth = follow_config.max_depth.max(1);
 
@@ -268,9 +332,9 @@ fn run_impl(
     graph_for_discovery.drop_edges_with_sources(&to_unfollow);
 
     let mut ax = AnalysisCtx {
-        nested_inputs: &ctx.nested_inputs,
-        top_level_inputs: ctx.top_level_inputs.clone(),
-        inputs: &ctx.inputs,
+        nested_inputs,
+        top_level_inputs,
+        inputs,
         graph: &graph_for_discovery,
         existing_follows: &existing_follows,
         follow_config,
@@ -290,7 +354,7 @@ fn run_impl(
     // see the minted names.
     if transitive_min > 0 {
         let direct_groups = collect_direct_groups(&ax, &plan);
-        emit_direct_promotions(&ax, editor, direct_groups, &mut plan);
+        emit_direct_promotions(&ax, source_text, direct_groups, &mut plan);
 
         for (name, _) in &plan.toplevel_adds {
             ax.top_level_inputs.insert(name.clone());
@@ -305,14 +369,10 @@ fn run_impl(
     scrub_redundant(&graph_for_discovery, &mut plan);
 
     if !plan.has_pending() {
-        if !quiet {
-            println!("All inputs are already deduplicated.");
-        }
-        return Ok(());
+        return None;
     }
 
-    let applied = apply_plan(editor, state, &ctx.inputs, &plan)?;
-    render_summary(editor, state, &applied, quiet)
+    Some(plan)
 }
 
 /// Depth-bounded path-shape filter shared by every collection function.
@@ -690,7 +750,7 @@ fn emit_transitive_promotions(
 /// the later passes consult it.
 fn emit_direct_promotions(
     ax: &AnalysisCtx<'_>,
-    editor: &Editor,
+    source_text: &str,
     direct_groups: HashMap<String, Vec<(AttrPath, Option<String>)>>,
     plan: &mut FollowPlan,
 ) {
@@ -722,7 +782,7 @@ fn emit_direct_promotions(
                 input: ChangeId::new(path.clone()),
                 target: target_attr.clone(),
             };
-            FlakeEdit::from_text(&editor.text())
+            FlakeEdit::from_text(source_text)
                 .ok()
                 .and_then(|mut fe| fe.apply_change(change).ok())
                 .and_then(|outcome| outcome.text)
@@ -823,13 +883,22 @@ fn apply_plan(
     inputs: &crate::edit::InputMap,
     plan: &FollowPlan,
 ) -> Result<AppliedPlan> {
-    let mut current_text = editor.text();
     let batch_lock: Option<FlakeLock> = commands::load_flake_lock(state).ok();
+    apply_plan_text(&editor.text(), batch_lock.as_ref(), inputs, plan)
+}
+
+fn apply_plan_text(
+    original_text: &str,
+    batch_lock: Option<&FlakeLock>,
+    inputs: &crate::edit::InputMap,
+    plan: &FollowPlan,
+) -> Result<AppliedPlan> {
+    let mut current_text = original_text.to_owned();
     let mut warnings: Vec<validate::ValidationError> = Vec::new();
 
     // Lock-drift lints fire only on the pre-batch text. Mid-batch they would
     // flag every in-progress edit as drift against the on-disk lockfile.
-    let pre_validation = validate::validate_full(&current_text, inputs, batch_lock.as_ref());
+    let pre_validation = validate::validate_full(&current_text, inputs, batch_lock);
     warnings.extend(pre_validation.warnings);
 
     // Top-level adds must precede follows that name them.
@@ -847,7 +916,7 @@ fn apply_plan(
                     let validation = validate::validate_speculative(
                         &resulting_text,
                         temp.curr_list(),
-                        batch_lock.as_ref(),
+                        batch_lock,
                     );
                     if validation.is_ok() {
                         warnings.extend(validation.warnings);
@@ -885,7 +954,7 @@ fn apply_plan(
                     let validation = validate::validate_speculative(
                         &resulting_text,
                         temp.curr_list(),
-                        batch_lock.as_ref(),
+                        batch_lock,
                     );
                     if validation.is_ok() {
                         warnings.extend(validation.warnings);
@@ -917,7 +986,7 @@ fn apply_plan(
                     let validation = validate::validate_speculative(
                         &resulting_text,
                         temp.curr_list(),
-                        batch_lock.as_ref(),
+                        batch_lock,
                     );
                     if validation.is_ok() {
                         warnings.extend(validation.warnings);

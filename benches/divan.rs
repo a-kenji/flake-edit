@@ -1,4 +1,7 @@
+use divan::Bencher;
+use flake_edit::app::follow::auto;
 use flake_edit::change::Change;
+use flake_edit::config::FollowConfig;
 use flake_edit::walk::Walker;
 
 fn main() {
@@ -18,6 +21,15 @@ const INPUTS: &str = r#"{
       };
       }
     "#;
+
+const HYPERCONFIG_FLAKE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/hyperconfig.flake.nix"
+));
+const HYPERCONFIG_LOCK: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/hyperconfig.flake.lock"
+));
 
 #[divan::bench]
 fn collect_inputs() {
@@ -49,4 +61,23 @@ fn remove_input() {
     let _ = walker.walk(&change);
     // a simple sanity check
     assert!(!walker.inputs.is_empty())
+}
+
+#[divan::bench]
+fn follow_large_fixture(bencher: Bencher) {
+    // Construct the planner config once so only the planner is timed.
+    let follow_config = FollowConfig {
+        transitive_min: 2,
+        max_depth: 8,
+        ..FollowConfig::default()
+    };
+    bencher.bench_local(|| {
+        let output = auto::run_in_memory(HYPERCONFIG_FLAKE, HYPERCONFIG_LOCK, &follow_config)
+            .expect("follow benchmark fixture succeeds");
+        assert!(
+            output.is_some(),
+            "hyperconfig fixture should still produce edits"
+        );
+        output
+    });
 }
