@@ -111,6 +111,7 @@ pub fn run_batch(
             Ok(s) => s
                 .with_diff(args.diff())
                 .with_no_lock(args.no_lock())
+                .with_lock_offline(true)
                 .with_interactive(false)
                 .with_lock_file(Some(lock_path))
                 .with_no_cache(args.no_cache())

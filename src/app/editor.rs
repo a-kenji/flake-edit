@@ -68,16 +68,18 @@ impl Editor {
         FlakeEdit::from_text(&self.text())
     }
 
-    fn run_nix_flake_lock(&self) -> io::Result<()> {
+    fn run_nix_flake_lock(&self, offline: bool) -> io::Result<()> {
         let flake_dir = match self.flake.path.parent() {
             Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
             _ => PathBuf::from("."),
         };
 
-        let output = Command::new("nix")
-            .args(["flake", "lock"])
-            .current_dir(&flake_dir)
-            .output()?;
+        let mut cmd = Command::new("nix");
+        if offline {
+            cmd.arg("--offline");
+        }
+        cmd.args(["flake", "lock"]);
+        let output = cmd.current_dir(&flake_dir).output()?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -109,7 +111,7 @@ impl Editor {
             self.flake.write(new_content)?;
 
             if !state.no_lock
-                && let Err(e) = self.run_nix_flake_lock()
+                && let Err(e) = self.run_nix_flake_lock(state.lock_offline)
             {
                 eprintln!("Warning: Failed to update lockfile: {}", e);
             }

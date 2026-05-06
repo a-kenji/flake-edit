@@ -18,6 +18,9 @@ pub struct AppState {
     pub diff: bool,
     /// Skip running nix flake lock after changes
     pub no_lock: bool,
+    /// Pass `--offline` to `nix flake lock`. Set for follows-only edits so
+    /// the lockfile refresh works without network access.
+    pub lock_offline: bool,
     /// Allow interactive TUI prompts
     pub interactive: bool,
     /// Disable reading from and writing to the completion cache
@@ -40,6 +43,7 @@ impl AppState {
             lock_file: None,
             diff: false,
             no_lock: false,
+            lock_offline: false,
             interactive: true,
             no_cache: false,
             cache_path: None,
@@ -54,6 +58,11 @@ impl AppState {
 
     pub fn with_no_lock(mut self, no_lock: bool) -> Self {
         self.no_lock = no_lock;
+        self
+    }
+
+    pub fn with_lock_offline(mut self, lock_offline: bool) -> Self {
+        self.lock_offline = lock_offline;
         self
     }
 
