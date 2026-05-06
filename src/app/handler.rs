@@ -247,10 +247,12 @@ pub fn run(args: CliArgs) -> Result<()> {
             if let Some(max) = depth {
                 state.config.follow.max_depth = *max;
             }
+            state.lock_offline = true;
             follow::auto::run(&editor, &mut flake_edit, &state)?;
         }
 
         Command::AddFollow { input, target } => {
+            state.lock_offline = true;
             follow::add_follow(
                 &editor,
                 &mut flake_edit,
