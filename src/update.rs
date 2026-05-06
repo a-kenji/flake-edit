@@ -8,11 +8,12 @@ use crate::input::Input;
 use crate::uri::is_git_url;
 use crate::version::parse_ref;
 
+/// Rewrites flake.nix URIs for `update`, `pin`, and `unpin`.
 #[derive(Default, Debug)]
 pub struct Updater {
     text: Rope,
     inputs: Vec<UpdateInput>,
-    // Keeps track of offset for changing multiple inputs on a single pass.
+    /// Cumulative byte delta from edits applied earlier in the current pass.
     offset: i32,
 }
 
@@ -158,13 +159,17 @@ impl Updater {
                 change.clone()
             };
 
-            // set_ref() preserves storage location (path vs query param)
+            // `set_ref` preserves whether the ref lives in the URL path or a
+            // query parameter.
             let mut parsed = parsed.clone();
             let _ = parsed.set_ref(Some(final_change.clone()));
             let updated_uri = parsed.to_string();
 
-            if !Self::print_update_status(&input.input.id, &parsed_ref.previous_ref, &final_change)
-            {
+            if !Self::print_update_status(
+                input.input.id.as_str(),
+                &parsed_ref.previous_ref,
+                &final_change,
+            ) {
                 return;
             }
 
@@ -173,6 +178,8 @@ impl Updater {
             tracing::error!("Could not find latest version for Input: {:?}", input);
         }
     }
+    /// Build an [`Updater`] from `text` and the inputs in `map`. Inputs
+    /// without an editable URL are skipped.
     pub fn new(text: Rope, map: InputMap) -> Self {
         let mut inputs = vec![];
         for (_id, input) in map {
@@ -192,9 +199,15 @@ impl Updater {
             .strip_prefix('"')
             .and_then(|s| s.strip_suffix('"'))
             .unwrap_or(id);
-        self.inputs.iter().position(|n| n.input.bare_id() == bare)
+        self.inputs
+            .iter()
+            .position(|n| n.input.id().as_str() == bare)
     }
-    /// Pin an input based on it's id to a specific rev.
+    /// Pin the input named `id` to `rev`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the requested `id` if no such input exists.
     pub fn pin_input_to_ref(&mut self, id: &str, rev: &str) -> Result<(), String> {
         self.sort();
         let idx = self.get_index(id).ok_or_else(|| id.to_string())?;
@@ -203,7 +216,12 @@ impl Updater {
         self.change_input_to_rev(&input, rev);
         Ok(())
     }
-    /// Remove any ?ref= or ?rev= parameters from a specific input.
+
+    /// Remove any `?ref=` or `?rev=` pin from `id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the requested `id` if no such input exists.
     pub fn unpin_input(&mut self, id: &str) -> Result<(), String> {
         self.sort();
         let idx = self.get_index(id).ok_or_else(|| id.to_string())?;
@@ -212,14 +230,17 @@ impl Updater {
         self.remove_ref_and_rev(&input);
         Ok(())
     }
-    /// Update all inputs to a specific semver release,
-    /// if a specific input is given, just update the single input.
+
+    /// Update inputs to the latest matching release.
+    ///
+    /// When `id` is `Some`, only that input is updated. Otherwise every
+    /// input with an editable URL is processed.
     pub fn update_all_inputs_to_latest_semver(&mut self, id: Option<String>, init: bool) {
         self.sort();
         let inputs = self.inputs.clone();
         for input in inputs.iter() {
             if let Some(ref input_id) = id {
-                if input.input.id == *input_id {
+                if input.input.id.as_str() == input_id.as_str() {
                     self.query_and_update_all_inputs(input, init);
                 }
             } else {
@@ -227,6 +248,8 @@ impl Updater {
             }
         }
     }
+
+    /// Current source after all queued edits.
     pub fn get_changes(&self) -> String {
         self.text.to_string()
     }
@@ -240,12 +263,13 @@ impl Updater {
             .to_string()
     }
 
-    /// Change a specific input to a specific rev.
+    /// Rewrite `input`'s URL to pin it to `rev`.
     pub fn change_input_to_rev(&mut self, input: &UpdateInput, rev: &str) {
         let uri = self.get_input_text(input);
         match uri.parse::<FlakeRef>() {
             Ok(mut parsed) => {
-                // set_rev() preserves storage location (path vs query param)
+                // `set_rev` preserves whether the rev lives in the URL path
+                // or a query parameter.
                 let _ = parsed.set_rev(Some(rev.into()));
                 self.update_input(input.clone(), &parsed.to_string());
             }
@@ -261,7 +285,8 @@ impl Updater {
                 if parsed.ref_source_location() == RefLocation::None {
                     return;
                 }
-                // set_ref/set_rev handle both path-based and query param storage
+                // `set_ref`/`set_rev` handle both path-based and
+                // query-parameter storage.
                 let _ = parsed.set_ref(None);
                 let _ = parsed.set_rev(None);
                 self.update_input(input.clone(), &parsed.to_string());
@@ -271,7 +296,8 @@ impl Updater {
             }
         }
     }
-    /// Query a forge api for the latest release and update, if necessary.
+    /// Query the forge API for `input`'s latest release and rewrite the URL
+    /// when newer.
     pub fn query_and_update_all_inputs(&mut self, input: &UpdateInput, init: bool) {
         let uri = self.get_input_text(input);
 
@@ -314,7 +340,8 @@ impl Updater {
         }
     }
 
-    /// Update an input using channel-based versioning (nixpkgs, home-manager, nix-darwin).
+    /// Update `input` using channel-based versioning (nixpkgs, home-manager,
+    /// nix-darwin).
     fn update_channel_input(&mut self, input: &UpdateInput, parsed: &FlakeRef) {
         let owner = parsed.r#type.get_owner().unwrap();
         let repo = parsed.r#type.get_repo().unwrap();
@@ -323,7 +350,10 @@ impl Updater {
         let current_ref = parsed.get_ref_or_rev().unwrap_or_default();
 
         if current_ref.is_empty() {
-            tracing::debug!("Skipping unpinned channel input: {}", input.input.id);
+            tracing::debug!(
+                "Skipping unpinned channel input: {}",
+                input.input.id.as_str()
+            );
             return;
         }
 
@@ -345,12 +375,12 @@ impl Updater {
         let _ = parsed.set_ref(Some(final_ref.clone()));
         let updated_uri = parsed.to_string();
 
-        if Self::print_update_status(&input.input.id, &current_ref, &final_ref) {
+        if Self::print_update_status(input.input.id.as_str(), &current_ref, &final_ref) {
             self.update_input(input.clone(), &updated_uri);
         }
     }
 
-    /// Update an input using semver tag-based versioning (standard behavior).
+    /// Update `input` to the latest semver tag from its forge.
     fn update_semver_input(&mut self, input: &UpdateInput, init: bool) {
         let target = match self.parse_update_target(input, init) {
             Some(target) => target,
@@ -365,7 +395,7 @@ impl Updater {
         self.apply_update(input, &target, tags, init);
     }
 
-    // Sort the entries, so that we can adjust multiple values together
+    // Sort by source range so multi-edit passes stay aligned with `offset`.
     fn sort(&mut self) {
         self.inputs.sort();
     }
@@ -388,7 +418,7 @@ impl Updater {
     }
 }
 
-// Wrapper around  individual inputs
+/// Wrapper that lets [`Updater`] sort inputs by source position.
 #[derive(Debug, Clone)]
 pub struct UpdateInput {
     input: Input,

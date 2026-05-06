@@ -16,7 +16,7 @@ pub struct CliArgs {
     /// Defaults to `flake.lock` in the current directory.
     #[arg(long)]
     lock_file: Option<String>,
-    /// Print a diff of the changes, will not write the changes to disk.
+    /// Print a diff of the changes instead of writing them to disk.
     #[arg(long, default_value_t = false)]
     diff: bool,
     /// Skip updating the lockfile after editing flake.nix.
@@ -41,12 +41,12 @@ pub struct CliArgs {
 
 #[allow(unused)]
 impl CliArgs {
-    /// Surface current version together with the current git revision and date, if available
+    /// Version string with embedded git revision and date, when available.
     fn unstable_version() -> &'static str {
         const VERSION: &str = env!("CARGO_PKG_VERSION");
         let date = option_env!("GIT_DATE").unwrap_or("no_date");
         let rev = option_env!("GIT_REV").unwrap_or("no_rev");
-        // This is a memory leak, only use sparingly.
+        // Leaks per call. Only invoked once at startup.
         Box::leak(format!("{VERSION} - {date} - {rev}").into_boxed_str())
     }
 
@@ -188,6 +188,12 @@ pub enum Command {
         /// `follow.transitive_min`.
         #[arg(long, num_args = 0..=1, default_missing_value = "2")]
         transitive: Option<usize>,
+        /// Maximum depth of follows declarations to write: 1 writes only
+        /// `parent.child.follows`, 2 also writes
+        /// `parent.child.grandchild.follows`. Defaults to 2 if no value is
+        /// given. Overrides the config file's `follow.max_depth`.
+        #[arg(long, num_args = 0..=1, default_missing_value = "2")]
+        depth: Option<usize>,
         /// Flake.nix paths to process. If empty, runs on current directory.
         #[arg(trailing_var_arg = true, num_args = 0..)]
         paths: Vec<std::path::PathBuf>,
@@ -227,8 +233,8 @@ pub enum Command {
     },
 }
 
+/// Which subcommand to complete.
 #[derive(Debug, Clone, Default)]
-/// Which command should be completed
 pub enum CompletionMode {
     #[default]
     None,
@@ -249,6 +255,7 @@ impl From<String> for CompletionMode {
     }
 }
 
+/// Output format for the `list` subcommand.
 #[derive(Debug, Clone, Default)]
 pub enum ListFormat {
     None,

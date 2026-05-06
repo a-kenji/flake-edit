@@ -1,0 +1,105 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1700000000,
+        "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "1111111111111111111111111111111111111111",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "flake-utils": {
+      "locked": {
+        "lastModified": 1700000004,
+        "narHash": "sha256-EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEA=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "5555555555555555555555555555555555555555",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "flake-utils_2": {
+      "locked": {
+        "lastModified": 1700000005,
+        "narHash": "sha256-FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "6666666666666666666666666666666666666666",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "flake-edit": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nested-helper": "nested-helper"
+      },
+      "locked": {
+        "lastModified": 1700000001,
+        "narHash": "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA=",
+        "owner": "a-kenji",
+        "repo": "flake-edit",
+        "rev": "2222222222222222222222222222222222222222",
+        "type": "github"
+      },
+      "original": {
+        "owner": "a-kenji",
+        "repo": "flake-edit",
+        "type": "github"
+      }
+    },
+    "nested-helper": {
+      "inputs": {
+        "nixpkgs": [
+          "flake-edit",
+          "nixpkgs"
+        ],
+        "flake-utils": "flake-utils_2"
+      },
+      "locked": {
+        "lastModified": 1700000002,
+        "narHash": "sha256-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCA=",
+        "owner": "a-kenji",
+        "repo": "nested-helper",
+        "rev": "3333333333333333333333333333333333333333",
+        "type": "github"
+      },
+      "original": {
+        "owner": "a-kenji",
+        "repo": "nested-helper",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "flake-utils": "flake-utils",
+        "flake-edit": "flake-edit"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

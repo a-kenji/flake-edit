@@ -1,0 +1,93 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1700000000,
+        "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "1111111111111111111111111111111111111111",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "omnibus": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "flops": "flops"
+      },
+      "locked": {
+        "lastModified": 1700000010,
+        "narHash": "sha256-OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOA=",
+        "owner": "Lehmanator",
+        "repo": "nix-configs",
+        "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Lehmanator",
+        "repo": "nix-configs",
+        "type": "github"
+      }
+    },
+    "flops": {
+      "inputs": {
+        "nixpkgs": [
+          "omnibus",
+          "nixpkgs"
+        ],
+        "POP": "POP"
+      },
+      "locked": {
+        "lastModified": 1700000011,
+        "narHash": "sha256-FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB=",
+        "owner": "example",
+        "repo": "flops",
+        "rev": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "example",
+        "repo": "flops",
+        "type": "github"
+      }
+    },
+    "POP": {
+      "inputs": {
+        "nixpkgs": [
+          "omnibus",
+          "flops",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1700000012,
+        "narHash": "sha256-PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPC=",
+        "owner": "example",
+        "repo": "POP",
+        "rev": "cccccccccccccccccccccccccccccccccccccccc",
+        "type": "github"
+      },
+      "original": {
+        "owner": "example",
+        "repo": "POP",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "omnibus": "omnibus"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

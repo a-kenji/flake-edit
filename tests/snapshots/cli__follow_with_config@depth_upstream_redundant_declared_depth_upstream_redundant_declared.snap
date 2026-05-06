@@ -1,0 +1,33 @@
+---
+source: tests/cli.rs
+assertion_line: 646
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/depth_upstream_redundant_declared.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/depth_upstream_redundant_declared.flake.lock"
+    - "--config"
+    - "[FIXTURES]/depth_upstream_redundant_declared.config.toml"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -5,7 +5,6 @@
+     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+     flake-edit.url = "github:a-kenji/flake-edit";
+     flake-edit.inputs.nixpkgs.follows = "nixpkgs";
+-    flake-edit.inputs.nested-helper.inputs.nixpkgs.follows = "nixpkgs";
+     tui-term.url = "github:a-kenji/tui-term";
+   };
+
+
+----- stderr -----
+warning: stale-lock follows at line 6, column 22: flake-edit.nested-helper.nixpkgs -> nixpkgs (flake.lock resolves to flake-edit.nixpkgs; run `nix flake lock`)

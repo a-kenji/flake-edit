@@ -497,6 +497,95 @@ fn test_add_follow_nonexistent(#[case] fixture: &str, #[case] input: &str, #[cas
     });
 }
 
+/// `add-follow` with a 3+ segment dot path (e.g. `a.b.c`) used to silently
+/// emit malformed Nix because only the first `.` was treated as the
+/// `inputs.` separator. Reject these up front with a depth error.
+#[test]
+fn add_follow_rejects_three_segment_dot_path() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    error_filters(&mut settings);
+    let output = cli()
+        .arg("--flake")
+        .arg(fixture_path("root"))
+        .arg("--diff")
+        .arg("add-follow")
+        .arg("neovim.nixvim.flake-parts")
+        .arg("flake-parts")
+        .output()
+        .expect("run flake-edit");
+    assert!(!output.status.success(), "expected non-zero exit");
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(
+        stderr.contains("depth") || stderr.contains("3 segments"),
+        "stderr should mention depth or segment count, got:\n{stderr}",
+    );
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("root"))
+                .arg("--diff")
+                .arg("add-follow")
+                .arg("neovim.nixvim.flake-parts")
+                .arg("flake-parts")
+        );
+    });
+}
+
+/// Slash-separated input paths are not a recognized syntax: the whole string
+/// becomes a single segment and the existing `Input not found` error must
+/// remain intact (regression guard against accidentally widening the parser).
+#[test]
+fn add_follow_rejects_slash_form_unrecognized() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    error_filters(&mut settings);
+    let output = cli()
+        .arg("--flake")
+        .arg(fixture_path("root"))
+        .arg("--diff")
+        .arg("add-follow")
+        .arg("neovim/nixvim/flake-parts")
+        .arg("flake-parts")
+        .output()
+        .expect("run flake-edit");
+    assert!(!output.status.success(), "expected non-zero exit");
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(
+        stderr.contains("not found"),
+        "slash-form must hit the existing 'not found' error, got:\n{stderr}",
+    );
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("root"))
+                .arg("--diff")
+                .arg("add-follow")
+                .arg("neovim/nixvim/flake-parts")
+                .arg("flake-parts")
+        );
+    });
+}
+
+#[test]
+fn add_follow_accepts_two_segment_dot_path_unchanged() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("root"))
+                .arg("--diff")
+                .arg("add-follow")
+                .arg("rust-overlay.flake-compat")
+                .arg("flake-utils")
+        );
+    });
+}
+
 /// Test the follow command to automatically follow matching inputs
 #[rstest]
 #[case("centerpiece")] // Two nested nixpkgs inputs that can follow top-level nixpkgs
@@ -510,6 +599,17 @@ fn test_add_follow_nonexistent(#[case] fixture: &str, #[case] input: &str, #[cas
 #[case("stale_follows")] // Stale follows: crane.flake-compat no longer exists in lock
 #[case("stale_follows_invalid_parent")] // Stale follows: nixpkgs.treefmt-nix doesn't exist
 #[case("treefmt_transitive")] // treefmt has treefmt-nix as transitive input that matches top-level
+#[case("multi_hop_cycle")] // multi-hop a -> b -> c declared chain
+#[case("dot_ancestor_cycle")] // dot-named participant in a multi-hop chain
+#[case("lockfile_only_cycle")] // cycle closes only through resolved lockfile edges
+#[case("stale_lockfile_only")] // stale-edge detection alongside the resolver
+#[case("split_inputs_block_and_flat")] // some inputs in a block, neovim flat outside
+#[case("stale_lock")] // declared follows the lockfile didn't apply
+#[case("transitive_grandchild")] // baseline: depth-2 candidate, default max_depth=1 ignores it
+#[case("transitive_grandchild_existing")] // baseline: handwritten depth-2 follows, no-op
+#[case("transitive_grandchild_cycle")] // baseline: depth-2 candidate skipped (cycle)
+#[case("transitive_self_named")] // self-named depth-3 follows must round-trip without removal
+#[case("follow_slash_syntax")] // slash-form `follows = "parent/child"` is the alias of `parent.child`
 fn test_follow(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -531,6 +631,31 @@ fn test_follow(#[case] fixture: &str) {
 #[rstest]
 #[case("centerpiece", "ignore_treefmt")] // Config ignores treefmt-nix.nixpkgs, only home-manager follows
 #[case("treefmt_transitive", "transitive")] // Transitive follows with transitive_min = 2
+#[case("transitive_grandchild", "deep_follows_2")] // max_depth=2 emits depth-2 follows
+#[case("transitive_grandchild_existing", "deep_follows_2")] // handwritten depth-2 already present, no-op
+#[case("transitive_grandchild_cycle", "deep_follows_2")] // depth-2 candidate skipped due to cycle
+#[case("depth_upstream_redundant", "depth_upstream_redundant")] // upstream propagation makes depth-2 follow redundant; nothing emitted
+#[case("depth_upstream_partial", "depth_upstream_partial")] // partial upstream coverage: nixpkgs skipped, flake-utils emitted
+#[case(
+    "depth_upstream_redundant_declared",
+    "depth_upstream_redundant_declared"
+)] // already-declared depth-2 follow auto-removed
+#[case("depth_upstream_redundant_partial", "depth_upstream_redundant_partial")] // mixed: nixpkgs depth-2 removed, flake-utils kept
+#[case("depth_upstream_redundant_depth3", "depth_upstream_redundant_depth3")] // depth-3 chain auto-removed
+#[case(
+    "transitive_promote_with_upstream_redundant",
+    "transitive_promote_with_upstream_redundant"
+)]
+// transitive_min=2 promotes rust-analyzer-src while sibling depth-2 nixpkgs follow stays suppressed by upstream propagation
+#[case(
+    "transitive_promote_unlocks_deeper",
+    "transitive_promote_unlocks_deeper"
+)]
+// promoting flake-compat to a new top-level unlocks a deeper nested follow with the same canonical name in the same invocation
+#[case("stale_edge_unblocks_follow", "stale_edge_unblocks_follow")]
+// a stale follows declaration would block a valid candidate via the cycle check; the removal and the unblocked follow must land in one invocation
+#[case("prune_empty_intermediate_inputs", "prune_empty_intermediate_inputs")]
+// depth-2 redundant follow is the sole entry of an `inputs = { ... }` block; auto-removal must collapse the now-empty intermediate block
 fn test_follow_with_config(#[case] fixture: &str, #[case] config: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -650,6 +775,166 @@ fn test_follow_paths_incompatible_with_lock_flag() {
     });
 }
 
+/// Lockfiles whose `inputs` map contains empty `[]` arrays (a
+/// follows declaration whose chain has been overridden away) must
+/// deserialize and the `follow` subcommand must run to completion.
+#[rstest]
+fn test_follow_empty_indirect_lockfile() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    stderr_path_filters(&mut settings);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("lock_indirect_empty"))
+                .arg("--lock-file")
+                .arg(fixture_lock_path("lock_indirect_empty"))
+                .arg("--diff")
+                .arg("follow")
+                .arg("--depth")
+                .arg("2")
+        );
+    });
+}
+
+/// `inputs.X.follows = ""` is a real, intentional Nix idiom for
+/// "this nested input has no follows / pinning override". `list`
+/// must surface it as `=> ""` and `follow` must not synthesize a
+/// bogus self-referential edge from it.
+#[rstest]
+fn test_list_empty_target_follows() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    stderr_path_filters(&mut settings);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("follows_empty_target"))
+                .arg("--lock-file")
+                .arg(fixture_lock_path("follows_empty_target"))
+                .arg("list")
+        );
+    });
+}
+
+#[rstest]
+fn test_follow_empty_target_follows() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    stderr_path_filters(&mut settings);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("follows_empty_target"))
+                .arg("--lock-file")
+                .arg(fixture_lock_path("follows_empty_target"))
+                .arg("--diff")
+                .arg("follow")
+                .arg("--depth")
+                .arg("2")
+        );
+    });
+}
+
+/// When the user has declared a parent override like
+/// `clan-core.inputs.treefmt-nix.follows = "systems"`, the auto-deduplicator
+/// must not propose a deeper override
+/// `clan-core.inputs.data-mesher.inputs.treefmt-nix.follows = "treefmt-nix"`
+/// that contradicts the parent's chosen target.
+#[rstest]
+fn test_follow_respects_ancestor() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    stderr_path_filters(&mut settings);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("follow_respects_ancestor"))
+                .arg("--lock-file")
+                .arg(fixture_lock_path("follow_respects_ancestor"))
+                .arg("--diff")
+                .arg("follow")
+                .arg("--transitive")
+                .arg("--depth")
+                .arg("6")
+        );
+    });
+}
+
+/// `inputs.X.follows = ""` is the user explicitly nulling a nested input.
+/// `--transitive --depth 6` against a flake with a top-level `treefmt-nix`
+/// must not propose to retarget the nulled follows: doing so would erase
+/// the user's deliberate decision.
+#[rstest]
+fn test_follow_respects_nulled() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    stderr_path_filters(&mut settings);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("follow_respects_nulled"))
+                .arg("--lock-file")
+                .arg(fixture_lock_path("follow_respects_nulled"))
+                .arg("--diff")
+                .arg("follow")
+                .arg("--transitive")
+                .arg("--depth")
+                .arg("6")
+        );
+    });
+}
+
+/// Nulled twin of [`test_follow_empty_target_follows`]: `follows = ""`
+/// whose source path is absent from the lockfile must be removed.
+#[rstest]
+fn test_follow_nulled_stale_source_removed() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    stderr_path_filters(&mut settings);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("nulled_stale_source_removed"))
+                .arg("--lock-file")
+                .arg(fixture_lock_path("nulled_stale_source_removed"))
+                .arg("--diff")
+                .arg("follow")
+                .arg("--transitive")
+                .arg("--depth")
+                .arg("6")
+        );
+    });
+}
+
+/// Depth-3 sibling of [`test_follow_nulled_stale_source_removed`].
+#[rstest]
+fn test_follow_nulled_stale_depth3() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    stderr_path_filters(&mut settings);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("nulled_stale_depth3"))
+                .arg("--lock-file")
+                .arg(fixture_lock_path("nulled_stale_depth3"))
+                .arg("--diff")
+                .arg("follow")
+                .arg("--transitive")
+                .arg("--depth")
+                .arg("6")
+        );
+    });
+}
+
 /// Test follow with positional path (single file)
 #[rstest]
 #[case("centerpiece")] // Single file with nested nixpkgs inputs
@@ -750,6 +1035,94 @@ fn test_follow_multi_directory() {
     insta::assert_snapshot!("multi_directory_root", root_result);
     insta::assert_snapshot!("multi_directory_other", other_result);
     insta::assert_snapshot!("multi_directory_another", another_result);
+}
+
+/// `follow` on a flake with no `inputs = { ... };` block exits 0 with
+/// a no-op message instead of erroring with `No inputs found in the
+/// flake`. The lock is borrowed from `first_nested_node` so the
+/// fixture's empty-inputs case is what trips the no-op, not an empty
+/// nested-inputs lockfile (both produce the same exit but only the
+/// former regresses).
+#[test]
+fn test_follow_no_inputs() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    stderr_path_filters(&mut settings);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("follow_no_inputs"))
+                .arg("--lock-file")
+                .arg(fixture_lock_path("first_nested_node"))
+                .arg("--no-lock")
+                .arg("--diff")
+                .arg("follow")
+        );
+    });
+}
+
+/// Batch mode (`flake-edit follow PATHS...`) on a mix of inputful and
+/// inputless flakes exits 0, emits the inputful flake's diff, and
+/// produces no `Error processing ...` line for the inputless one.
+#[test]
+fn test_follow_paths_batch_with_inputless() {
+    let tmpdir = tempfile::tempdir().expect("Failed to create tmpdir");
+    let root = tmpdir.path();
+
+    let inputful_dir = root.join("inputful");
+    let inputless_dir = root.join("inputless");
+    fs::create_dir(&inputful_dir).expect("create inputful/");
+    fs::create_dir(&inputless_dir).expect("create inputless/");
+
+    copy_fixture_to_dir("centerpiece", &inputful_dir);
+
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    fs::copy(
+        format!("{manifest_dir}/tests/fixtures/follow_no_inputs.flake.nix"),
+        inputless_dir.join("flake.nix"),
+    )
+    .expect("copy inputless flake.nix");
+    // Borrow any lock with nested_inputs so loading it succeeds;
+    // missing-lock handling is governed elsewhere.
+    fs::copy(
+        format!("{manifest_dir}/tests/fixtures/first_nested_node.flake.lock"),
+        inputless_dir.join("flake.lock"),
+    )
+    .expect("copy inputless flake.lock");
+
+    let output = Command::new(get_cargo_bin("flake-edit"))
+        .env("NO_COLOR", "1")
+        .arg("--diff")
+        .arg("follow")
+        .arg(inputful_dir.join("flake.nix"))
+        .arg(inputless_dir.join("flake.nix"))
+        .output()
+        .expect("Failed to run flake-edit");
+
+    assert!(
+        output.status.success(),
+        "batch follow failed (status {:?}): stdout={}\nstderr={}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("Error processing"),
+        "inputless flake produced an error in batch mode: stderr={stderr}",
+    );
+    assert!(
+        !stderr.contains("No inputs found"),
+        "inputless flake reported NoInputs: stderr={stderr}",
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("home-manager") || stdout.contains("treefmt"),
+        "inputful flake's diff did not appear in stdout: stdout={stdout}",
+    );
 }
 
 /// Test follow without arguments (runs on current directory).

@@ -1,0 +1,43 @@
+---
+source: tests/cli.rs
+assertion_line: 653
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/transitive_promote_with_upstream_redundant.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/transitive_promote_with_upstream_redundant.flake.lock"
+    - "--config"
+    - "[FIXTURES]/transitive_promote_with_upstream_redundant.config.toml"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -5,7 +5,10 @@
+     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+     fenix.url = "github:nix-community/fenix";
+     fenix.inputs.nixpkgs.follows = "nixpkgs";
++    fenix.inputs.rust-analyzer-src.follows = "rust-analyzer-src";
+     fenix2.url = "github:nix-community/fenix-alt";
++    fenix2.inputs.rust-analyzer-src.follows = "rust-analyzer-src";
++    rust-analyzer-src.url = "github:rust-lang/rust-analyzer/nightly";
+   };
+
+   outputs =
+@@ -14,6 +17,7 @@
+       nixpkgs,
+       fenix,
+       fenix2,
++      rust-analyzer-src,
+     }:
+     { };
+ }
+
+----- stderr -----

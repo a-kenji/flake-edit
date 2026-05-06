@@ -1,0 +1,32 @@
+---
+source: tests/cli.rs
+assertion_line: 616
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/stale_lock.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/stale_lock.flake.lock"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -10,7 +10,6 @@
+     crane.inputs.nixpkgs.follows = "nixpkgs";
+     # Stale follows: crane no longer has a nested input named `gone`. Triggers
+     # the auto-follow removal path so validate_full runs.
+-    crane.inputs.gone.follows = "nixpkgs";
+   };
+
+   outputs =
+
+----- stderr -----
+warning: stale follows at line 7, column 17: crane.gone -> nixpkgs (source no longer present in flake.lock)
+warning: stale-lock follows at line 7, column 17: crane.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)

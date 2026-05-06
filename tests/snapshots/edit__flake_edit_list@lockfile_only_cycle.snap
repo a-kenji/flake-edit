@@ -1,0 +1,21 @@
+---
+source: tests/edit.rs
+expression: "ListOutput::from(flake_edit.list())"
+info:
+  flake_nix: ""
+  changes: []
+---
+inputs:
+  bar:
+    id: bar
+    url: "github:example/bar"
+    flake: true
+  foo:
+    id: foo
+    url: "github:example/foo"
+    flake: true
+  nixpkgs:
+    id: nixpkgs
+    url: "github:NixOS/nixpkgs/nixos-unstable"
+    flake: true
+follows: []

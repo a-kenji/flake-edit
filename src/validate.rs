@@ -1,309 +1,139 @@
-//! Validation for Nix expressions.
+//! Validation for Nix flake expressions.
+//!
+//! - [`error`]: [`ValidationError`], [`Severity`], [`Location`].
+//! - `syntax` (private): rnix parse errors and duplicate-attribute detection.
+//! - `follows` (crate-private): cycle, stale, target, contradiction, and depth
+//!   lints.
+//!
+//! [`validate`] runs the syntax-level lints. [`validate_full`] adds the
+//! follows-graph lints that need a parsed [`InputMap`] and an optional
+//! [`FlakeLock`].
 
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
-use std::fmt;
+pub mod error;
+pub(crate) mod follows;
+mod syntax;
 
-use rnix::{Root, SyntaxKind, SyntaxNode, TextRange};
+pub use error::{DuplicateAttr, Location, Severity, ValidationError, ValidationResult};
 
-/// Location information for error reporting (1-indexed).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Location {
-    pub line: usize,
-    pub column: usize,
-}
+use crate::edit::InputMap;
+use crate::follows::DEFAULT_MAX_DEPTH;
+use crate::lock::FlakeLock;
 
-impl fmt::Display for Location {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "line {}, column {}", self.line, self.column)
-    }
-}
-
-/// Information about a duplicate attribute.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DuplicateAttr {
-    /// The attribute path, e.g., "a.b.c" or "inputs.nixpkgs.url".
-    pub path: String,
-    /// Location of the first occurrence.
-    pub first: Location,
-    /// Location of the duplicate occurrence.
-    pub duplicate: Location,
-}
-
-impl fmt::Display for DuplicateAttr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "duplicate attribute '{}' at {} (first defined at {})",
-            self.path, self.duplicate, self.first
-        )
-    }
-}
-
-/// Validation errors that can occur when parsing Nix expressions.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ValidationError {
-    /// Syntax error from rnix parser.
-    ParseError { message: String, location: Location },
-    /// Duplicate attribute in an attribute set.
-    DuplicateAttribute(DuplicateAttr),
-}
-
-impl fmt::Display for ValidationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ValidationError::ParseError { message, location } => {
-                write!(f, "parse error at {}: {}", location, message)
-            }
-            ValidationError::DuplicateAttribute(dup) => write!(f, "{}", dup),
-        }
-    }
-}
-
-/// Result of validation containing any errors found.
-#[derive(Debug, Default)]
-pub struct ValidationResult {
-    pub errors: Vec<ValidationError>,
-}
-
-impl ValidationResult {
-    pub fn is_ok(&self) -> bool {
-        self.errors.is_empty()
-    }
-
-    pub fn has_errors(&self) -> bool {
-        !self.errors.is_empty()
-    }
-}
-
-/// Validator for Nix expressions.
-pub struct Validator {
-    source: String,
-    /// Byte offsets where each line starts (for computing line/column).
-    line_starts: Vec<usize>,
-}
-
-/// Extract the full attribute path as a string, e.g., "a.b.c".
-fn extract_attrpath(attrpath: &SyntaxNode) -> String {
-    attrpath
-        .children()
-        .map(|child| {
-            let s = child.to_string();
-            // Unquote string attribute names: `"a"` -> `a`
-            if child.kind() == SyntaxKind::NODE_STRING {
-                s.trim_matches('"').to_string()
-            } else {
-                s
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(".")
-}
-
-/// Check whether a `NODE_ATTRPATH_VALUE` node has a `NODE_ATTR_SET` as its value.
-fn value_is_attrset(node: &SyntaxNode) -> bool {
-    node.children()
-        .any(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
-}
-
-impl Validator {
-    /// Create a new validator for the given source.
-    pub fn new(source: &str) -> Self {
-        let line_starts = Self::compute_line_starts(source);
-        Self {
-            source: source.to_string(),
-            line_starts,
-        }
-    }
-
-    /// Compute byte offsets for the start of each line.
-    fn compute_line_starts(source: &str) -> Vec<usize> {
-        let mut starts = vec![0];
-        for (i, c) in source.char_indices() {
-            if c == '\n' {
-                starts.push(i + 1);
-            }
-        }
-        starts
-    }
-
-    /// Convert a TextRange to a Location (using the start position).
-    fn range_to_location(&self, range: TextRange) -> Location {
-        self.offset_to_location(range.start().into())
-    }
-
-    /// Convert a byte offset to line and column (1-indexed).
-    fn offset_to_location(&self, offset: usize) -> Location {
-        let line = self
-            .line_starts
-            .iter()
-            .rposition(|&start| start <= offset)
-            .unwrap_or(0);
-        let column = offset - self.line_starts[line];
-        Location {
-            line: line + 1,
-            column: column + 1,
-        }
-    }
-
-    /// Validate the source and return any errors found.
-    pub fn validate(&self) -> ValidationResult {
-        let root = Root::parse(&self.source);
-        let mut errors = Vec::new();
-
-        // Collect rnix parse errors
-        for error in root.errors() {
-            let location = self.parse_error_location(error);
-            errors.push(ValidationError::ParseError {
-                message: error.to_string(),
-                location,
-            });
-        }
-
-        // Check for duplicate attributes
-        let syntax = root.syntax();
-        self.check_node(&syntax, &mut errors);
-
-        ValidationResult { errors }
-    }
-
-    /// Extract location from an rnix ParseError.
-    fn parse_error_location(&self, error: &rnix::ParseError) -> Location {
-        use rnix::ParseError::*;
-        match error {
-            Unexpected(r)
-            | UnexpectedExtra(r)
-            | UnexpectedWanted(_, r, _)
-            | UnexpectedDoubleBind(r)
-            | DuplicatedArgs(r, _) => self.range_to_location(*r),
-            UnexpectedEOF | UnexpectedEOFWanted(_) | RecursionLimitExceeded | _ => Location {
-                line: self.line_starts.len(),
-                column: 1,
-            },
-        }
-    }
-
-    /// Recursively check a node and its descendants for duplicate attributes.
-    fn check_node(&self, node: &SyntaxNode, errors: &mut Vec<ValidationError>) {
-        if node.kind() == SyntaxKind::NODE_ATTR_SET {
-            self.check_attr_set(node, errors);
-        }
-
-        for child in node.children() {
-            self.check_node(&child, errors);
-        }
-    }
-
-    /// Check an attribute set for duplicate attributes.
-    ///
-    /// Nix allows duplicate attribute names when both values are attribute sets
-    /// (they get merged). For example:
-    /// ```nix
-    /// {
-    ///   inputs = { nixpkgs.url = "..."; };
-    ///   inputs = { flake-utils.url = "..."; };
-    /// }
-    /// ```
-    /// is equivalent to a single `inputs` with both entries. We allow this but
-    /// still check the merged contents for true conflicts.
-    fn check_attr_set(&self, attr_set: &SyntaxNode, errors: &mut Vec<ValidationError>) {
-        // Track first occurrence: path -> (location, is_attrset, node)
-        let mut seen: HashMap<String, (Location, bool, SyntaxNode)> = HashMap::new();
-        // Track all attrset-valued nodes for a given path so we can cross-check
-        let mut merged_attrsets: HashMap<String, Vec<SyntaxNode>> = HashMap::new();
-
-        for child in attr_set.children() {
-            if child.kind() == SyntaxKind::NODE_ATTRPATH_VALUE
-                && let Some(attrpath) = child
-                    .children()
-                    .find(|c| c.kind() == SyntaxKind::NODE_ATTRPATH)
-            {
-                let path = extract_attrpath(&attrpath);
-                let location = self.range_to_location(attrpath.text_range());
-                let is_attrset = value_is_attrset(&child);
-
-                match seen.entry(path.clone()) {
-                    Entry::Occupied(entry) => {
-                        let (ref first_loc, first_is_attrset, _) = *entry.get();
-                        if first_is_attrset && is_attrset {
-                            merged_attrsets.entry(path).or_default().push(child.clone());
-                        } else {
-                            errors.push(ValidationError::DuplicateAttribute(DuplicateAttr {
-                                path: entry.key().clone(),
-                                first: first_loc.clone(),
-                                duplicate: location,
-                            }));
-                        }
-                    }
-                    Entry::Vacant(entry) => {
-                        if is_attrset {
-                            merged_attrsets.entry(path).or_default().push(child.clone());
-                        }
-                        entry.insert((location, is_attrset, child.clone()));
-                    }
-                }
-            }
-        }
-
-        // Cross-check merged attrsets for duplicate attrs across blocks.
-        for nodes in merged_attrsets.values() {
-            if nodes.len() < 2 {
-                continue;
-            }
-            // Collect all attrs across all blocks and check for duplicates.
-            let mut cross_seen: HashMap<String, Location> = HashMap::new();
-            for node in nodes {
-                // Find the NODE_ATTR_SET child to iterate its attrs.
-                for attrset_child in node.children() {
-                    if attrset_child.kind() != SyntaxKind::NODE_ATTR_SET {
-                        continue;
-                    }
-                    for inner in attrset_child.children() {
-                        if inner.kind() == SyntaxKind::NODE_ATTRPATH_VALUE
-                            && let Some(inner_path_node) = inner
-                                .children()
-                                .find(|c| c.kind() == SyntaxKind::NODE_ATTRPATH)
-                        {
-                            let inner_path = extract_attrpath(&inner_path_node);
-                            let inner_loc = self.range_to_location(inner_path_node.text_range());
-
-                            match cross_seen.entry(inner_path) {
-                                Entry::Occupied(e) => {
-                                    errors.push(ValidationError::DuplicateAttribute(
-                                        DuplicateAttr {
-                                            path: e.key().clone(),
-                                            first: e.get().clone(),
-                                            duplicate: inner_loc,
-                                        },
-                                    ));
-                                }
-                                Entry::Vacant(e) => {
-                                    e.insert(inner_loc);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Convenience function to validate source and return errors.
+/// Run the syntax-level lints over `source`: parse errors, duplicate
+/// attributes, and the always-on declared-cycle check.
 pub fn validate(source: &str) -> ValidationResult {
-    Validator::new(source).validate()
+    let mut errors: Vec<ValidationError> = Vec::new();
+    syntax::collect(source, &mut errors);
+    if errors.is_empty() {
+        let mut walker = crate::walk::Walker::new(source);
+        if walker.walk(&crate::change::Change::None).is_ok() {
+            let line_map = syntax::LineMap::new(source);
+            let graph = crate::follows::FollowsGraph::from_declared(&walker.inputs);
+            let offset_to_location = |offset: usize| line_map.offset_to_location(offset);
+            errors.extend(follows::lint_follows_cycle(&graph, &offset_to_location));
+        }
+    }
+    ValidationResult {
+        errors,
+        warnings: Vec::new(),
+    }
+}
+
+/// Run syntax checks plus every follows-graph lint.
+///
+/// The follows-graph is built once from `inputs` and the optional `lock`,
+/// then handed to each lint. One graph build per call is cheap enough that
+/// callers do not need to share a pre-built graph.
+pub fn validate_full(
+    source: &str,
+    inputs: &InputMap,
+    lock: Option<&FlakeLock>,
+) -> ValidationResult {
+    validate_full_inner(source, inputs, lock, true)
+}
+
+/// Like [`validate_full`] but skips the lock-drift lints (`lint_follows_stale`
+/// and `lint_follows_stale_lock`) that compare declared edges in `flake.nix`
+/// against `flake.lock`.
+///
+/// For speculative validation during a multi-step apply. The lockfile cannot
+/// reflect mid-batch text edits, so a freshly-added follows always looks
+/// stale relative to the on-disk lock. Running lock-drift lints there would
+/// flag every in-progress edit as drift.
+pub fn validate_speculative(
+    source: &str,
+    inputs: &InputMap,
+    lock: Option<&FlakeLock>,
+) -> ValidationResult {
+    validate_full_inner(source, inputs, lock, false)
+}
+
+fn validate_full_inner(
+    source: &str,
+    inputs: &InputMap,
+    lock: Option<&FlakeLock>,
+    lock_drift_lints: bool,
+) -> ValidationResult {
+    let mut errors: Vec<ValidationError> = Vec::new();
+    let mut warnings: Vec<ValidationError> = Vec::new();
+
+    syntax::collect(source, &mut errors);
+
+    let line_map = syntax::LineMap::new(source);
+    let offset_to_location = |offset: usize| line_map.offset_to_location(offset);
+
+    let graph = follows::build_graph(inputs, lock, DEFAULT_MAX_DEPTH);
+
+    let mut candidates: Vec<ValidationError> = Vec::new();
+    candidates.extend(follows::lint_follows_cycle(&graph, &offset_to_location));
+    if let Some(lock) = lock
+        && lock_drift_lints
+    {
+        candidates.extend(follows::lint_follows_stale(&graph, &offset_to_location));
+        candidates.extend(follows::lint_follows_stale_lock(
+            &graph,
+            lock,
+            &offset_to_location,
+        ));
+    }
+    let top_level = follows::top_level_names(inputs);
+    candidates.extend(follows::lint_follows_target_not_toplevel(
+        &graph,
+        &top_level,
+        &offset_to_location,
+    ));
+    candidates.extend(follows::lint_follows_contradiction(
+        &graph,
+        &offset_to_location,
+    ));
+    candidates.extend(follows::lint_follows_depth_exceeded(
+        &graph,
+        DEFAULT_MAX_DEPTH,
+        &offset_to_location,
+    ));
+
+    for err in candidates {
+        match err.severity() {
+            Severity::Warning => warnings.push(err),
+            Severity::Error => errors.push(err),
+        }
+    }
+
+    ValidationResult { errors, warnings }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::edit::InputMap;
+    use crate::follows::{AttrPath, Segment};
+    use crate::input::{Follows, Input, Range};
+    use crate::validate::error::DuplicateAttr;
 
     fn expect_duplicate(err: &ValidationError) -> &DuplicateAttr {
         match err {
             ValidationError::DuplicateAttribute(dup) => dup,
-            ValidationError::ParseError { .. } => {
-                panic!("expected DuplicateAttribute, got ParseError")
-            }
+            other => panic!("expected DuplicateAttribute, got {other:?}"),
         }
     }
 
@@ -521,6 +351,26 @@ mod tests {
     }
 
     #[test]
+    fn follows_cycle_self_edge_lints() {
+        let source = r#"{
+  inputs.foo = {
+    url = "github:owner/foo";
+    inputs.foo.follows = "foo/foo";
+  };
+  outputs = { ... }: { };
+}"#;
+        let result = validate(source);
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, ValidationError::FollowsCycle { .. })),
+            "expected FollowsCycle, got: {:?}",
+            result.errors,
+        );
+    }
+
+    #[test]
     fn three_mergeable_attrsets() {
         let source = r#"{
   inputs = { a.url = "a"; };
@@ -532,6 +382,82 @@ mod tests {
             result.is_ok(),
             "expected no errors, got: {:?}",
             result.errors
+        );
+    }
+
+    fn seg(s: &str) -> Segment {
+        Segment::from_unquoted(s).unwrap()
+    }
+
+    fn path(s: &str) -> AttrPath {
+        AttrPath::parse(s).unwrap()
+    }
+
+    fn declared_input(id: &str, follows: &[(&str, &str)]) -> Input {
+        let mut input = Input::new(seg(id));
+        for (parent, target) in follows {
+            input.follows.push(Follows::Indirect {
+                path: AttrPath::new(seg(parent)),
+                target: Some(path(target)),
+            });
+        }
+        input.range = Range { start: 1, end: 2 };
+        input
+    }
+
+    fn make_inputs(items: Vec<Input>) -> InputMap {
+        let mut map = InputMap::new();
+        for input in items {
+            map.insert(input.id().as_str().to_string(), input);
+        }
+        map
+    }
+
+    #[test]
+    fn validate_full_emits_target_not_toplevel_by_default() {
+        let inputs = make_inputs(vec![declared_input("a", &[("b", "missing")])]);
+        let result = validate_full("{}", &inputs, None);
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, ValidationError::FollowsTargetNotToplevel { .. })),
+            "expected target-not-toplevel error, got: {:?}",
+            result.errors,
+        );
+    }
+
+    #[test]
+    fn validate_full_separates_warnings_from_errors() {
+        // Stale follows is a warning, target-not-toplevel is an error, and
+        // both can fire on the same input.
+        let inputs = make_inputs(vec![declared_input("a", &[("b", "missing")])]);
+        let lock_text = r#"{
+  "nodes": {
+    "a": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "abc", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "root": { "inputs": { "a": "a" } }
+  },
+  "root": "root",
+  "version": 7
+}"#;
+        let lock = FlakeLock::read_from_str(lock_text).unwrap();
+        let result = validate_full("{}", &inputs, Some(&lock));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, ValidationError::FollowsTargetNotToplevel { .. })),
+        );
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|e| matches!(e, ValidationError::FollowsStale { .. })),
+            "expected at least one stale warning, got warnings: {:?}",
+            result.warnings,
         );
     }
 }

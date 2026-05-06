@@ -1,0 +1,3 @@
+[follow]
+max_depth = 2
+transitive_min = 0

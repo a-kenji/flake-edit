@@ -1,0 +1,32 @@
+---
+source: tests/cli.rs
+assertion_line: 644
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/depth_upstream_partial.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/depth_upstream_partial.flake.lock"
+    - "--config"
+    - "[FIXTURES]/depth_upstream_partial.config.toml"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -7,6 +7,7 @@
+     flake-edit.url = "github:a-kenji/flake-edit";
+     flake-edit.inputs.nixpkgs.follows = "nixpkgs";
+     flake-edit.inputs.flake-utils.follows = "flake-utils";
++    flake-edit.inputs.nested-helper.inputs.flake-utils.follows = "flake-utils";
+   };
+
+   outputs =
+
+----- stderr -----

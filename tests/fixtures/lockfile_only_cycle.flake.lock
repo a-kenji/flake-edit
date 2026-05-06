@@ -1,0 +1,70 @@
+{
+  "_comment": "Hand-edited fixture: flake.nix declares no follows, but `foo.bar = [bar]` and `bar.foo = [foo]` form a 2-hop cycle through resolved edges only.",
+  "nodes": {
+    "bar": {
+      "inputs": {
+        "foo": [
+          "foo"
+        ]
+      },
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA=",
+        "owner": "example",
+        "repo": "bar",
+        "rev": "2222222222222222222222222222222222222222",
+        "type": "github"
+      },
+      "original": {
+        "owner": "example",
+        "repo": "bar",
+        "type": "github"
+      }
+    },
+    "foo": {
+      "inputs": {
+        "bar": [
+          "bar"
+        ]
+      },
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA=",
+        "owner": "example",
+        "repo": "foo",
+        "rev": "1111111111111111111111111111111111111111",
+        "type": "github"
+      },
+      "original": {
+        "owner": "example",
+        "repo": "foo",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNA=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "3333333333333333333333333333333333333333",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "bar": "bar",
+        "foo": "foo",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

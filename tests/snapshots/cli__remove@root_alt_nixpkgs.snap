@@ -16,7 +16,7 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -2,7 +2,6 @@
+@@ -2,21 +2,16 @@
    description = "Manage your flake inputs comfortably.";
 
    inputs = {
@@ -24,17 +24,15 @@ exit_code: 0
 
      flake-utelinos.url = "github:numtide/flake-utils";
 
-@@ -9,7 +8,6 @@
      rust-overlay = {
-       url = "github:oxalica/rust-overlay";
+-      url = "github:oxalica/rust-overlay";
        inputs = {
 -        nixpkgs.follows = "nixpkgs";
          flake-utils.follows = "flake-utils";
        };
      };
-@@ -16,7 +14,6 @@
      crane = {
-       url = "github:ipetkov/crane";
+-      url = "github:ipetkov/crane";
        inputs = {
 -        nixpkgs.follows = "nixpkgs";
          rust-overlay.follows = "rust-overlay";

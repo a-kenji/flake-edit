@@ -1,0 +1,32 @@
+---
+source: tests/cli.rs
+assertion_line: 643
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/transitive_grandchild.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/transitive_grandchild.flake.lock"
+    - "--config"
+    - "[FIXTURES]/deep_follows_2.config.toml"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -4,6 +4,7 @@
+   inputs = {
+     flake-parts.url = "github:hercules-ci/flake-parts";
+     neovim.url = "github:nix-community/neovim-nightly-overlay";
++    neovim.inputs.nixvim.inputs.flake-parts.follows = "flake-parts";
+   };
+
+   outputs =
+
+----- stderr -----

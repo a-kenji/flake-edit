@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use serde::Serialize;
+
 use crate::cli::{CliArgs, Command, ListFormat};
 use crate::config::ConfigError;
 use crate::edit::{InputMap, sorted_input_ids};
@@ -9,7 +11,92 @@ use crate::tui;
 
 use super::commands::{self, CommandError};
 use super::editor::Editor;
+use super::follow;
 use super::state::AppState;
+
+/// JSON output for `flake-edit list --format json`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ListOutput {
+    pub inputs: BTreeMap<String, InputView>,
+    pub follows: Vec<FollowEdge>,
+}
+
+/// One entry in [`ListOutput::inputs`].
+///
+/// `id` and `url` are unquoted (the in-memory invariant). `flake` mirrors the
+/// `inputs.<id>.flake = false;` source-form attribute.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct InputView {
+    pub id: String,
+    pub url: String,
+    pub flake: bool,
+}
+
+/// One edge in [`ListOutput::follows`].
+///
+/// - `parent` is the top-level input the follows is *declared on*.
+/// - `nested` is the nested input being redirected.
+/// - `target` is the rendered [`crate::follows::AttrPath`] the nested input
+///   is redirected to.
+/// - `kind` distinguishes indirect (URL-less, follows another input) from
+///   direct (URL-bearing) declarations.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct FollowEdge {
+    pub parent: String,
+    pub nested: String,
+    pub target: String,
+    pub kind: FollowEdgeKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FollowEdgeKind {
+    Indirect,
+    Direct,
+}
+
+impl From<&InputMap> for ListOutput {
+    fn from(inputs: &InputMap) -> Self {
+        let mut input_views: BTreeMap<String, InputView> = BTreeMap::new();
+        let mut follows: Vec<FollowEdge> = Vec::new();
+        for key in sorted_input_ids(inputs) {
+            let input = &inputs[key];
+            let parent_id = input.id().as_str().to_string();
+            input_views.insert(
+                key.clone(),
+                InputView {
+                    id: parent_id.clone(),
+                    url: input.url().to_string(),
+                    flake: input.flake,
+                },
+            );
+            for f in input.follows() {
+                match f {
+                    Follows::Indirect { path, target } => {
+                        follows.push(FollowEdge {
+                            parent: parent_id.clone(),
+                            nested: path.to_string(),
+                            target: target.as_ref().map(|t| t.to_string()).unwrap_or_default(),
+                            kind: FollowEdgeKind::Indirect,
+                        });
+                    }
+                    Follows::Direct(name, child) => {
+                        follows.push(FollowEdge {
+                            parent: parent_id.clone(),
+                            nested: name.clone(),
+                            target: child.url().to_string(),
+                            kind: FollowEdgeKind::Direct,
+                        });
+                    }
+                }
+            }
+        }
+        ListOutput {
+            inputs: input_views,
+            follows,
+        }
+    }
+}
 
 mod root;
 
@@ -36,22 +123,26 @@ pub enum HandlerError {
     IncompatibleFollowOptions,
 }
 
-/// Main entry point for the application.
+/// Application entry point.
 ///
 /// Parses CLI arguments, initializes state, and dispatches to command handlers.
 pub fn run(args: CliArgs) -> Result<()> {
-    // Handle batch mode for follow [paths...] early, before creating Editor/AppState
-    if let Command::Follow { paths, transitive } = args.subcommand()
+    // Batch `follow [PATHS...]` runs before creating Editor/AppState because
+    // it owns its own per-file Editor/AppState pairs.
+    if let Command::Follow {
+        paths,
+        transitive,
+        depth,
+    } = args.subcommand()
         && !paths.is_empty()
     {
         if args.flake().is_some() || args.lock_file().is_some() {
             return Err(HandlerError::IncompatibleFollowOptions);
         }
-        return commands::follow_auto_batch(paths, *transitive, &args)
+        return follow::auto::run_batch(paths, *transitive, *depth, &args)
             .map_err(HandlerError::Command);
     }
 
-    // Find flake.nix path
     let flake_path = if let Some(flake) = args.flake() {
         let path = PathBuf::from(flake);
         if path.is_dir() {
@@ -72,7 +163,6 @@ pub fn run(args: CliArgs) -> Result<()> {
         binding.path().to_path_buf()
     };
 
-    // Create editor and state
     let editor = Editor::from_path(flake_path.clone())?;
     let mut flake_edit = editor.create_flake_edit()?;
     let interactive = tui::is_interactive(args.non_interactive());
@@ -86,7 +176,6 @@ pub fn run(args: CliArgs) -> Result<()> {
         .with_no_cache(no_cache)
         .with_cache_path(args.cache().map(PathBuf::from));
 
-    // Dispatch to command
     match args.subcommand() {
         Command::Add {
             uri,
@@ -149,16 +238,20 @@ pub fn run(args: CliArgs) -> Result<()> {
         Command::Follow {
             paths: _,
             transitive,
+            depth,
         } => {
-            // Batch mode with paths is handled above; here we run on the current flake
+            // The batch path is handled above. This branch runs on the current flake.
             if let Some(min) = transitive {
                 state.config.follow.transitive_min = *min;
             }
-            commands::follow_auto(&editor, &mut flake_edit, &state)?;
+            if let Some(max) = depth {
+                state.config.follow.max_depth = *max;
+            }
+            follow::auto::run(&editor, &mut flake_edit, &state)?;
         }
 
         Command::AddFollow { input, target } => {
-            commands::add_follow(
+            follow::add_follow(
                 &editor,
                 &mut flake_edit,
                 &state,
@@ -183,7 +276,6 @@ pub fn run(args: CliArgs) -> Result<()> {
                 }
                 CompletionMode::Change => {
                     let inputs = flake_edit.list();
-                    // Cache inputs while we have them
                     crate::cache::populate_cache_from_input_map(inputs, no_cache);
                     for id in inputs.keys() {
                         println!("{}", id);
@@ -191,7 +283,6 @@ pub fn run(args: CliArgs) -> Result<()> {
                     std::process::exit(0);
                 }
                 CompletionMode::Follow => {
-                    // Get nested input paths from lockfile for follow completions
                     if let Ok(lock) = crate::lock::FlakeLock::from_default_path() {
                         for path in lock.nested_input_paths() {
                             println!("{}", path);
@@ -212,9 +303,8 @@ pub fn run(args: CliArgs) -> Result<()> {
         }
     }
 
-    // Cache any inputs we've seen during this command.
-    // This helps build up the completion cache over time as users interact
-    // with different flakes, not just when they explicitly add inputs.
+    // Build up the completion cache as users interact with different flakes,
+    // not only when they add inputs explicitly.
     crate::cache::populate_cache_from_input_map(flake_edit.curr_list(), no_cache);
 
     Ok(())
@@ -239,10 +329,10 @@ fn list_simple(inputs: &InputMap) {
         if !buf.is_empty() {
             buf.push('\n');
         }
-        buf.push_str(input.bare_id());
+        buf.push_str(input.id().as_str());
         for follows in input.follows() {
-            if let Follows::Indirect(id, _) = follows {
-                let id = format!("{}.{}", input.bare_id(), id);
+            if let Follows::Indirect { path, .. } = follows {
+                let id = format!("{}.{}", input.id().as_str(), path);
                 if !buf.is_empty() {
                     buf.push('\n');
                 }
@@ -254,9 +344,8 @@ fn list_simple(inputs: &InputMap) {
 }
 
 fn list_json(inputs: &InputMap) {
-    let sorted: BTreeMap<_, _> = inputs.iter().collect();
-    let json = serde_json::to_string(&sorted).unwrap();
-    println!("{json}");
+    let out: ListOutput = inputs.into();
+    println!("{}", serde_json::to_string(&out).unwrap());
 }
 
 fn list_toplevel(inputs: &InputMap) {
@@ -275,14 +364,11 @@ fn list_raw(inputs: &InputMap) {
     println!("{:#?}", sorted);
 }
 
-/// Check if a URL is a top-level follows reference (e.g., "harmonia/treefmt-nix")
-/// rather than a real URL (which would have a protocol like "github:" or "git+").
+/// True if `url` is a top-level follows reference (e.g.,
+/// `harmonia/treefmt-nix`) rather than a real URL with a `github:` or `git+`
+/// protocol prefix.
 fn is_toplevel_follows(url: &str) -> bool {
-    let url_trimmed = url.trim_matches('"');
-    !url_trimmed.is_empty()
-        && !url_trimmed.contains(':')
-        && url_trimmed.contains('/')
-        && !url_trimmed.starts_with('/')
+    !url.is_empty() && !url.contains(':') && url.contains('/') && !url.starts_with('/')
 }
 
 fn list_detailed(inputs: &InputMap) {
@@ -293,14 +379,20 @@ fn list_detailed(inputs: &InputMap) {
             buf.push('\n');
         }
         let line = if is_toplevel_follows(input.url()) {
-            format!("· {} <= {}", input.id(), input.url())
+            format!("· {} <= {}", input.id().as_str(), input.url())
         } else {
-            format!("· {} - {}", input.id(), input.url())
+            format!("· {} - {}", input.id().as_str(), input.url())
         };
         buf.push_str(&line);
         for follows in input.follows() {
-            if let Follows::Indirect(id, follow_id) = follows {
-                let id = format!("{}{} => {}", " ".repeat(5), id, follow_id);
+            if let Follows::Indirect { path, target } = follows {
+                // Render an empty `follows = ""` as `=> ""` to mirror the
+                // source-flake form. Non-empty targets render bare.
+                let target_str = match target {
+                    Some(t) => t.to_string(),
+                    None => "\"\"".to_string(),
+                };
+                let id = format!("{}{} => {}", " ".repeat(5), path, target_str);
                 if !buf.is_empty() {
                     buf.push('\n');
                 }
@@ -314,30 +406,149 @@ fn list_detailed(inputs: &InputMap) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::edit::FlakeEdit;
+    use crate::follows::{AttrPath, Segment};
+    use crate::input::{Follows, Input, Range};
+    use serde_json::json;
+
+    #[test]
+    fn list_output_empty_inputs_is_empty_shape() {
+        let inputs: InputMap = InputMap::new();
+        let out: ListOutput = (&inputs).into();
+        let v = serde_json::to_value(&out).unwrap();
+        assert_eq!(v, json!({ "inputs": {}, "follows": [] }));
+    }
+
+    #[test]
+    fn list_output_single_toplevel_no_follows() {
+        let mut inputs = InputMap::new();
+        let id = Segment::from_unquoted("nixpkgs").unwrap();
+        let mut input = Input::new(id);
+        input.url = "github:nixos/nixpkgs/nixos-unstable".into();
+        inputs.insert("nixpkgs".into(), input);
+        let v = serde_json::to_value(ListOutput::from(&inputs)).unwrap();
+        assert_eq!(
+            v,
+            json!({
+                "inputs": {
+                    "nixpkgs": {
+                        "id": "nixpkgs",
+                        "url": "github:nixos/nixpkgs/nixos-unstable",
+                        "flake": true,
+                    }
+                },
+                "follows": [],
+            })
+        );
+    }
+
+    #[test]
+    fn list_output_renders_indirect_follows_as_flat_array() {
+        let mut inputs = InputMap::new();
+        let crane = Segment::from_unquoted("crane").unwrap();
+        let mut input = Input::new(crane);
+        input.url = "github:ipetkov/crane".into();
+        input.range = Range {
+            start: 100,
+            end: 120,
+        };
+        input.follows.push(Follows::Indirect {
+            path: AttrPath::new(Segment::from_unquoted("nixpkgs").unwrap()),
+            target: Some(AttrPath::parse("nixpkgs").unwrap()),
+        });
+        inputs.insert("crane".into(), input);
+        let v = serde_json::to_value(ListOutput::from(&inputs)).unwrap();
+        assert_eq!(
+            v,
+            json!({
+                "inputs": {
+                    "crane": {
+                        "id": "crane",
+                        "url": "github:ipetkov/crane",
+                        "flake": true,
+                    }
+                },
+                "follows": [
+                    {
+                        "parent": "crane",
+                        "nested": "nixpkgs",
+                        "target": "nixpkgs",
+                        "kind": "indirect"
+                    }
+                ],
+            })
+        );
+    }
+
+    #[test]
+    fn list_output_url_is_unquoted() {
+        // URLs are stored unquoted in memory. The ListOutput JSON wire form
+        // surfaces them unquoted too.
+        let mut inputs = InputMap::new();
+        let id = Segment::from_unquoted("nixpkgs").unwrap();
+        let mut input = Input::new(id);
+        input.url = "github:nixos/nixpkgs".into();
+        inputs.insert("nixpkgs".into(), input);
+        let s = serde_json::to_string(&ListOutput::from(&inputs)).unwrap();
+        assert!(!s.contains("\\\"github:"));
+        assert!(s.contains("\"url\":\"github:nixos/nixpkgs\""));
+    }
+
+    #[test]
+    fn list_output_kind_serialises_kebab_case() {
+        let edge = FollowEdge {
+            parent: "a".into(),
+            nested: "b".into(),
+            target: "c".into(),
+            kind: FollowEdgeKind::Indirect,
+        };
+        let v = serde_json::to_value(&edge).unwrap();
+        assert_eq!(v.get("kind").unwrap(), &json!("indirect"));
+    }
+
+    #[test]
+    fn list_output_inputs_sorted_by_id() {
+        let content = r#"{
+            inputs.zzz.url = "github:ex/zzz";
+            inputs.aaa.url = "github:ex/aaa";
+            outputs = { ... }: { };
+        }
+        "#;
+        let mut fe = FlakeEdit::from_text(content).unwrap();
+        let v = serde_json::to_value(ListOutput::from(fe.list())).unwrap();
+        let keys: Vec<&str> = v
+            .get("inputs")
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(|s| s.as_str())
+            .collect();
+        assert_eq!(keys, vec!["aaa", "zzz"]);
+    }
 
     #[test]
     fn test_is_toplevel_follows() {
-        // Positive: follows references look like "parent/nested"
-        assert!(is_toplevel_follows("\"harmonia/treefmt-nix\""));
-        assert!(is_toplevel_follows("\"clan-core/treefmt-nix\""));
-        assert!(is_toplevel_follows("clan-core/systems"));
-
-        // Negative: real URLs have protocols
-        assert!(!is_toplevel_follows("\"github:NixOS/nixpkgs\""));
-        assert!(!is_toplevel_follows(
-            "\"git+https://git.clan.lol/clan/clan-core\""
-        ));
-        assert!(!is_toplevel_follows("\"path:/some/local/path\""));
-        assert!(!is_toplevel_follows("\"https://github.com/pinpox.keys\""));
-
-        // Negative: absolute paths
-        assert!(!is_toplevel_follows("\"/nix/store/abc\""));
-
-        // Negative: no slash (just a name)
-        assert!(!is_toplevel_follows("\"nixpkgs\""));
-
-        // Negative: empty
-        assert!(!is_toplevel_follows(""));
-        assert!(!is_toplevel_follows("\"\""));
+        for url in [
+            "harmonia/treefmt-nix",
+            "clan-core/treefmt-nix",
+            "clan-core/systems",
+        ] {
+            assert!(is_toplevel_follows(url), "{url} should be a follows ref");
+        }
+        for url in [
+            "github:NixOS/nixpkgs",
+            "git+https://git.clan.lol/clan/clan-core",
+            "path:/some/local/path",
+            "https://github.com/pinpox.keys",
+            "/nix/store/abc",
+            "nixpkgs",
+            "",
+        ] {
+            assert!(
+                !is_toplevel_follows(url),
+                "{url} should not be a follows ref",
+            );
+        }
     }
 }

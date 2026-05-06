@@ -1,0 +1,34 @@
+---
+source: tests/cli.rs
+assertion_line: 646
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/depth_upstream_redundant_partial.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/depth_upstream_redundant_partial.flake.lock"
+    - "--config"
+    - "[FIXTURES]/depth_upstream_redundant_partial.config.toml"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -7,7 +7,6 @@
+     flake-edit.url = "github:a-kenji/flake-edit";
+     flake-edit.inputs.nixpkgs.follows = "nixpkgs";
+     flake-edit.inputs.flake-utils.follows = "flake-utils";
+-    flake-edit.inputs.nested-helper.inputs.nixpkgs.follows = "nixpkgs";
+     flake-edit.inputs.nested-helper.inputs.flake-utils.follows = "flake-utils";
+   };
+
+
+----- stderr -----
+warning: stale-lock follows at line 7, column 22: flake-edit.nested-helper.flake-utils -> flake-utils (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 7, column 22: flake-edit.nested-helper.nixpkgs -> nixpkgs (flake.lock resolves to flake-edit.nixpkgs; run `nix flake lock`)

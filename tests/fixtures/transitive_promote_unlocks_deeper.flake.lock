@@ -1,0 +1,136 @@
+{
+  "nodes": {
+    "alpha": {
+      "inputs": {
+        "flake-compat": "flake_compat"
+      },
+      "locked": {
+        "lastModified": 1700000000,
+        "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "owner": "example",
+        "repo": "alpha",
+        "rev": "1111111111111111111111111111111111111111",
+        "type": "github"
+      },
+      "original": {
+        "owner": "example",
+        "repo": "alpha",
+        "type": "github"
+      }
+    },
+    "beta": {
+      "inputs": {
+        "flake-compat": "flake_compat_2"
+      },
+      "locked": {
+        "lastModified": 1700000001,
+        "narHash": "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA=",
+        "owner": "example",
+        "repo": "beta",
+        "rev": "2222222222222222222222222222222222222222",
+        "type": "github"
+      },
+      "original": {
+        "owner": "example",
+        "repo": "beta",
+        "type": "github"
+      }
+    },
+    "gamma": {
+      "inputs": {
+        "helper": "helper"
+      },
+      "locked": {
+        "lastModified": 1700000002,
+        "narHash": "sha256-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCA=",
+        "owner": "example",
+        "repo": "gamma",
+        "rev": "3333333333333333333333333333333333333333",
+        "type": "github"
+      },
+      "original": {
+        "owner": "example",
+        "repo": "gamma",
+        "type": "github"
+      }
+    },
+    "helper": {
+      "inputs": {
+        "flake-compat": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1700000003,
+        "narHash": "sha256-DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDA=",
+        "owner": "example",
+        "repo": "helper",
+        "rev": "4444444444444444444444444444444444444444",
+        "type": "github"
+      },
+      "original": {
+        "owner": "example",
+        "repo": "helper",
+        "type": "github"
+      }
+    },
+    "flake_compat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1700000004,
+        "narHash": "sha256-EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEA=",
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "rev": "5555555555555555555555555555555555555555",
+        "type": "github"
+      },
+      "original": {
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
+    "flake_compat_2": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1700000005,
+        "narHash": "sha256-FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA=",
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "rev": "6666666666666666666666666666666666666666",
+        "type": "github"
+      },
+      "original": {
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1700000006,
+        "narHash": "sha256-GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGA=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "7777777777777777777777777777777777777777",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "alpha": "alpha",
+        "beta": "beta",
+        "gamma": "gamma",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

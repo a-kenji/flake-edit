@@ -2,18 +2,20 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// Default configuration embedded in the binary.
+/// Default configuration TOML embedded in the binary.
 pub const DEFAULT_CONFIG_TOML: &str = include_str!("assets/config.toml");
 
-/// Error type for configuration loading failures.
+/// Configuration loading failures.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
+    /// Failed to read the configuration file from disk.
     #[error("Failed to read config file '{path}': {source}")]
     Io {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
+    /// Failed to parse a configuration file as TOML.
     #[error("Failed to parse config file '{path}':\n{source}")]
     Parse {
         path: PathBuf,
@@ -22,9 +24,10 @@ pub enum ConfigError {
     },
 }
 
-/// Filenames to search for project-level configuration.
+/// Filenames searched for project-level configuration, in priority order.
 const CONFIG_FILENAMES: &[&str] = &["flake-edit.toml", ".flake-edit.toml"];
 
+/// Top-level `flake-edit.toml` configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -32,23 +35,34 @@ pub struct Config {
     pub follow: FollowConfig,
 }
 
-/// Configuration for the `follow` command.
+/// `[follow]` section of [`Config`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FollowConfig {
-    /// Inputs to ignore during follow.
+    /// Inputs to skip during follow analysis.
+    ///
+    /// See [`Self::is_ignored`] for the matching rules.
     #[serde(default)]
     pub ignore: Vec<String>,
 
-    /// Minimum number of transitive follows needed to add a top-level follows input.
-    /// Set to 0 to disable transitive follows deduplication.
+    /// Minimum number of transitive references required before a shared
+    /// nested input is promoted to top-level. `0` disables transitive
+    /// deduplication.
     #[serde(default = "default_transitive_min")]
     pub transitive_min: usize,
 
-    /// Alias mappings: canonical_name -> [alternative_names]
-    /// e.g., nixpkgs = ["nixpkgs-lib"] means nixpkgs-lib can follow nixpkgs
+    /// Alias mappings: canonical name to alternative names. For example,
+    /// `nixpkgs = ["nixpkgs-lib"]` lets `nixpkgs-lib` follow `nixpkgs`.
     #[serde(default)]
     pub aliases: HashMap<String, Vec<String>>,
+
+    /// Maximum depth of follows declarations to write.
+    ///
+    /// `1` (default) writes only `parent.nested.follows = "target"`. `2` or
+    /// higher also writes deeper paths such as
+    /// `parent.middle.grandchild.follows = "target"`.
+    #[serde(default = "default_max_depth")]
+    pub max_depth: usize,
 }
 
 impl Default for FollowConfig {
@@ -57,30 +71,28 @@ impl Default for FollowConfig {
             ignore: Vec::new(),
             transitive_min: default_transitive_min(),
             aliases: HashMap::new(),
+            max_depth: default_max_depth(),
         }
     }
 }
 
 impl FollowConfig {
-    /// Check if an input should be ignored.
+    /// True if the input at `path` (e.g. `crane.nixpkgs`) with simple `name`
+    /// (e.g. `nixpkgs`) is in [`Self::ignore`].
     ///
-    /// Supports two formats:
-    /// - Full path: `"crane.nixpkgs"` - ignores only that specific nested input
-    /// - Simple name: `"nixpkgs"` - ignores all nested inputs with that name
+    /// Entries containing a `.` match the full dotted path. Bare entries
+    /// match by name across all parents.
     pub fn is_ignored(&self, path: &str, name: &str) -> bool {
         self.ignore.iter().any(|ignored| {
-            // Check for full path match first (more specific)
             if ignored.contains('.') {
                 ignored == path
             } else {
-                // Simple name match
                 ignored == name
             }
         })
     }
 
-    /// Find the canonical name for a given input name.
-    /// Returns the canonical name if found in aliases, otherwise returns None.
+    /// Canonical name `name` is an alias of, or `None` if no alias applies.
     pub fn resolve_alias(&self, name: &str) -> Option<&str> {
         for (canonical, alternatives) in &self.aliases {
             if alternatives.iter().any(|alt| alt == name) {
@@ -90,14 +102,12 @@ impl FollowConfig {
         None
     }
 
-    /// Check if `nested_name` can follow `top_level_name`.
-    /// Returns true if they match directly or via alias.
+    /// True if `nested_name` may follow `top_level_name` (direct match or via
+    /// [`Self::aliases`]).
     pub fn can_follow(&self, nested_name: &str, top_level_name: &str) -> bool {
-        // Direct match
         if nested_name == top_level_name {
             return true;
         }
-        // Check if nested_name is an alias for top_level_name
         self.resolve_alias(nested_name) == Some(top_level_name)
     }
 
@@ -107,12 +117,16 @@ impl FollowConfig {
 }
 
 impl Config {
-    /// Load configuration in the following order:
-    /// 1. Project-level config (flake-edit.toml or .flake-edit.toml in current/parent dirs)
-    /// 2. User-level config (~/.config/flake-edit/config.toml)
-    /// 3. Default embedded config
+    /// Load the first available configuration:
+    /// 1. Project-level ([`CONFIG_FILENAMES`], walking upward from the
+    ///    current directory).
+    /// 2. User-level (`~/.config/flake-edit/config.toml`).
+    /// 3. The default embedded config.
     ///
-    /// Returns an error if a config file exists but is malformed.
+    /// # Errors
+    ///
+    /// Returns [`ConfigError`] if a discovered file cannot be read or
+    /// parsed.
     pub fn load() -> Result<Self, ConfigError> {
         if let Some(path) = Self::project_config_path() {
             return Self::try_load_from_file(&path);
@@ -123,10 +137,12 @@ impl Config {
         Ok(Self::default())
     }
 
-    /// Load configuration from an explicitly specified path.
+    /// Load configuration from `path`, or fall back to [`Self::load`] when
+    /// `path` is `None`.
     ///
-    /// Returns an error if the file doesn't exist or is malformed.
-    /// If no path is specified, falls back to the default load order.
+    /// # Errors
+    ///
+    /// Returns [`ConfigError`] if `path` does not exist or cannot be parsed.
     pub fn load_from(path: Option<&Path>) -> Result<Self, ConfigError> {
         match path {
             Some(p) => Self::try_load_from_file(p),
@@ -134,7 +150,6 @@ impl Config {
         }
     }
 
-    /// Try to load config from a file, returning detailed errors on failure.
     fn try_load_from_file(path: &Path) -> Result<Self, ConfigError> {
         let content = std::fs::read_to_string(path).map_err(|e| ConfigError::Io {
             path: path.to_path_buf(),
@@ -146,6 +161,8 @@ impl Config {
         })
     }
 
+    /// Path to the nearest project-level config file, walking upward from
+    /// the current directory.
     pub fn project_config_path() -> Option<PathBuf> {
         let cwd = std::env::current_dir().ok()?;
         Self::find_config_in_ancestors(&cwd)
@@ -156,11 +173,14 @@ impl Config {
         Some(dirs.config_dir().to_path_buf())
     }
 
+    /// Path to `~/.config/flake-edit/config.toml`, or `None` if it does not
+    /// exist.
     pub fn user_config_path() -> Option<PathBuf> {
         let config_path = Self::xdg_config_dir()?.join("config.toml");
         config_path.exists().then_some(config_path)
     }
 
+    /// XDG config directory for flake-edit, regardless of whether it exists.
     pub fn user_config_dir() -> Option<PathBuf> {
         Self::xdg_config_dir()
     }
@@ -186,6 +206,10 @@ fn default_transitive_min() -> usize {
     0
 }
 
+fn default_max_depth() -> usize {
+    1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,6 +221,19 @@ mod tests {
         assert!(config.follow.ignore.is_empty());
         assert_eq!(config.follow.transitive_min, 0);
         assert!(config.follow.aliases.is_empty());
+        assert_eq!(config.follow.max_depth, 1);
+    }
+
+    #[test]
+    fn max_depth_defaults_to_one() {
+        let cfg = FollowConfig::default();
+        assert_eq!(cfg.max_depth, 1);
+    }
+
+    #[test]
+    fn max_depth_parses_from_toml() {
+        let cfg: Config = toml::from_str("[follow]\nmax_depth = 2\n").unwrap();
+        assert_eq!(cfg.follow.max_depth, 2);
     }
 
     #[test]

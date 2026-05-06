@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/root.flake.nix"
+    - "--diff"
+    - add-follow
+    - rust-overlay.flake-compat
+    - flake-utils
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -10,6 +10,7 @@
+       url = "github:oxalica/rust-overlay";
+       inputs.nixpkgs.follows = "nixpkgs";
+       inputs.flake-utils.follows = "flake-utils";
++      inputs.flake-compat.follows = "flake-utils";
+     };
+     crane = {
+       url = "github:ipetkov/crane";
+
+----- stderr -----

@@ -1,0 +1,21 @@
+---
+source: tests/cli.rs
+assertion_line: 618
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/transitive_grandchild.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/transitive_grandchild.flake.lock"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+All inputs are already deduplicated.
+
+----- stderr -----

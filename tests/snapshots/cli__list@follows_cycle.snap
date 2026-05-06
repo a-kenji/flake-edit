@@ -12,9 +12,9 @@ info:
 success: true
 exit_code: 0
 ----- stdout -----
-· harmonia - "github:nix-community/harmonia"
-     nixpkgs => "nixpkgs"
-· nixpkgs - "github:NixOS/nixpkgs/nixos-unstable"
-· treefmt-nix <= "harmonia/treefmt-nix"
+· harmonia - github:nix-community/harmonia
+     nixpkgs => nixpkgs
+· nixpkgs - github:NixOS/nixpkgs/nixos-unstable
+· treefmt-nix <= harmonia/treefmt-nix
 
 ----- stderr -----

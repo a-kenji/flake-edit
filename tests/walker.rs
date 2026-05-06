@@ -1,6 +1,7 @@
 mod common;
 
 use common::{Info, load_flake};
+use flake_edit::app::handler::ListOutput;
 use flake_edit::change::Change;
 use flake_edit::walk::Walker;
 use rstest::rstest;
@@ -24,7 +25,7 @@ fn test_walker_list_inputs(#[case] fixture: &str) {
         info => &info,
         snapshot_suffix => fixture
     }, {
-        insta::assert_yaml_snapshot!(walker.inputs);
+        insta::assert_yaml_snapshot!(ListOutput::from(&walker.inputs));
     });
 }
 
@@ -65,7 +66,7 @@ fn test_walker_remove_input(#[case] fixture: &str, #[case] input_id: &str) {
     let content = load_flake(fixture);
     let mut walker = Walker::new(&content);
     let change = Change::Remove {
-        ids: vec![input_id.to_owned().into()],
+        ids: vec![flake_edit::change::ChangeId::parse(input_id).unwrap()],
     };
     let info = Info::with_change(change.clone());
     let result = walker.walk(&change).unwrap().unwrap();

@@ -1,0 +1,21 @@
+---
+source: tests/cli.rs
+assertion_line: 522
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/stale_lockfile_only.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/stale_lockfile_only.flake.lock"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+Nothing to deduplicate.
+
+----- stderr -----

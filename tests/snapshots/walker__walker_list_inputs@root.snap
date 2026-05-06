@@ -1,54 +1,45 @@
 ---
 source: tests/walker.rs
-expression: walker.inputs
+expression: "ListOutput::from(&walker.inputs)"
 info:
   flake_nix: ""
   changes: []
 ---
-crane:
-  id: crane
-  flake: true
-  url: "\"github:ipetkov/crane\""
-  follows:
-    - Indirect:
-        - flake-utils
-        - "\"flake-utils\""
-    - Indirect:
-        - nixpkgs
-        - "\"nixpkgs\""
-    - Indirect:
-        - rust-overlay
-        - "\"rust-overlay\""
-  range:
-    start: 373
-    end: 395
-flake-utils:
-  id: flake-utils
-  flake: true
-  url: "\"github:numtide/flake-utils\""
-  follows: []
-  range:
-    start: 153
-    end: 181
-nixpkgs:
-  id: nixpkgs
-  flake: true
-  url: "\"github:nixos/nixpkgs/nixos-unstable\""
-  follows: []
-  range:
-    start: 91
-    end: 128
-rust-overlay:
-  id: rust-overlay
-  flake: true
-  url: "\"github:oxalica/rust-overlay\""
-  follows:
-    - Indirect:
-        - flake-utils
-        - "\"flake-utils\""
-    - Indirect:
-        - nixpkgs
-        - "\"nixpkgs\""
-  range:
-    start: 217
-    end: 246
+inputs:
+  crane:
+    id: crane
+    url: "github:ipetkov/crane"
+    flake: true
+  flake-utils:
+    id: flake-utils
+    url: "github:numtide/flake-utils"
+    flake: true
+  nixpkgs:
+    id: nixpkgs
+    url: "github:nixos/nixpkgs/nixos-unstable"
+    flake: true
+  rust-overlay:
+    id: rust-overlay
+    url: "github:oxalica/rust-overlay"
+    flake: true
+follows:
+  - parent: crane
+    nested: flake-utils
+    target: flake-utils
+    kind: indirect
+  - parent: crane
+    nested: nixpkgs
+    target: nixpkgs
+    kind: indirect
+  - parent: crane
+    nested: rust-overlay
+    target: rust-overlay
+    kind: indirect
+  - parent: rust-overlay
+    nested: flake-utils
+    target: flake-utils
+    kind: indirect
+  - parent: rust-overlay
+    nested: nixpkgs
+    target: nixpkgs
+    kind: indirect

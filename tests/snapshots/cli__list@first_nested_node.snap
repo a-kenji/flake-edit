@@ -12,10 +12,10 @@ info:
 success: true
 exit_code: 0
 ----- stdout -----
-· flake-compat - "github:edolstra/flake-compat"
-· naersk - "github:nix-community/naersk/master"
-     nixpkgs => "nixpkgs"
-· nixpkgs - "github:NixOS/nixpkgs/nixpkgs-unstable"
-· utils - "github:numtide/flake-utils"
+· flake-compat - github:edolstra/flake-compat
+· naersk - github:nix-community/naersk/master
+     nixpkgs => nixpkgs
+· nixpkgs - github:NixOS/nixpkgs/nixpkgs-unstable
+· utils - github:numtide/flake-utils
 
 ----- stderr -----

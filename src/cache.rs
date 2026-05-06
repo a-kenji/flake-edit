@@ -27,24 +27,23 @@ struct CacheEntry {
     hit: u32,
 }
 
-/// Generate the cache entry key from an id and uri.
-///
-/// The key format is `{id}.{uri}` which allows multiple URIs per input ID
-/// (e.g., both a github: and path: URI for the same input).
+/// Build the cache entry key as `{id}.{uri}`. Keying by `(id, uri)` allows
+/// multiple URIs per input id (e.g. both a `github:` and a `path:` URI).
 fn entry_key(id: &str, uri: &str) -> String {
     format!("{}.{}", id, uri)
 }
 
-/// Cache for storing previously used flake URIs.
+/// Persistent store of previously seen flake URIs.
 ///
-/// Used for shell completions to suggest frequently used inputs.
+/// Powers shell-completion suggestions, ranked by hit count.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Cache {
     entries: HashMap<String, CacheEntry>,
 }
 
 impl Cache {
-    /// Save the cache to disk.
+    /// Write the cache to its on-disk location, creating the parent directory
+    /// if needed.
     pub fn commit(&self) -> std::io::Result<()> {
         let cache_dir = cache_dir();
         if !cache_dir.exists() {
@@ -57,12 +56,13 @@ impl Cache {
         Ok(())
     }
 
-    /// Load the cache from the default location, or return a default empty cache.
+    /// Load the cache from the default location, or return an empty cache on
+    /// any failure.
     pub fn load() -> Self {
         Self::from_path(cache_file())
     }
 
-    /// Load the cache from a specific file path, or return a default empty cache.
+    /// Load the cache from `path`, or return an empty cache on any failure.
     pub fn from_path(path: &std::path::Path) -> Self {
         Self::try_from_path(path).unwrap_or_else(|e| {
             tracing::warn!("Could not read cache file {:?}: {}", path, e);
@@ -70,13 +70,18 @@ impl Cache {
         })
     }
 
-    /// Try to load the cache from a specific file path.
+    /// Load the cache from `path`, surfacing read or parse errors.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`std::io::Error`] if `path` cannot be opened or its JSON
+    /// payload cannot be deserialized.
     pub fn try_from_path(path: &std::path::Path) -> std::io::Result<Self> {
         let file = std::fs::File::open(path)?;
         serde_json::from_reader(file).map_err(|e| std::io::Error::other(e.to_string()))
     }
 
-    /// Add or update a cache entry.
+    /// Insert or bump the hit count of the `(id, uri)` entry.
     pub fn add_entry(&mut self, id: String, uri: String) {
         let key = entry_key(&id, &uri);
         match self.entries.get_mut(&key) {
@@ -88,34 +93,32 @@ impl Cache {
         }
     }
 
-    /// List cached URIs sorted by hit count (most used first).
+    /// All cached URIs sorted by descending hit count.
     pub fn list_uris(&self) -> Vec<String> {
         let mut entries: Vec<_> = self.entries.values().collect();
         entries.sort_by(|a, b| b.hit.cmp(&a.hit));
         entries.iter().map(|e| e.uri.clone()).collect()
     }
 
-    /// List cached URIs for a specific input ID, sorted by hit count (most used first).
+    /// Cached URIs for `id` sorted by descending hit count.
     ///
-    /// This is useful for the "change" workflow where we want to suggest URIs
-    /// that were previously used for the same input ID (e.g., both the remote
-    /// github: URI and a local path: URI for testing).
+    /// Useful for the `change` workflow, which suggests URIs that have been
+    /// used for the same input id (e.g. both a remote `github:` and a local
+    /// `path:` URI for testing).
     pub fn list_uris_for_id(&self, id: &str) -> Vec<String> {
         let mut entries: Vec<_> = self.entries.values().filter(|e| e.id == id).collect();
         entries.sort_by(|a, b| b.hit.cmp(&a.hit));
         entries.iter().map(|e| e.uri.clone()).collect()
     }
 
-    /// Add entries for all inputs without incrementing hit counts.
+    /// Insert any `(id, uri)` pairs not already present, without bumping hit
+    /// counts on existing entries.
     ///
-    /// This is used to populate the cache with inputs discovered while
-    /// running any command (list, change, update, etc.), not just add.
-    /// Unlike `add_entry`, this does NOT increment hit counts for existing
-    /// entries - it only adds new entries that don't exist yet.
+    /// Use this when populating the cache as a side effect of any command
+    /// that reads inputs (`list`, `change`, `update`, ...), not only `add`.
     pub fn populate_from_inputs<'a>(&mut self, inputs: impl Iterator<Item = (&'a str, &'a str)>) {
         for (id, uri) in inputs {
             let key = entry_key(id, uri);
-            // Only add if not already present (don't increment hit count)
             self.entries.entry(key).or_insert_with(|| CacheEntry {
                 id: id.to_string(),
                 uri: uri.to_string(),
@@ -125,14 +128,10 @@ impl Cache {
     }
 }
 
-/// Populate the cache with inputs from a flake.
+/// Load the on-disk cache, add any new `(id, uri)` pairs, and commit.
 ///
-/// This is a convenience function that loads the cache, adds any new inputs,
-/// and commits the changes. It's designed to be called from any command that
-/// reads inputs, helping build up the cache over time.
-///
-/// Errors are logged but don't cause failures - caching is best-effort.
-/// If `no_cache` is true, this function does nothing.
+/// Best-effort: I/O failures are logged, not propagated. A `no_cache` of
+/// `true` makes the call a no-op.
 pub fn populate_cache_from_inputs<'a>(
     inputs: impl Iterator<Item = (&'a str, &'a str)>,
     no_cache: bool,
@@ -145,7 +144,6 @@ pub fn populate_cache_from_inputs<'a>(
     let initial_len = cache.entries.len();
     cache.populate_from_inputs(inputs);
 
-    // Only write if we added new entries
     if cache.entries.len() > initial_len
         && let Err(e) = cache.commit()
     {
@@ -153,22 +151,17 @@ pub fn populate_cache_from_inputs<'a>(
     }
 }
 
-/// Populate the cache from an InputMap.
-///
-/// Convenience wrapper around `populate_cache_from_inputs` for use with
-/// the `FlakeEdit::list()` result. URIs are trimmed of surrounding quotes
-/// since the raw syntax representation includes them.
-/// If `no_cache` is true, this function does nothing.
+/// Convenience wrapper over [`populate_cache_from_inputs`] for the result of
+/// [`crate::edit::FlakeEdit::list`]. A `no_cache` of `true` makes the call a
+/// no-op.
 pub fn populate_cache_from_input_map(inputs: &crate::edit::InputMap, no_cache: bool) {
     populate_cache_from_inputs(
-        inputs
-            .iter()
-            .map(|(id, input)| (id.as_str(), input.url().trim_matches('"'))),
+        inputs.iter().map(|(id, input)| (id.as_str(), input.url())),
         no_cache,
     );
 }
 
-/// Default flake URI type prefixes for completion.
+/// Flake URI type prefixes offered by completion.
 pub const DEFAULT_URI_TYPES: [&str; 14] = [
     "github:",
     "gitlab:",
@@ -186,17 +179,15 @@ pub const DEFAULT_URI_TYPES: [&str; 14] = [
     "flake:",
 ];
 
-/// Configuration for cache usage.
-///
-/// Controls whether and where to read/write the URI completion cache.
+/// Where to read and write the URI completion cache.
 #[derive(Debug, Clone, Default)]
 pub enum CacheConfig {
-    /// Use the default cache location (~/.local/share/flake-edit/)
+    /// Default XDG location (`~/.local/share/flake-edit/`).
     #[default]
     Default,
-    /// Don't use any cache (for --no-cache flag)
+    /// Disable caching entirely (`--no-cache`).
     None,
-    /// Use a custom cache file path (for --cache flag or testing)
+    /// Read and write at a custom path (`--cache`, or tests).
     Custom(std::path::PathBuf),
 }
 

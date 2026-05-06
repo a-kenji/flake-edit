@@ -1,0 +1,30 @@
+---
+source: tests/cli.rs
+assertion_line: 618
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/follow_slash_syntax.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/follow_slash_syntax.flake.lock"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -6,6 +6,7 @@
+     parent.url = "github:foo/parent";
+     consumer.url = "github:foo/consumer";
+     consumer.inputs.child.follows = "parent/child";
++    consumer.inputs.nixpkgs.follows = "nixpkgs";
+   };
+
+   outputs =
+
+----- stderr -----

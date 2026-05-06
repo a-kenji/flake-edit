@@ -1,0 +1,21 @@
+---
+source: tests/cli.rs
+assertion_line: 522
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/lockfile_only_cycle.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/lockfile_only_cycle.flake.lock"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+All inputs are already deduplicated.
+
+----- stderr -----
