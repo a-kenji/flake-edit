@@ -234,7 +234,7 @@ impl AttrPath {
         self.0.last().expect("AttrPath is non-empty by invariant")
     }
 
-    #[allow(clippy::len_without_is_empty)]
+    #[expect(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.0.len()
     }

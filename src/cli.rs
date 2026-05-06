@@ -39,7 +39,6 @@ pub struct CliArgs {
     subcommand: Command,
 }
 
-#[allow(unused)]
 impl CliArgs {
     /// Version string with embedded git revision and date, when available.
     fn unstable_version() -> &'static str {

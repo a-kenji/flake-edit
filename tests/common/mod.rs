@@ -2,7 +2,7 @@
 //!
 //! This module provides helpers for loading test data and rstest fixtures.
 
-#![allow(dead_code)]
+#![expect(dead_code)]
 
 use flake_edit::change::Change;
 use flake_edit::edit::FlakeEdit;

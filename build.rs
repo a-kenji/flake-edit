@@ -11,7 +11,11 @@ mod asset_build {
     use std::path::PathBuf;
     use std::{env, fs::create_dir_all, path::Path};
 
-    include!("src/cli.rs");
+    #[expect(dead_code)]
+    mod cli {
+        include!("src/cli.rs");
+    }
+    use cli::*;
 
     pub fn run() {
         println!("cargo:rerun-if-env-changed=ASSET_DIR");

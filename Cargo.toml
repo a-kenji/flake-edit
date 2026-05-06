@@ -119,3 +119,6 @@ insta = { version = "1.47.2", features = ["yaml", "filters", "redactions"] }
 insta-cmd = "0.6"
 rstest = "0.26"
 tempfile = "3"
+
+[lints.clippy]
+allow_attributes = "warn"

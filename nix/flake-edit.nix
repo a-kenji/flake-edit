@@ -42,7 +42,13 @@ let
       ;
   };
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-  cargoClippy = craneLib.cargoClippy (commonArgs // { inherit cargoArtifacts; });
+  cargoClippy = craneLib.cargoClippy (
+    commonArgs
+    // {
+      inherit cargoArtifacts;
+      cargoClippyExtraArgs = "--all-targets --all-features -- --deny warnings";
+    }
+  );
   cargoDeny = craneLib.cargoDeny (commonArgs // { inherit cargoArtifacts; });
   cargoTarpaulin = craneLib.cargoTarpaulin (commonArgs // { inherit cargoArtifacts; });
   cargoDoc = craneLib.cargoDoc (commonArgs // { inherit cargoArtifacts; });

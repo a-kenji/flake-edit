@@ -524,7 +524,7 @@ impl FollowsGraph {
         )
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn dfs_routes_to(
         &self,
         node: &AttrPath,
