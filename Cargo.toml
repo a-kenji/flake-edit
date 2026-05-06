@@ -136,3 +136,7 @@ float_cmp = "warn"
 filetype_is_file = "warn"
 clone_on_ref_ptr = "warn"
 if_then_some_else_none = "warn"
+tabs_in_doc_comments = "warn"
+
+[lints.rustdoc]
+bare_urls = "warn"
