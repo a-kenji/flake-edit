@@ -4,8 +4,6 @@
 //! from on-disk fixtures. Every helper accepts attribute paths as `&str`
 //! and parses them through [`AttrPath::parse`].
 
-#![allow(dead_code)]
-
 mod common;
 
 use common::load_fixtures;

@@ -119,3 +119,24 @@ insta = { version = "1.47.2", features = ["yaml", "filters", "redactions"] }
 insta-cmd = "0.6"
 rstest = "0.26"
 tempfile = "3"
+
+[lints.rust]
+unsafe_code = "deny"
+unused_extern_crates = "warn"
+
+[lints.clippy]
+allow_attributes = "warn"
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+mem_forget = "warn"
+rc_mutex = "warn"
+unchecked_time_subtraction = "warn"
+float_cmp = "warn"
+filetype_is_file = "warn"
+clone_on_ref_ptr = "warn"
+if_then_some_else_none = "warn"
+tabs_in_doc_comments = "warn"
+
+[lints.rustdoc]
+bare_urls = "warn"
