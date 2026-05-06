@@ -348,11 +348,8 @@ fn parse_forge_version(json: &str) -> Option<ForgeType> {
     serde_json::from_str::<ForgeVersion>(json)
         .ok()
         .and_then(|v| {
-            if v.version.contains("+forgejo") || v.version.contains("+gitea") {
-                Some(ForgeType::Gitea)
-            } else {
-                None
-            }
+            (v.version.contains("+forgejo") || v.version.contains("+gitea"))
+                .then_some(ForgeType::Gitea)
         })
 }
 
