@@ -1,5 +1,5 @@
-use flake_edit::api::test_helpers::*;
-use flake_edit::api::{ForgeType, IntermediaryTags, Tags};
+use flake_edit::forge::api::test_helpers::*;
+use flake_edit::forge::api::{ForgeType, IntermediaryTags, Tags};
 use nix_uri::FlakeRef;
 
 #[test]

@@ -3,7 +3,7 @@
 //! These repos use branches (e.g., `nixos-24.11`, `nixpkgs-unstable`) instead of
 //! semver tags for versioning.
 
-use crate::api::{Branches, branch_exists, get_branches};
+use super::api::{Branches, branch_exists, get_branches};
 
 /// Update strategy for a given input.
 #[derive(Debug, Clone, PartialEq)]

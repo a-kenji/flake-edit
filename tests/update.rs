@@ -1,5 +1,5 @@
 use flake_edit::edit::FlakeEdit;
-use flake_edit::update::Updater;
+use flake_edit::forge::update::Updater;
 use ropey::Rope;
 
 fn flake_with_pins() -> String {

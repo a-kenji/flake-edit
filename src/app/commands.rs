@@ -5,9 +5,9 @@ use ropey::Rope;
 use crate::change::Change;
 use crate::edit::{FlakeEdit, InputMap};
 use crate::error::FlakeEditError;
+use crate::forge::update::Updater;
 use crate::lock::FlakeLock;
 use crate::tui;
-use crate::update::Updater;
 use crate::validate;
 
 use super::editor::Editor;

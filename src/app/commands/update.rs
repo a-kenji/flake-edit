@@ -3,7 +3,7 @@
 //! Three modes: scripted single-input by ID, interactive
 //! multi-select with current versions rendered for context, and a
 //! non-interactive bump-everything path. `init` toggles whether
-//! [`crate::update::Updater`] seeds updates for inputs the lockfile
+//! [`crate::forge::update::Updater`] seeds updates for inputs the lockfile
 //! has not yet seen.
 
 use nix_uri::FlakeRef;
