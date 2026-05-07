@@ -18,9 +18,10 @@ use crate::input::Range;
 use crate::lock::{FlakeLock, NestedInput};
 use crate::validate;
 
-use super::super::commands::{self, CommandError, Result};
-use super::super::editor::Editor;
-use super::super::state::AppState;
+use super::super::super::editor::Editor;
+use super::super::super::state::AppState;
+use super::super::{CommandError, Result, load_flake_lock};
+use super::load_follow_context;
 
 /// Entry point for `flake-edit follow` on a single in-memory flake.
 pub fn run(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) -> Result<()> {
@@ -225,7 +226,7 @@ fn run_impl(
     state: &AppState,
     quiet: bool,
 ) -> Result<()> {
-    let Some(ctx) = commands::load_follow_context(flake_edit, state)? else {
+    let Some(ctx) = load_follow_context(flake_edit, state)? else {
         if !quiet {
             println!("Nothing to deduplicate.");
         }
@@ -238,7 +239,7 @@ fn run_impl(
     // (declared-only) answers "is this nested input already followed in
     // flake.nix?". Emission must not be suppressed for an edge that the
     // lock resolved but the source never declared.
-    let graph = match commands::load_flake_lock(state) {
+    let graph = match load_flake_lock(state) {
         Ok(lock) => FollowsGraph::from_flake(&ctx.inputs, &lock),
         Err(_) => FollowsGraph::from_declared(&ctx.inputs),
     };
@@ -884,7 +885,7 @@ fn apply_plan(
     inputs: &crate::edit::InputMap,
     plan: &FollowPlan,
 ) -> Result<AppliedPlan> {
-    let batch_lock: Option<FlakeLock> = commands::load_flake_lock(state).ok();
+    let batch_lock: Option<FlakeLock> = load_flake_lock(state).ok();
     apply_plan_text(&editor.text(), batch_lock.as_ref(), inputs, plan)
 }
 

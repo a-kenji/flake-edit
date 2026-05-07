@@ -1,7 +1,7 @@
 mod common;
 
 use common::{Info, load_flake};
-use flake_edit::app::handler::ListOutput;
+use flake_edit::app::commands::list::ListOutput;
 use flake_edit::change::Change;
 use flake_edit::walk::Walker;
 use rstest::rstest;
