@@ -19,7 +19,7 @@ fn unwrap_parens(node: &SyntaxNode) -> SyntaxNode {
 }
 
 /// List the outputs from a flake.nix root node.
-pub fn list_outputs(root: &SyntaxNode) -> Result<Outputs, WalkerError> {
+pub(crate) fn list_outputs(root: &SyntaxNode) -> Result<Outputs, WalkerError> {
     let mut outputs: Vec<String> = vec![];
     let mut any = false;
 
@@ -73,7 +73,7 @@ pub fn list_outputs(root: &SyntaxNode) -> Result<Outputs, WalkerError> {
 /// Builds modifications bottom-up (output -> lambda -> toplevel -> attr_set)
 /// then uses `attr_set.replace_with()` to propagate to NODE_ROOT,
 /// preserving any leading comments/trivia.
-pub fn change_outputs(
+pub(crate) fn change_outputs(
     root: &SyntaxNode,
     change: OutputChange,
 ) -> Result<Option<SyntaxNode>, WalkerError> {

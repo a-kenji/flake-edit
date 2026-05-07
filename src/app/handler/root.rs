@@ -5,10 +5,10 @@ use std::{env, fs};
 use tracing::debug;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Root(PathBuf);
+pub(crate) struct Root(PathBuf);
 
 impl Root {
-    pub fn path(&self) -> &PathBuf {
+    pub(crate) fn path(&self) -> &PathBuf {
         &self.0
     }
 
@@ -16,7 +16,7 @@ impl Root {
     /// first check if the path is in the same directory,
     /// then seek upwards until either the file is found,
     /// or the root is reached.
-    pub fn from_path<P>(path: P) -> Result<Root, std::io::Error>
+    pub(crate) fn from_path<P>(path: P) -> Result<Root, std::io::Error>
     where
         P: AsRef<Path>,
     {

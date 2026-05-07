@@ -10,7 +10,7 @@ use flake_edit::walk::Walker;
 use rstest::fixture;
 
 /// Load a fixture file pair (flake.nix and flake.lock).
-pub fn load_fixtures(name: &str) -> (String, String) {
+pub(crate) fn load_fixtures(name: &str) -> (String, String) {
     let dir = env!("CARGO_MANIFEST_DIR");
     let flake_nix =
         std::fs::read_to_string(format!("{dir}/tests/fixtures/{name}.flake.nix")).unwrap();
@@ -20,34 +20,34 @@ pub fn load_fixtures(name: &str) -> (String, String) {
 }
 
 /// Load just the flake.nix content.
-pub fn load_flake(name: &str) -> String {
+pub(crate) fn load_flake(name: &str) -> String {
     let dir = env!("CARGO_MANIFEST_DIR");
     std::fs::read_to_string(format!("{dir}/tests/fixtures/{name}.flake.nix")).unwrap()
 }
 
 /// Info struct for snapshot metadata.
 #[derive(serde::Serialize)]
-pub struct Info {
-    pub flake_nix: String,
-    pub changes: Vec<Change>,
+pub(crate) struct Info {
+    pub(crate) flake_nix: String,
+    pub(crate) changes: Vec<Change>,
 }
 
 impl Info {
-    pub fn new(flake_nix: String, changes: Vec<Change>) -> Self {
+    pub(crate) fn new(flake_nix: String, changes: Vec<Change>) -> Self {
         Self { flake_nix, changes }
     }
 
-    pub fn empty() -> Self {
+    pub(crate) fn empty() -> Self {
         Self::new(String::new(), vec![])
     }
 
-    pub fn with_change(change: Change) -> Self {
+    pub(crate) fn with_change(change: Change) -> Self {
         Self::new(String::new(), vec![change])
     }
 }
 
 /// Available fixture names for testing.
-pub const FIXTURES: &[&str] = &[
+pub(crate) const FIXTURES: &[&str] = &[
     "root",
     "root_alt",
     "toplevel_nesting",
