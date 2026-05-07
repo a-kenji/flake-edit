@@ -1,5 +1,5 @@
 #[cfg(feature = "assets")]
-mod asset_build {
+pub mod asset_build {
     use clap::CommandFactory;
     use clap::ValueEnum;
     use clap_complete::{Shell, generate_to};
@@ -11,8 +11,7 @@ mod asset_build {
     use std::path::PathBuf;
     use std::{env, fs::create_dir_all, path::Path};
 
-    #[expect(dead_code)]
-    mod cli {
+    pub mod cli {
         include!("src/cli.rs");
     }
     use cli::*;

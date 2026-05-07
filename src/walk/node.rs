@@ -5,15 +5,15 @@ use crate::follows::{AttrPath, Segment};
 
 use super::context::Context;
 
-pub type Node = SyntaxNode;
+pub(crate) type Node = SyntaxNode;
 
 /// Parse `s` as a Nix expression and return its [`SyntaxNode`].
-pub fn parse_node(s: &str) -> Node {
+pub(crate) fn parse_node(s: &str) -> Node {
     Root::parse(s).syntax()
 }
 
 /// Replace `parent`'s child at `index` with `new_child` and return the rebuilt node.
-pub fn substitute_child(parent: &SyntaxNode, index: usize, new_child: &SyntaxNode) -> Node {
+pub(crate) fn substitute_child(parent: &SyntaxNode, index: usize, new_child: &SyntaxNode) -> Node {
     let green = parent
         .green()
         .replace_child(index, new_child.green().into());
@@ -21,7 +21,7 @@ pub fn substitute_child(parent: &SyntaxNode, index: usize, new_child: &SyntaxNod
 }
 
 /// Empty syntax node used as a removal placeholder.
-pub fn empty_node() -> Node {
+pub(crate) fn empty_node() -> Node {
     Root::parse("").syntax()
 }
 
@@ -57,7 +57,7 @@ pub(crate) fn is_attrset_content_empty(node: &SyntaxNode) -> bool {
 }
 
 /// Whitespace node copied from `node`'s previous sibling (or next, as fallback).
-pub fn get_sibling_whitespace(node: &SyntaxNode) -> Option<Node> {
+pub(crate) fn get_sibling_whitespace(node: &SyntaxNode) -> Option<Node> {
     if let Some(prev) = node.prev_sibling_or_token()
         && prev.kind() == SyntaxKind::TOKEN_WHITESPACE
     {
@@ -75,7 +75,7 @@ pub fn get_sibling_whitespace(node: &SyntaxNode) -> Option<Node> {
 ///
 /// Stops at the first newline so trailing comments on the reference line stay attached
 /// to it instead of getting displaced by the inserted node.
-pub fn insertion_index_after(node: &SyntaxNode) -> usize {
+pub(crate) fn insertion_index_after(node: &SyntaxNode) -> usize {
     let element: rnix::SyntaxElement = node.clone().into();
     let mut cursor = element.next_sibling_or_token();
     let mut last_index = node.index() + 1;
@@ -100,7 +100,7 @@ pub fn insertion_index_after(node: &SyntaxNode) -> usize {
 
 /// Index of `child`'s adjacent whitespace token (preferring the previous sibling)
 /// for stripping after a removal or replacement.
-pub fn adjacent_whitespace_index(child: &rnix::SyntaxElement) -> Option<usize> {
+pub(crate) fn adjacent_whitespace_index(child: &rnix::SyntaxElement) -> Option<usize> {
     if let Some(prev) = child.prev_sibling_or_token()
         && prev.kind() == SyntaxKind::TOKEN_WHITESPACE
     {
@@ -154,27 +154,27 @@ pub(crate) fn should_remove_nested_input(
 }
 
 /// Quoted string node, e.g. `"github:NixOS/nixpkgs"`.
-pub fn make_quoted_string(s: &str) -> Node {
+pub(crate) fn make_quoted_string(s: &str) -> Node {
     parse_node(&format!("\"{}\"", s))
 }
 
 /// Top-level URL attribute, e.g. `inputs.nixpkgs.url = "github:NixOS/nixpkgs";`.
-pub fn make_toplevel_url_attr(id: &str, uri: &str) -> Node {
+pub(crate) fn make_toplevel_url_attr(id: &str, uri: &str) -> Node {
     parse_node(&format!("inputs.{}.url = \"{}\";", id, uri))
 }
 
 /// Top-level `flake = false` attribute, e.g. `inputs.not_a_flake.flake = false;`.
-pub fn make_toplevel_flake_false_attr(id: &str) -> Node {
+pub(crate) fn make_toplevel_flake_false_attr(id: &str) -> Node {
     parse_node(&format!("inputs.{}.flake = false;", id))
 }
 
 /// Nested URL attribute, e.g. `nixpkgs.url = "github:NixOS/nixpkgs";`.
-pub fn make_url_attr(id: &str, uri: &str) -> Node {
+pub(crate) fn make_url_attr(id: &str, uri: &str) -> Node {
     parse_node(&format!("{}.url = \"{}\";", id, uri))
 }
 
 /// Nested `flake = false` attribute, e.g. `not_a_flake.flake = false;`.
-pub fn make_flake_false_attr(id: &str) -> Node {
+pub(crate) fn make_flake_false_attr(id: &str) -> Node {
     parse_node(&format!("{}.flake = false;", id))
 }
 
@@ -182,7 +182,7 @@ pub fn make_flake_false_attr(id: &str) -> Node {
 ///
 /// `indent` is the base indentation of the entry (e.g., `"  "` for 2-space indent).
 /// The inner attribute gets one extra level.
-pub fn make_attrset_url_attr(id: &str, uri: &str, indent: &str) -> Node {
+pub(crate) fn make_attrset_url_attr(id: &str, uri: &str, indent: &str) -> Node {
     parse_node(&format!(
         "{} = {{\n{}  url = \"{}\";\n{}}};",
         id, indent, uri, indent
@@ -190,7 +190,7 @@ pub fn make_attrset_url_attr(id: &str, uri: &str, indent: &str) -> Node {
 }
 
 /// Attrset-style URL plus `flake = false`.
-pub fn make_attrset_url_flake_false_attr(id: &str, uri: &str, indent: &str) -> Node {
+pub(crate) fn make_attrset_url_flake_false_attr(id: &str, uri: &str, indent: &str) -> Node {
     parse_node(&format!(
         "{} = {{\n{}  url = \"{}\";\n{}  flake = false;\n{}}};",
         id, indent, uri, indent, indent
@@ -202,7 +202,7 @@ pub fn make_attrset_url_flake_false_attr(id: &str, uri: &str, indent: &str) -> N
 /// Each variant captures both the attrpath layout and the surrounding insertion context.
 /// Per-segment quoting goes through [`Segment::render`] so dotted or leading-digit
 /// segments pick up `"..."` automatically.
-pub enum FollowsKind<'a> {
+pub(crate) enum FollowsKind<'a> {
     /// `inputs.<id>.follows = "<target>";`, sibling of other `inputs.<...>.url = ...`
     /// attrs in the outer flake attr-set.
     TopLevelFlat { id: &'a Segment, target: &'a str },
@@ -243,7 +243,7 @@ fn render_inputs_chain(segments: &[Segment]) -> String {
 
 impl FollowsKind<'_> {
     /// Render the variant to a [`SyntaxNode`] ready to splice into the CST.
-    pub fn emit(&self) -> Node {
+    pub(crate) fn emit(&self) -> Node {
         match self {
             FollowsKind::TopLevelFlat { id, target } => {
                 parse_node(&format!("inputs.{}.follows = \"{}\";", id.render(), target))

@@ -129,7 +129,7 @@ pub(crate) fn insert_with_ctx(
 
 /// Walk the `inputs` section of a `flake.nix`, applying `change` and recording
 /// every traversed input into `inputs`.
-pub fn walk_inputs(
+pub(crate) fn walk_inputs(
     inputs: &mut HashMap<String, Input>,
     node: SyntaxNode,
     ctx: &Option<Context>,
@@ -1375,7 +1375,7 @@ fn handle_input_attr_set(
 ///   inputs.flake-utils.follows = "flake-utils";
 /// };
 /// ```
-pub fn walk_input(
+pub(crate) fn walk_input(
     inputs: &mut HashMap<String, Input>,
     node: &SyntaxNode,
     ctx: &Option<Context>,

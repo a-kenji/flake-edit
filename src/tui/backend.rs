@@ -6,14 +6,14 @@ use crossterm::{
 };
 use ratatui::{Terminal, TerminalOptions, Viewport, backend::CrosstermBackend};
 
-pub struct InlineTerminal {
+pub(crate) struct InlineTerminal {
     terminal: Terminal<CrosstermBackend<Stdout>>,
     inline_mode: bool,
     height: u16,
 }
 
 impl InlineTerminal {
-    pub fn new(height: u16) -> io::Result<Self> {
+    pub(crate) fn new(height: u16) -> io::Result<Self> {
         let (_, term_height) = terminal::size()?;
 
         let inline_mode = height < term_height;
@@ -41,17 +41,17 @@ impl InlineTerminal {
         })
     }
 
-    pub fn terminal(&mut self) -> &mut Terminal<CrosstermBackend<Stdout>> {
+    pub(crate) fn terminal(&mut self) -> &mut Terminal<CrosstermBackend<Stdout>> {
         &mut self.terminal
     }
 
-    pub fn height(&self) -> u16 {
+    pub(crate) fn height(&self) -> u16 {
         self.height
     }
 
     /// Resize the terminal to a new height.
     /// This clears the current viewport and creates a new one.
-    pub fn resize(&mut self, new_height: u16) -> io::Result<()> {
+    pub(crate) fn resize(&mut self, new_height: u16) -> io::Result<()> {
         if new_height == self.height {
             return Ok(());
         }
