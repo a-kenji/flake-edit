@@ -1,0 +1,144 @@
+//! `flake-edit change`: replace an input's URI in place.
+//!
+//! Four branches: full interactive (pick + URI), URI-only
+//! interactive (with the ID known), scripted (id + uri), and
+//! infer-id (uri only). All route the resulting URI through
+//! [`super::uri::transform_uri`].
+
+use nix_uri::urls::UrlWrapper;
+use nix_uri::{FlakeRef, NixUriResult};
+
+use crate::change::Change;
+use crate::edit::{FlakeEdit, InputMap, sorted_input_ids};
+use crate::tui;
+
+use super::super::editor::Editor;
+use super::super::state::AppState;
+use super::uri::{BuildKind, UriOptions, apply_uri_options, build_uri_change, transform_uri};
+use super::{CommandError, Result, apply_change};
+
+pub fn change(
+    editor: &Editor,
+    flake_edit: &mut FlakeEdit,
+    state: &AppState,
+    id: Option<String>,
+    uri: Option<String>,
+    opts: UriOptions<'_>,
+) -> Result<()> {
+    let inputs = flake_edit.list();
+
+    let change = match (id, uri, state.interactive) {
+        // Full interactive: select input, then enter URI. Also covers the
+        // case where only URI was provided interactively (need to select input).
+        (None, None, true) | (None, Some(_), true) => {
+            change_full_interactive(editor, state, inputs, &opts)?
+        }
+        // ID provided, no URI, interactive: show URI input for that ID.
+        (Some(id), None, true) => change_uri_interactive(editor, state, inputs, &id, &opts)?,
+        // Both ID and URI provided: non-interactive.
+        (Some(id_val), Some(uri_str), _) => {
+            build_uri_change(BuildKind::Change, id_val, uri_str, &opts)?
+        }
+        // Only one positional arg: infer ID from URI.
+        (Some(uri), None, false) | (None, Some(uri), false) => change_infer_id(uri, &opts)?,
+        (None, None, false) => {
+            return Err(CommandError::NoId);
+        }
+    };
+
+    apply_change(editor, flake_edit, state, change)
+}
+
+/// Runs the full interactive flow: pick an input from the list, then
+/// enter the new URI.
+fn change_full_interactive(
+    editor: &Editor,
+    state: &AppState,
+    inputs: &InputMap,
+    opts: &UriOptions<'_>,
+) -> Result<Change> {
+    let input_pairs: Vec<(String, String)> = sorted_input_ids(inputs)
+        .into_iter()
+        .map(|id| (id.clone(), inputs[id].url().trim_matches('"').to_string()))
+        .collect();
+
+    if input_pairs.is_empty() {
+        return Err(CommandError::NoInputs);
+    }
+
+    let tui_app = tui::App::change("Change", editor.text(), input_pairs, state.cache_config());
+    let Some(tui::AppResult::Change(tui_change)) = tui::run(tui_app)? else {
+        return Ok(Change::None);
+    };
+
+    // CLI options override the TUI result.
+    if let Change::Change { id, uri, .. } = tui_change {
+        let final_uri = uri
+            .map(|u| transform_uri(u, opts.ref_or_rev, opts.shallow))
+            .transpose()?;
+        Ok(Change::Change { id, uri: final_uri })
+    } else {
+        Ok(tui_change)
+    }
+}
+
+/// Runs the interactive flow with the ID already known, showing only
+/// the URI input widget.
+fn change_uri_interactive(
+    editor: &Editor,
+    state: &AppState,
+    inputs: &InputMap,
+    id: &str,
+    opts: &UriOptions<'_>,
+) -> Result<Change> {
+    let current_uri = inputs.get(id).map(|i| i.url().trim_matches('"'));
+    let tui_app = tui::App::change_uri(
+        "Change",
+        editor.text(),
+        id,
+        current_uri,
+        state.diff,
+        state.cache_config(),
+    );
+
+    let Some(tui::AppResult::Change(tui_change)) = tui::run(tui_app)? else {
+        return Ok(Change::None);
+    };
+
+    // CLI options override the TUI result.
+    if let Change::Change {
+        uri: Some(new_uri), ..
+    } = tui_change
+    {
+        let final_uri = transform_uri(new_uri, opts.ref_or_rev, opts.shallow)?;
+        Ok(Change::Change {
+            id: Some(id.to_string()),
+            uri: Some(final_uri),
+        })
+    } else {
+        Err(CommandError::NoUri)
+    }
+}
+
+/// Builds a `Change::Change` when only the URI is supplied, inferring
+/// the ID from the parsed flake reference.
+fn change_infer_id(uri: String, opts: &UriOptions<'_>) -> Result<Change> {
+    let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(&uri);
+
+    let flake_ref = flake_ref.map_err(|_| CommandError::CouldNotInferId(uri.clone()))?;
+    let flake_ref = apply_uri_options(flake_ref, opts.ref_or_rev, opts.shallow)
+        .map_err(CommandError::CouldNotInferId)?;
+
+    let final_uri = if flake_ref.to_string().is_empty() {
+        uri.clone()
+    } else {
+        flake_ref.to_string()
+    };
+
+    let id = flake_ref.id().ok_or(CommandError::CouldNotInferId(uri))?;
+
+    Ok(Change::Change {
+        id: Some(id),
+        uri: Some(final_uri),
+    })
+}

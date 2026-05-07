@@ -1,5 +1,5 @@
 use divan::Bencher;
-use flake_edit::app::follow::auto;
+use flake_edit::app::commands::follow::auto;
 use flake_edit::change::Change;
 use flake_edit::config::FollowConfig;
 use flake_edit::walk::Walker;
