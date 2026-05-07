@@ -7,7 +7,6 @@ use crate::validate;
 use crate::walk::Walker;
 
 pub struct FlakeEdit {
-    changes: Vec<Change>,
     walker: Walker,
 }
 
@@ -24,14 +23,6 @@ pub type InputMap = HashMap<String, Input>;
 /// Sorted input ids from `inputs`.
 pub fn sorted_input_ids(inputs: &InputMap) -> Vec<&String> {
     let mut keys: Vec<_> = inputs.keys().collect();
-    keys.sort();
-    keys
-}
-
-/// Sorted input ids as owned strings, for callers that can't hold a borrow on
-/// `inputs`.
-pub fn sorted_input_ids_owned(inputs: &InputMap) -> Vec<String> {
-    let mut keys: Vec<String> = inputs.keys().cloned().collect();
     keys.sort();
     keys
 }
@@ -54,10 +45,6 @@ pub struct ApplyOutcome {
 }
 
 impl FlakeEdit {
-    pub fn new(changes: Vec<Change>, walker: Walker) -> Self {
-        Self { changes, walker }
-    }
-
     pub fn from_text(stream: &str) -> Result<Self, FlakeEditError> {
         let validation = validate::validate(stream);
         if validation.has_errors() {
@@ -65,15 +52,7 @@ impl FlakeEdit {
         }
 
         let walker = Walker::new(stream);
-        Ok(Self::new(Vec::new(), walker))
-    }
-
-    pub fn changes(&self) -> &[Change] {
-        self.changes.as_ref()
-    }
-
-    pub fn add_change(&mut self, change: Change) {
-        self.changes.push(change);
+        Ok(Self { walker })
     }
 
     pub fn source_text(&self) -> String {

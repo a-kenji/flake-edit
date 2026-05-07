@@ -52,24 +52,6 @@ impl CliArgs {
     pub fn subcommand(&self) -> &Command {
         &self.subcommand
     }
-    pub fn list(&self) -> bool {
-        matches!(self.subcommand, Command::List { .. })
-    }
-    pub fn update(&self) -> bool {
-        matches!(self.subcommand, Command::Update { .. })
-    }
-    pub fn pin(&self) -> bool {
-        matches!(self.subcommand, Command::Pin { .. })
-    }
-    pub fn unpin(&self) -> bool {
-        matches!(self.subcommand, Command::Unpin { .. })
-    }
-    pub fn change(&self) -> bool {
-        matches!(self.subcommand, Command::Change { .. })
-    }
-    pub fn follow(&self) -> bool {
-        matches!(self.subcommand, Command::Follow { .. })
-    }
 
     pub fn flake(&self) -> Option<&String> {
         self.flake.as_ref()

@@ -489,7 +489,6 @@ impl App {
                     WorkflowData::Change { selected_input, .. } => Change::Change {
                         id: selected_input.clone(),
                         uri: Some(current_text.to_string()),
-                        ref_or_rev: None,
                     },
                     _ => self.build_change(),
                 }

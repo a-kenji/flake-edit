@@ -6,7 +6,7 @@ use nix_uri::{FlakeRef, NixUriResult};
 use ropey::Rope;
 
 use crate::change::{Change, ChangeId};
-use crate::edit::{FlakeEdit, InputMap, sorted_input_ids, sorted_input_ids_owned};
+use crate::edit::{FlakeEdit, InputMap, sorted_input_ids};
 use crate::error::FlakeEditError;
 use crate::lock::{FlakeLock, NestedInput};
 use crate::tui;
@@ -513,11 +513,7 @@ fn change_full_interactive(
         let final_uri = uri
             .map(|u| transform_uri(u, ref_or_rev, shallow))
             .transpose()?;
-        Ok(Change::Change {
-            id,
-            uri: final_uri,
-            ref_or_rev: None,
-        })
+        Ok(Change::Change { id, uri: final_uri })
     } else {
         Ok(tui_change)
     }
@@ -555,7 +551,6 @@ fn change_uri_interactive(
         Ok(Change::Change {
             id: Some(id.to_string()),
             uri: Some(final_uri),
-            ref_or_rev: None,
         })
     } else {
         Err(CommandError::NoUri)
@@ -572,7 +567,6 @@ fn change_with_id_and_uri(
     Ok(Change::Change {
         id: Some(id),
         uri: Some(final_uri),
-        ref_or_rev: None,
     })
 }
 
@@ -595,7 +589,6 @@ fn change_infer_id(uri: String, ref_or_rev: Option<&str>, shallow: bool) -> Resu
     Ok(Change::Change {
         id: Some(id),
         uri: Some(final_uri),
-        ref_or_rev: None,
     })
 }
 
@@ -607,7 +600,10 @@ pub fn update(
     init: bool,
 ) -> Result<()> {
     let inputs = flake_edit.list().clone();
-    let input_ids = sorted_input_ids_owned(&inputs);
+    let input_ids = sorted_input_ids(&inputs)
+        .into_iter()
+        .cloned()
+        .collect::<Vec<_>>();
 
     if let Some(id) = id {
         let mut updater = updater(editor, inputs);
@@ -675,7 +671,10 @@ pub fn pin(
     rev: Option<String>,
 ) -> Result<()> {
     let inputs = flake_edit.list().clone();
-    let input_ids = sorted_input_ids_owned(&inputs);
+    let input_ids = sorted_input_ids(&inputs)
+        .into_iter()
+        .cloned()
+        .collect::<Vec<_>>();
 
     if let Some(id) = id {
         let lock = load_flake_lock(state).map_err(|e| CommandError::LockFileError {
@@ -746,7 +745,10 @@ pub fn unpin(
     id: Option<String>,
 ) -> Result<()> {
     let inputs = flake_edit.list().clone();
-    let input_ids = sorted_input_ids_owned(&inputs);
+    let input_ids = sorted_input_ids(&inputs)
+        .into_iter()
+        .cloned()
+        .collect::<Vec<_>>();
 
     if let Some(id) = id {
         let mut updater = updater(editor, inputs);

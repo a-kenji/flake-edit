@@ -17,7 +17,6 @@ pub enum Change {
     Change {
         id: Option<String>,
         uri: Option<String>,
-        ref_or_rev: Option<String>,
     },
     /// Redirect a nested input to follow another input.
     ///
@@ -146,15 +145,6 @@ impl Change {
     }
     pub fn is_remove(&self) -> bool {
         matches!(self, Change::Remove { .. })
-    }
-    pub fn is_some(&self) -> bool {
-        !matches!(self, Change::None)
-    }
-    pub fn is_add(&self) -> bool {
-        matches!(self, Change::Add { .. })
-    }
-    pub fn is_change(&self) -> bool {
-        matches!(self, Change::Change { .. })
     }
     pub fn is_follows(&self) -> bool {
         matches!(self, Change::Follows { .. })
