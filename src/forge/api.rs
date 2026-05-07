@@ -6,7 +6,7 @@ use serde::Deserialize;
 use thiserror::Error;
 use ureq::Agent;
 
-use crate::version::parse_ref;
+use super::version::parse_ref;
 
 #[derive(Error, Debug)]
 pub enum ApiError {

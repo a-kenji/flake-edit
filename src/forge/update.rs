@@ -2,11 +2,11 @@ use nix_uri::{FlakeRef, RefLocation};
 use ropey::Rope;
 use std::cmp::Ordering;
 
-use crate::channel::{UpdateStrategy, detect_strategy, find_latest_channel};
+use super::channel::{UpdateStrategy, detect_strategy, find_latest_channel};
+use super::version::parse_ref;
 use crate::edit::InputMap;
 use crate::input::Input;
 use crate::uri::is_git_url;
-use crate::version::parse_ref;
 
 /// Rewrites flake.nix URIs for `update`, `pin`, and `unpin`.
 #[derive(Default, Debug)]
@@ -24,13 +24,13 @@ enum UpdateTarget {
         owner: String,
         repo: String,
         domain: String,
-        parsed_ref: crate::version::ParsedRef,
+        parsed_ref: super::version::ParsedRef,
     },
     ForgeRef {
         parsed: Box<FlakeRef>,
         owner: String,
         repo: String,
-        parsed_ref: crate::version::ParsedRef,
+        parsed_ref: super::version::ParsedRef,
     },
 }
 
@@ -110,14 +110,14 @@ impl Updater {
         })
     }
 
-    fn fetch_tags(&self, target: &UpdateTarget) -> Option<crate::api::Tags> {
+    fn fetch_tags(&self, target: &UpdateTarget) -> Option<super::api::Tags> {
         match target {
             UpdateTarget::GitUrl {
                 owner,
                 repo,
                 domain,
                 ..
-            } => match crate::api::get_tags(repo, owner, Some(domain)) {
+            } => match super::api::get_tags(repo, owner, Some(domain)) {
                 Ok(tags) => Some(tags),
                 Err(_) => {
                     tracing::error!("Failed to fetch tags for {}/{} on {}", owner, repo, domain);
@@ -125,7 +125,7 @@ impl Updater {
                 }
             },
             UpdateTarget::ForgeRef { owner, repo, .. } => {
-                match crate::api::get_tags(repo, owner, None) {
+                match super::api::get_tags(repo, owner, None) {
                     Ok(tags) => Some(tags),
                     Err(_) => {
                         tracing::error!("Failed to fetch tags for {}/{}", owner, repo);
@@ -140,7 +140,7 @@ impl Updater {
         &mut self,
         input: &UpdateInput,
         target: &UpdateTarget,
-        mut tags: crate::api::Tags,
+        mut tags: super::api::Tags,
         _init: bool,
     ) {
         tags.sort();
