@@ -140,7 +140,7 @@ pub struct CompletionItem {
 
 /// State for completion dropdown
 #[derive(Debug, Clone)]
-pub struct CompletionState {
+pub(crate) struct CompletionState {
     /// All available completion items (URI types)
     items: Vec<String>,
     /// Filtered items based on current input prefix

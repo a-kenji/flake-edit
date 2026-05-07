@@ -6,7 +6,7 @@ use tracing_subscriber::{filter::EnvFilter, fmt};
 const LOG_ENV: &str = "FE_LOG";
 
 /// Configuration of logging
-pub fn init_logging(log_file: Option<PathBuf>) -> Result<(), std::io::Error> {
+pub(crate) fn init_logging(log_file: Option<PathBuf>) -> Result<(), std::io::Error> {
     // Check if running in CI environment - if so, log to stderr instead of file
     let log_to_stdout = std::env::var("CI").is_ok();
 
@@ -64,6 +64,6 @@ pub fn init_logging(log_file: Option<PathBuf>) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-pub fn init() -> Result<(), std::io::Error> {
+pub(crate) fn init() -> Result<(), std::io::Error> {
     init_logging(Some("/tmp/flake-edit/flake-edit.log".into()))
 }

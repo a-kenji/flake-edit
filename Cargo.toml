@@ -123,6 +123,7 @@ tempfile = "3"
 [lints.rust]
 unsafe_code = "deny"
 unused_extern_crates = "warn"
+unreachable_pub = "warn"
 
 [lints.clippy]
 allow_attributes = "warn"
