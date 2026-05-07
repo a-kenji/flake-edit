@@ -34,7 +34,6 @@ pub mod error;
 pub mod follows;
 pub mod input;
 pub mod lock;
-pub mod state;
 #[cfg(feature = "tui")]
 pub mod tui;
 pub mod update;

@@ -295,7 +295,6 @@ fn test_change_url(#[case] fixture: &str, #[case] input_id: &str, #[case] new_ur
     let change = Change::Change {
         id: Some(input_id.to_owned()),
         uri: Some(new_url.to_owned()),
-        ref_or_rev: None,
     };
     let info = Info::with_change(change.clone());
     let result = flake_edit.apply_change(change).unwrap().text.unwrap();
@@ -318,7 +317,6 @@ fn test_change_nonexistent_input_error(#[case] fixture: &str, #[case] input_id: 
     let change = Change::Change {
         id: Some(input_id.to_owned()),
         uri: Some("github:foo/bar".to_owned()),
-        ref_or_rev: None,
     };
     let result = flake_edit.apply_change(change);
     assert!(result.is_err());

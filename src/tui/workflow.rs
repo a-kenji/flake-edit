@@ -133,7 +133,6 @@ impl WorkflowData {
             } => Change::Change {
                 id: selected_input.clone(),
                 uri: uri.clone(),
-                ref_or_rev: None,
             },
             WorkflowData::Remove {
                 selected_inputs, ..
