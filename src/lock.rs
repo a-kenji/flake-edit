@@ -153,12 +153,15 @@ pub(crate) struct Original {
     #[serde(rename = "ref")]
     ref_field: Option<String>,
     url: Option<String>,
+    path: Option<String>,
+    id: Option<String>,
 }
 
 impl Original {
-    /// Reconstruct a flake URL from the original reference. Returns `None`
-    /// when the type is forge-shaped (`github`, `gitlab`, `sourcehut`) but
-    /// `owner` or `repo` is missing.
+    /// Reconstruct a flake URL from the original reference.
+    ///
+    /// Returns `None` when required fields are missing or the type is
+    /// unknown. Unknown types log a `tracing::warn!`.
     fn to_flake_url(&self) -> Option<String> {
         match self.node_type.as_str() {
             "github" | "gitlab" | "sourcehut" => {
@@ -171,8 +174,53 @@ impl Original {
                 }
                 Some(url)
             }
-            _ => self.url.clone(),
+            "git" => Some(prefixed_vcs_url(
+                "git+",
+                self.url.as_deref()?,
+                self.ref_field.as_deref(),
+            )),
+            "hg" => Some(prefixed_vcs_url(
+                "hg+",
+                self.url.as_deref()?,
+                self.ref_field.as_deref(),
+            )),
+            "tarball" | "file" => self.url.clone(),
+            "path" => Some(format!("path:{}", self.path.as_deref()?)),
+            "indirect" => Some(indirect_flake_url(
+                self.id.as_deref()?,
+                self.ref_field.as_deref(),
+            )),
+            other => {
+                tracing::warn!(
+                    "Unknown flake.lock node type '{other}'; cannot reconstruct flake URL"
+                );
+                None
+            }
         }
+    }
+}
+
+/// Prepend `git+` / `hg+` to a VCS transport URL and append `?ref=<r>`.
+///
+/// Nix keeps unrecognized query parameters (e.g. `?dir=subdir`) inside
+/// the lockfile's `url` field, so the input may already carry a `?`.
+/// Append with `&` in that case to avoid producing a flakeref with two
+/// `?`, which Nix's URL parser rejects.
+fn prefixed_vcs_url(scheme_prefix: &str, url: &str, ref_field: Option<&str>) -> String {
+    let Some(r) = ref_field else {
+        return format!("{scheme_prefix}{url}");
+    };
+    let separator = if url.contains('?') { '&' } else { '?' };
+    format!("{scheme_prefix}{url}{separator}ref={r}")
+}
+
+/// Indirect refs encode `ref` as a path component (`flake:<id>/<ref>`),
+/// not a query parameter. Other VCS schemes use `?ref=`; the indirect
+/// scheme is the odd one out and easy to get wrong.
+fn indirect_flake_url(id: &str, ref_field: Option<&str>) -> String {
+    match ref_field {
+        Some(r) => format!("flake:{id}/{r}"),
+        None => format!("flake:{id}"),
     }
 }
 
@@ -1116,5 +1164,128 @@ mod tests {
             Some("nixpkgs".to_string()),
             "non-empty Indirect must surface its follows target",
         );
+    }
+
+    fn original(node_type: &str) -> Original {
+        Original {
+            owner: None,
+            repo: None,
+            node_type: node_type.to_string(),
+            ref_field: None,
+            url: None,
+            path: None,
+            id: None,
+        }
+    }
+
+    /// A bare `https://...` parses as a `tarball` flakeref, not a
+    /// `git` repo, so the missing `git+` prefix is a silent corruption
+    /// rather than a parse error.
+    #[test]
+    fn to_flake_url_git_type_prepends_scheme() {
+        let mut o = original("git");
+        o.url = Some("https://git.clan.lol/clan/munix".to_string());
+        assert_eq!(
+            o.to_flake_url().as_deref(),
+            Some("git+https://git.clan.lol/clan/munix"),
+        );
+    }
+
+    /// Loss of `ref` would unpin the reconstructed URL from the branch
+    /// the lock captured.
+    #[test]
+    fn to_flake_url_git_with_ref_appends_query() {
+        let mut o = original("git");
+        o.url = Some("https://git.example.com/repo".to_string());
+        o.ref_field = Some("main".to_string());
+        assert_eq!(
+            o.to_flake_url().as_deref(),
+            Some("git+https://git.example.com/repo?ref=main"),
+        );
+    }
+
+    /// The lockfile type is `"hg"` (not `"mercurial"`); the previous
+    /// spelling silently matched no input and dropped every hg
+    /// promotion.
+    #[test]
+    fn to_flake_url_hg_type_prepends_scheme() {
+        let mut o = original("hg");
+        o.url = Some("https://hg.example.com/repo".to_string());
+        assert_eq!(
+            o.to_flake_url().as_deref(),
+            Some("hg+https://hg.example.com/repo"),
+        );
+    }
+
+    /// `original.url` may already carry a `?` (Nix only strips
+    /// recognized params like `ref` / `shallow`; the rest stay
+    /// in-band). Appending `?ref=` would produce two `?`, which Nix
+    /// rejects.
+    #[test]
+    fn to_flake_url_git_with_existing_query_appends_with_ampersand() {
+        let mut o = original("git");
+        o.url = Some("https://git.example.com/repo?dir=subdir".to_string());
+        o.ref_field = Some("main".to_string());
+        assert_eq!(
+            o.to_flake_url().as_deref(),
+            Some("git+https://git.example.com/repo?dir=subdir&ref=main"),
+        );
+    }
+
+    #[test]
+    fn to_flake_url_tarball_returns_url_unchanged() {
+        let mut o = original("tarball");
+        o.url = Some("https://channels.nixos.org/nixos-25.05/nixexprs.tar.xz".to_string());
+        assert_eq!(
+            o.to_flake_url().as_deref(),
+            Some("https://channels.nixos.org/nixos-25.05/nixexprs.tar.xz"),
+        );
+    }
+
+    #[test]
+    fn to_flake_url_path_uses_path_field() {
+        let mut o = original("path");
+        o.path = Some("/etc/nixos".to_string());
+        assert_eq!(o.to_flake_url().as_deref(), Some("path:/etc/nixos"));
+    }
+
+    #[test]
+    fn to_flake_url_indirect_uses_id_field() {
+        let mut o = original("indirect");
+        o.id = Some("nixpkgs".to_string());
+        assert_eq!(o.to_flake_url().as_deref(), Some("flake:nixpkgs"));
+    }
+
+    /// Indirect refs use a path component (`flake:<id>/<ref>`) rather
+    /// than the `?ref=` query the VCS schemes use; pin the test on
+    /// that asymmetry.
+    #[test]
+    fn to_flake_url_indirect_with_ref_appends_path_component() {
+        let mut o = original("indirect");
+        o.id = Some("nixpkgs".to_string());
+        o.ref_field = Some("nixos-25.05".to_string());
+        assert_eq!(
+            o.to_flake_url().as_deref(),
+            Some("flake:nixpkgs/nixos-25.05"),
+        );
+    }
+
+    /// `auto.rs` interprets `None` from [`Original::to_flake_url`] as
+    /// "skip promotion". A refactor that turned the `?` operators into
+    /// silent defaults (e.g. `unwrap_or_default`) would write empty
+    /// `inputs.<x>.url = ""` strings instead.
+    #[test]
+    fn to_flake_url_returns_none_when_required_fields_missing() {
+        // git/hg without a url
+        assert_eq!(original("git").to_flake_url(), None);
+        assert_eq!(original("hg").to_flake_url(), None);
+        // path without a path
+        assert_eq!(original("path").to_flake_url(), None);
+        // indirect without an id
+        assert_eq!(original("indirect").to_flake_url(), None);
+        // forge type without owner/repo
+        assert_eq!(original("github").to_flake_url(), None);
+        // unknown type, warn-and-None
+        assert_eq!(original("future-type").to_flake_url(), None);
     }
 }
