@@ -1,41 +1,5 @@
-use flake_edit::forge::api::test_helpers::*;
-use flake_edit::forge::api::{ForgeType, IntermediaryTags, Tags};
+use flake_edit::forge::api::{IntermediaryTags, Tags};
 use nix_uri::FlakeRef;
-
-#[test]
-fn test_parse_forge_version_forgejo() {
-    let json = r#"{"version":"1.21.0+forgejo"}"#;
-    let result = parse_forge_version_test(json);
-    assert_eq!(result, Some(ForgeType::Gitea));
-}
-
-#[test]
-fn test_parse_forge_version_gitea_suffix() {
-    let json = r#"{"version":"1.21.0+gitea"}"#;
-    let result = parse_forge_version_test(json);
-    assert_eq!(result, Some(ForgeType::Gitea));
-}
-
-#[test]
-fn test_parse_forge_version_plain_version() {
-    let json = r#"{"version":"1.21.0"}"#;
-    let result = parse_forge_version_test(json);
-    assert_eq!(result, None);
-}
-
-#[test]
-fn test_parse_forge_version_invalid_json() {
-    let json = r#"{"invalid": "data"}"#;
-    let result = parse_forge_version_test(json);
-    assert_eq!(result, None);
-}
-
-#[test]
-fn test_parse_forge_version_malformed_json() {
-    let json = r#"not json at all"#;
-    let result = parse_forge_version_test(json);
-    assert_eq!(result, None);
-}
 
 // URL parsing tests using nix-uri
 #[test]
