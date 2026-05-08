@@ -46,13 +46,24 @@ pub struct ApplyOutcome {
 
 impl FlakeEdit {
     pub fn from_text(stream: &str) -> Result<Self, FlakeEditError> {
-        let validation = validate::validate(stream);
+        let parsed = validate::ParsedSource::new(stream);
+        let validation = validate::validate_parsed(&parsed);
         if validation.has_errors() {
             return Err(FlakeEditError::Validation(validation.errors));
         }
 
-        let walker = Walker::new(stream);
+        let walker = Walker::from_root(parsed.syntax);
         Ok(Self { walker })
+    }
+
+    /// Wrap an already-parsed `flake.nix` syntax tree, skipping the parse and
+    /// validation that [`Self::from_text`] runs. Reserved for the auto-follow
+    /// apply loop, where each iteration validates its result and feeds the
+    /// resulting parse back to the next iteration's walker.
+    pub(crate) fn from_syntax(syntax: rnix::SyntaxNode) -> Self {
+        Self {
+            walker: Walker::from_root(syntax),
+        }
     }
 
     pub fn source_text(&self) -> String {

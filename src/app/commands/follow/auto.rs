@@ -756,6 +756,14 @@ fn emit_direct_promotions(
     direct_groups: HashMap<String, Vec<(AttrPath, Option<String>)>>,
     plan: &mut FollowPlan,
 ) {
+    // Probes only differ in which `Change` they apply, not in the input
+    // text, so parse `source_text` once and clone the syntax per probe.
+    let probe_parsed = validate::ParsedSource::new(source_text);
+    if !probe_parsed.parse_errors.is_empty() {
+        return;
+    }
+    let probe_syntax = probe_parsed.syntax;
+
     let mut direct_groups_sorted: Vec<_> = direct_groups.into_iter().collect();
     direct_groups_sorted.sort_by(|a, b| a.0.cmp(&b.0));
     for (canonical_name, mut entries) in direct_groups_sorted {
@@ -784,9 +792,9 @@ fn emit_direct_promotions(
                 input: ChangeId::new(path.clone()),
                 target: target_attr.clone(),
             };
-            FlakeEdit::from_text(source_text)
+            let mut fe = FlakeEdit::from_syntax(probe_syntax.clone());
+            fe.apply_change(change)
                 .ok()
-                .and_then(|mut fe| fe.apply_change(change).ok())
                 .and_then(|outcome| outcome.text)
                 .is_some()
         });
@@ -903,6 +911,21 @@ fn apply_plan_text(
     let pre_validation = validate::validate_full(&current_text, inputs, batch_lock);
     warnings.extend(pre_validation.warnings);
 
+    // The lockfile is fixed for the batch, so build its graph once and let
+    // each [`validate::validate_speculative_parsed`] call clone-and-merge.
+    let lock_graph: Option<FollowsGraph> = batch_lock.map(FollowsGraph::from_lock);
+    let lock_graph_ref = lock_graph.as_ref();
+
+    // Each accepted change replaces `current_parsed` with the post-edit
+    // [`validate::ParsedSource`], so the next iteration's walker and
+    // validation share a single rnix parse of the new text.
+    let mut current_parsed = validate::ParsedSource::new(&current_text);
+    if !current_parsed.parse_errors.is_empty() {
+        return Err(CommandError::FlakeEdit(
+            crate::error::FlakeEditError::Validation(current_parsed.parse_errors.clone()),
+        ));
+    }
+
     // Top-level adds must precede follows that name them.
     for (id, url) in &plan.toplevel_adds {
         let change = Change::Add {
@@ -911,18 +934,20 @@ fn apply_plan_text(
             flake: true,
         };
 
-        let mut temp = FlakeEdit::from_text(&current_text).map_err(CommandError::FlakeEdit)?;
+        let mut temp = FlakeEdit::from_syntax(current_parsed.syntax.clone());
         match temp.apply_change(change) {
             Ok(outcome) => match outcome.text {
                 Some(resulting_text) => {
-                    let validation = validate::validate_speculative(
-                        &resulting_text,
+                    let resulting_parsed = validate::ParsedSource::new(&resulting_text);
+                    let validation = validate::validate_speculative_parsed(
+                        &resulting_parsed,
                         temp.curr_list(),
-                        batch_lock,
+                        lock_graph_ref,
                     );
                     if validation.is_ok() {
                         warnings.extend(validation.warnings);
                         current_text = resulting_text;
+                        current_parsed = resulting_parsed;
                     } else {
                         for err in validation.errors {
                             eprintln!("Error adding top-level input {}: {}", id, err);
@@ -946,21 +971,23 @@ fn apply_plan_text(
             target: target.clone(),
         };
 
-        let mut temp = FlakeEdit::from_text(&current_text).map_err(CommandError::FlakeEdit)?;
+        let mut temp = FlakeEdit::from_syntax(current_parsed.syntax.clone());
         match temp.apply_change(change) {
             Ok(outcome) => match outcome.text {
                 Some(resulting_text) => {
                     if resulting_text == current_text {
                         continue;
                     }
-                    let validation = validate::validate_speculative(
-                        &resulting_text,
+                    let resulting_parsed = validate::ParsedSource::new(&resulting_text);
+                    let validation = validate::validate_speculative_parsed(
+                        &resulting_parsed,
                         temp.curr_list(),
-                        batch_lock,
+                        lock_graph_ref,
                     );
                     if validation.is_ok() {
                         warnings.extend(validation.warnings);
                         current_text = resulting_text;
+                        current_parsed = resulting_parsed;
                         applied_follows.push((input_path.clone(), target.clone()));
                     } else {
                         for err in validation.errors {
@@ -981,18 +1008,20 @@ fn apply_plan_text(
             ids: vec![ChangeId::new(nested_path.clone())],
         };
 
-        let mut temp = FlakeEdit::from_text(&current_text).map_err(CommandError::FlakeEdit)?;
+        let mut temp = FlakeEdit::from_syntax(current_parsed.syntax.clone());
         match temp.apply_change(change) {
             Ok(outcome) => {
                 if let Some(resulting_text) = outcome.text {
-                    let validation = validate::validate_speculative(
-                        &resulting_text,
+                    let resulting_parsed = validate::ParsedSource::new(&resulting_text);
+                    let validation = validate::validate_speculative_parsed(
+                        &resulting_parsed,
                         temp.curr_list(),
-                        batch_lock,
+                        lock_graph_ref,
                     );
                     if validation.is_ok() {
                         warnings.extend(validation.warnings);
                         current_text = resulting_text;
+                        current_parsed = resulting_parsed;
                         unfollowed.push(nested_path.clone());
                     }
                 }

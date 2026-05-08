@@ -106,6 +106,13 @@ pub(crate) fn lint_follows_target_not_toplevel<F: Fn(usize) -> Location>(
             });
         }
     }
+    out.sort_by(|a, b| match (a, b) {
+        (
+            ValidationError::FollowsTargetNotToplevel { edge: ea, .. },
+            ValidationError::FollowsTargetNotToplevel { edge: eb, .. },
+        ) => ea.source.cmp(&eb.source),
+        _ => std::cmp::Ordering::Equal,
+    });
     out
 }
 
@@ -164,6 +171,13 @@ pub(crate) fn lint_follows_depth_exceeded<F: Fn(usize) -> Location>(
             });
         }
     }
+    out.sort_by(|a, b| match (a, b) {
+        (
+            ValidationError::FollowsDepthExceeded { edge: ea, .. },
+            ValidationError::FollowsDepthExceeded { edge: eb, .. },
+        ) => ea.source.cmp(&eb.source),
+        _ => std::cmp::Ordering::Equal,
+    });
     out
 }
 
@@ -183,6 +197,21 @@ pub(crate) fn build_graph(
 ) -> FollowsGraph {
     let graph = match lock {
         Some(lock) => FollowsGraph::from_flake(inputs, lock),
+        None => FollowsGraph::from_declared(inputs),
+    };
+    graph.with_max_depth(max_depth)
+}
+
+/// [`build_graph`] for callers that already hold a lockfile-derived
+/// [`FollowsGraph`] (from [`FollowsGraph::from_lock`]). Skips the recursive
+/// `flake.lock` walk that [`build_graph`] performs each call.
+pub(crate) fn build_graph_with_lock_graph(
+    inputs: &InputMap,
+    lock_graph: Option<&FollowsGraph>,
+    max_depth: usize,
+) -> FollowsGraph {
+    let graph = match lock_graph {
+        Some(lock_graph) => FollowsGraph::from_declared_and_lock_graph(inputs, lock_graph),
         None => FollowsGraph::from_declared(inputs),
     };
     graph.with_max_depth(max_depth)
