@@ -199,8 +199,8 @@ pub fn run(args: CliArgs) -> Result<()> {
                 }
                 CompletionMode::Follow => {
                     if let Ok(lock) = crate::lock::FlakeLock::from_default_path() {
-                        for path in lock.nested_input_paths() {
-                            println!("{}", path);
+                        for nested in lock.nested_inputs() {
+                            println!("{}", nested.path);
                         }
                     }
                     std::process::exit(0);

@@ -203,31 +203,31 @@ impl FlakeLock {
         &self.root
     }
 
-    /// Resolve an input path (sequence of *input names*) to the node key it
-    /// ultimately points at, walking the lock tree from `root`.
+    /// Resolve an [`AttrPath`] to the node key it ultimately points at,
+    /// walking the lock tree from `root`.
     ///
-    /// Lockfile `Indirect` entries are `follows` paths of input names rooted at
-    /// the lock root, not node keys, so encountering one restarts the walk from
-    /// root with that path plus any remaining segments.
-    fn resolve_input_path<S: AsRef<str>>(&self, segments: &[S]) -> Result<String, FlakeEditError> {
+    /// [`Input::Indirect`] entries are `follows` paths of input *names*
+    /// rooted at the lock root, not node keys, so encountering one restarts
+    /// the walk from root with that path plus any remaining segments.
+    fn resolve_input_path(&self, path: &AttrPath) -> Result<String, FlakeEditError> {
         // Bound recursion: a valid lock file has no follows cycles, but we
         // still guard against malformed input.
         const MAX_HOPS: usize = 64;
-        self.resolve_input_path_inner(segments, MAX_HOPS)
+        self.resolve_input_path_inner(path.segments(), MAX_HOPS)
     }
 
-    fn resolve_input_path_inner<S: AsRef<str>>(
+    /// `segments` is non-empty by construction: callers either forward an
+    /// [`AttrPath`]'s segments or prepend an [`Input::Indirect`] follows
+    /// path, both of which are non-empty.
+    fn resolve_input_path_inner(
         &self,
-        segments: &[S],
+        segments: &[Segment],
         budget: usize,
     ) -> Result<String, FlakeEditError> {
         if budget == 0 {
             return Err(FlakeEditError::LockError(
                 "Cycle while resolving follows path.".into(),
             ));
-        }
-        if segments.is_empty() {
-            return Err(FlakeEditError::LockError("Empty input path.".into()));
         }
 
         let mut current_key = self.root.clone();
@@ -237,12 +237,11 @@ impl FlakeLock {
             .ok_or(FlakeEditError::LockMissingRoot)?;
 
         for (i, segment) in segments.iter().enumerate() {
-            let segment = segment.as_ref();
             let inputs = current_node.inputs.as_ref().ok_or_else(|| {
                 if i == 0 {
                     FlakeEditError::LockError("Could not resolve root.".into())
                 } else {
-                    let prefix: Vec<_> = segments[..i].iter().map(|s| s.as_ref()).collect();
+                    let prefix: Vec<_> = segments[..i].iter().map(|s| s.as_str()).collect();
                     FlakeEditError::LockError(format!(
                         "Input '{}' has no sub-inputs.",
                         prefix.join(".")
@@ -250,8 +249,8 @@ impl FlakeLock {
                 }
             })?;
 
-            let resolved = inputs.get(segment).ok_or_else(|| {
-                let prefix: Vec<_> = segments[..=i].iter().map(|s| s.as_ref()).collect();
+            let resolved = inputs.get(segment.as_str()).ok_or_else(|| {
+                let prefix: Vec<_> = segments[..=i].iter().map(|s| s.as_str()).collect();
                 FlakeEditError::LockError(format!(
                     "Input '{}' not found in lock file.",
                     prefix.join(".")
@@ -263,16 +262,12 @@ impl FlakeLock {
                     current_key = node_key.clone();
                 }
                 Input::Indirect(Some(follows_path)) => {
-                    let mut new_path: Vec<String> = follows_path
-                        .segments()
-                        .iter()
-                        .map(|s| s.as_str().to_string())
-                        .collect();
-                    new_path.extend(segments[i + 1..].iter().map(|s| s.as_ref().to_string()));
+                    let mut new_path: Vec<Segment> = follows_path.segments().to_vec();
+                    new_path.extend(segments[i + 1..].iter().cloned());
                     return self.resolve_input_path_inner(&new_path, budget - 1);
                 }
                 Input::Indirect(None) => {
-                    let prefix: Vec<_> = segments[..=i].iter().map(|s| s.as_ref()).collect();
+                    let prefix: Vec<_> = segments[..=i].iter().map(|s| s.as_str()).collect();
                     return Err(FlakeEditError::LockError(format!(
                         "Input '{}' has no follows target.",
                         prefix.join(".")
@@ -282,7 +277,7 @@ impl FlakeLock {
 
             if i + 1 < segments.len() {
                 current_node = self.nodes.get(&current_key).ok_or_else(|| {
-                    let prefix: Vec<_> = segments[..=i].iter().map(|s| s.as_ref()).collect();
+                    let prefix: Vec<_> = segments[..=i].iter().map(|s| s.as_str()).collect();
                     FlakeEditError::LockError(format!(
                         "Could not find node '{}' for input '{}'.",
                         current_key,
@@ -295,30 +290,18 @@ impl FlakeLock {
         Ok(current_key)
     }
 
-    /// Resolve `id` (a dotted attribute path) to its locked revision.
+    /// Resolve `path` to its locked revision.
     ///
     /// # Errors
     ///
-    /// Returns [`FlakeEditError::LockError`] if `id` is malformed or does not
-    /// resolve to a node with a `rev` field.
-    pub fn rev_for(&self, id: &str) -> Result<String, FlakeEditError> {
-        let path = AttrPath::parse(id)
-            .map_err(|e| FlakeEditError::LockError(format!("Invalid input path '{id}': {e}")))?;
-        let owned: Vec<&str> = path.segments().iter().map(|s| s.as_str()).collect();
-        let node_name = self.resolve_input_path(&owned)?;
+    /// Returns [`FlakeEditError::LockError`] if any segment is missing in the
+    /// lock graph, the resolved node is not present, or it carries no `rev`.
+    pub fn rev_for(&self, path: &AttrPath) -> Result<String, FlakeEditError> {
+        let node_name = self.resolve_input_path(path)?;
         let node = self.nodes.get(&node_name).ok_or_else(|| {
             FlakeEditError::LockError(format!("Could not find node '{node_name}'."))
         })?;
         node.rev()
-    }
-
-    /// Rendered nested input paths (e.g. `naersk.nixpkgs`,
-    /// `naersk.flake-utils`) suitable for shell completion.
-    pub fn nested_input_paths(&self) -> Vec<String> {
-        self.nested_inputs()
-            .into_iter()
-            .map(|input| input.path.to_string())
-            .collect()
     }
 
     /// All nested inputs reachable from the root, with their existing
@@ -615,7 +598,7 @@ mod tests {
         assert_eq!(
             "c00d587b1a1afbf200b1d8f0b0e4ba9deb1c7f0e",
             parsed_lock
-                .rev_for("nixpkgs")
+                .rev_for(&"nixpkgs".parse().unwrap())
                 .expect("Id: nixpkgs is in the lockfile.")
         );
     }
@@ -632,7 +615,7 @@ mod tests {
         assert_eq!(
             "ad0b5eed1b6031efaed382844806550c3dcb4206",
             parsed_lock
-                .rev_for("nixpkgs")
+                .rev_for(&"nixpkgs".parse().unwrap())
                 .expect("Id: nixpkgs is in the lockfile.")
         );
     }
@@ -647,7 +630,11 @@ mod tests {
         let minimal_lock = minimal_lock();
         let parsed_lock =
             FlakeLock::read_from_str(minimal_lock).expect("Should be parsed correctly.");
-        assert!(parsed_lock.rev_for("browseros.nixpkgs").is_err());
+        assert!(
+            parsed_lock
+                .rev_for(&"browseros.nixpkgs".parse().unwrap())
+                .is_err()
+        );
     }
 
     #[test]
@@ -657,7 +644,7 @@ mod tests {
         assert_eq!(
             "2741b4b489b55df32afac57bc4bfd220e8bf617e",
             parsed
-                .rev_for("treefmt-nix.nixpkgs")
+                .rev_for(&"treefmt-nix.nixpkgs".parse().unwrap())
                 .expect("Should resolve sub-input path")
         );
     }
@@ -667,9 +654,9 @@ mod tests {
         let lock = minimal_independent_lock_nixpkgs_overridden();
         let parsed = FlakeLock::read_from_str(lock).expect("Should be parsed correctly.");
         assert_eq!(
-            parsed.rev_for("nixpkgs").unwrap(),
+            parsed.rev_for(&"nixpkgs".parse().unwrap()).unwrap(),
             parsed
-                .rev_for("treefmt-nix.nixpkgs")
+                .rev_for(&"treefmt-nix.nixpkgs".parse().unwrap())
                 .expect("Should resolve followed sub-input")
         );
     }
@@ -682,8 +669,10 @@ mod tests {
         let parsed_lock =
             FlakeLock::read_from_str(minimal_lock).expect("Should be parsed correctly.");
         assert_eq!(
-            parsed_lock.rev_for("nixpkgs").unwrap(),
-            parsed_lock.rev_for("\"nixpkgs\"").unwrap(),
+            parsed_lock.rev_for(&"nixpkgs".parse().unwrap()).unwrap(),
+            parsed_lock
+                .rev_for(&"\"nixpkgs\"".parse().unwrap())
+                .unwrap(),
         );
     }
 
@@ -702,7 +691,7 @@ mod tests {
   "version": 7
 }"#;
         let parsed = FlakeLock::read_from_str(lock).unwrap();
-        assert!(parsed.rev_for("bare").is_err());
+        assert!(parsed.rev_for(&"bare".parse().unwrap()).is_err());
     }
 
     #[test]
@@ -721,7 +710,7 @@ mod tests {
   "version": 7
 }"#;
         let parsed = FlakeLock::read_from_str(lock).unwrap();
-        assert!(parsed.rev_for("norev").is_err());
+        assert!(parsed.rev_for(&"norev".parse().unwrap()).is_err());
     }
 
     #[test]
@@ -861,7 +850,7 @@ mod tests {
         assert_eq!(
             "def",
             parsed
-                .rev_for("\"hls-1.10\".nixpkgs")
+                .rev_for(&"\"hls-1.10\".nixpkgs".parse().unwrap())
                 .expect("Should resolve quoted sub-input path")
         );
     }
@@ -895,7 +884,7 @@ mod tests {
         assert_eq!(
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             parsed
-                .rev_for("treefmt-nix.nixpkgs")
+                .rev_for(&"treefmt-nix.nixpkgs".parse().unwrap())
                 .expect("indirect follows must resolve through root.inputs, not by node name")
         );
     }
@@ -937,7 +926,7 @@ mod tests {
         assert_eq!(
             "2222222222222222222222222222222222222222",
             parsed
-                .rev_for("devshell.nixpkgs")
+                .rev_for(&"devshell.nixpkgs".parse().unwrap())
                 .expect("multi-segment indirect follows must be walked from root")
         );
     }
