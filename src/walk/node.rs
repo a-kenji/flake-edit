@@ -17,7 +17,7 @@ pub(crate) fn substitute_child(parent: &SyntaxNode, index: usize, new_child: &Sy
     let green = parent
         .green()
         .replace_child(index, new_child.green().into());
-    parse_node(&green.to_string())
+    SyntaxNode::new_root(green)
 }
 
 /// Empty syntax node used as a removal placeholder.
@@ -109,7 +109,7 @@ pub(crate) fn remove_child_with_whitespace(
     if let Some(ws_index) = adjacent_whitespace_index(&element) {
         green = green.remove_child(ws_index);
     }
-    parse_node(&green.to_string())
+    SyntaxNode::new_root(green)
 }
 
 /// Whether `parent`'s input declarations predominantly use attrset style

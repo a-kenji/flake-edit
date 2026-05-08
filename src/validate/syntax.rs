@@ -1,7 +1,7 @@
 //! Syntax-level lints: rnix parse errors and duplicate-attribute detection.
 //!
-//! Entry point is [`collect`]. [`LineMap`] resolves CST byte offsets into
-//! [`Location`]s.
+//! Entry point is [`collect_with_parsed`]. [`LineMap`] resolves CST byte
+//! offsets into [`Location`]s.
 
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -10,8 +10,40 @@ use rnix::{Root, SyntaxKind, SyntaxNode, TextRange};
 
 use super::error::{DuplicateAttr, Location, ValidationError};
 
+/// Shared output of a single rnix parse: feed it to [`collect_with_parsed`]
+/// to lint, and to [`crate::walk::Walker::from_root`] to build a walker
+/// against the same syntax tree.
+pub(crate) struct ParsedSource {
+    pub(crate) line_map: LineMap,
+    pub(crate) parse_errors: Vec<ValidationError>,
+    pub(crate) syntax: SyntaxNode,
+}
+
+impl ParsedSource {
+    /// Parse `source` with rnix and capture parse errors as
+    /// [`ValidationError::ParseError`]. The caller decides whether to surface
+    /// `parse_errors` or proceed.
+    pub(crate) fn new(source: &str) -> Self {
+        let line_map = LineMap::new(source);
+        let parsed = Root::parse(source);
+        let mut parse_errors = Vec::new();
+        for error in parsed.errors() {
+            let location = parse_error_location(error, &line_map);
+            parse_errors.push(ValidationError::ParseError {
+                message: error.to_string(),
+                location,
+            });
+        }
+        Self {
+            line_map,
+            parse_errors,
+            syntax: parsed.syntax(),
+        }
+    }
+}
+
 /// Lookup table that maps CST byte offsets to 1-indexed [`Location`]s.
-pub(super) struct LineMap {
+pub(crate) struct LineMap {
     line_starts: Vec<usize>,
 }
 
@@ -53,22 +85,11 @@ impl LineMap {
     }
 }
 
-/// Parse `source` with rnix and append parse errors and duplicate-attribute
+/// Append `parsed`'s captured parse errors and any duplicate-attribute
 /// findings to `errors`.
-pub(super) fn collect(source: &str, errors: &mut Vec<ValidationError>) {
-    let line_map = LineMap::new(source);
-    let root = Root::parse(source);
-
-    for error in root.errors() {
-        let location = parse_error_location(error, &line_map);
-        errors.push(ValidationError::ParseError {
-            message: error.to_string(),
-            location,
-        });
-    }
-
-    let syntax = root.syntax();
-    check_node(&syntax, &line_map, errors);
+pub(crate) fn collect_with_parsed(parsed: &ParsedSource, errors: &mut Vec<ValidationError>) {
+    errors.extend(parsed.parse_errors.iter().cloned());
+    check_node(&parsed.syntax, &parsed.line_map, errors);
 }
 
 fn parse_error_location(error: &rnix::ParseError, line_map: &LineMap) -> Location {

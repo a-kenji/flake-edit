@@ -15,21 +15,29 @@ mod syntax;
 
 pub use error::{DuplicateAttr, Location, Severity, ValidationError, ValidationResult};
 
+pub(crate) use syntax::ParsedSource;
+
 use crate::edit::InputMap;
-use crate::follows::DEFAULT_MAX_DEPTH;
+use crate::follows::{DEFAULT_MAX_DEPTH, FollowsGraph};
 use crate::lock::FlakeLock;
 
 /// Run the syntax-level lints over `source`: parse errors, duplicate
 /// attributes, and the always-on declared-cycle check.
 pub fn validate(source: &str) -> ValidationResult {
+    let parsed = ParsedSource::new(source);
+    validate_parsed(&parsed)
+}
+
+/// [`validate`] for callers that already hold a [`ParsedSource`], so the
+/// rnix parse is shared with [`crate::walk::Walker`] construction.
+pub(crate) fn validate_parsed(parsed: &ParsedSource) -> ValidationResult {
     let mut errors: Vec<ValidationError> = Vec::new();
-    syntax::collect(source, &mut errors);
+    syntax::collect_with_parsed(parsed, &mut errors);
     if errors.is_empty() {
-        let mut walker = crate::walk::Walker::new(source);
+        let mut walker = crate::walk::Walker::from_root(parsed.syntax.clone());
         if walker.walk(&crate::change::Change::None).is_ok() {
-            let line_map = syntax::LineMap::new(source);
             let graph = crate::follows::FollowsGraph::from_declared(&walker.inputs);
-            let offset_to_location = |offset: usize| line_map.offset_to_location(offset);
+            let offset_to_location = |offset: usize| parsed.line_map.offset_to_location(offset);
             errors.extend(follows::lint_follows_cycle(&graph, &offset_to_location));
         }
     }
@@ -49,7 +57,8 @@ pub fn validate_full(
     inputs: &InputMap,
     lock: Option<&FlakeLock>,
 ) -> ValidationResult {
-    validate_full_inner(source, inputs, lock, true)
+    let parsed = ParsedSource::new(source);
+    validate_full_inner_parsed(&parsed, inputs, lock)
 }
 
 /// Like [`validate_full`] but skips the lock-drift lints (`lint_follows_stale`
@@ -65,49 +74,81 @@ pub fn validate_speculative(
     inputs: &InputMap,
     lock: Option<&FlakeLock>,
 ) -> ValidationResult {
-    validate_full_inner(source, inputs, lock, false)
+    let parsed = ParsedSource::new(source);
+    let lock_graph = lock.map(FollowsGraph::from_lock);
+    validate_speculative_parsed(&parsed, inputs, lock_graph.as_ref())
 }
 
-fn validate_full_inner(
-    source: &str,
+/// [`validate_speculative`] for callers that already hold a [`ParsedSource`]
+/// and a pre-built [`FollowsGraph`] of the lockfile (typically from
+/// [`FollowsGraph::from_lock`]). Pass `lock_graph = None` to validate against
+/// declared edges only.
+///
+/// Skips the duplicate-attribute lints. The apply loop's
+/// [`crate::change::Change`] variants cannot introduce duplicates the source
+/// did not already carry: `Add` rejects existing ids, `Follows` mutates in
+/// place, `Remove` only deletes. [`validate_full`] runs once before the batch
+/// and covers the original duplicate state.
+pub(crate) fn validate_speculative_parsed(
+    parsed: &ParsedSource,
+    inputs: &InputMap,
+    lock_graph: Option<&FollowsGraph>,
+) -> ValidationResult {
+    let mut errors: Vec<ValidationError> = parsed.parse_errors.to_vec();
+    let mut warnings: Vec<ValidationError> = Vec::new();
+    let graph = follows::build_graph_with_lock_graph(inputs, lock_graph, DEFAULT_MAX_DEPTH);
+    run_follows_lints(parsed, inputs, &graph, None, &mut errors, &mut warnings);
+    ValidationResult { errors, warnings }
+}
+
+fn validate_full_inner_parsed(
+    parsed: &ParsedSource,
     inputs: &InputMap,
     lock: Option<&FlakeLock>,
-    lock_drift_lints: bool,
 ) -> ValidationResult {
     let mut errors: Vec<ValidationError> = Vec::new();
     let mut warnings: Vec<ValidationError> = Vec::new();
-
-    syntax::collect(source, &mut errors);
-
-    let line_map = syntax::LineMap::new(source);
-    let offset_to_location = |offset: usize| line_map.offset_to_location(offset);
-
+    syntax::collect_with_parsed(parsed, &mut errors);
     let graph = follows::build_graph(inputs, lock, DEFAULT_MAX_DEPTH);
+    run_follows_lints(parsed, inputs, &graph, lock, &mut errors, &mut warnings);
+    ValidationResult { errors, warnings }
+}
+
+/// Run every follows-graph lint and route results into `errors`/`warnings` by
+/// severity. `flake_lock` enables the lock-drift lints (stale and stale-lock);
+/// pass `None` to skip them.
+fn run_follows_lints(
+    parsed: &ParsedSource,
+    inputs: &InputMap,
+    graph: &FollowsGraph,
+    flake_lock: Option<&FlakeLock>,
+    errors: &mut Vec<ValidationError>,
+    warnings: &mut Vec<ValidationError>,
+) {
+    let offset_to_location = |offset: usize| parsed.line_map.offset_to_location(offset);
 
     let mut candidates: Vec<ValidationError> = Vec::new();
-    candidates.extend(follows::lint_follows_cycle(&graph, &offset_to_location));
-    if let Some(lock) = lock
-        && lock_drift_lints
-    {
-        candidates.extend(follows::lint_follows_stale(&graph, &offset_to_location));
+    candidates.extend(follows::lint_follows_cycle(graph, &offset_to_location));
+    if let Some(lock) = flake_lock {
+        candidates.extend(follows::lint_follows_stale(graph, &offset_to_location));
         candidates.extend(follows::lint_follows_stale_lock(
-            &graph,
+            graph,
             lock,
             &offset_to_location,
         ));
     }
     let top_level = follows::top_level_names(inputs);
     candidates.extend(follows::lint_follows_target_not_toplevel(
-        &graph,
+        graph,
         &top_level,
         &offset_to_location,
     ));
     candidates.extend(follows::lint_follows_contradiction(
-        &graph,
+        graph,
         &offset_to_location,
     ));
     candidates.extend(follows::lint_follows_depth_exceeded(
-        &graph,
+        graph,
         DEFAULT_MAX_DEPTH,
         &offset_to_location,
     ));
@@ -118,8 +159,6 @@ fn validate_full_inner(
             Severity::Error => errors.push(err),
         }
     }
-
-    ValidationResult { errors, warnings }
 }
 
 #[cfg(test)]

@@ -188,6 +188,32 @@ impl FollowsGraph {
         graph
     }
 
+    /// Variant of [`Self::from_flake`] that takes an already-built lock graph
+    /// (typically from [`Self::from_lock`]). Use when validating successive
+    /// states against the same `flake.lock` to skip the recursive lockfile
+    /// walk per call.
+    pub(crate) fn from_declared_and_lock_graph(
+        inputs: &InputMap,
+        lock_graph: &FollowsGraph,
+    ) -> Self {
+        let mut graph = FollowsGraph::from_declared(inputs);
+        graph
+            .resolved_universe
+            .extend(lock_graph.resolved_universe.iter().cloned());
+        for edges in lock_graph.edges.values() {
+            for edge in edges {
+                let already = graph
+                    .outgoing(&edge.source)
+                    .iter()
+                    .any(|e| e.follows == edge.follows);
+                if !already {
+                    graph.insert_edge(edge.clone());
+                }
+            }
+        }
+        graph
+    }
+
     /// Override the traversal depth bound. Default is [`DEFAULT_MAX_DEPTH`].
     #[must_use]
     pub fn with_max_depth(mut self, max: usize) -> Self {
@@ -200,15 +226,15 @@ impl FollowsGraph {
         self.edges.get(src).map(Vec::as_slice).unwrap_or(&[])
     }
 
-    /// Iterator over every edge, lex-sorted by source.
+    /// Iterator over every edge.
+    ///
+    /// Order is unspecified (HashMap-derived). Callers that need a
+    /// deterministic order must sort after collecting.
     pub fn edges(&self) -> impl Iterator<Item = &Edge> {
-        let mut keys: Vec<&AttrPath> = self.edges.keys().collect();
-        keys.sort();
-        keys.into_iter()
-            .flat_map(|k| self.edges.get(k).unwrap().iter())
+        self.edges.values().flat_map(|v| v.iter())
     }
 
-    /// Edges originating from `flake.nix`. Lex-sorted by source.
+    /// Edges originating from `flake.nix`. See [`Self::edges`] on ordering.
     pub fn declared_edges(&self) -> impl Iterator<Item = &Edge> {
         self.edges()
             .filter(|e| matches!(e.origin, EdgeOrigin::Declared { .. }))
@@ -1145,7 +1171,8 @@ mod tests {
 
         g.drop_edges_with_sources(&[path("crane.nixpkgs")]);
 
-        let remaining: Vec<String> = g.edges().map(|e| e.source.to_string()).collect();
+        let mut remaining: Vec<String> = g.edges().map(|e| e.source.to_string()).collect();
+        remaining.sort();
         assert_eq!(
             remaining,
             vec![

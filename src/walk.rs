@@ -47,6 +47,12 @@ pub struct Walker {
 impl<'a> Walker {
     pub fn new(stream: &'a str) -> Self {
         let root = Root::parse(stream).syntax();
+        Self::from_root(root)
+    }
+
+    /// Build a walker around an already-parsed root, skipping the rnix parse.
+    /// Lets callers that ran a parse for validation share the result.
+    pub fn from_root(root: SyntaxNode) -> Self {
         Self {
             root,
             inputs: HashMap::new(),
@@ -99,34 +105,47 @@ impl<'a> Walker {
                 });
             }
 
-            for child in toplevel.children() {
-                let child_str = child.to_string();
+            // Dispatch on the NODE_ATTRPATH child alone, not on the value.
+            // For `inputs = { ... }` the value is the whole inputs attrset;
+            // stringifying it dominates this walk on large flakes.
+            let Some(attrpath) = toplevel
+                .children()
+                .find(|c| c.kind() == SyntaxKind::NODE_ATTRPATH)
+            else {
+                continue;
+            };
+            let mut path_idents = attrpath.children();
+            let Some(first_ident) = path_idents.next() else {
+                continue;
+            };
+            let has_more_idents = path_idents.next().is_some();
+            let first_text = first_ident.to_string();
+            let first_unquoted = strip_outer_quotes(&first_text);
 
-                if child_str == "description" {
-                    break;
-                }
+            if !has_more_idents && first_unquoted == "description" {
+                continue;
+            }
 
-                if child_str == "inputs" {
-                    if let Some(result) = self.handle_inputs_attr(&toplevel, &child, &ctx, change) {
-                        return Ok(Some(result));
-                    }
-                    continue;
-                }
-
-                if child_str.starts_with("inputs") {
+            if first_unquoted == "inputs" {
+                if has_more_idents {
                     if let Some(result) =
-                        self.handle_inputs_flat(&attr_set, &toplevel, &child, &ctx, change)
+                        self.handle_inputs_flat(&attr_set, &toplevel, &attrpath, &ctx, change)
                     {
                         return Ok(Some(result));
                     }
-                    continue;
-                }
-
-                if child_str == "outputs"
-                    && let Some(result) = self.handle_add_at_outputs(&attr_set, &toplevel, change)
+                } else if let Some(result) =
+                    self.handle_inputs_attr(&toplevel, &attrpath, &ctx, change)
                 {
                     return Ok(Some(result));
                 }
+                continue;
+            }
+
+            if !has_more_idents
+                && first_unquoted == "outputs"
+                && let Some(result) = self.handle_add_at_outputs(&attr_set, &toplevel, change)
+            {
+                return Ok(Some(result));
             }
         }
 
@@ -197,8 +216,8 @@ impl<'a> Walker {
                     .unwrap_or_default();
 
                 if current_target == target {
-                    // Same target, no-op
-                    return Ok(Some(parse_node(&attr_set.parent().unwrap().to_string())));
+                    // Same target, no-op.
+                    return Ok(Some(attr_set.parent().unwrap().clone()));
                 }
                 // Different target, retarget
                 if let Some(value) = value_node {
@@ -207,7 +226,7 @@ impl<'a> Walker {
                     let green = attr_set
                         .green()
                         .replace_child(toplevel.index(), new_toplevel.green().into());
-                    return Ok(Some(parse_node(&attr_set.replace_with(green).to_string())));
+                    return Ok(Some(SyntaxNode::new_root(attr_set.replace_with(green))));
                 }
             }
 
@@ -251,7 +270,7 @@ impl<'a> Walker {
                 green = green.insert_child(insert_index, ws_node.green().into());
             }
 
-            return Ok(Some(parse_node(&attr_set.replace_with(green).to_string())));
+            return Ok(Some(SyntaxNode::new_root(attr_set.replace_with(green))));
         }
 
         Ok(None)
@@ -286,7 +305,7 @@ impl<'a> Walker {
                     .unwrap_or_default();
 
                 if current_target == target {
-                    return Ok(Some(parse_node(&attr_set.parent().unwrap().to_string())));
+                    return Ok(Some(attr_set.parent().unwrap().clone()));
                 }
 
                 if let Some(value) = value_node {
@@ -298,7 +317,7 @@ impl<'a> Walker {
                     let green = attr_set
                         .green()
                         .replace_child(toplevel.index(), new_toplevel.green().into());
-                    return Ok(Some(parse_node(&attr_set.replace_with(green).to_string())));
+                    return Ok(Some(SyntaxNode::new_root(attr_set.replace_with(green))));
                 }
             }
         }
@@ -316,12 +335,12 @@ impl<'a> Walker {
                 green = green.insert_child(insert_index, whitespace.green().into());
             }
 
-            let new_block = parse_node(&green.to_string());
+            let new_block = SyntaxNode::new_root(green);
             let new_toplevel = substitute_child(toplevel, block_attr_set.index(), &new_block);
             let green = attr_set
                 .green()
                 .replace_child(toplevel.index(), new_toplevel.green().into());
-            return Ok(Some(parse_node(&attr_set.replace_with(green).to_string())));
+            return Ok(Some(SyntaxNode::new_root(attr_set.replace_with(green))));
         }
 
         Ok(None)
@@ -345,7 +364,7 @@ impl<'a> Walker {
             .green()
             .replace_child(sibling.index(), replacement.green().into());
         let green = toplevel.replace_with(green);
-        Some(parse_node(&green.to_string()))
+        Some(SyntaxNode::new_root(green))
     }
 
     /// Apply `change` to flat-style `inputs.foo.url = "..."` attributes.
@@ -370,7 +389,7 @@ impl<'a> Walker {
             if let Some(ws_index) = adjacent_whitespace_index(&element) {
                 green = green.remove_child(ws_index);
             }
-            return Some(parse_node(&attr_set.replace_with(green).to_string()));
+            return Some(SyntaxNode::new_root(attr_set.replace_with(green)));
         }
 
         let sibling = child.next_sibling()?;
@@ -378,7 +397,7 @@ impl<'a> Walker {
             .green()
             .replace_child(sibling.index(), replacement.green().into());
         let green = toplevel.replace_with(green);
-        Some(parse_node(&green.to_string()))
+        Some(SyntaxNode::new_root(green))
     }
 
     /// Add a new input just before `outputs` when no `inputs` block exists yet.
@@ -451,6 +470,6 @@ impl<'a> Walker {
             }
         }
 
-        Some(parse_node(&attr_set.replace_with(green).to_string()))
+        Some(SyntaxNode::new_root(attr_set.replace_with(green)))
     }
 }

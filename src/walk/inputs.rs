@@ -154,7 +154,7 @@ pub(crate) fn walk_inputs(
                         green = green.insert_child(insert_index, ws_node.green().into());
                     }
 
-                    return Some(parse_node(&green.to_string()));
+                    return Some(SyntaxNode::new_root(green));
                 }
             }
         }
@@ -211,7 +211,7 @@ pub(crate) fn walk_inputs(
                         green = green.insert_child(insert_index, ws_node.green().into());
                     }
 
-                    return Some(parse_node(&green.to_string()));
+                    return Some(SyntaxNode::new_root(green));
                 }
             }
         }
@@ -304,7 +304,7 @@ pub(crate) fn walk_inputs(
             parse_node(&closing_indent).green().into(),
         );
 
-        return Some(parse_node(&green.to_string()));
+        return Some(SyntaxNode::new_root(green));
     }
 
     None
@@ -485,7 +485,7 @@ fn handle_child_attrpath_value(
         {
             green = green.remove_child(ws_index);
         }
-        return Some(parse_node(&green.to_string()));
+        return Some(SyntaxNode::new_root(green));
     }
 
     // Add a new entry into a non-empty `inputs = { ... }` block.
@@ -554,7 +554,7 @@ fn handle_child_attrpath_value(
                     green = green.insert_child(insert_index + offset, no_flake.green().into());
                 }
             }
-            return Some(parse_node(&green.to_string()));
+            return Some(SyntaxNode::new_root(green));
         }
 
         let uri_node = make_url_attr(id, uri);
@@ -566,7 +566,7 @@ fn handle_child_attrpath_value(
             let no_flake = make_flake_false_attr(id);
             green = green.insert_child(insert_index + 1, no_flake.green().into());
         }
-        return Some(parse_node(&green.to_string()));
+        return Some(SyntaxNode::new_root(green));
     }
 
     None
@@ -1192,7 +1192,7 @@ fn handle_input_attr_set(
                         green = green.insert_child(insert_index, whitespace.green().into());
                     }
 
-                    let new_child = parse_node(&green.to_string());
+                    let new_child = SyntaxNode::new_root(green);
                     return Some(substitute_child(node, child.index(), &new_child));
                 }
             } else if full_path.len() == 1 {
@@ -1219,7 +1219,7 @@ fn handle_input_attr_set(
                             green = green.insert_child(insert_index, whitespace.green().into());
                         }
 
-                        let new_child = parse_node(&green.to_string());
+                        let new_child = SyntaxNode::new_root(green);
                         return Some(substitute_child(node, child.index(), &new_child));
                     }
                 }
