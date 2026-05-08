@@ -8,6 +8,7 @@
 use nix_uri::FlakeRef;
 
 use crate::edit::{FlakeEdit, sorted_input_ids};
+use crate::follows::AttrPath;
 
 use super::super::editor::Editor;
 use super::super::state::AppState;
@@ -38,7 +39,8 @@ pub fn pin(
         let target_rev = if let Some(rev) = rev {
             rev
         } else {
-            lock.rev_for(&id)
+            let path = AttrPath::parse(&id).map_err(|_| CommandError::InputNotFound(id.clone()))?;
+            lock.rev_for(&path)
                 .map_err(|_| CommandError::InputNotFound(id.clone()))?
         };
         let mut updater = updater(editor, inputs);
@@ -70,8 +72,10 @@ pub fn pin(
             "Select input",
             input_ids,
             |id| {
+                let path =
+                    AttrPath::parse(id).map_err(|_| CommandError::InputNotFound(id.to_string()))?;
                 let target_rev = lock
-                    .rev_for(id)
+                    .rev_for(&path)
                     .map_err(|_| CommandError::InputNotFound(id.to_string()))?;
                 let mut updater = updater(editor, inputs.clone());
                 updater
