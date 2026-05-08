@@ -20,6 +20,9 @@ pub fn strip_outer_quotes(s: &str) -> &str {
         .unwrap_or(s)
 }
 
+/// Sentinel segment used when CST text cannot form a valid [`Segment`].
+pub(crate) const INVALID_SEGMENT_SENTINEL: &str = "__invalid__";
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Segment(String);
 
@@ -80,6 +83,21 @@ impl Segment {
     /// Build a [`Segment`] from a CST node's source text.
     pub fn from_syntax(node: &rnix::SyntaxNode) -> Result<Self, SegmentError> {
         Segment::from_source(&node.to_string())
+    }
+
+    /// Infallible [`Self::from_syntax`]: substitutes [`INVALID_SEGMENT_SENTINEL`]
+    /// when the node text would be rejected by [`Self::from_unquoted`], emitting
+    /// `tracing::warn!` on the fall-through.
+    pub(crate) fn from_syntax_or_sentinel(node: &rnix::SyntaxNode) -> Self {
+        Segment::from_syntax(node).unwrap_or_else(|err| {
+            let raw = node.to_string();
+            tracing::warn!(
+                "follows::path::Segment: invalid attribute segment {raw:?} ({err}); using \
+                 sentinel {INVALID_SEGMENT_SENTINEL:?}"
+            );
+            Segment::from_unquoted(INVALID_SEGMENT_SENTINEL)
+                .expect("sentinel segment is non-empty and quote-free")
+        })
     }
 
     pub fn as_str(&self) -> &str {
@@ -285,6 +303,37 @@ impl AttrPath {
         Some(AttrPath(suffix))
     }
 
+    /// Parse the right-hand side of a `follows = "..."` binding into a typed
+    /// target.
+    ///
+    /// Empty input produces `None`. Non-empty input is split on `/`, the only
+    /// separator Nix recognises in a follows target ,  a `.` inside a segment
+    /// is part of the identifier (`"hls-1.10/nixpkgs"` is two segments, not
+    /// three). Each segment passes through [`Segment::from_unquoted`]; if the
+    /// body is malformed the result falls back to a single-segment path
+    /// built from `fallback` so the caller never loses an entry.
+    pub(crate) fn parse_follows_target(text: &str, fallback: &Segment) -> Option<AttrPath> {
+        if text.is_empty() {
+            return None;
+        }
+        let body = strip_outer_quotes(text);
+        if body.is_empty() {
+            return None;
+        }
+        let mut segs = body
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .filter_map(|s| Segment::from_unquoted(s.to_string()).ok());
+        let Some(first) = segs.next() else {
+            return Some(AttrPath::new(fallback.clone()));
+        };
+        let mut path = AttrPath::new(first);
+        for seg in segs {
+            path.push(seg);
+        }
+        Some(path)
+    }
+
     /// Render as the `parent/child/grandchild` form used by lockfile
     /// `follows = [...]` arrays: `/` separators, each segment unquoted.
     pub fn to_flake_follows_string(&self) -> String {
@@ -294,6 +343,31 @@ impl AttrPath {
             .collect::<Vec<_>>()
             .join("/")
     }
+}
+
+/// Idents for the `inputs.<S0>.inputs.<S1>...inputs.<SN>.follows` attrpath shape.
+pub(crate) fn follows_idents_prefixed(segments: &[Segment]) -> Vec<&str> {
+    let mut out: Vec<&str> = Vec::with_capacity(segments.len() * 2 + 1);
+    for seg in segments {
+        out.push("inputs");
+        out.push(seg.as_str());
+    }
+    out.push("follows");
+    out
+}
+
+/// Idents for the `<S0>.inputs.<S1>...inputs.<SN>.follows` attrpath shape, with
+/// no leading `inputs.` qualifier.
+pub(crate) fn follows_idents_bare(segments: &[Segment]) -> Vec<&str> {
+    let mut out: Vec<&str> = Vec::with_capacity(segments.len() * 2);
+    for (i, seg) in segments.iter().enumerate() {
+        if i > 0 {
+            out.push("inputs");
+        }
+        out.push(seg.as_str());
+    }
+    out.push("follows");
+    out
 }
 
 impl fmt::Display for AttrPath {
@@ -632,5 +706,69 @@ mod tests {
         let p = AttrPath::parse("\"hls-1.10\".nixpkgs").unwrap();
         // Dot inside a segment must NOT become a slash.
         assert_eq!(p.to_flake_follows_string(), "hls-1.10/nixpkgs");
+    }
+
+    #[test]
+    fn parse_follows_target_accepts_slash_form() {
+        let fallback = Segment::from_unquoted("fallback").unwrap();
+        let parsed = AttrPath::parse_follows_target("hyprland/hyprlang", &fallback)
+            .expect("non-empty input must parse to Some");
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed.first().as_str(), "hyprland");
+        assert_eq!(parsed.last().as_str(), "hyprlang");
+    }
+
+    #[test]
+    fn parse_follows_target_dot_inside_segment_is_not_a_separator() {
+        let fallback = Segment::from_unquoted("fallback").unwrap();
+
+        let single = AttrPath::parse_follows_target("hls-1.10", &fallback).unwrap();
+        assert_eq!(single.len(), 1);
+        assert_eq!(single.first().as_str(), "hls-1.10");
+
+        let two = AttrPath::parse_follows_target("hls-1.10/nixpkgs", &fallback).unwrap();
+        assert_eq!(two.len(), 2);
+        assert_eq!(two.first().as_str(), "hls-1.10");
+        assert_eq!(two.last().as_str(), "nixpkgs");
+    }
+
+    #[test]
+    fn segment_from_syntax_or_sentinel_falls_back_on_empty_string() {
+        use rnix::SyntaxKind;
+
+        let src = r#"{ inputs."" = {}; }"#;
+        let parsed = rnix::Root::parse(src);
+        fn find_first_string(node: rnix::SyntaxNode) -> Option<rnix::SyntaxNode> {
+            if node.kind() == SyntaxKind::NODE_STRING {
+                return Some(node);
+            }
+            for c in node.children() {
+                if let Some(s) = find_first_string(c) {
+                    return Some(s);
+                }
+            }
+            None
+        }
+        let empty_string = find_first_string(parsed.syntax()).expect("CST has an empty string");
+        let seg = Segment::from_syntax_or_sentinel(&empty_string);
+        assert_eq!(seg.as_str(), super::INVALID_SEGMENT_SENTINEL);
+    }
+
+    #[test]
+    fn follows_idents_prefixed_interleaves_inputs() {
+        let p = AttrPath::parse("crane.nixpkgs").unwrap();
+        assert_eq!(
+            follows_idents_prefixed(p.segments()),
+            vec!["inputs", "crane", "inputs", "nixpkgs", "follows"],
+        );
+    }
+
+    #[test]
+    fn follows_idents_bare_omits_leading_inputs() {
+        let p = AttrPath::parse("crane.nixpkgs").unwrap();
+        assert_eq!(
+            follows_idents_bare(p.segments()),
+            vec!["crane", "inputs", "nixpkgs", "follows"],
+        );
     }
 }
