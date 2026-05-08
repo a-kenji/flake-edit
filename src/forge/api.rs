@@ -109,6 +109,12 @@ struct GitHub {
 }
 
 impl GitHub {
+    /// Hard cap on paginated listing requests. Shared by `list_tags`
+    /// and `list_branches` so the two paths cannot drift apart.
+    const MAX_PAGES: u32 = 20;
+    /// GitHub's maximum page size for list endpoints.
+    const PER_PAGE: usize = 100;
+
     fn new() -> Self {
         Self {
             http: HttpClient::default(),
@@ -116,57 +122,76 @@ impl GitHub {
     }
 }
 
+/// Drive a paginated listing endpoint until a short page or the
+/// safety cap is hit, accumulating items in order.
+///
+/// `fetch` receives a 1-based page number and returns the items on
+/// that page. Iteration stops when `fetch` yields fewer than
+/// `per_page` items (real APIs signal "no more" with a short page)
+/// or when `page` reaches `max_pages` (safety cap against runaway
+/// loops on a misbehaving endpoint that always returns full pages).
+fn paginated<T, F>(per_page: usize, max_pages: u32, mut fetch: F) -> Result<Vec<T>, ApiError>
+where
+    F: FnMut(u32) -> Result<Vec<T>, ApiError>,
+{
+    let mut all = Vec::new();
+    let mut page: u32 = 1;
+    loop {
+        let items = fetch(page)?;
+        let count = items.len();
+        all.extend(items);
+        if count < per_page || page >= max_pages {
+            break;
+        }
+        page += 1;
+    }
+    Ok(all)
+}
+
 impl Forge for GitHub {
     fn list_tags(&self, owner: &str, repo: &str) -> Result<Tags, ApiError> {
         let headers = Headers::for_domain("github.com");
-        let body = self.http.get(
-            &format!("https://api.github.com/repos/{}/{}/tags", owner, repo),
-            &headers,
-        )?;
-        tracing::debug!("Body from api: {body}");
-        let tags = serde_json::from_str::<IntermediaryTags>(&body)?;
-        Ok(tags.into())
+        let tags = paginated(Self::PER_PAGE, Self::MAX_PAGES, |page| {
+            let url = format!(
+                "https://api.github.com/repos/{}/{}/tags?per_page={}&page={}",
+                owner,
+                repo,
+                Self::PER_PAGE,
+                page
+            );
+            tracing::debug!("Fetching tags page {}: {}", page, url);
+            let body = self.http.get(&url, &headers)?;
+            let page_tags = serde_json::from_str::<IntermediaryTags>(&body)?;
+            tracing::debug!("Got {} tags on page {}", page_tags.0.len(), page);
+            Ok(page_tags.0)
+        })?;
+        tracing::debug!("Total tags fetched: {}", tags.len());
+        Ok(IntermediaryTags(tags).into())
     }
 
     fn list_branches(&self, owner: &str, repo: &str) -> Result<Branches, ApiError> {
         let headers = Headers::for_domain("github.com");
-        let mut all_branches = Vec::new();
-        let mut page = 1;
-        const MAX_PAGES: u32 = 20; // Safety limit to avoid infinite loops
-
-        loop {
+        let branches = paginated(Self::PER_PAGE, Self::MAX_PAGES, |page| {
             let url = format!(
-                "https://api.github.com/repos/{}/{}/branches?per_page=100&page={}",
-                owner, repo, page
+                "https://api.github.com/repos/{}/{}/branches?per_page={}&page={}",
+                owner,
+                repo,
+                Self::PER_PAGE,
+                page
             );
             tracing::debug!("Fetching branches page {}: {}", page, url);
-
             let body = self.http.get(&url, &headers)?;
             let page_branches = serde_json::from_str::<IntermediaryBranches>(&body)?;
-
-            let count = page_branches.0.len();
-            tracing::debug!("Got {} branches on page {}", count, page);
-
-            all_branches.extend(page_branches.0);
-
-            // Stop if we got fewer than 100 (last page) or hit max pages
-            if count < 100 || page >= MAX_PAGES {
-                break;
-            }
-
-            page += 1;
-        }
-
-        tracing::debug!("Total branches fetched: {}", all_branches.len());
-        Ok(IntermediaryBranches(all_branches).into())
+            tracing::debug!("Got {} branches on page {}", page_branches.0.len(), page);
+            Ok(page_branches.0)
+        })?;
+        tracing::debug!("Total branches fetched: {}", branches.len());
+        Ok(IntermediaryBranches(branches).into())
     }
 
     fn branch_exists(&self, owner: &str, repo: &str, branch: &str) -> bool {
         let headers = Headers::for_domain("github.com");
-        let url = format!(
-            "https://api.github.com/repos/{}/{}/branches/{}",
-            owner, repo, branch
-        );
+        let url = format!("https://api.github.com/repos/{owner}/{repo}/branches/{branch}");
         self.http.head_ok(&url, &headers)
     }
 }
@@ -426,5 +451,37 @@ impl From<IntermediaryBranches> for Branches {
         Branches {
             names: value.0.into_iter().map(|b| b.name).collect(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn paginated_accumulates_until_short_page() {
+        let pages: Vec<Vec<u32>> = vec![(0..100).collect(), (100..105).collect()];
+        let mut calls = 0u32;
+        let result = paginated::<u32, _>(100, GitHub::MAX_PAGES, |page| {
+            calls += 1;
+            Ok(pages[(page - 1) as usize].clone())
+        })
+        .unwrap();
+        assert_eq!(calls, 2, "stops after the short page, no third request");
+        assert_eq!(result.len(), 105);
+        assert_eq!(result.first().copied(), Some(0));
+        assert_eq!(result.last().copied(), Some(104));
+    }
+
+    #[test]
+    fn paginated_caps_at_max_pages() {
+        let mut calls = 0u32;
+        let result = paginated::<u32, _>(2, 3, |_| {
+            calls += 1;
+            Ok(vec![1, 2])
+        })
+        .unwrap();
+        assert_eq!(calls, 3, "safety cap halts the loop on always-full pages");
+        assert_eq!(result.len(), 6);
     }
 }
