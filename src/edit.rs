@@ -60,6 +60,7 @@ impl FlakeEdit {
     /// validation that [`Self::from_text`] runs. Reserved for the auto-follow
     /// apply loop, where each iteration validates its result and feeds the
     /// resulting parse back to the next iteration's walker.
+    #[cfg(feature = "application")]
     pub(crate) fn from_syntax(syntax: rnix::SyntaxNode) -> Self {
         Self {
             walker: Walker::from_root(syntax),

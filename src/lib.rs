@@ -18,15 +18,19 @@
 //! - [`validate`] runs pre-edit lint passes. [`error::FlakeEditError`] is the
 //!   crate-wide error.
 //!
-//! Feature flags: `tui` enables [`app`] and [`tui`], `diff` enables [`diff`].
+//! Feature flags: `application` (default) enables the binary-side glue
+//! ([`app`], [`cli`], [`diff`], [`tui`]) and pulls in `clap`, `ratatui`,
+//! `crossterm`, `diffy`, etc. Library-only consumers can disable it with
+//! `--no-default-features` to compile the pure edit / walk / forge surface.
 
-#[cfg(feature = "tui")]
+#[cfg(feature = "application")]
 pub mod app;
 pub mod cache;
 pub mod change;
+#[cfg(feature = "application")]
 pub mod cli;
 pub mod config;
-#[cfg(feature = "diff")]
+#[cfg(feature = "application")]
 pub mod diff;
 pub mod edit;
 pub mod error;
@@ -34,7 +38,7 @@ pub mod follows;
 pub mod forge;
 pub mod input;
 pub mod lock;
-#[cfg(feature = "tui")]
+#[cfg(feature = "application")]
 pub mod tui;
 pub mod uri;
 pub mod validate;

@@ -17,6 +17,7 @@ include = ["src/**/*", "LICENSE", "README.md", "build.rs"]
 
 [[bin]]
 name = "flake-edit"
+required-features = ["application"]
 
 [workspace]
 members = ["."]
@@ -29,13 +30,13 @@ application = [
   "write",
   "assets",
   "anyhow",
-  "diff",
+  "diffy",
   "tracing-subscriber",
-  "tui",
+  "ratatui",
+  "crossterm",
+  "nucleo-matcher",
 ]
-tui = ["ratatui", "crossterm", "nucleo-matcher"]
 write = []
-diff = ["diffy"]
 assets = ["clap_complete", "clap_complete_nushell", "roff", "clap_mangen"]
 
 [dependencies]
