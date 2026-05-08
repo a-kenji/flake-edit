@@ -1,6 +1,8 @@
 //! `flake-edit follow` must reach a fixed point in a single invocation: a
 //! second run on the resulting `flake.nix` produces no further changes.
 
+#![cfg(feature = "application")]
+
 use insta_cmd::get_cargo_bin;
 use rstest::rstest;
 use std::fs;

@@ -1,3 +1,5 @@
+#![cfg(feature = "application")]
+
 mod common;
 
 use common::{Info, load_flake};

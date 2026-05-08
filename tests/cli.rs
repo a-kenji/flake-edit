@@ -1,3 +1,5 @@
+#![cfg(feature = "application")]
+
 use insta::internals::Content;
 use insta_cmd::{assert_cmd_snapshot, get_cargo_bin};
 use rstest::rstest;

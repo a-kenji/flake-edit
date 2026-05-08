@@ -9,7 +9,7 @@
 //! Fixtures are loaded from `tests/fixtures/` and inputs are extracted
 //! using the same parsing logic as the main application.
 
-#![cfg(feature = "tui")]
+#![cfg(feature = "application")]
 
 use clap::Parser;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
