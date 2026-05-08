@@ -117,7 +117,7 @@ impl Updater {
                 repo,
                 domain,
                 ..
-            } => match super::api::get_tags(repo, owner, Some(domain)) {
+            } => match super::api::get_tags(owner, repo, Some(domain)) {
                 Ok(tags) => Some(tags),
                 Err(_) => {
                     tracing::error!("Failed to fetch tags for {}/{} on {}", owner, repo, domain);
@@ -125,7 +125,7 @@ impl Updater {
                 }
             },
             UpdateTarget::ForgeRef { owner, repo, .. } => {
-                match super::api::get_tags(repo, owner, None) {
+                match super::api::get_tags(owner, repo, None) {
                     Ok(tags) => Some(tags),
                     Err(_) => {
                         tracing::error!("Failed to fetch tags for {}/{}", owner, repo);

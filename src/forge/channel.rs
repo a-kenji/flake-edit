@@ -176,7 +176,7 @@ pub fn find_latest_channel(
 
     // Fallback: fetch all branches (for Gitea/Forgejo or if targeted fails)
     tracing::debug!("Targeted lookup failed, falling back to listing all branches");
-    let branches = match get_branches(repo, owner, domain) {
+    let branches = match get_branches(owner, repo, domain) {
         Ok(b) => b,
         Err(e) => {
             tracing::error!("Failed to fetch branches: {}", e);
@@ -244,7 +244,7 @@ fn find_latest_channel_targeted(
     // Check from newest to oldest, return first match (will be the newest)
     for candidate in &candidates {
         tracing::debug!("Checking if branch exists: {}", candidate);
-        if branch_exists(repo, owner, candidate, domain) {
+        if branch_exists(owner, repo, candidate, domain) {
             tracing::debug!("Found existing channel: {}", candidate);
             return Some(candidate.clone());
         }
@@ -253,7 +253,7 @@ fn find_latest_channel_targeted(
     // No newer channel found, check if current version exists
     let current_branch = format!("{}{}.{:02}", prefix, current_version.0, current_version.1);
     tracing::debug!("No newer channel, checking current: {}", current_branch);
-    if branch_exists(repo, owner, &current_branch, domain) {
+    if branch_exists(owner, repo, &current_branch, domain) {
         return Some(current_branch);
     }
 

@@ -36,11 +36,30 @@ struct Headers {
     authorization: Option<String>,
 }
 
-pub struct ForgeClient {
+impl Headers {
+    fn base() -> Self {
+        Self {
+            user_agent: Some("flake-edit".to_string()),
+            authorization: None,
+        }
+    }
+
+    /// Headers with optional Bearer token authentication for the given domain.
+    fn for_domain(domain: &str) -> Self {
+        let mut headers = Self::base();
+        if let Some(token) = get_forge_token(domain) {
+            tracing::debug!("Found token for {}", domain);
+            headers.authorization = Some(format!("Bearer {token}"));
+        }
+        headers
+    }
+}
+
+struct HttpClient {
     agent: Agent,
 }
 
-impl Default for ForgeClient {
+impl Default for HttpClient {
     fn default() -> Self {
         Self {
             agent: Agent::new_with_defaults(),
@@ -48,21 +67,26 @@ impl Default for ForgeClient {
     }
 }
 
-impl ForgeClient {
+impl HttpClient {
     fn get(&self, url: &str, headers: &Headers) -> Result<String, ApiError> {
-        let mut request = self.agent.get(url);
-        if let Some(ref ua) = headers.user_agent {
-            request = request.header("User-Agent", ua);
-        }
-        if let Some(ref auth) = headers.authorization {
-            request = request.header("Authorization", auth);
-        }
-        let body = request.call()?.body_mut().read_to_string()?;
+        let body = self
+            .build(url, headers)
+            .call()?
+            .body_mut()
+            .read_to_string()?;
         Ok(body)
     }
 
     /// Check if a URL returns a successful (2xx) response
     fn head_ok(&self, url: &str, headers: &Headers) -> bool {
+        self.build(url, headers).call().is_ok()
+    }
+
+    fn build(
+        &self,
+        url: &str,
+        headers: &Headers,
+    ) -> ureq::RequestBuilder<ureq::typestate::WithoutBody> {
         let mut request = self.agent.get(url);
         if let Some(ref ua) = headers.user_agent {
             request = request.header("User-Agent", ua);
@@ -70,143 +94,42 @@ impl ForgeClient {
         if let Some(ref auth) = headers.authorization {
             request = request.header("Authorization", auth);
         }
-        request.call().is_ok()
+        request
     }
+}
 
-    fn base_headers() -> Headers {
-        Headers {
-            user_agent: Some("flake-edit".to_string()),
-            authorization: None,
+pub(crate) trait Forge {
+    fn list_tags(&self, owner: &str, repo: &str) -> Result<Tags, ApiError>;
+    fn list_branches(&self, owner: &str, repo: &str) -> Result<Branches, ApiError>;
+    fn branch_exists(&self, owner: &str, repo: &str, branch: &str) -> bool;
+}
+
+struct GitHub {
+    http: HttpClient,
+}
+
+impl GitHub {
+    fn new() -> Self {
+        Self {
+            http: HttpClient::default(),
         }
     }
+}
 
-    /// Create headers with optional Bearer token authentication for the given domain.
-    fn auth_headers(domain: &str) -> Headers {
-        let mut headers = Self::base_headers();
-        if let Some(token) = get_forge_token(domain) {
-            tracing::debug!("Found token for {}", domain);
-            headers.authorization = Some(format!("Bearer {token}"));
-        }
-        headers
-    }
-
-    pub fn detect_forge_type(&self, domain: &str) -> ForgeType {
-        if domain == "github.com" {
-            return ForgeType::GitHub;
-        }
-
-        tracing::debug!("Attempting to detect forge type for domain: {}", domain);
-        let headers = Self::base_headers();
-
-        // Try both HTTPS and HTTP for each endpoint
-        for scheme in ["https", "http"] {
-            // Try Forgejo version endpoint first
-            let forgejo_url = format!("{}://{}/api/forgejo/v1/version", scheme, domain);
-            tracing::debug!("Trying Forgejo endpoint: {}", forgejo_url);
-            if let Ok(text) = self.get(&forgejo_url, &headers) {
-                tracing::debug!("Forgejo endpoint response body: {}", text);
-                if let Some(forge_type) = parse_forge_version(&text) {
-                    tracing::info!("Detected Forgejo/Gitea at {}", domain);
-                    return forge_type;
-                }
-            }
-
-            // Try Gitea version endpoint
-            let gitea_url = format!("{}://{}/api/v1/version", scheme, domain);
-            tracing::debug!("Trying Gitea endpoint: {}", gitea_url);
-            if let Ok(text) = self.get(&gitea_url, &headers) {
-                tracing::debug!("Gitea endpoint response body: {}", text);
-                if let Some(forge_type) = parse_forge_version(&text) {
-                    tracing::info!("Detected Forgejo/Gitea at {}", domain);
-                    return forge_type;
-                }
-                // Plain Gitea just has a version number without +gitea or +forgejo
-                if serde_json::from_str::<ForgeVersion>(&text).is_ok() {
-                    tracing::info!("Detected Gitea at {}", domain);
-                    return ForgeType::Gitea;
-                }
-            }
-        }
-
-        tracing::warn!(
-            "Could not detect forge type for {}, will try GitHub API as fallback",
-            domain
-        );
-        ForgeType::Unknown
-    }
-
-    pub fn query_github_tags(&self, repo: &str, owner: &str) -> Result<IntermediaryTags, ApiError> {
-        let headers = Self::auth_headers("github.com");
-        let body = self.get(
+impl Forge for GitHub {
+    fn list_tags(&self, owner: &str, repo: &str) -> Result<Tags, ApiError> {
+        let headers = Headers::for_domain("github.com");
+        let body = self.http.get(
             &format!("https://api.github.com/repos/{}/{}/tags", owner, repo),
             &headers,
         )?;
-
         tracing::debug!("Body from api: {body}");
         let tags = serde_json::from_str::<IntermediaryTags>(&body)?;
-        Ok(tags)
+        Ok(tags.into())
     }
 
-    /// Check if a specific branch exists (returns true/false, no error on 404)
-    pub fn branch_exists_github(&self, repo: &str, owner: &str, branch: &str) -> bool {
-        let headers = Self::auth_headers("github.com");
-        let url = format!(
-            "https://api.github.com/repos/{}/{}/branches/{}",
-            owner, repo, branch
-        );
-
-        self.head_ok(&url, &headers)
-    }
-
-    /// Check if a specific branch exists on Gitea/Forgejo
-    pub fn branch_exists_gitea(&self, repo: &str, owner: &str, domain: &str, branch: &str) -> bool {
-        let headers = Self::auth_headers(domain);
-        for scheme in ["https", "http"] {
-            let url = format!(
-                "{}://{}/api/v1/repos/{}/{}/branches/{}",
-                scheme, domain, owner, repo, branch
-            );
-            if self.head_ok(&url, &headers) {
-                return true;
-            }
-        }
-        false
-    }
-
-    pub fn query_gitea_tags(
-        &self,
-        repo: &str,
-        owner: &str,
-        domain: &str,
-    ) -> Result<IntermediaryTags, ApiError> {
-        let headers = Self::auth_headers(domain);
-
-        // Try HTTPS first, then HTTP
-        for scheme in ["https", "http"] {
-            let url = format!(
-                "{}://{}/api/v1/repos/{}/{}/tags",
-                scheme, domain, owner, repo
-            );
-            tracing::debug!("Trying Gitea tags endpoint: {}", url);
-
-            if let Ok(body) = self.get(&url, &headers) {
-                tracing::debug!("Body from Gitea API: {body}");
-                if let Ok(tags) = serde_json::from_str::<IntermediaryTags>(&body) {
-                    return Ok(tags);
-                }
-            }
-        }
-
-        Err(ApiError::NoTagsFound)
-    }
-
-    pub fn query_github_branches(
-        &self,
-        repo: &str,
-        owner: &str,
-    ) -> Result<IntermediaryBranches, ApiError> {
-        let headers = Self::auth_headers("github.com");
-
+    fn list_branches(&self, owner: &str, repo: &str) -> Result<Branches, ApiError> {
+        let headers = Headers::for_domain("github.com");
         let mut all_branches = Vec::new();
         let mut page = 1;
         const MAX_PAGES: u32 = 20; // Safety limit to avoid infinite loops
@@ -218,7 +141,7 @@ impl ForgeClient {
             );
             tracing::debug!("Fetching branches page {}: {}", page, url);
 
-            let body = self.get(&url, &headers)?;
+            let body = self.http.get(&url, &headers)?;
             let page_branches = serde_json::from_str::<IntermediaryBranches>(&body)?;
 
             let count = page_branches.0.len();
@@ -235,17 +158,58 @@ impl ForgeClient {
         }
 
         tracing::debug!("Total branches fetched: {}", all_branches.len());
-        Ok(IntermediaryBranches(all_branches))
+        Ok(IntermediaryBranches(all_branches).into())
     }
 
-    pub fn query_gitea_branches(
-        &self,
-        repo: &str,
-        owner: &str,
-        domain: &str,
-    ) -> Result<IntermediaryBranches, ApiError> {
-        let headers = Self::auth_headers(domain);
+    fn branch_exists(&self, owner: &str, repo: &str, branch: &str) -> bool {
+        let headers = Headers::for_domain("github.com");
+        let url = format!(
+            "https://api.github.com/repos/{}/{}/branches/{}",
+            owner, repo, branch
+        );
+        self.http.head_ok(&url, &headers)
+    }
+}
 
+struct Gitea {
+    http: HttpClient,
+    domain: String,
+}
+
+impl Gitea {
+    fn new(domain: String) -> Self {
+        Self {
+            http: HttpClient::default(),
+            domain,
+        }
+    }
+}
+
+impl Forge for Gitea {
+    fn list_tags(&self, owner: &str, repo: &str) -> Result<Tags, ApiError> {
+        let headers = Headers::for_domain(&self.domain);
+
+        // Try HTTPS first, then HTTP
+        for scheme in ["https", "http"] {
+            let url = format!(
+                "{}://{}/api/v1/repos/{}/{}/tags",
+                scheme, self.domain, owner, repo
+            );
+            tracing::debug!("Trying Gitea tags endpoint: {}", url);
+
+            if let Ok(body) = self.http.get(&url, &headers) {
+                tracing::debug!("Body from Gitea API: {body}");
+                if let Ok(tags) = serde_json::from_str::<IntermediaryTags>(&body) {
+                    return Ok(tags.into());
+                }
+            }
+        }
+
+        Err(ApiError::NoTagsFound)
+    }
+
+    fn list_branches(&self, owner: &str, repo: &str) -> Result<Branches, ApiError> {
+        let headers = Headers::for_domain(&self.domain);
         let mut all_branches = Vec::new();
         let mut page = 1;
         const MAX_PAGES: u32 = 20;
@@ -255,11 +219,11 @@ impl ForgeClient {
             loop {
                 let url = format!(
                     "{}://{}/api/v1/repos/{}/{}/branches?limit=50&page={}",
-                    scheme, domain, owner, repo, page
+                    scheme, self.domain, owner, repo, page
                 );
                 tracing::debug!("Trying Gitea branches endpoint: {}", url);
 
-                match self.get(&url, &headers) {
+                match self.http.get(&url, &headers) {
                     Ok(body) => {
                         tracing::debug!("Body from Gitea API: {body}");
                         match serde_json::from_str::<IntermediaryBranches>(&body) {
@@ -268,7 +232,7 @@ impl ForgeClient {
                                 all_branches.extend(page_branches.0);
 
                                 if count < 50 || page >= MAX_PAGES {
-                                    return Ok(IntermediaryBranches(all_branches));
+                                    return Ok(IntermediaryBranches(all_branches).into());
                                 }
                                 page += 1;
                             }
@@ -280,13 +244,39 @@ impl ForgeClient {
             }
 
             if !all_branches.is_empty() {
-                return Ok(IntermediaryBranches(all_branches));
+                return Ok(IntermediaryBranches(all_branches).into());
             }
             page = 1; // Reset for next scheme
         }
 
         Err(ApiError::InvalidInput("Could not fetch branches".into()))
     }
+
+    fn branch_exists(&self, owner: &str, repo: &str, branch: &str) -> bool {
+        let headers = Headers::for_domain(&self.domain);
+        for scheme in ["https", "http"] {
+            let url = format!(
+                "{}://{}/api/v1/repos/{}/{}/branches/{}",
+                scheme, self.domain, owner, repo, branch
+            );
+            if self.http.head_ok(&url, &headers) {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+/// Hard-coded [`GitHub`] for `github.com`. Every other domain gets
+/// [`Gitea`], since self-hosted instances almost universally expose
+/// `/api/v1/repos/...` even when they do not advertise themselves as
+/// Gitea or Forgejo.
+pub(crate) fn forge_for(domain: Option<&str>) -> Box<dyn Forge> {
+    let domain = domain.unwrap_or("github.com");
+    if domain == "github.com" {
+        return Box::new(GitHub::new());
+    }
+    Box::new(Gitea::new(domain.to_string()))
 }
 
 #[derive(Deserialize, Debug)]
@@ -332,106 +322,32 @@ struct TagVersion {
     original: String,
 }
 
-#[derive(Deserialize, Debug)]
-struct ForgeVersion {
-    version: String,
+pub fn get_tags(owner: &str, repo: &str, domain: Option<&str>) -> Result<Tags, ApiError> {
+    forge_for(domain).list_tags(owner, repo)
 }
 
-#[derive(Debug, PartialEq)]
-pub enum ForgeType {
-    GitHub,
-    Gitea, // Covers both Gitea and Forgejo
-    Unknown,
-}
-
-fn parse_forge_version(json: &str) -> Option<ForgeType> {
-    serde_json::from_str::<ForgeVersion>(json)
-        .ok()
-        .and_then(|v| {
-            (v.version.contains("+forgejo") || v.version.contains("+gitea"))
-                .then_some(ForgeType::Gitea)
-        })
-}
-
-// Test helpers are always available but not documented
-#[doc(hidden)]
-pub mod test_helpers {
-    use super::*;
-
-    pub fn parse_forge_version_test(json: &str) -> Option<ForgeType> {
-        parse_forge_version(json)
-    }
-}
-
-pub fn get_tags(repo: &str, owner: &str, domain: Option<&str>) -> Result<Tags, ApiError> {
-    let domain = domain.unwrap_or("github.com");
-    let client = ForgeClient::default();
-    let forge_type = client.detect_forge_type(domain);
-
-    tracing::debug!("Detected forge type for {}: {:?}", domain, forge_type);
-
-    let tags = match forge_type {
-        ForgeType::GitHub => client.query_github_tags(repo, owner)?,
-        ForgeType::Gitea => client.query_gitea_tags(repo, owner, domain)?,
-        ForgeType::Unknown => {
-            tracing::warn!("Unknown forge type for {}, trying Gitea API", domain);
-            client.query_gitea_tags(repo, owner, domain)?
-        }
-    };
-
-    Ok(tags.into())
-}
-
-pub fn get_branches(repo: &str, owner: &str, domain: Option<&str>) -> Result<Branches, ApiError> {
-    let domain = domain.unwrap_or("github.com");
-    let client = ForgeClient::default();
-    let forge_type = client.detect_forge_type(domain);
-
-    tracing::debug!(
-        "Fetching branches for {}/{} on {} ({:?})",
-        owner,
-        repo,
-        domain,
-        forge_type
-    );
-
-    let branches = match forge_type {
-        ForgeType::GitHub => client.query_github_branches(repo, owner)?,
-        ForgeType::Gitea => client.query_gitea_branches(repo, owner, domain)?,
-        ForgeType::Unknown => {
-            tracing::warn!("Unknown forge type for {}, trying Gitea API", domain);
-            client.query_gitea_branches(repo, owner, domain)?
-        }
-    };
-
-    Ok(branches.into())
+pub fn get_branches(owner: &str, repo: &str, domain: Option<&str>) -> Result<Branches, ApiError> {
+    forge_for(domain).list_branches(owner, repo)
 }
 
 /// Check if a specific branch exists without listing all branches.
 /// Much more efficient for repos with many branches (like nixpkgs).
-pub fn branch_exists(repo: &str, owner: &str, branch: &str, domain: Option<&str>) -> bool {
-    let domain = domain.unwrap_or("github.com");
-    let client = ForgeClient::default();
-    let forge_type = client.detect_forge_type(domain);
-
-    match forge_type {
-        ForgeType::GitHub => client.branch_exists_github(repo, owner, branch),
-        ForgeType::Gitea => client.branch_exists_gitea(repo, owner, domain, branch),
-        ForgeType::Unknown => client.branch_exists_gitea(repo, owner, domain, branch),
-    }
+pub fn branch_exists(owner: &str, repo: &str, branch: &str, domain: Option<&str>) -> bool {
+    forge_for(domain).branch_exists(owner, repo, branch)
 }
 
 /// Check multiple branches and return which ones exist.
 /// More efficient than get_branches for known candidate branches.
 pub fn filter_existing_branches(
-    repo: &str,
     owner: &str,
+    repo: &str,
     candidates: &[String],
     domain: Option<&str>,
 ) -> Vec<String> {
+    let forge = forge_for(domain);
     candidates
         .iter()
-        .filter(|branch| branch_exists(repo, owner, branch, domain))
+        .filter(|branch| forge.branch_exists(owner, repo, branch))
         .cloned()
         .collect()
 }
