@@ -200,7 +200,11 @@ impl Change {
                     }
                     out
                 };
-                vec![format!("Added follows: {}.follows = \"{}\"", path, target)]
+                vec![format!(
+                    "Added follows: {}.follows = \"{}\"",
+                    path,
+                    target.to_flake_follows_string()
+                )]
             }
             Change::None => vec![],
         }

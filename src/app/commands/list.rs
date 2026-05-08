@@ -83,7 +83,10 @@ impl From<&InputMap> for ListOutput {
                         follows.push(FollowEdge {
                             parent: parent_id.clone(),
                             nested: path.to_string(),
-                            target: target.as_ref().map(|t| t.to_string()).unwrap_or_default(),
+                            target: target
+                                .as_ref()
+                                .map(|t| t.to_flake_follows_string())
+                                .unwrap_or_default(),
                             kind: FollowEdgeKind::Indirect,
                         });
                     }
@@ -185,7 +188,7 @@ fn list_detailed(inputs: &InputMap) {
                 // Render an empty `follows = ""` as `=> ""` to mirror the
                 // source-flake form. Non-empty targets render bare.
                 let target_str = match target {
-                    Some(t) => t.to_string(),
+                    Some(t) => t.to_flake_follows_string(),
                     None => "\"\"".to_string(),
                 };
                 let id = format!("{}{} => {}", " ".repeat(5), path, target_str);

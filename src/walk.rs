@@ -155,7 +155,7 @@ impl<'a> Walker {
             if path.len() >= 2 {
                 let parent_id = input.input();
                 if self.inputs.contains_key(parent_id.as_str()) {
-                    let target_str = target.to_string();
+                    let target_str = target.to_flake_follows_string();
                     return self.handle_follows_flat_toplevel(&attr_set, path, &target_str);
                 }
             }

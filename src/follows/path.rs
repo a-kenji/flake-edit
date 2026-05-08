@@ -334,8 +334,9 @@ impl AttrPath {
         Some(path)
     }
 
-    /// Render as the `parent/child/grandchild` form used by lockfile
-    /// `follows = [...]` arrays: `/` separators, each segment unquoted.
+    /// Render for the RHS of `follows = "..."`. `Display` emits the
+    /// LHS attribute-path form and injects per-segment quoting that
+    /// is invalid in this string-value position.
     pub fn to_flake_follows_string(&self) -> String {
         self.0
             .iter()
