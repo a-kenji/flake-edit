@@ -98,6 +98,68 @@ pub(crate) fn insertion_index_after(node: &SyntaxNode) -> usize {
     last_index
 }
 
+/// Remove `node` from `parent` along with any adjacent whitespace token.
+pub(crate) fn remove_child_with_whitespace(
+    parent: &SyntaxNode,
+    node: &SyntaxNode,
+    index: usize,
+) -> SyntaxNode {
+    let mut green = parent.green().remove_child(index);
+    let element: rnix::SyntaxElement = node.clone().into();
+    if let Some(ws_index) = adjacent_whitespace_index(&element) {
+        green = green.remove_child(ws_index);
+    }
+    parse_node(&green.to_string())
+}
+
+/// Whether `parent`'s input declarations predominantly use attrset style
+/// (`foo = { url = "..."; };`) over flat style (`foo.url = "...";`).
+pub(crate) fn uses_attrset_style(parent: &SyntaxNode) -> bool {
+    let mut attrset_count = 0usize;
+    let mut flat_url_count = 0usize;
+
+    for child in parent.children() {
+        if child.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
+            continue;
+        }
+
+        if child
+            .children()
+            .any(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
+        {
+            attrset_count += 1;
+            continue;
+        }
+
+        if let Some(attrpath) = child
+            .children()
+            .find(|c| c.kind() == SyntaxKind::NODE_ATTRPATH)
+        {
+            let idents: Vec<_> = attrpath.children().collect();
+            if idents.len() >= 2
+                && idents
+                    .last()
+                    .map(|i| i.to_string() == "url")
+                    .unwrap_or(false)
+            {
+                flat_url_count += 1;
+            }
+        }
+    }
+
+    attrset_count > flat_url_count
+}
+
+/// Indent slice of a whitespace token: everything after the last `\n`.
+/// For `"\n    "` returns `"    "`.
+pub(crate) fn extract_indent(ws_str: &str) -> &str {
+    if let Some(last_nl) = ws_str.rfind('\n') {
+        &ws_str[last_nl + 1..]
+    } else {
+        ws_str
+    }
+}
+
 /// Index of `child`'s adjacent whitespace token (preferring the previous sibling)
 /// for stripping after a removal or replacement.
 pub(crate) fn adjacent_whitespace_index(child: &rnix::SyntaxElement) -> Option<usize> {

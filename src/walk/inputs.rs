@@ -3,84 +3,18 @@ use std::collections::HashMap;
 use rnix::{SyntaxKind, SyntaxNode};
 
 use crate::change::Change;
+use crate::follows::path::{follows_idents_bare, follows_idents_prefixed};
 use crate::follows::{AttrPath, Segment, strip_outer_quotes};
 use crate::input::Input;
 
 use super::context::Context;
 use super::node::{
-    FollowsKind, adjacent_whitespace_index, empty_node, get_sibling_whitespace,
+    FollowsKind, adjacent_whitespace_index, empty_node, extract_indent, get_sibling_whitespace,
     insertion_index_after, is_attrset_content_empty, make_attrset_url_attr,
     make_attrset_url_flake_false_attr, make_flake_false_attr, make_quoted_string, make_url_attr,
-    parse_node, should_remove_input, should_remove_nested_input, substitute_child,
+    parse_node, remove_child_with_whitespace, should_remove_input, should_remove_nested_input,
+    substitute_child, uses_attrset_style,
 };
-
-/// Sentinel segment used when CST text cannot form a valid [`Segment`].
-const INVALID_SEGMENT_SENTINEL: &str = "__invalid__";
-
-/// Read a CST node as an unquoted [`Segment`].
-///
-/// Falls back to [`INVALID_SEGMENT_SENTINEL`] when the node text would be
-/// rejected by [`Segment::from_unquoted`], so the walker keeps making forward
-/// progress against malformed input instead of panicking. Emits a
-/// `tracing::warn!` so the fall-through is observable.
-fn segment_from_syntax(node: &SyntaxNode) -> Segment {
-    Segment::from_syntax(node).unwrap_or_else(|err| {
-        let raw = node.to_string();
-        tracing::warn!(
-            "walk/inputs: invalid attribute segment {raw:?} ({err}); using sentinel \
-             {INVALID_SEGMENT_SENTINEL:?}"
-        );
-        Segment::from_unquoted(INVALID_SEGMENT_SENTINEL)
-            .expect("sentinel segment is non-empty and quote-free")
-    })
-}
-
-/// Parse the right-hand side of a `follows = "..."` binding into a typed
-/// target.
-///
-/// Empty input produces `None`, the in-flake analog of the lockfile's
-/// `Input::Indirect(None)` (`inputs.X = []`). Non-empty input is split
-/// on `/`, the only separator Nix recognises in a follows target. A `.`
-/// inside a segment is part of the identifier (`"hls-1.10/nixpkgs"` is
-/// two segments, not three). Each segment passes through
-/// [`Segment::from_unquoted`]; if the body is malformed the result
-/// falls back to a single-segment path built from `fallback_seg` so
-/// the walker never loses an entry.
-fn parse_follows_target(text: &str, fallback_seg: &Segment) -> Option<AttrPath> {
-    if text.is_empty() {
-        return None;
-    }
-    let body = strip_outer_quotes(text);
-    if body.is_empty() {
-        return None;
-    }
-    let mut segs = body
-        .split('/')
-        .filter(|s| !s.is_empty())
-        .filter_map(|s| Segment::from_unquoted(s.to_string()).ok());
-    let Some(first) = segs.next() else {
-        return Some(AttrPath::new(fallback_seg.clone()));
-    };
-    let mut path = AttrPath::new(first);
-    for seg in segs {
-        path.push(seg);
-    }
-    Some(path)
-}
-
-/// Remove `node` from `parent` along with any adjacent whitespace token.
-fn remove_child_with_whitespace(
-    parent: &SyntaxNode,
-    node: &SyntaxNode,
-    index: usize,
-) -> SyntaxNode {
-    let mut green = parent.green().remove_child(index);
-    let element: rnix::SyntaxElement = node.clone().into();
-    if let Some(ws_index) = adjacent_whitespace_index(&element) {
-        green = green.remove_child(ws_index);
-    }
-    parse_node(&green.to_string())
-}
 
 /// Insert or update `inputs[id]` from a parsed `Input`.
 ///
@@ -97,7 +31,7 @@ pub(crate) fn insert_with_ctx(
     if let Some(ctx) = ctx {
         if let Some(follows) = ctx.first() {
             // The follows target arrives as the `input.url` token.
-            let target = parse_follows_target(&input.url, &id);
+            let target = AttrPath::parse_follows_target(&input.url, &id);
             let key = follows.as_str().to_string();
             let nested_path = AttrPath::new(id.clone());
             if let Some(node) = inputs.get_mut(&key) {
@@ -385,7 +319,7 @@ fn handle_flat_url(
     ctx: &Option<Context>,
     change: &Change,
 ) -> Option<SyntaxNode> {
-    let id_seg = segment_from_syntax(input_id);
+    let id_seg = Segment::from_syntax_or_sentinel(input_id);
     let id_str = id_seg.as_str().to_string();
     let input = Input::with_url(id_seg.clone(), url.to_string(), url.text_range());
     insert_with_ctx(inputs, id_seg.clone(), input, ctx);
@@ -415,7 +349,7 @@ fn handle_flat_flake(
     ctx: &Option<Context>,
     change: &Change,
 ) -> Option<SyntaxNode> {
-    let id_seg = segment_from_syntax(input_id);
+    let id_seg = Segment::from_syntax_or_sentinel(input_id);
 
     if should_remove_input(change, ctx, &id_seg) {
         return Some(empty_node());
@@ -433,7 +367,7 @@ fn handle_nested_input(
     ctx: &Option<Context>,
     change: &Change,
 ) -> Option<SyntaxNode> {
-    let id_seg = segment_from_syntax(input_id);
+    let id_seg = Segment::from_syntax_or_sentinel(input_id);
 
     for attr in nested_attr.children() {
         for binding in attr.children() {
@@ -506,7 +440,7 @@ fn handle_child_ident(
 
     if child.to_string().starts_with("inputs") {
         let id = child_node.next_sibling()?;
-        let context: Context = segment_from_syntax(&id).into();
+        let context: Context = Segment::from_syntax_or_sentinel(&id).into();
         if walk_inputs(inputs, child_node.clone(), &Some(context), change).is_some() {
             tracing::warn!(
                 "Flat tree attribute replacement not yet implemented for: {}",
@@ -516,54 +450,6 @@ fn handle_child_ident(
     }
 
     None
-}
-
-/// Whether `parent`'s input declarations predominantly use attrset style
-/// (`foo = { url = "..."; };`) over flat style (`foo.url = "...";`).
-fn uses_attrset_style(parent: &SyntaxNode) -> bool {
-    let mut attrset_count = 0usize;
-    let mut flat_url_count = 0usize;
-
-    for child in parent.children() {
-        if child.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
-            continue;
-        }
-
-        if child
-            .children()
-            .any(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
-        {
-            attrset_count += 1;
-            continue;
-        }
-
-        if let Some(attrpath) = child
-            .children()
-            .find(|c| c.kind() == SyntaxKind::NODE_ATTRPATH)
-        {
-            let idents: Vec<_> = attrpath.children().collect();
-            if idents.len() >= 2
-                && idents
-                    .last()
-                    .map(|i| i.to_string() == "url")
-                    .unwrap_or(false)
-            {
-                flat_url_count += 1;
-            }
-        }
-    }
-
-    attrset_count > flat_url_count
-}
-
-/// Indent slice of a whitespace token: everything after the last `\n`.
-/// For `"\n    "` returns `"    "`.
-fn extract_indent(ws_str: &str) -> &str {
-    if let Some(last_nl) = ws_str.rfind('\n') {
-        &ws_str[last_nl + 1..]
-    } else {
-        ws_str
-    }
 }
 
 /// Handle a `NODE_ATTRPATH_VALUE` child during input walking.
@@ -583,7 +469,7 @@ fn handle_child_attrpath_value(
                 .find(|child| child.to_string() == "inputs")
                 .and_then(|input_child| input_child.prev_sibling())
         });
-        maybe_input_id.map(|id| segment_from_syntax(&id).into())
+        maybe_input_id.map(|id| Segment::from_syntax_or_sentinel(&id).into())
     } else {
         ctx.clone()
     };
@@ -708,7 +594,7 @@ fn handle_attrpath_follows(
     let path_segments: Vec<(SyntaxNode, Segment)> = children[..children.len() - 1]
         .iter()
         .filter(|c| c.to_string() != "inputs")
-        .map(|c| (c.clone(), segment_from_syntax(c)))
+        .map(|c| (c.clone(), Segment::from_syntax_or_sentinel(c)))
         .collect();
 
     let owner_node = path_segments.first()?.0.clone();
@@ -747,7 +633,7 @@ fn handle_attrpath_follows(
     // Build the [`crate::input::Follows::Indirect`] directly so we can carry
     // the full multi-segment chain. `insert_with_ctx`'s single-segment path
     // would truncate intermediate segments here.
-    let target = parse_follows_target(&leaf_input.url, &follows_seg);
+    let target = AttrPath::parse_follows_target(&leaf_input.url, &follows_seg);
     let mut path_iter = rest.iter().cloned();
     let mut nested_path = AttrPath::new(path_iter.next().expect("rest non-empty"));
     for seg in path_iter {
@@ -769,7 +655,7 @@ fn handle_attrpath_follows(
         && let Some(id) = change.id()
     {
         if rest.len() == 1 {
-            let owner_match_seg = segment_from_syntax(&owner_node);
+            let owner_match_seg = Segment::from_syntax_or_sentinel(&owner_node);
             if id.matches_with_follows(&owner_match_seg, Some(&follows_seg)) {
                 return Some(empty_node());
             }
@@ -803,7 +689,7 @@ fn handle_url_attr(
         if ctx.is_some() {
             return None;
         }
-        let prev_seg = segment_from_syntax(&prev_id);
+        let prev_seg = Segment::from_syntax_or_sentinel(&prev_id);
         let prev_str = prev_seg.as_str().to_string();
         if let Change::Remove { ids } = change
             && ids
@@ -847,14 +733,14 @@ fn handle_url_attr(
             if let Some(follows_ident) = first_ident.next_sibling() {
                 // Flat attrpath style: `nixpkgs.follows = "nixpkgs"`.
                 if follows_ident.to_string() == "follows" {
-                    let id_seg = segment_from_syntax(&first_ident);
+                    let id_seg = Segment::from_syntax_or_sentinel(&first_ident);
                     let Some(follows) = attrpath.next_sibling() else {
                         continue;
                     };
                     let input =
                         Input::with_url(id_seg.clone(), follows.to_string(), follows.text_range());
                     insert_with_ctx(inputs, id_seg, input, ctx);
-                    let follows_target_seg = segment_from_syntax(&follows);
+                    let follows_target_seg = Segment::from_syntax_or_sentinel(&follows);
                     if should_remove_nested_input(change, ctx, &follows_target_seg) {
                         return Some(empty_node());
                     }
@@ -863,7 +749,7 @@ fn handle_url_attr(
                 && SyntaxKind::NODE_ATTR_SET == value_node.kind()
             {
                 // Nested attrset style: `nixpkgs = { follows = "nixpkgs"; }`.
-                let id_seg = segment_from_syntax(&first_ident);
+                let id_seg = Segment::from_syntax_or_sentinel(&first_ident);
                 for inner_attr in value_node.children() {
                     let Some(inner_path) = inner_attr.first_child() else {
                         continue;
@@ -881,7 +767,7 @@ fn handle_url_attr(
                             follows.text_range(),
                         );
                         insert_with_ctx(inputs, id_seg.clone(), input, ctx);
-                        let follows_target_seg = segment_from_syntax(&follows);
+                        let follows_target_seg = Segment::from_syntax_or_sentinel(&follows);
                         if should_remove_nested_input(change, ctx, &follows_target_seg) {
                             return Some(empty_node());
                         }
@@ -903,7 +789,7 @@ fn handle_flake_attr(
     if let Some(input_id) = attr.prev_sibling()
         && let Some(is_flake) = attr.parent().unwrap().next_sibling()
     {
-        let id_seg = segment_from_syntax(&input_id);
+        let id_seg = Segment::from_syntax_or_sentinel(&input_id);
         let mut input = Input::new(id_seg.clone());
         input.flake = is_flake.to_string().parse().unwrap();
         let text_range = input_id.text_range();
@@ -949,20 +835,30 @@ fn handle_follows_attr(
         .next()
         .map(|c| c.to_string() == "inputs")
         .unwrap_or(false);
-    let chain_first = segment_from_syntax(&chain[0]);
+    let chain_first = Segment::from_syntax_or_sentinel(&chain[0]);
     let (owner_seg, nested_segs): (Segment, Vec<Segment>) =
         match ctx.as_ref().and_then(|c| c.first().cloned()) {
-            Some(ctx_owner) if attrpath_starts_with_inputs => {
-                (ctx_owner, chain.iter().map(segment_from_syntax).collect())
-            }
+            Some(ctx_owner) if attrpath_starts_with_inputs => (
+                ctx_owner,
+                chain.iter().map(Segment::from_syntax_or_sentinel).collect(),
+            ),
             Some(ctx_owner) if ctx_owner == chain_first => (
                 ctx_owner,
-                chain[1..].iter().map(segment_from_syntax).collect(),
+                chain[1..]
+                    .iter()
+                    .map(Segment::from_syntax_or_sentinel)
+                    .collect(),
             ),
-            Some(ctx_owner) => (ctx_owner, chain.iter().map(segment_from_syntax).collect()),
+            Some(ctx_owner) => (
+                ctx_owner,
+                chain.iter().map(Segment::from_syntax_or_sentinel).collect(),
+            ),
             None => (
                 chain_first,
-                chain[1..].iter().map(segment_from_syntax).collect(),
+                chain[1..]
+                    .iter()
+                    .map(Segment::from_syntax_or_sentinel)
+                    .collect(),
             ),
         };
 
@@ -995,7 +891,7 @@ fn handle_follows_attr(
     let url_text = follows_value.to_string();
     let unquoted = strip_outer_quotes(&url_text);
     let leaf_seg = nested_path.last().clone();
-    let target = parse_follows_target(unquoted, &leaf_seg);
+    let target = AttrPath::parse_follows_target(unquoted, &leaf_seg);
 
     let key = owner_seg.as_str().to_string();
     let entry = inputs
@@ -1112,32 +1008,6 @@ fn find_existing_follows(
     None
 }
 
-/// Expected attrpath idents for a follows lookup inside a parent input's
-/// `{ ... }` block: `inputs.<R0>.inputs.<R1>...inputs.<RN>.follows`.
-fn block_follows_idents(rest: &[Segment]) -> Vec<&str> {
-    let mut out: Vec<&str> = Vec::with_capacity(rest.len() * 2 + 1);
-    for seg in rest.iter() {
-        out.push("inputs");
-        out.push(seg.as_str());
-    }
-    out.push("follows");
-    out
-}
-
-/// Expected attrpath idents for a flat follows lookup outside a parent's
-/// block (e.g. inside `inputs = { ... }`): `<S0>.inputs.<S1>...inputs.<SN>.follows`.
-fn flat_follows_idents(path: &[Segment]) -> Vec<&str> {
-    let mut out: Vec<&str> = Vec::with_capacity(path.len() * 2);
-    for (i, seg) in path.iter().enumerate() {
-        if i > 0 {
-            out.push("inputs");
-        }
-        out.push(seg.as_str());
-    }
-    out.push("follows");
-    out
-}
-
 /// Locate an `inputs.<R0>...inputs.<RN>.follows` attr inside an input's
 /// `{ ... }` block and rebuild the surrounding `node`.
 ///
@@ -1149,7 +1019,7 @@ fn find_existing_nested_follows(
     rest: &[Segment],
     target: &str,
 ) -> Option<Option<SyntaxNode>> {
-    let expected = block_follows_idents(rest);
+    let expected = follows_idents_prefixed(rest);
     let found = find_existing_follows(attr_set, &expected, target)?;
     if found.same_target {
         return Some(Some(node.clone()));
@@ -1169,7 +1039,7 @@ fn find_existing_flat_follows(
     path: &[Segment],
     target: &str,
 ) -> Option<Option<SyntaxNode>> {
-    let expected = flat_follows_idents(path);
+    let expected = follows_idents_bare(path);
     let found = find_existing_follows(node, &expected, target)?;
     if found.same_target {
         return Some(Some(node.clone()));
@@ -1193,7 +1063,7 @@ fn handle_input_attr_set(
         for leaf in attr.children() {
             if leaf.to_string() == "url" {
                 let id_node = child.prev_sibling().unwrap();
-                let id_seg = segment_from_syntax(&id_node);
+                let id_seg = Segment::from_syntax_or_sentinel(&id_node);
                 let id_str = id_seg.as_str().to_string();
                 let uri = leaf.next_sibling().unwrap();
                 let input = Input::with_url(id_seg.clone(), uri.to_string(), uri.text_range());
@@ -1224,7 +1094,7 @@ fn handle_input_attr_set(
 
             if leaf.to_string().starts_with("inputs") {
                 let id_node = child.prev_sibling().unwrap();
-                let id_seg = segment_from_syntax(&id_node);
+                let id_seg = Segment::from_syntax_or_sentinel(&id_node);
                 let context: Context = id_seg.clone().into();
                 let ctx_some = Some(context);
                 if let Some(replacement) = walk_inputs(inputs, child.clone(), &ctx_some, change) {
@@ -1249,7 +1119,7 @@ fn handle_input_attr_set(
                         let Some(nested_id) = nested_path.first_child() else {
                             continue;
                         };
-                        let nested_seg = segment_from_syntax(&nested_id);
+                        let nested_seg = Segment::from_syntax_or_sentinel(&nested_id);
                         if should_remove_nested_input(change, &ctx_some, &nested_seg) {
                             let new_inputs_attrset = remove_child_with_whitespace(
                                 &inputs_attrset,
@@ -1691,56 +1561,5 @@ mod tests {
             result.contains("nixpkgs.url ="),
             "top-level nixpkgs.url must remain intact, got:\n{result}"
         );
-    }
-
-    #[test]
-    fn parse_follows_target_accepts_slash_form() {
-        use crate::follows::Segment;
-        let fallback = Segment::from_unquoted("fallback").unwrap();
-        let parsed = super::parse_follows_target("hyprland/hyprlang", &fallback)
-            .expect("non-empty input must parse to Some");
-        assert_eq!(parsed.len(), 2);
-        assert_eq!(parsed.first().as_str(), "hyprland");
-        assert_eq!(parsed.last().as_str(), "hyprlang");
-    }
-
-    #[test]
-    fn parse_follows_target_dot_inside_segment_is_not_a_separator() {
-        use crate::follows::Segment;
-        let fallback = Segment::from_unquoted("fallback").unwrap();
-
-        let single = super::parse_follows_target("hls-1.10", &fallback).unwrap();
-        assert_eq!(single.len(), 1);
-        assert_eq!(single.first().as_str(), "hls-1.10");
-
-        let two = super::parse_follows_target("hls-1.10/nixpkgs", &fallback).unwrap();
-        assert_eq!(two.len(), 2);
-        assert_eq!(two.first().as_str(), "hls-1.10");
-        assert_eq!(two.last().as_str(), "nixpkgs");
-    }
-
-    #[test]
-    fn segment_from_syntax_falls_back_to_sentinel_on_empty_string() {
-        use rnix::SyntaxKind;
-
-        // An empty quoted attribute (`""`) parses but its segment text is
-        // empty, so `Segment::from_source` rejects it and the walker has to
-        // substitute the sentinel to keep traversing.
-        let src = r#"{ inputs."" = {}; }"#;
-        let parsed = rnix::Root::parse(src);
-        fn find_first_string(node: rnix::SyntaxNode) -> Option<rnix::SyntaxNode> {
-            if node.kind() == SyntaxKind::NODE_STRING {
-                return Some(node);
-            }
-            for c in node.children() {
-                if let Some(s) = find_first_string(c) {
-                    return Some(s);
-                }
-            }
-            None
-        }
-        let empty_string = find_first_string(parsed.syntax()).expect("CST has an empty string");
-        let seg = super::segment_from_syntax(&empty_string);
-        assert_eq!(seg.as_str(), super::INVALID_SEGMENT_SENTINEL);
     }
 }

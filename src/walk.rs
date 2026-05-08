@@ -12,6 +12,7 @@ use rnix::{Root, SyntaxKind, SyntaxNode};
 
 use crate::change::Change;
 use crate::edit::{OutputChange, Outputs};
+use crate::follows::path::follows_idents_prefixed;
 use crate::follows::{AttrPath, Segment, strip_outer_quotes};
 use crate::input::Input;
 
@@ -24,30 +25,6 @@ use node::{
     make_quoted_string, make_toplevel_flake_false_attr, make_toplevel_url_attr, parse_node,
     substitute_child,
 };
-
-/// Expected idents for a top-level flat follows attrpath of any depth:
-/// `inputs.<S0>.inputs.<S1>...inputs.<SN>.follows`.
-fn expected_toplevel_flat_idents(path: &AttrPath) -> Vec<&str> {
-    let mut out: Vec<&str> = Vec::with_capacity(path.len() * 2 + 2);
-    for seg in path.segments() {
-        out.push("inputs");
-        out.push(seg.as_str());
-    }
-    out.push("follows");
-    out
-}
-
-/// Expected idents for a block-style follows attrpath inside a parent input's
-/// `{ ... }` block: `inputs.<R0>.inputs.<R1>...inputs.<RN>.follows`.
-fn expected_block_follows_idents(rest: &[Segment]) -> Vec<&str> {
-    let mut out: Vec<&str> = Vec::with_capacity(rest.len() * 2 + 1);
-    for seg in rest.iter() {
-        out.push("inputs");
-        out.push(seg.as_str());
-    }
-    out.push("follows");
-    out
-}
 
 /// Whether a CST attrpath (idents may carry surrounding `"..."`) matches `expected`
 /// pairwise after unquoting.
@@ -184,7 +161,7 @@ impl<'a> Walker {
         let parent_id = path.first();
         // Toplevel-flat shape: `inputs.S0.inputs.S1...inputs.SN.follows`
         // (2 * len + 1 idents).
-        let expected_flat = expected_toplevel_flat_idents(path);
+        let expected_flat = follows_idents_prefixed(path.segments());
         let mut last_parent_attr: Option<SyntaxNode> = None;
         let mut block_parent: Option<(SyntaxNode, SyntaxNode)> = None;
 
@@ -288,7 +265,7 @@ impl<'a> Walker {
         rest: &[Segment],
         target: &str,
     ) -> Result<Option<SyntaxNode>, WalkerError> {
-        let expected_block = expected_block_follows_idents(rest);
+        let expected_block = follows_idents_prefixed(rest);
         for attr in block_attr_set.children() {
             if attr.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
                 continue;
