@@ -24,7 +24,7 @@ pub(crate) fn list_outputs(root: &SyntaxNode) -> Result<Outputs, WalkerError> {
     let mut any = false;
 
     if root.kind() != SyntaxKind::NODE_ROOT {
-        return Err(WalkerError::NotARoot(root.kind()));
+        return Err(WalkerError::NotARoot);
     }
 
     for toplevel in root.first_child().unwrap().children() {
@@ -78,7 +78,7 @@ pub(crate) fn change_outputs(
     change: OutputChange,
 ) -> Result<Option<SyntaxNode>, WalkerError> {
     if root.kind() != SyntaxKind::NODE_ROOT {
-        return Err(WalkerError::NotARoot(root.kind()));
+        return Err(WalkerError::NotARoot);
     }
 
     let attr_set = root.first_child().unwrap();
