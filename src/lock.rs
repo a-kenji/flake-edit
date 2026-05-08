@@ -127,9 +127,9 @@ impl<'de> Deserialize<'de> for Input {
     }
 }
 
-/// Locked metadata for a node. Only [`Self::rev`] is consumed by the rest
-/// of the crate; other coordinates from the JSON (`owner`, `repo`, `type`,
-/// `ref`, `narHash`, ...) are ignored on parse.
+/// Locked metadata for a node. Only [`Self::rev`] is consumed by the
+/// crate; the other JSON coordinates (`owner`, `repo`, `type`, `narHash`,
+/// ...) are ignored on parse.
 #[derive(Debug, Deserialize, Clone)]
 pub(crate) struct Locked {
     rev: Option<String>,
@@ -143,61 +143,224 @@ impl Locked {
     }
 }
 
-/// Original (pre-lock) reference for a node, as written in the source flake.
-#[derive(Debug, Deserialize)]
-pub(crate) struct Original {
-    owner: Option<String>,
-    repo: Option<String>,
-    #[serde(rename = "type")]
-    node_type: String,
-    #[serde(rename = "ref")]
-    ref_field: Option<String>,
-    url: Option<String>,
-    path: Option<String>,
-    id: Option<String>,
+/// Original (pre-lock) reference for a node, as written in the source
+/// flake. One variant per flakeref shape Nix produces in `flake.lock`.
+#[derive(Debug)]
+pub(crate) enum Original {
+    Github {
+        owner: String,
+        repo: String,
+        ref_field: Option<String>,
+    },
+    Gitlab {
+        owner: String,
+        repo: String,
+        ref_field: Option<String>,
+    },
+    Sourcehut {
+        owner: String,
+        repo: String,
+        ref_field: Option<String>,
+    },
+    Git {
+        url: String,
+        ref_field: Option<String>,
+    },
+    Hg {
+        url: String,
+        ref_field: Option<String>,
+    },
+    Tarball {
+        url: String,
+    },
+    File {
+        url: String,
+    },
+    Path {
+        path: String,
+    },
+    Indirect {
+        id: String,
+        ref_field: Option<String>,
+    },
+    /// Flakeref `type` not recognized by this crate. Tolerated because
+    /// Nix adds new schemes occasionally; lockfiles that mention one
+    /// should still parse so the rest of the inputs stay usable.
+    /// Malformed payloads of recognized types surface as `D::Error`,
+    /// not here.
+    Unknown {
+        node_type: String,
+    },
+}
+
+impl<'de> Deserialize<'de> for Original {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        #[derive(Deserialize)]
+        struct ForgePayload {
+            owner: String,
+            repo: String,
+            #[serde(rename = "ref")]
+            ref_field: Option<String>,
+        }
+        #[derive(Deserialize)]
+        struct VcsPayload {
+            url: String,
+            #[serde(rename = "ref")]
+            ref_field: Option<String>,
+        }
+        #[derive(Deserialize)]
+        struct UrlPayload {
+            url: String,
+        }
+        #[derive(Deserialize)]
+        struct PathPayload {
+            path: String,
+        }
+        #[derive(Deserialize)]
+        struct IndirectPayload {
+            id: String,
+            #[serde(rename = "ref")]
+            ref_field: Option<String>,
+        }
+
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let node_type = value
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| D::Error::missing_field("type"))?
+            .to_string();
+
+        fn payload<T: for<'a> Deserialize<'a>, E: Error>(value: serde_json::Value) -> Result<T, E> {
+            serde_json::from_value(value).map_err(E::custom)
+        }
+
+        Ok(match node_type.as_str() {
+            "github" => {
+                let ForgePayload {
+                    owner,
+                    repo,
+                    ref_field,
+                } = payload(value)?;
+                Original::Github {
+                    owner,
+                    repo,
+                    ref_field,
+                }
+            }
+            "gitlab" => {
+                let ForgePayload {
+                    owner,
+                    repo,
+                    ref_field,
+                } = payload(value)?;
+                Original::Gitlab {
+                    owner,
+                    repo,
+                    ref_field,
+                }
+            }
+            "sourcehut" => {
+                let ForgePayload {
+                    owner,
+                    repo,
+                    ref_field,
+                } = payload(value)?;
+                Original::Sourcehut {
+                    owner,
+                    repo,
+                    ref_field,
+                }
+            }
+            "git" => {
+                let VcsPayload { url, ref_field } = payload(value)?;
+                Original::Git { url, ref_field }
+            }
+            "hg" => {
+                let VcsPayload { url, ref_field } = payload(value)?;
+                Original::Hg { url, ref_field }
+            }
+            "tarball" => {
+                let UrlPayload { url } = payload(value)?;
+                Original::Tarball { url }
+            }
+            "file" => {
+                let UrlPayload { url } = payload(value)?;
+                Original::File { url }
+            }
+            "path" => {
+                let PathPayload { path } = payload(value)?;
+                Original::Path { path }
+            }
+            "indirect" => {
+                let IndirectPayload { id, ref_field } = payload(value)?;
+                Original::Indirect { id, ref_field }
+            }
+            _ => Original::Unknown { node_type },
+        })
+    }
 }
 
 impl Original {
-    /// Reconstruct a flake URL from the original reference.
-    ///
-    /// Returns `None` when required fields are missing or the type is
-    /// unknown. Unknown types log a `tracing::warn!`.
+    /// Reconstruct a flake URL from the original reference. Returns
+    /// `None` for [`Original::Unknown`], which also logs a
+    /// `tracing::warn!` naming the unrecognized type.
     fn to_flake_url(&self) -> Option<String> {
-        match self.node_type.as_str() {
-            "github" | "gitlab" | "sourcehut" => {
-                let owner = self.owner.as_deref()?;
-                let repo = self.repo.as_deref()?;
-                let mut url = format!("{}:{}/{}", self.node_type, owner, repo);
-                if let Some(ref_field) = &self.ref_field {
-                    url.push('/');
-                    url.push_str(ref_field);
-                }
-                Some(url)
+        match self {
+            Original::Github {
+                owner,
+                repo,
+                ref_field,
+            } => Some(forge_flake_url("github", owner, repo, ref_field.as_deref())),
+            Original::Gitlab {
+                owner,
+                repo,
+                ref_field,
+            } => Some(forge_flake_url("gitlab", owner, repo, ref_field.as_deref())),
+            Original::Sourcehut {
+                owner,
+                repo,
+                ref_field,
+            } => Some(forge_flake_url(
+                "sourcehut",
+                owner,
+                repo,
+                ref_field.as_deref(),
+            )),
+            Original::Git { url, ref_field } => {
+                Some(prefixed_vcs_url("git+", url, ref_field.as_deref()))
             }
-            "git" => Some(prefixed_vcs_url(
-                "git+",
-                self.url.as_deref()?,
-                self.ref_field.as_deref(),
-            )),
-            "hg" => Some(prefixed_vcs_url(
-                "hg+",
-                self.url.as_deref()?,
-                self.ref_field.as_deref(),
-            )),
-            "tarball" | "file" => self.url.clone(),
-            "path" => Some(format!("path:{}", self.path.as_deref()?)),
-            "indirect" => Some(indirect_flake_url(
-                self.id.as_deref()?,
-                self.ref_field.as_deref(),
-            )),
-            other => {
+            Original::Hg { url, ref_field } => {
+                Some(prefixed_vcs_url("hg+", url, ref_field.as_deref()))
+            }
+            Original::Tarball { url } | Original::File { url } => Some(url.clone()),
+            Original::Path { path } => Some(format!("path:{path}")),
+            Original::Indirect { id, ref_field } => {
+                Some(indirect_flake_url(id, ref_field.as_deref()))
+            }
+            Original::Unknown { node_type } => {
                 tracing::warn!(
-                    "Unknown flake.lock node type '{other}'; cannot reconstruct flake URL"
+                    "Unknown flake.lock node type '{node_type}'; cannot reconstruct flake URL"
                 );
                 None
             }
         }
     }
+}
+
+/// Build a `<scheme>:<owner>/<repo>[/<ref>]` URL, the shape shared by
+/// `github`, `gitlab`, and `sourcehut` flakerefs.
+fn forge_flake_url(scheme: &str, owner: &str, repo: &str, ref_field: Option<&str>) -> String {
+    let mut url = format!("{scheme}:{owner}/{repo}");
+    if let Some(r) = ref_field {
+        url.push('/');
+        url.push_str(r);
+    }
+    url
 }
 
 /// Prepend `git+` / `hg+` to a VCS transport URL and append `?ref=<r>`.
@@ -744,6 +907,8 @@ mod tests {
 
     #[test]
     fn rev_for_node_without_rev_returns_error() {
+        // `path` is set only so the `original` block deserializes; this
+        // test is about missing `locked.rev`.
         let lock = r#"{
   "nodes": {
     "root": {
@@ -751,7 +916,7 @@ mod tests {
     },
     "norev": {
       "locked": { "lastModified": 1, "narHash": "", "type": "path" },
-      "original": { "type": "path" }
+      "original": { "type": "path", "path": "/tmp/norev" }
     }
   },
   "root": "root",
@@ -1166,25 +1331,15 @@ mod tests {
         );
     }
 
-    fn original(node_type: &str) -> Original {
-        Original {
-            owner: None,
-            repo: None,
-            node_type: node_type.to_string(),
-            ref_field: None,
-            url: None,
-            path: None,
-            id: None,
-        }
-    }
-
     /// A bare `https://...` parses as a `tarball` flakeref, not a
     /// `git` repo, so the missing `git+` prefix is a silent corruption
     /// rather than a parse error.
     #[test]
     fn to_flake_url_git_type_prepends_scheme() {
-        let mut o = original("git");
-        o.url = Some("https://git.clan.lol/clan/munix".to_string());
+        let o = Original::Git {
+            url: "https://git.clan.lol/clan/munix".to_string(),
+            ref_field: None,
+        };
         assert_eq!(
             o.to_flake_url().as_deref(),
             Some("git+https://git.clan.lol/clan/munix"),
@@ -1195,9 +1350,10 @@ mod tests {
     /// the lock captured.
     #[test]
     fn to_flake_url_git_with_ref_appends_query() {
-        let mut o = original("git");
-        o.url = Some("https://git.example.com/repo".to_string());
-        o.ref_field = Some("main".to_string());
+        let o = Original::Git {
+            url: "https://git.example.com/repo".to_string(),
+            ref_field: Some("main".to_string()),
+        };
         assert_eq!(
             o.to_flake_url().as_deref(),
             Some("git+https://git.example.com/repo?ref=main"),
@@ -1209,8 +1365,10 @@ mod tests {
     /// promotion.
     #[test]
     fn to_flake_url_hg_type_prepends_scheme() {
-        let mut o = original("hg");
-        o.url = Some("https://hg.example.com/repo".to_string());
+        let o = Original::Hg {
+            url: "https://hg.example.com/repo".to_string(),
+            ref_field: None,
+        };
         assert_eq!(
             o.to_flake_url().as_deref(),
             Some("hg+https://hg.example.com/repo"),
@@ -1223,9 +1381,10 @@ mod tests {
     /// rejects.
     #[test]
     fn to_flake_url_git_with_existing_query_appends_with_ampersand() {
-        let mut o = original("git");
-        o.url = Some("https://git.example.com/repo?dir=subdir".to_string());
-        o.ref_field = Some("main".to_string());
+        let o = Original::Git {
+            url: "https://git.example.com/repo?dir=subdir".to_string(),
+            ref_field: Some("main".to_string()),
+        };
         assert_eq!(
             o.to_flake_url().as_deref(),
             Some("git+https://git.example.com/repo?dir=subdir&ref=main"),
@@ -1234,8 +1393,9 @@ mod tests {
 
     #[test]
     fn to_flake_url_tarball_returns_url_unchanged() {
-        let mut o = original("tarball");
-        o.url = Some("https://channels.nixos.org/nixos-25.05/nixexprs.tar.xz".to_string());
+        let o = Original::Tarball {
+            url: "https://channels.nixos.org/nixos-25.05/nixexprs.tar.xz".to_string(),
+        };
         assert_eq!(
             o.to_flake_url().as_deref(),
             Some("https://channels.nixos.org/nixos-25.05/nixexprs.tar.xz"),
@@ -1244,15 +1404,18 @@ mod tests {
 
     #[test]
     fn to_flake_url_path_uses_path_field() {
-        let mut o = original("path");
-        o.path = Some("/etc/nixos".to_string());
+        let o = Original::Path {
+            path: "/etc/nixos".to_string(),
+        };
         assert_eq!(o.to_flake_url().as_deref(), Some("path:/etc/nixos"));
     }
 
     #[test]
     fn to_flake_url_indirect_uses_id_field() {
-        let mut o = original("indirect");
-        o.id = Some("nixpkgs".to_string());
+        let o = Original::Indirect {
+            id: "nixpkgs".to_string(),
+            ref_field: None,
+        };
         assert_eq!(o.to_flake_url().as_deref(), Some("flake:nixpkgs"));
     }
 
@@ -1261,31 +1424,46 @@ mod tests {
     /// that asymmetry.
     #[test]
     fn to_flake_url_indirect_with_ref_appends_path_component() {
-        let mut o = original("indirect");
-        o.id = Some("nixpkgs".to_string());
-        o.ref_field = Some("nixos-25.05".to_string());
+        let o = Original::Indirect {
+            id: "nixpkgs".to_string(),
+            ref_field: Some("nixos-25.05".to_string()),
+        };
         assert_eq!(
             o.to_flake_url().as_deref(),
             Some("flake:nixpkgs/nixos-25.05"),
         );
     }
 
-    /// `auto.rs` interprets `None` from [`Original::to_flake_url`] as
-    /// "skip promotion". A refactor that turned the `?` operators into
-    /// silent defaults (e.g. `unwrap_or_default`) would write empty
-    /// `inputs.<x>.url = ""` strings instead.
+    /// Unrecognized `type` strings deserialize to [`Original::Unknown`]
+    /// and [`Original::to_flake_url`] returns `None`.
     #[test]
-    fn to_flake_url_returns_none_when_required_fields_missing() {
-        // git/hg without a url
-        assert_eq!(original("git").to_flake_url(), None);
-        assert_eq!(original("hg").to_flake_url(), None);
-        // path without a path
-        assert_eq!(original("path").to_flake_url(), None);
-        // indirect without an id
-        assert_eq!(original("indirect").to_flake_url(), None);
-        // forge type without owner/repo
-        assert_eq!(original("github").to_flake_url(), None);
-        // unknown type, warn-and-None
-        assert_eq!(original("future-type").to_flake_url(), None);
+    fn to_flake_url_unknown_type_returns_none() {
+        let o: Original = serde_json::from_str(r#"{"type": "future-type"}"#).unwrap();
+        assert!(matches!(&o, Original::Unknown { node_type } if node_type == "future-type"));
+        assert_eq!(o.to_flake_url(), None);
+    }
+
+    /// Malformed payload of a recognized type must be a parse error, not
+    /// a silent fall-through to [`Original::Unknown`]. The error message
+    /// must name the missing field so the failure is actionable.
+    #[test]
+    fn malformed_known_type_is_a_parse_error() {
+        let err = serde_json::from_str::<Original>(r#"{"type": "github"}"#).unwrap_err();
+        assert!(
+            err.to_string().contains("owner"),
+            "error must name the missing field, got: {err}",
+        );
+    }
+
+    /// A node with `original.type` absent is malformed at the protocol
+    /// level. Surface it as a parse error rather than coercing to
+    /// `Unknown { node_type: "" }`.
+    #[test]
+    fn missing_type_is_a_parse_error() {
+        let err = serde_json::from_str::<Original>(r#"{}"#).unwrap_err();
+        assert!(
+            err.to_string().contains("type"),
+            "error must name the missing field, got: {err}",
+        );
     }
 }
