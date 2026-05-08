@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::process::Command;
+use std::time::Duration;
 
 use semver::Version;
 use serde::Deserialize;
@@ -8,25 +9,112 @@ use ureq::Agent;
 
 use super::version::parse_ref;
 
+type SourceError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+/// Errors from talking to a forge over HTTP.
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum ApiError {
-    #[error("HTTP request failed: {0}")]
-    HttpError(#[from] ureq::Error),
+    /// Request hit a configured timeout (connect, recv-response,
+    /// or recv-body).
+    #[error("request to {url} timed out")]
+    Timeout {
+        url: String,
+        #[source]
+        source: SourceError,
+    },
 
-    #[error("JSON parsing failed: {0}")]
-    JsonError(#[from] serde_json::Error),
+    /// Could not establish a connection. Covers DNS resolution
+    /// failure (`HostNotFound`), TCP connect refusal, TLS handshake
+    /// failure, and underlying IO errors below the HTTP layer.
+    #[error("could not reach {url}")]
+    ConnectFailed {
+        url: String,
+        #[source]
+        source: SourceError,
+    },
 
-    #[error("UTF-8 conversion failed: {0}")]
-    Utf8Error(#[from] std::string::FromUtf8Error),
+    #[error("{url} not found (HTTP 404)")]
+    NotFound { url: String },
 
-    #[error("IO error: {0}")]
-    IoError(#[from] std::io::Error),
+    /// Non-404 HTTP error response (other 4xx, all 5xx). Almost
+    /// always a transient server-side condition or a misformed
+    /// request, distinct from "the resource is gone".
+    #[error("{url} returned HTTP {status}")]
+    HttpStatus { url: String, status: u16 },
 
-    #[error("No tags found for repository")]
+    /// Failed to parse the JSON response body returned by the forge.
+    #[error("failed to parse JSON response from {url}: {source}")]
+    Json {
+        url: String,
+        #[source]
+        source: serde_json::Error,
+    },
+
+    /// HTTP error not classified above. Reached only if ureq grows
+    /// a new variant or a bespoke connector chain returns one of the
+    /// rarer existing variants (`Tls`, `Protocol`, ...). Treat as a
+    /// transient failure.
+    #[error("unexpected HTTP error for {url}: {source}")]
+    Other {
+        url: String,
+        #[source]
+        source: SourceError,
+    },
+
+    /// The forge returned no tags for the repository.
+    #[error("no tags found for repository")]
     NoTagsFound,
 
-    #[error("Invalid domain or repository: {0}")]
+    /// The supplied domain or repository identifier was invalid.
+    #[error("invalid domain or repository: {0}")]
     InvalidInput(String),
+}
+
+/// Classify a `ureq::Error` from establishing the request (DNS,
+/// connect, send, recv-response, status code) into the domain
+/// `ApiError`. Hand-written instead of `#[from]` so a future ureq
+/// variant cannot silently disappear into a catch-all; it falls
+/// into `Other` deliberately.
+fn classify_ureq(err: ureq::Error, url: &str) -> ApiError {
+    let url = url.to_string();
+    match err {
+        ureq::Error::StatusCode(404) => ApiError::NotFound { url },
+        ureq::Error::StatusCode(status) => ApiError::HttpStatus { url, status },
+        ureq::Error::Timeout(_) => ApiError::Timeout {
+            url,
+            source: Box::new(err),
+        },
+        ureq::Error::HostNotFound | ureq::Error::ConnectionFailed | ureq::Error::Io(_) => {
+            ApiError::ConnectFailed {
+                url,
+                source: Box::new(err),
+            }
+        }
+        _ => ApiError::Other {
+            url,
+            source: Box::new(err),
+        },
+    }
+}
+
+/// Classify a `ureq::Error` from reading the response body off a
+/// connection that already succeeded. Distinct from `classify_ureq`
+/// because here an `Io(_)` is a mid-stream drop, not a connect
+/// failure; calling it `ConnectFailed` would tell the user we never
+/// reached the forge when in fact the peer hung up halfway through.
+fn classify_body_read(err: ureq::Error, url: &str) -> ApiError {
+    let url = url.to_string();
+    match err {
+        ureq::Error::Timeout(_) => ApiError::Timeout {
+            url,
+            source: Box::new(err),
+        },
+        _ => ApiError::Other {
+            url,
+            source: Box::new(err),
+        },
+    }
 }
 
 /// Headers for HTTP requests
@@ -61,8 +149,13 @@ struct HttpClient {
 
 impl Default for HttpClient {
     fn default() -> Self {
+        let config = ureq::Agent::config_builder()
+            .timeout_connect(Some(Duration::from_secs(10)))
+            .timeout_recv_response(Some(Duration::from_secs(30)))
+            .timeout_recv_body(Some(Duration::from_secs(30)))
+            .build();
         Self {
-            agent: Agent::new_with_defaults(),
+            agent: Agent::new_with_config(config),
         }
     }
 }
@@ -71,15 +164,29 @@ impl HttpClient {
     fn get(&self, url: &str, headers: &Headers) -> Result<String, ApiError> {
         let body = self
             .build(url, headers)
-            .call()?
+            .call()
+            .map_err(|e| classify_ureq(e, url))?
             .body_mut()
-            .read_to_string()?;
+            .read_to_string()
+            .map_err(|e| classify_body_read(e, url))?;
         Ok(body)
     }
 
-    /// Check if a URL returns a successful (2xx) response
-    fn head_ok(&self, url: &str, headers: &Headers) -> bool {
-        self.build(url, headers).call().is_ok()
+    /// Probe a URL and report whether the resource exists.
+    ///
+    /// `Ok(true)` for any 2xx response, `Ok(false)` for HTTP 404,
+    /// `Err(_)` for anything else (timeout, connect failure, 5xx,
+    /// ...). The caller must not collapse these three into a bool:
+    /// "branch does not exist" and "could not reach the forge" are
+    /// different answers and the user needs to see the latter.
+    fn head_status(&self, url: &str, headers: &Headers) -> Result<bool, ApiError> {
+        match self.build(url, headers).call() {
+            Ok(_) => Ok(true),
+            Err(e) => match classify_ureq(e, url) {
+                ApiError::NotFound { .. } => Ok(false),
+                other => Err(other),
+            },
+        }
     }
 
     fn build(
@@ -101,7 +208,7 @@ impl HttpClient {
 pub(crate) trait Forge {
     fn list_tags(&self, owner: &str, repo: &str) -> Result<Tags, ApiError>;
     fn list_branches(&self, owner: &str, repo: &str) -> Result<Branches, ApiError>;
-    fn branch_exists(&self, owner: &str, repo: &str, branch: &str) -> bool;
+    fn branch_exists(&self, owner: &str, repo: &str, branch: &str) -> Result<bool, ApiError>;
 }
 
 struct GitHub {
@@ -161,7 +268,12 @@ impl Forge for GitHub {
             );
             tracing::debug!("Fetching tags page {}: {}", page, url);
             let body = self.http.get(&url, &headers)?;
-            let page_tags = serde_json::from_str::<IntermediaryTags>(&body)?;
+            let page_tags = serde_json::from_str::<IntermediaryTags>(&body).map_err(|source| {
+                ApiError::Json {
+                    url: url.clone(),
+                    source,
+                }
+            })?;
             tracing::debug!("Got {} tags on page {}", page_tags.0.len(), page);
             Ok(page_tags.0)
         })?;
@@ -181,7 +293,13 @@ impl Forge for GitHub {
             );
             tracing::debug!("Fetching branches page {}: {}", page, url);
             let body = self.http.get(&url, &headers)?;
-            let page_branches = serde_json::from_str::<IntermediaryBranches>(&body)?;
+            let page_branches =
+                serde_json::from_str::<IntermediaryBranches>(&body).map_err(|source| {
+                    ApiError::Json {
+                        url: url.clone(),
+                        source,
+                    }
+                })?;
             tracing::debug!("Got {} branches on page {}", page_branches.0.len(), page);
             Ok(page_branches.0)
         })?;
@@ -189,10 +307,10 @@ impl Forge for GitHub {
         Ok(IntermediaryBranches(branches).into())
     }
 
-    fn branch_exists(&self, owner: &str, repo: &str, branch: &str) -> bool {
+    fn branch_exists(&self, owner: &str, repo: &str, branch: &str) -> Result<bool, ApiError> {
         let headers = Headers::for_domain("github.com");
         let url = format!("https://api.github.com/repos/{owner}/{repo}/branches/{branch}");
-        self.http.head_ok(&url, &headers)
+        self.http.head_status(&url, &headers)
     }
 }
 
@@ -277,18 +395,25 @@ impl Forge for Gitea {
         Err(ApiError::InvalidInput("Could not fetch branches".into()))
     }
 
-    fn branch_exists(&self, owner: &str, repo: &str, branch: &str) -> bool {
+    fn branch_exists(&self, owner: &str, repo: &str, branch: &str) -> Result<bool, ApiError> {
         let headers = Headers::for_domain(&self.domain);
+        // Probe https first, fall back to http for misconfigured
+        // self-hosted instances. The first scheme to give a
+        // definitive answer (2xx or 404) wins; http is tried only
+        // when https errored out before reaching the application
+        // layer.
+        let mut last_err: Option<ApiError> = None;
         for scheme in ["https", "http"] {
             let url = format!(
                 "{}://{}/api/v1/repos/{}/{}/branches/{}",
                 scheme, self.domain, owner, repo, branch
             );
-            if self.http.head_ok(&url, &headers) {
-                return true;
+            match self.http.head_status(&url, &headers) {
+                Ok(answer) => return Ok(answer),
+                Err(e) => last_err = Some(e),
             }
         }
-        false
+        Err(last_err.expect("at least one scheme was attempted"))
     }
 }
 
@@ -356,25 +481,41 @@ pub fn get_branches(owner: &str, repo: &str, domain: Option<&str>) -> Result<Bra
 }
 
 /// Check if a specific branch exists without listing all branches.
+///
 /// Much more efficient for repos with many branches (like nixpkgs).
-pub fn branch_exists(owner: &str, repo: &str, branch: &str, domain: Option<&str>) -> bool {
+/// `Ok(true)` for an existing branch, `Ok(false)` for HTTP 404,
+/// `Err(_)` for any transient failure (timeout, DNS, 5xx, ...). The
+/// caller must propagate the error rather than collapse it into
+/// "the branch does not exist".
+pub fn branch_exists(
+    owner: &str,
+    repo: &str,
+    branch: &str,
+    domain: Option<&str>,
+) -> Result<bool, ApiError> {
     forge_for(domain).branch_exists(owner, repo, branch)
 }
 
 /// Check multiple branches and return which ones exist.
 /// More efficient than get_branches for known candidate branches.
+///
+/// Fails loudly on the first transient error: a flaky network must
+/// not silently shrink the candidate set, which would tell the user
+/// their branch is gone when in fact the forge was unreachable.
 pub fn filter_existing_branches(
     owner: &str,
     repo: &str,
     candidates: &[String],
     domain: Option<&str>,
-) -> Vec<String> {
+) -> Result<Vec<String>, ApiError> {
     let forge = forge_for(domain);
-    candidates
-        .iter()
-        .filter(|branch| forge.branch_exists(owner, repo, branch))
-        .cloned()
-        .collect()
+    let mut existing = Vec::new();
+    for branch in candidates {
+        if forge.branch_exists(owner, repo, branch)? {
+            existing.push(branch.clone());
+        }
+    }
+    Ok(existing)
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -458,6 +599,8 @@ impl From<IntermediaryBranches> for Branches {
 mod tests {
     use super::*;
 
+    const URL: &str = "https://api.github.com/repos/foo/bar/branches/baz";
+
     #[test]
     fn paginated_accumulates_until_short_page() {
         let pages: Vec<Vec<u32>> = vec![(0..100).collect(), (100..105).collect()];
@@ -483,5 +626,52 @@ mod tests {
         .unwrap();
         assert_eq!(calls, 3, "safety cap halts the loop on always-full pages");
         assert_eq!(result.len(), 6);
+    }
+
+    #[test]
+    fn classify_404_is_not_found() {
+        let err = classify_ureq(ureq::Error::StatusCode(404), URL);
+        match err {
+            ApiError::NotFound { url } => assert_eq!(url, URL),
+            other => panic!("expected NotFound, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn classify_500_is_http_status() {
+        let err = classify_ureq(ureq::Error::StatusCode(503), URL);
+        match err {
+            ApiError::HttpStatus { url, status } => {
+                assert_eq!(url, URL);
+                assert_eq!(status, 503);
+            }
+            other => panic!("expected HttpStatus, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn body_read_io_is_not_connect_failed() {
+        let io = std::io::Error::other("peer closed");
+        let err = classify_body_read(ureq::Error::Io(io), URL);
+        match err {
+            ApiError::Other { url, .. } => assert_eq!(url, URL),
+            other => panic!("expected Other, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn http_client_has_explicit_timeouts() {
+        // Without timeouts a hung TCP connect blocks the whole CLI.
+        // The exact values are tunable but they must not be unset.
+        let client = HttpClient::default();
+        let timeouts = client.agent.config().timeouts();
+        assert!(
+            timeouts.connect.is_some(),
+            "connect timeout must be set on the HTTP agent"
+        );
+        assert!(
+            timeouts.recv_response.is_some(),
+            "recv_response timeout must be set on the HTTP agent"
+        );
     }
 }

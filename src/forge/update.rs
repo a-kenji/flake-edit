@@ -374,9 +374,18 @@ impl Updater {
         let has_refs_heads_prefix = current_ref.starts_with("refs/heads/");
 
         let latest = match find_latest_channel(&current_ref, &owner, &repo, domain.as_deref()) {
-            Some(latest) => latest,
+            Ok(Some(latest)) => latest,
             // Either already on latest, unstable, or not a recognized channel
-            None => return,
+            Ok(None) => return,
+            Err(e) => {
+                tracing::error!(
+                    "Failed to resolve latest channel for {}/{}: {}",
+                    owner,
+                    repo,
+                    e
+                );
+                return;
+            }
         };
 
         let final_ref = if has_refs_heads_prefix {

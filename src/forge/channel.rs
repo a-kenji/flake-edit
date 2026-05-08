@@ -3,7 +3,7 @@
 //! These repos use branches (e.g., `nixos-24.11`, `nixpkgs-unstable`) instead of
 //! semver tags for versioning.
 
-use super::api::{Branches, branch_exists, get_branches};
+use super::api::{ApiError, Branches, branch_exists, get_branches};
 
 /// Update strategy for a given input.
 #[derive(Debug, Clone, PartialEq)]
@@ -141,48 +141,51 @@ fn parse_version(version: &str) -> Option<(u32, u32)> {
 
 /// Find the latest channel branch that matches the current channel type.
 ///
-/// Returns `None` if:
+/// Returns `Ok(None)` if:
 /// - The current ref is unstable (should not be updated)
 /// - The current ref is not a recognized channel
-/// - No newer channel exists
+/// - No newer channel exists and we are already on the latest
+///
+/// Returns `Err` when a transient forge failure (timeout, DNS,
+/// 5xx, ...) prevents us from proving anything about the candidate
+/// set. Without this, a flaky network looked exactly like "no
+/// newer channel exists" and silently kept the user pinned to a
+/// stale release.
 pub fn find_latest_channel(
     current_ref: &str,
     owner: &str,
     repo: &str,
     domain: Option<&str>,
-) -> Option<String> {
+) -> Result<Option<String>, ApiError> {
     let current_channel = parse_channel_ref(current_ref);
 
     // Don't update unstable channels
     if current_channel.is_unstable() {
         tracing::debug!("Skipping update for unstable channel: {}", current_ref);
-        return None;
+        return Ok(None);
     }
 
     // Only update recognized channel patterns
-    let prefix = current_channel.prefix()?;
-    let current_version = current_channel.version()?;
+    let (prefix, current_version) = match (current_channel.prefix(), current_channel.version()) {
+        (Some(p), Some(v)) => (p, v),
+        _ => return Ok(None),
+    };
 
     // Try targeted approach first (much faster for repos with many branches like nixpkgs)
-    if let Some(latest) = find_latest_channel_targeted(prefix, current_version, owner, repo, domain)
+    if let Some(latest) =
+        find_latest_channel_targeted(prefix, current_version, owner, repo, domain)?
     {
         if latest != current_ref {
-            return Some(latest);
+            return Ok(Some(latest));
         } else {
             tracing::debug!("{} is already on the latest channel", current_ref);
-            return None;
+            return Ok(None);
         }
     }
 
     // Fallback: fetch all branches (for Gitea/Forgejo or if targeted fails)
     tracing::debug!("Targeted lookup failed, falling back to listing all branches");
-    let branches = match get_branches(owner, repo, domain) {
-        Ok(b) => b,
-        Err(e) => {
-            tracing::error!("Failed to fetch branches: {}", e);
-            return None;
-        }
-    };
+    let branches = get_branches(owner, repo, domain)?;
 
     // Find all channels matching the same prefix and pick the latest
     let latest = find_latest_matching_branch(&branches, prefix, current_version);
@@ -191,10 +194,10 @@ pub fn find_latest_channel(
         && latest_branch == current_ref
     {
         tracing::debug!("{} is already on the latest channel", current_ref);
-        return None;
+        return Ok(None);
     }
 
-    latest
+    Ok(latest)
 }
 
 /// Generate candidate channel versions from current to ~5 years in the future.
@@ -225,15 +228,17 @@ fn generate_candidate_channels(prefix: &str, current_version: (u32, u32)) -> Vec
     candidates
 }
 
-/// Try to find the latest channel using targeted branch existence checks.
-/// Returns None if no candidates exist (caller should fall back to listing).
+/// Find the latest channel by probing candidate branches one by
+/// one. Cheaper than listing all branches; falls back to that on
+/// `Ok(None)`. `Err` always propagates; see `find_latest_channel`
+/// for the contract.
 fn find_latest_channel_targeted(
     prefix: &str,
     current_version: (u32, u32),
     owner: &str,
     repo: &str,
     domain: Option<&str>,
-) -> Option<String> {
+) -> Result<Option<String>, ApiError> {
     let candidates = generate_candidate_channels(prefix, current_version);
 
     tracing::debug!(
@@ -244,20 +249,20 @@ fn find_latest_channel_targeted(
     // Check from newest to oldest, return first match (will be the newest)
     for candidate in &candidates {
         tracing::debug!("Checking if branch exists: {}", candidate);
-        if branch_exists(owner, repo, candidate, domain) {
+        if branch_exists(owner, repo, candidate, domain)? {
             tracing::debug!("Found existing channel: {}", candidate);
-            return Some(candidate.clone());
+            return Ok(Some(candidate.clone()));
         }
     }
 
     // No newer channel found, check if current version exists
     let current_branch = format!("{}{}.{:02}", prefix, current_version.0, current_version.1);
     tracing::debug!("No newer channel, checking current: {}", current_branch);
-    if branch_exists(owner, repo, &current_branch, domain) {
-        return Some(current_branch);
+    if branch_exists(owner, repo, &current_branch, domain)? {
+        return Ok(Some(current_branch));
     }
 
-    None
+    Ok(None)
 }
 
 /// Find the latest branch matching a given prefix that is newer than current_version.
