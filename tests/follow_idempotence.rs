@@ -85,6 +85,33 @@ fn run_follow(flake: &Path, lock: &Path, config: Option<&str>, label: &str) {
     "prune_empty_intermediate_inputs",
     Some("prune_empty_intermediate_inputs")
 )] // empty intermediate `inputs = { ... }` block prune must converge
+#[case("follow_dotted_input_promotion", None)]
 fn follow_is_idempotent(#[case] fixture: &str, #[case] config: Option<&str>) {
     assert_idempotent(fixture, config);
+}
+
+#[test]
+fn follow_emits_unquoted_rhs_for_dotted_input_name() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let flake_dest = tmp.path().join("flake.nix");
+    let lock_dest = tmp.path().join("flake.lock");
+    fs::copy(fixture_path("follow_dotted_input_promotion"), &flake_dest).expect("copy flake.nix");
+    fs::copy(
+        fixture_lock_path("follow_dotted_input_promotion"),
+        &lock_dest,
+    )
+    .expect("copy flake.lock");
+
+    run_follow(&flake_dest, &lock_dest, None, "promote-dotted");
+
+    let result = fs::read_to_string(&flake_dest).expect("read flake.nix after follow");
+    let expected = r#"inputs."ghc-8.6.5-iohk".follows = "ghc-8.6.5-iohk";"#;
+    assert!(
+        result.contains(expected),
+        "expected RHS to be a flat unquoted Nix string, got:\n{result}",
+    );
+    assert!(
+        !result.contains(r#"= ""ghc-8"#),
+        "RHS must not double-quote the target, got:\n{result}",
+    );
 }

@@ -88,7 +88,7 @@ pub(crate) fn walk_inputs(
         let full_path = input.path();
         let parent_id = input.input();
         let parent_id_str = parent_id.as_str();
-        let target_str = target.to_string();
+        let target_str = target.to_flake_follows_string();
 
         if full_path.len() >= 2 {
             let parent_exists = inputs.contains_key(parent_id_str);
@@ -1160,7 +1160,7 @@ fn handle_input_attr_set(
         let full_path = input.path();
         let parent_id = input.input();
         let parent_id_str = parent_id.as_str();
-        let target_str = target.to_string();
+        let target_str = target.to_flake_follows_string();
 
         if let Some(id_node) = child.prev_sibling()
             && strip_outer_quotes(&id_node.to_string()) == parent_id_str

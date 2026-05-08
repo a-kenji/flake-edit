@@ -483,13 +483,10 @@ fn collect_direct_candidates(ax: &AnalysisCtx<'_>, plan: &mut FollowPlan) {
             continue;
         }
 
-        // Top-level input names parse as a single-segment attr path. A
-        // failure here would mean an invalid Nix identifier slipped in, so
-        // skip rather than queue something the apply step would discard.
-        let target_path = match AttrPath::parse(target) {
-            Ok(p) => p,
+        let target_path = match Segment::from_unquoted(target.clone()) {
+            Ok(seg) => AttrPath::new(seg),
             Err(e) => {
-                tracing::warn!("Skipping {path_display} -> {target}: invalid attr path: {e}");
+                tracing::warn!("Skipping {path_display} -> {target}: invalid input name: {e}");
                 continue;
             }
         };
@@ -702,9 +699,8 @@ fn emit_transitive_promotions(
         }
 
         let (target_path, paths) = eligible.pop().unwrap();
-        let follow_target_str = target_path.to_flake_follows_string();
 
-        if follow_target_str == top_name {
+        if target_path.to_flake_follows_string() == top_name {
             continue;
         }
 
@@ -717,20 +713,8 @@ fn emit_transitive_promotions(
                 continue;
             }
         };
-        // `to_flake_follows_string` produces a `/`-joined target like
-        // `a/b`. Pack it into a single segment so `AttrPath::Display`
-        // emits it as the quoted form `"a/b"` rather than splitting on
-        // the slash as if it were a dotted path.
-        let follow_target_seg = match Segment::from_unquoted(follow_target_str) {
-            Ok(s) => s,
-            Err(e) => {
-                tracing::warn!("Skipping toplevel follow promotion for `{top_name}`: {e}");
-                continue;
-            }
-        };
-        let follow_target_path = AttrPath::new(follow_target_seg);
         plan.toplevel_follows
-            .push((AttrPath::new(top_seg.clone()), follow_target_path));
+            .push((AttrPath::new(top_seg.clone()), target_path));
 
         let top_path = AttrPath::new(top_seg);
         for path in paths {
@@ -777,11 +761,11 @@ fn emit_direct_promotions(
             continue;
         };
 
-        let target_attr = match AttrPath::parse(&canonical_name) {
-            Ok(p) => p,
+        let target_attr = match Segment::from_unquoted(canonical_name.clone()) {
+            Ok(seg) => AttrPath::new(seg),
             Err(e) => {
                 tracing::warn!(
-                    "Skipping direct-reference promotion for `{canonical_name}`: invalid attr path: {e}"
+                    "Skipping direct-reference promotion for `{canonical_name}`: invalid input name: {e}"
                 );
                 continue;
             }
@@ -1144,7 +1128,11 @@ fn format_apply_error(applying: &AttrPath, err: &validate::ValidationError) -> S
 fn warning_dedup_key(err: &validate::ValidationError) -> String {
     use validate::ValidationError as V;
     match err {
-        V::FollowsStale { edge, .. } => format!("stale|{}|{}", edge.source, edge.follows),
+        V::FollowsStale { edge, .. } => format!(
+            "stale|{}|{}",
+            edge.source,
+            edge.follows.to_flake_follows_string()
+        ),
         V::FollowsStaleLock {
             source,
             declared_target,
@@ -1153,9 +1141,12 @@ fn warning_dedup_key(err: &validate::ValidationError) -> String {
         } => {
             let lock = lock_target
                 .as_ref()
-                .map(|t| t.to_string())
+                .map(|t| t.to_flake_follows_string())
                 .unwrap_or_default();
-            format!("stale-lock|{source}|{declared_target}|{lock}")
+            format!(
+                "stale-lock|{source}|{}|{lock}",
+                declared_target.to_flake_follows_string()
+            )
         }
         other => format!("other|{other}"),
     }

@@ -315,4 +315,44 @@ mod tests {
         let text = result.unwrap().text.unwrap();
         assert!(text.contains("inputs.nixpkgs.follows = \"nixpkgs\""));
     }
+
+    #[test]
+    fn follows_target_with_dots_renders_as_flat_string() {
+        use crate::follows::{AttrPath, Segment};
+
+        let flake = r#"{
+  inputs = {
+    "ghc-8.6.5-iohk".url = "github:input-output-hk/ghc";
+    crane = {
+      url = "github:ipetkov/crane";
+    };
+  };
+  outputs = { ... }: { };
+}"#;
+        let mut fe = FlakeEdit::from_text(flake).unwrap();
+        let target_seg = Segment::from_unquoted("ghc-8.6.5-iohk").unwrap();
+        let change = Change::Follows {
+            input: crate::change::ChangeId::parse("crane.\"ghc-8.6.5-iohk\"").unwrap(),
+            target: AttrPath::new(target_seg),
+        };
+        let text = fe
+            .apply_change(change)
+            .expect("apply Change::Follows")
+            .text
+            .expect("walker must produce changed text");
+
+        let expected = "inputs.\"ghc-8.6.5-iohk\".follows = \"ghc-8.6.5-iohk\";";
+        assert!(
+            text.contains(expected),
+            "RHS must render as a flat Nix string, got:\n{text}",
+        );
+        assert!(
+            !text.contains(r#""ghc-8."6"."#),
+            "RHS must not contain segment-by-segment quoting, got:\n{text}",
+        );
+        assert!(
+            !text.contains(r#"= ""ghc-8"#),
+            "RHS must not double-quote the target, got:\n{text}",
+        );
+    }
 }
