@@ -107,7 +107,12 @@ pub(crate) fn remove_child_with_whitespace(
     let mut green = parent.green().remove_child(index);
     let element: rnix::SyntaxElement = node.clone().into();
     if let Some(ws_index) = adjacent_whitespace_index(&element) {
-        green = green.remove_child(ws_index);
+        let adjusted = if ws_index > index {
+            ws_index - 1
+        } else {
+            ws_index
+        };
+        green = green.remove_child(adjusted);
     }
     SyntaxNode::new_root(green)
 }
@@ -481,5 +486,17 @@ mod tests {
     fn follows_kind_block_bare() {
         let node = FollowsKind::BlockBare { target: "nixpkgs" }.emit();
         assert_eq!(node.to_string(), "follows = \"nixpkgs\";");
+    }
+
+    #[test]
+    fn remove_child_strips_trailing_whitespace_only() {
+        let root = parse_node("{a = 1;\n  b = 2;}");
+        let attr_set = root.first_child().expect("attr set");
+        let a = attr_set
+            .children()
+            .find(|c| c.to_string().starts_with("a ="))
+            .expect("`a` binding present");
+        let result = remove_child_with_whitespace(&attr_set, &a, a.index());
+        assert_eq!(result.to_string(), "{b = 2;}");
     }
 }
