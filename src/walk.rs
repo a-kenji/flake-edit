@@ -68,7 +68,7 @@ impl<'a> Walker {
     pub fn walk(&mut self, change: &Change) -> Result<Option<SyntaxNode>, WalkerError> {
         let cst = self.root.clone();
         if cst.kind() != SyntaxKind::NODE_ROOT {
-            return Err(WalkerError::NotARoot(cst.kind()));
+            return Err(WalkerError::NotARoot);
         }
         self.walk_toplevel(cst, None, change)
     }
@@ -99,10 +99,11 @@ impl<'a> Walker {
 
         for toplevel in attr_set.children() {
             if toplevel.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
-                return Err(WalkerError::UnexpectedNodeKind {
-                    expected: SyntaxKind::NODE_ATTRPATH_VALUE,
-                    found: toplevel.kind(),
-                });
+                let range = toplevel.text_range();
+                return Err(WalkerError::unexpected_top_level(
+                    &toplevel.to_string(),
+                    range.start().into(),
+                ));
             }
 
             // Dispatch on the NODE_ATTRPATH child alone, not on the value.
