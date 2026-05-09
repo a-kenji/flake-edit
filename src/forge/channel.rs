@@ -7,7 +7,7 @@ use super::api::{ApiError, Branches, branch_exists, get_branches};
 
 /// Update strategy for a given input.
 #[derive(Debug, Clone, PartialEq)]
-pub enum UpdateStrategy {
+pub(crate) enum UpdateStrategy {
     /// Standard semver tag-based updates (most repos)
     SemverTags,
     /// nixpkgs channel-based updates (nixos-YY.MM, nixpkgs-YY.MM)
@@ -20,7 +20,7 @@ pub enum UpdateStrategy {
 
 /// Detected channel type from a ref string.
 #[derive(Debug, Clone, PartialEq)]
-pub enum ChannelType {
+pub(crate) enum ChannelType {
     /// nixos-YY.MM (e.g., nixos-24.11)
     NixosStable { year: u32, month: u32 },
     /// nixpkgs-YY.MM (e.g., nixpkgs-24.11)
@@ -39,12 +39,12 @@ pub enum ChannelType {
 
 impl ChannelType {
     /// Returns true if this is an unstable/rolling channel that shouldn't be updated.
-    pub fn is_unstable(&self) -> bool {
+    pub(crate) fn is_unstable(&self) -> bool {
         matches!(self, ChannelType::Unstable)
     }
 
     /// Returns the version tuple for comparison, if applicable.
-    pub fn version(&self) -> Option<(u32, u32)> {
+    pub(crate) fn version(&self) -> Option<(u32, u32)> {
         match self {
             ChannelType::NixosStable { year, month }
             | ChannelType::NixpkgsStable { year, month }
@@ -56,7 +56,7 @@ impl ChannelType {
     }
 
     /// Returns the branch prefix for finding similar channels.
-    pub fn prefix(&self) -> Option<&'static str> {
+    pub(crate) fn prefix(&self) -> Option<&'static str> {
         match self {
             ChannelType::NixosStable { .. } => Some("nixos-"),
             ChannelType::NixpkgsStable { .. } => Some("nixpkgs-"),
@@ -69,7 +69,7 @@ impl ChannelType {
 }
 
 /// Detect the update strategy based on owner/repo.
-pub fn detect_strategy(owner: &str, repo: &str) -> UpdateStrategy {
+pub(crate) fn detect_strategy(owner: &str, repo: &str) -> UpdateStrategy {
     match (owner.to_lowercase().as_str(), repo.to_lowercase().as_str()) {
         ("nixos", "nixpkgs") => UpdateStrategy::NixpkgsChannel,
         ("nix-community", "home-manager") => UpdateStrategy::HomeManagerChannel,
@@ -81,7 +81,7 @@ pub fn detect_strategy(owner: &str, repo: &str) -> UpdateStrategy {
 }
 
 /// Parse a ref string to determine its channel type.
-pub fn parse_channel_ref(ref_str: &str) -> ChannelType {
+pub(crate) fn parse_channel_ref(ref_str: &str) -> ChannelType {
     let ref_str = ref_str.strip_prefix("refs/heads/").unwrap_or(ref_str);
 
     if ref_str == "nixos-unstable" || ref_str == "nixpkgs-unstable" {

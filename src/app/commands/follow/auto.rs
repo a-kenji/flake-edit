@@ -20,7 +20,7 @@ use crate::validate;
 
 use super::super::super::editor::Editor;
 use super::super::super::state::AppState;
-use super::super::{CommandError, Result, load_flake_lock};
+use super::super::{Error, Result, load_flake_lock};
 use super::load_follow_context;
 
 /// Entry point for `flake-edit follow` on a single in-memory flake.
@@ -38,8 +38,8 @@ pub fn run_in_memory(
     lock_text: &str,
     follow_config: &FollowConfig,
 ) -> Result<Option<String>> {
-    let mut flake_edit = FlakeEdit::from_text(flake_text).map_err(CommandError::FlakeEdit)?;
-    let lock = FlakeLock::read_from_str(lock_text).map_err(CommandError::FlakeEdit)?;
+    let mut flake_edit = FlakeEdit::from_text(flake_text)?;
+    let lock = FlakeLock::read_from_str(lock_text)?;
     let nested_inputs = lock.nested_inputs();
     if nested_inputs.is_empty() {
         return Ok(None);
@@ -71,7 +71,7 @@ pub fn run_in_memory(
 ///
 /// Each file is processed independently with its own [`Editor`] and
 /// [`AppState`]; processing continues past per-file failures. Any
-/// failures are bundled into a single [`CommandError::Batch`].
+/// failures are bundled into a single [`Error::Batch`].
 pub fn run_batch(
     paths: &[std::path::PathBuf],
     transitive: Option<usize>,
@@ -80,7 +80,7 @@ pub fn run_batch(
 ) -> Result<()> {
     use std::path::PathBuf;
 
-    let mut errors: Vec<(PathBuf, CommandError)> = Vec::new();
+    let mut errors: Vec<(PathBuf, Box<Error>)> = Vec::new();
 
     for flake_path in paths {
         let lock_path = flake_path
@@ -90,8 +90,14 @@ pub fn run_batch(
 
         let editor = match Editor::from_path(flake_path.clone()) {
             Ok(e) => e,
-            Err(e) => {
-                errors.push((flake_path.clone(), e.into()));
+            Err(source) => {
+                errors.push((
+                    flake_path.clone(),
+                    Box::new(Error::FlakeNotFound {
+                        path: flake_path.clone(),
+                        source,
+                    }),
+                ));
                 continue;
             }
         };
@@ -99,7 +105,7 @@ pub fn run_batch(
         let mut flake_edit = match editor.create_flake_edit() {
             Ok(fe) => fe,
             Err(e) => {
-                errors.push((flake_path.clone(), e.into()));
+                errors.push((flake_path.clone(), Box::new(e.into())));
                 continue;
             }
         };
@@ -118,7 +124,7 @@ pub fn run_batch(
                 .with_no_cache(args.no_cache())
                 .with_cache_path(args.cache().map(PathBuf::from)),
             Err(e) => {
-                errors.push((flake_path.clone(), e.into()));
+                errors.push((flake_path.clone(), Box::new(e.into())));
                 continue;
             }
         };
@@ -131,14 +137,14 @@ pub fn run_batch(
         }
 
         if let Err(e) = run_impl(&editor, &mut flake_edit, &state, true) {
-            errors.push((flake_path.clone(), e));
+            errors.push((flake_path.clone(), Box::new(e)));
         }
     }
 
     if errors.is_empty() {
         Ok(())
     } else {
-        Err(CommandError::Batch { failures: errors })
+        Err(Error::Batch { failures: errors })
     }
 }
 
@@ -905,9 +911,9 @@ fn apply_plan_text(
     // validation share a single rnix parse of the new text.
     let mut current_parsed = validate::ParsedSource::new(&current_text);
     if !current_parsed.parse_errors.is_empty() {
-        return Err(CommandError::FlakeEdit(
-            crate::error::FlakeEditError::Validation(current_parsed.parse_errors.clone()),
-        ));
+        return Err(Error::Flake(crate::error::Error::Validation(
+            current_parsed.parse_errors.clone(),
+        )));
     }
 
     // Top-level adds must precede follows that name them.
@@ -934,13 +940,13 @@ fn apply_plan_text(
                         current_parsed = resulting_parsed;
                     } else {
                         for err in validation.errors {
-                            eprintln!("Error adding top-level input {}: {}", id, err);
+                            tracing::error!("could not add top-level input {id}: {err}");
                         }
                     }
                 }
-                None => eprintln!("Could not add top-level input {}", id),
+                None => tracing::error!("could not add top-level input {id}"),
             },
-            Err(e) => eprintln!("Error adding top-level input {}: {}", id, e),
+            Err(e) => tracing::error!("could not add top-level input {id}: {e}"),
         }
     }
 
@@ -975,13 +981,13 @@ fn apply_plan_text(
                         applied_follows.push((input_path.clone(), target.clone()));
                     } else {
                         for err in validation.errors {
-                            eprintln!("{}", format_apply_error(input_path, &err));
+                            tracing::error!("{}", format_apply_error(input_path, &err));
                         }
                     }
                 }
-                None => eprintln!("Could not create follows for {}", input_path),
+                None => tracing::error!("could not create follows for {input_path}"),
             },
-            Err(e) => eprintln!("Error applying follows for {}: {}", input_path, e),
+            Err(e) => tracing::error!("could not apply follows for {input_path}: {e}"),
         }
     }
 
@@ -1010,7 +1016,7 @@ fn apply_plan_text(
                     }
                 }
             }
-            Err(e) => eprintln!("Error removing stale follows for {}: {}", nested_path, e),
+            Err(e) => tracing::error!("could not remove stale follows for {nested_path}: {e}"),
         }
     }
 
@@ -1065,7 +1071,7 @@ fn render_summary(
             }
         );
         for (input_path, target) in &applied.applied_follows {
-            println!("  {} → {}", input_path, target);
+            println!("  {} -> {}", input_path, target);
         }
     }
 
@@ -1097,7 +1103,7 @@ fn offending_source(err: &validate::ValidationError) -> Option<&AttrPath> {
         | V::FollowsDepthExceeded { edge, .. } => Some(&edge.source),
         V::FollowsContradiction { edges, .. } => edges.first().map(|e| &e.source),
         V::FollowsCycle { cycle, .. } => cycle.edges.first().map(|e| &e.source),
-        V::FollowsStaleLock { source, .. } => Some(source),
+        V::FollowsStaleLock { source_path, .. } => Some(source_path),
         V::ParseError { .. } | V::DuplicateAttribute(_) => None,
     }
 }
@@ -1134,7 +1140,7 @@ fn warning_dedup_key(err: &validate::ValidationError) -> String {
             edge.follows.to_flake_follows_string()
         ),
         V::FollowsStaleLock {
-            source,
+            source_path,
             declared_target,
             lock_target,
             ..
@@ -1144,7 +1150,7 @@ fn warning_dedup_key(err: &validate::ValidationError) -> String {
                 .map(|t| t.to_flake_follows_string())
                 .unwrap_or_default();
             format!(
-                "stale-lock|{source}|{}|{lock}",
+                "stale-lock|{source_path}|{}|{lock}",
                 declared_target.to_flake_follows_string()
             )
         }
@@ -1224,8 +1230,8 @@ mod tests {
         let args = crate::cli::CliArgs::parse_from(["flake-edit", "follow"]);
 
         let err = run_batch(&paths, None, None, &args).expect_err("expected batch failure");
-        let CommandError::Batch { failures } = err else {
-            panic!("expected CommandError::Batch, got: {err:?}");
+        let Error::Batch { failures } = err else {
+            panic!("expected Error::Batch, got: {err:?}");
         };
 
         assert_eq!(
@@ -1233,6 +1239,13 @@ mod tests {
             2,
             "every per-file failure must reach the caller, got: {failures:?}",
         );
+        for (path, err) in &failures {
+            assert!(
+                matches!(err.as_ref(), Error::FlakeNotFound { .. }),
+                "expected FlakeNotFound for missing flake.nix at {}, got {err:?}",
+                path.display(),
+            );
+        }
         let collected: Vec<&std::path::PathBuf> = failures.iter().map(|(p, _)| p).collect();
         assert!(collected.contains(&&missing_a));
         assert!(collected.contains(&&missing_b));

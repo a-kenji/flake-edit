@@ -1,10 +1,55 @@
-use crate::error::FlakeEditError;
+use crate::error::Error;
 use crate::follows::{AttrPath, Segment};
 use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+
+/// Errors that arise from parsing or walking `flake.lock`.
+///
+/// Each variant pinpoints a distinct shape failure: a missing field, a
+/// follows cycle, or a node that the resolver cannot find. The variants
+/// carry the smallest contextual data (segment path, node key) that lets
+/// the caller reconstruct the failure without reparsing the message.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum LockError {
+    /// `flake.lock` did not parse as JSON.
+    #[error("failed to parse flake.lock as json")]
+    Parse(#[from] serde_json::Error),
+    /// The lockfile has no `root` node referenced by `nodes`.
+    #[error("flake.lock is missing the root node")]
+    MissingRoot,
+    /// The root node carries no `inputs`, so a path cannot be walked.
+    #[error("flake.lock root has no inputs")]
+    RootHasNoInputs,
+    /// An intermediate input on the path has no sub-inputs.
+    #[error("input '{path}' has no sub-inputs in flake.lock")]
+    InputHasNoSubInputs { path: String },
+    /// A path segment does not resolve to a declared input.
+    #[error("input '{path}' not found in flake.lock")]
+    InputNotFound { path: String },
+    /// A `follows` declaration with an empty target was encountered while
+    /// walking. Surfaced as a hard failure when the path needs a target.
+    #[error("input '{path}' has no follows target")]
+    FollowsTargetMissing { path: String },
+    /// The node referenced by a path segment is absent from the `nodes` map.
+    #[error("could not find lockfile node '{node}' referenced by input '{path}'")]
+    NodeMissingForPath { node: String, path: String },
+    /// The node looked up directly by name is absent.
+    #[error("could not find lockfile node '{node}'")]
+    NodeMissing { node: String },
+    /// Recursion budget exhausted while resolving a follows path.
+    #[error("cycle while resolving follows path")]
+    FollowsCycle,
+    /// A node has no `locked` block (so no `rev` can be retrieved).
+    #[error("lockfile node has no locked information")]
+    NodeNotLocked,
+    /// A locked block has no `rev`.
+    #[error("locked node has no rev")]
+    LockedHasNoRev,
+}
 
 /// A nested input discovered in `flake.lock` with its existing follows
 /// target, if any.
@@ -49,11 +94,8 @@ pub(crate) struct Node {
 }
 
 impl Node {
-    fn rev(&self) -> Result<String, FlakeEditError> {
-        self.locked
-            .as_ref()
-            .ok_or_else(|| FlakeEditError::LockError("Node has no locked information.".into()))?
-            .rev()
+    fn rev(&self) -> Result<String, LockError> {
+        self.locked.as_ref().ok_or(LockError::NodeNotLocked)?.rev()
     }
 }
 
@@ -136,10 +178,8 @@ pub(crate) struct Locked {
 }
 
 impl Locked {
-    fn rev(&self) -> Result<String, FlakeEditError> {
-        self.rev
-            .clone()
-            .ok_or_else(|| FlakeEditError::LockError("Locked node has no rev.".into()))
+    fn rev(&self) -> Result<String, LockError> {
+        self.rev.clone().ok_or(LockError::LockedHasNoRev)
     }
 }
 
@@ -391,22 +431,30 @@ impl FlakeLock {
     const LOCK: &'static str = "flake.lock";
 
     /// Load `flake.lock` from the current directory.
-    pub fn from_default_path() -> Result<Self, FlakeEditError> {
+    pub fn from_default_path() -> Result<Self, Error> {
         let path = PathBuf::from(Self::LOCK);
         Self::from_file(path)
     }
 
     /// Load and parse a lockfile from `path`.
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, FlakeEditError> {
-        let mut file = File::open(path)?;
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let path = path.as_ref();
+        let mut file = File::open(path).map_err(|source| Error::Read {
+            path: path.to_path_buf(),
+            source,
+        })?;
         let mut contents = String::new();
-        file.read_to_string(&mut contents)?;
+        file.read_to_string(&mut contents)
+            .map_err(|source| Error::Read {
+                path: path.to_path_buf(),
+                source,
+            })?;
         Self::read_from_str(&contents)
     }
 
     /// Parse lockfile JSON from `str`.
-    pub fn read_from_str(str: &str) -> Result<Self, FlakeEditError> {
-        Ok(serde_json::from_str(str)?)
+    pub fn read_from_str(str: &str) -> Result<Self, Error> {
+        serde_json::from_str(str).map_err(|e| Error::Lock(LockError::Parse(e)))
     }
 
     /// Name of the root node.
@@ -420,7 +468,7 @@ impl FlakeLock {
     /// [`Input::Indirect`] entries are `follows` paths of input *names*
     /// rooted at the lock root, not node keys, so encountering one restarts
     /// the walk from root with that path plus any remaining segments.
-    fn resolve_input_path(&self, path: &AttrPath) -> Result<String, FlakeEditError> {
+    fn resolve_input_path(&self, path: &AttrPath) -> Result<String, LockError> {
         // Bound recursion: a valid lock file has no follows cycles, but we
         // still guard against malformed input.
         const MAX_HOPS: usize = 64;
@@ -434,38 +482,31 @@ impl FlakeLock {
         &self,
         segments: &[Segment],
         budget: usize,
-    ) -> Result<String, FlakeEditError> {
+    ) -> Result<String, LockError> {
         if budget == 0 {
-            return Err(FlakeEditError::LockError(
-                "Cycle while resolving follows path.".into(),
-            ));
+            return Err(LockError::FollowsCycle);
         }
 
         let mut current_key = self.root.clone();
-        let mut current_node = self
-            .nodes
-            .get(self.root())
-            .ok_or(FlakeEditError::LockMissingRoot)?;
+        let mut current_node = self.nodes.get(self.root()).ok_or(LockError::MissingRoot)?;
 
         for (i, segment) in segments.iter().enumerate() {
             let inputs = current_node.inputs.as_ref().ok_or_else(|| {
                 if i == 0 {
-                    FlakeEditError::LockError("Could not resolve root.".into())
+                    LockError::RootHasNoInputs
                 } else {
                     let prefix: Vec<_> = segments[..i].iter().map(|s| s.as_str()).collect();
-                    FlakeEditError::LockError(format!(
-                        "Input '{}' has no sub-inputs.",
-                        prefix.join(".")
-                    ))
+                    LockError::InputHasNoSubInputs {
+                        path: prefix.join("."),
+                    }
                 }
             })?;
 
             let resolved = inputs.get(segment.as_str()).ok_or_else(|| {
                 let prefix: Vec<_> = segments[..=i].iter().map(|s| s.as_str()).collect();
-                FlakeEditError::LockError(format!(
-                    "Input '{}' not found in lock file.",
-                    prefix.join(".")
-                ))
+                LockError::InputNotFound {
+                    path: prefix.join("."),
+                }
             })?;
 
             match resolved {
@@ -479,21 +520,19 @@ impl FlakeLock {
                 }
                 Input::Indirect(None) => {
                     let prefix: Vec<_> = segments[..=i].iter().map(|s| s.as_str()).collect();
-                    return Err(FlakeEditError::LockError(format!(
-                        "Input '{}' has no follows target.",
-                        prefix.join(".")
-                    )));
+                    return Err(LockError::FollowsTargetMissing {
+                        path: prefix.join("."),
+                    });
                 }
             }
 
             if i + 1 < segments.len() {
                 current_node = self.nodes.get(&current_key).ok_or_else(|| {
                     let prefix: Vec<_> = segments[..=i].iter().map(|s| s.as_str()).collect();
-                    FlakeEditError::LockError(format!(
-                        "Could not find node '{}' for input '{}'.",
-                        current_key,
-                        prefix.join(".")
-                    ))
+                    LockError::NodeMissingForPath {
+                        node: current_key.clone(),
+                        path: prefix.join("."),
+                    }
                 })?;
             }
         }
@@ -505,14 +544,18 @@ impl FlakeLock {
     ///
     /// # Errors
     ///
-    /// Returns [`FlakeEditError::LockError`] if any segment is missing in the
-    /// lock graph, the resolved node is not present, or it carries no `rev`.
-    pub fn rev_for(&self, path: &AttrPath) -> Result<String, FlakeEditError> {
+    /// Returns a [`Error::Lock`] wrapping the underlying
+    /// [`LockError`] if any segment is missing in the lock graph, the
+    /// resolved node is not present, or it carries no `rev`.
+    pub fn rev_for(&self, path: &AttrPath) -> Result<String, Error> {
         let node_name = self.resolve_input_path(path)?;
-        let node = self.nodes.get(&node_name).ok_or_else(|| {
-            FlakeEditError::LockError(format!("Could not find node '{node_name}'."))
-        })?;
-        node.rev()
+        let node = self
+            .nodes
+            .get(&node_name)
+            .ok_or_else(|| LockError::NodeMissing {
+                node: node_name.clone(),
+            })?;
+        Ok(node.rev()?)
     }
 
     /// All nested inputs reachable from the root, with their existing

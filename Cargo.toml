@@ -129,6 +129,7 @@ unreachable_pub = "warn"
 [lints.clippy]
 allow_attributes = "warn"
 dbg_macro = "warn"
+exit = "deny"
 todo = "warn"
 unimplemented = "warn"
 mem_forget = "warn"

@@ -11,14 +11,14 @@ use std::collections::HashSet;
 
 use crate::change::{Change, ChangeId};
 use crate::edit::{FlakeEdit, InputMap};
-use crate::error::FlakeEditError;
+use crate::error::Error as FlakeError;
 use crate::follows::AttrPath;
 use crate::lock::NestedInput;
 use crate::tui;
 
 use super::super::editor::Editor;
 use super::super::state::AppState;
-use super::{CommandError, Result, apply_change, load_flake_lock};
+use super::{Error, Result, apply_change, load_flake_lock};
 
 pub(super) struct FollowContext {
     pub(super) nested_inputs: Vec<NestedInput>,
@@ -42,8 +42,8 @@ pub(super) fn load_follow_context(
                 .as_ref()
                 .map(|p| p.display().to_string())
                 .unwrap_or_else(|| "flake.lock".to_string());
-            return Err(CommandError::LockFileError {
-                path: lock_path,
+            return Err(Error::LockFile {
+                path: std::path::PathBuf::from(lock_path),
                 source: e,
             });
         }
@@ -82,23 +82,24 @@ pub fn add_follow(
     target: Option<String>,
 ) -> Result<()> {
     let change = if let (Some(input_val), Some(target_val)) = (input.clone(), target) {
-        let input_id = ChangeId::parse(&input_val).map_err(|e| {
-            CommandError::InvalidUri(format!("invalid follows path `{input_val}`: {e}"))
+        let input_id = ChangeId::parse(&input_val).map_err(|source| Error::InvalidFollowsPath {
+            path: input_val.clone(),
+            source,
         })?;
-        let target_path = AttrPath::parse(&target_val).map_err(|e| {
-            CommandError::InvalidUri(format!("invalid follows target `{target_val}`: {e}"))
-        })?;
+        let target_path =
+            AttrPath::parse(&target_val).map_err(|source| Error::InvalidFollowsPath {
+                path: target_val.clone(),
+                source,
+            })?;
         // Reject paths deeper than 2 segments so a typo can't sneak through.
         // [`auto::run`] bypasses this guard via direct `apply_change` calls
         // and is gated by `config.follow.max_depth` instead.
         let segments = input_id.path().len();
         if segments > 2 {
-            return Err(CommandError::FlakeEdit(
-                FlakeEditError::AddFollowDepthLimit {
-                    path: input_id.to_string(),
-                    segments,
-                },
-            ));
+            return Err(Error::Flake(FlakeError::AddFollowDepthLimit {
+                path: input_id.to_string(),
+                segments,
+            }));
         }
         Change::Follows {
             input: input_id,
@@ -121,7 +122,7 @@ pub fn add_follow(
         };
         tui_change
     } else {
-        return Err(CommandError::NoId);
+        return Err(Error::NoId);
     };
 
     apply_change(editor, flake_edit, state, change)

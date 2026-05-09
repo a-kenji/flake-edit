@@ -14,7 +14,7 @@ use crate::tui;
 use super::super::editor::Editor;
 use super::super::state::AppState;
 use super::uri::{BuildKind, UriOptions, apply_uri_options, build_uri_change, transform_uri};
-use super::{CommandError, Result, apply_change};
+use super::{Error, Result, apply_change};
 
 pub fn add(
     editor: &Editor,
@@ -37,7 +37,7 @@ pub fn add(
         // Non-interactive with only one positional arg: infer ID from URI.
         (Some(uri), None, false) | (None, Some(uri), false) => add_infer_id(uri, no_flake, &opts)?,
         (None, None, false) => {
-            return Err(CommandError::NoUri);
+            return Err(Error::NoUri);
         }
     };
 
@@ -78,8 +78,13 @@ fn add_infer_id(uri: String, no_flake: bool, opts: &UriOptions<'_>) -> Result<Ch
     let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(&uri);
 
     let (inferred_id, final_uri) = if let Ok(flake_ref) = flake_ref {
-        let flake_ref = apply_uri_options(flake_ref, opts.ref_or_rev, opts.shallow)
-            .map_err(CommandError::CouldNotInferId)?;
+        let flake_ref =
+            apply_uri_options(flake_ref, opts.ref_or_rev, opts.shallow).map_err(|source| {
+                Error::ApplyUriOptions {
+                    uri: uri.clone(),
+                    source,
+                }
+            })?;
         let parsed_uri = flake_ref.to_string();
         let final_uri = if parsed_uri.is_empty() || parsed_uri == "none" {
             uri.clone()
@@ -91,7 +96,7 @@ fn add_infer_id(uri: String, no_flake: bool, opts: &UriOptions<'_>) -> Result<Ch
         (None, uri.clone())
     };
 
-    let final_id = inferred_id.ok_or(CommandError::CouldNotInferId(uri))?;
+    let final_id = inferred_id.ok_or_else(|| Error::CouldNotInferId { uri: uri.clone() })?;
 
     Ok(Change::Add {
         id: Some(final_id),

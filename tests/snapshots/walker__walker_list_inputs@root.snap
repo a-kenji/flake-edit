@@ -1,6 +1,6 @@
 ---
 source: tests/walker.rs
-expression: "ListOutput::from(&walker.inputs)"
+expression: "ListOutput::from(flake_edit.list())"
 info:
   flake_nix: ""
   changes: []

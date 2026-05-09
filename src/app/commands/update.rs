@@ -12,7 +12,7 @@ use crate::edit::{FlakeEdit, sorted_input_ids};
 
 use super::super::editor::Editor;
 use super::super::state::AppState;
-use super::{CommandError, Result, interactive_multi_select, updater};
+use super::{Error, Result, interactive_multi_select, updater};
 
 pub fn update(
     editor: &Editor,
@@ -34,7 +34,7 @@ pub fn update(
         editor.apply_or_diff(&change, state)?;
     } else if state.interactive {
         if input_ids.is_empty() {
-            return Err(CommandError::NoInputs);
+            return Err(Error::NoInputs);
         }
 
         let display_items: Vec<String> = input_ids

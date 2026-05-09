@@ -18,7 +18,8 @@ impl fmt::Display for Location {
 }
 
 /// A duplicate attribute and where its two definitions sit.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("duplicate attribute '{path}' at {duplicate} (first defined at {first})")]
 pub struct DuplicateAttr {
     /// Attribute path, e.g. `a.b.c` or `inputs.nixpkgs.url`.
     pub path: String,
@@ -28,16 +29,6 @@ pub struct DuplicateAttr {
     pub duplicate: Location,
 }
 
-impl fmt::Display for DuplicateAttr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "duplicate attribute '{}' at {} (first defined at {})",
-            self.path, self.duplicate, self.first
-        )
-    }
-}
-
 /// Severity classification for [`ValidationError`].
 ///
 /// Errors abort the edit; warnings do not. Both flavours land in
@@ -45,20 +36,24 @@ impl fmt::Display for DuplicateAttr {
 /// respectively, populated by [`super::validate_full`] and
 /// [`super::validate_speculative`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Severity {
     Warning,
     Error,
 }
 
 /// Errors raised while parsing or analysing a flake.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum ValidationError {
     /// rnix could not parse the source.
+    #[error("parse error at {location}: {message}")]
     ParseError { message: String, location: Location },
     /// Duplicate attribute in an attribute set.
+    #[error(transparent)]
     DuplicateAttribute(DuplicateAttr),
     /// A declared `inputs.X.inputs.Y.follows` chain forms a cycle.
+    #[error("follows cycle at {location}: {}", format_edges(&cycle.edges))]
     FollowsCycle {
         cycle: crate::follows::Cycle,
         location: Location,
@@ -66,6 +61,7 @@ pub enum ValidationError {
     /// A follows declaration in `flake.nix` points at a nested input that no
     /// longer exists in `flake.lock`. Warning: the auto-follow pass should
     /// drop the declaration on the next run.
+    #[error("stale follows at {location}: {} -> {} (source no longer present in flake.lock)", edge.source, edge.follows)]
     FollowsStale {
         /// Declared edge whose source has dropped out of `flake.lock`'s
         /// nested-input universe.
@@ -74,12 +70,14 @@ pub enum ValidationError {
     },
     /// A follows target points at something that is not a top-level input,
     /// e.g. `inputs.foo.inputs.bar.follows = "does-not-exist"`.
+    #[error("follows target not a top-level input at {location}: {} -> {}", edge.source, edge.follows)]
     FollowsTargetNotToplevel {
         edge: crate::follows::Edge,
         location: Location,
     },
     /// Two follows declarations share a source path but disagree on the
     /// target.
+    #[error("contradicting follows at {location}: {}", format_edges(edges))]
     FollowsContradiction {
         edges: Vec<crate::follows::Edge>,
         location: Location,
@@ -87,9 +85,16 @@ pub enum ValidationError {
     /// A declared follows whose target diverges from the lockfile's
     /// resolution of the same source path. Warning: the user edited
     /// `flake.nix` but never ran `nix flake lock`.
+    #[error(
+        "stale-lock follows at {location}: {source_path} -> {declared_target} (flake.lock resolves to {}; run `nix flake lock`)",
+        format_lock_target(lock_target)
+    )]
     FollowsStaleLock {
         /// Source path of the declared follows, e.g. `crane.nixpkgs`.
-        source: crate::follows::AttrPath,
+        ///
+        /// Renamed from `source` because thiserror treats a field named
+        /// `source` as the error's `#[source]`.
+        source_path: crate::follows::AttrPath,
         /// Target the declaration in `flake.nix` asks for.
         declared_target: crate::follows::AttrPath,
         /// Target the lockfile resolves the same source to. `None` if the
@@ -98,12 +103,28 @@ pub enum ValidationError {
         location: Location,
     },
     /// A follows path is deeper than the configured graph traversal bound.
+    #[error("follows depth exceeded at {location}: {} -> {} reached depth {depth} (max {max_depth})", edge.source, edge.follows)]
     FollowsDepthExceeded {
         edge: crate::follows::Edge,
         depth: usize,
         max_depth: usize,
         location: Location,
     },
+}
+
+fn format_edges(edges: &[crate::follows::Edge]) -> String {
+    edges
+        .iter()
+        .map(|e| format!("{} -> {}", e.source, e.follows))
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+fn format_lock_target(target: &Option<crate::follows::AttrPath>) -> String {
+    match target {
+        Some(t) => t.to_string(),
+        None => "<none>".to_string(),
+    }
 }
 
 impl ValidationError {
@@ -114,76 +135,6 @@ impl ValidationError {
                 Severity::Warning
             }
             _ => Severity::Error,
-        }
-    }
-}
-
-impl fmt::Display for ValidationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ValidationError::ParseError { message, location } => {
-                write!(f, "parse error at {}: {}", location, message)
-            }
-            ValidationError::DuplicateAttribute(dup) => write!(f, "{}", dup),
-            ValidationError::FollowsCycle { cycle, location } => {
-                let chain = cycle
-                    .edges
-                    .iter()
-                    .map(|e| format!("{} -> {}", e.source, e.follows))
-                    .collect::<Vec<_>>()
-                    .join("; ");
-                write!(f, "follows cycle at {}: {}", location, chain)
-            }
-            ValidationError::FollowsStale { edge, location } => {
-                write!(
-                    f,
-                    "stale follows at {}: {} -> {} (source no longer present in flake.lock)",
-                    location, edge.source, edge.follows
-                )
-            }
-            ValidationError::FollowsTargetNotToplevel { edge, location } => {
-                write!(
-                    f,
-                    "follows target not a top-level input at {}: {} -> {}",
-                    location, edge.source, edge.follows
-                )
-            }
-            ValidationError::FollowsContradiction { edges, location } => {
-                let pairs = edges
-                    .iter()
-                    .map(|e| format!("{} -> {}", e.source, e.follows))
-                    .collect::<Vec<_>>()
-                    .join("; ");
-                write!(f, "contradicting follows at {}: {}", location, pairs)
-            }
-            ValidationError::FollowsStaleLock {
-                source,
-                declared_target,
-                lock_target,
-                location,
-            } => {
-                let lock = match lock_target {
-                    Some(t) => t.to_string(),
-                    None => "<none>".to_string(),
-                };
-                write!(
-                    f,
-                    "stale-lock follows at {}: {} -> {} (flake.lock resolves to {}; run `nix flake lock`)",
-                    location, source, declared_target, lock,
-                )
-            }
-            ValidationError::FollowsDepthExceeded {
-                edge,
-                depth,
-                max_depth,
-                location,
-            } => {
-                write!(
-                    f,
-                    "follows depth exceeded at {}: {} -> {} reached depth {} (max {})",
-                    location, edge.source, edge.follows, depth, max_depth
-                )
-            }
         }
     }
 }
@@ -279,7 +230,7 @@ mod tests {
             ),
             (
                 ValidationError::FollowsStaleLock {
-                    source: AttrPath::parse("a.b").unwrap(),
+                    source_path: AttrPath::parse("a.b").unwrap(),
                     declared_target: AttrPath::parse("x").unwrap(),
                     lock_target: Some(AttrPath::parse("y").unwrap()),
                     location: loc(),

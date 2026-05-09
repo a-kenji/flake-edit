@@ -1,5 +1,6 @@
 ---
 source: tests/cli.rs
+assertion_line: 949
 info:
   program: flake-edit
   args:
@@ -14,6 +15,7 @@ exit_code: 1
 ----- stdout -----
 
 ----- stderr -----
-Error: 
-   0: 1 file(s) failed during batch processing:
-        - [FIXTURES]/centerpiece.flake.nix: Could not read lock file '[FIXTURES]/flake.lock': IoError: No such file or directory (os error 2)
+error: 1 file(s) failed during batch processing
+  - [FIXTURES]/centerpiece.flake.nix: could not read lock file '[FIXTURES]/flake.lock': failed to read [FIXTURES]/flake.lock: No such file or directory (os error 2)
+
+hint: run `flake-edit list` against each failing file to verify input names

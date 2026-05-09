@@ -1,5 +1,6 @@
 ---
 source: tests/cli.rs
+assertion_line: 735
 info:
   program: flake-edit
   args:
@@ -19,16 +20,9 @@ exit_code: 1
 ----- stdout -----
 
 ----- stderr -----
-Error: 
-   0: Failed to parse config file '[FIXTURES]/malformed.config.toml':
-      TOML parse error at line 3, column 13
-        |
-      3 | [follow.auto
-        |             ^
-      unclosed table, expected `]`
-
-   1: TOML parse error at line 3, column 13
-        |
-      3 | [follow.auto
-        |             ^
-      unclosed table, expected `]`
+error: failed to parse config file '[FIXTURES]/malformed.config.toml'
+  caused by: TOML parse error at line 3, column 13
+  |
+3 | [follow.auto
+  |             ^
+unclosed table, expected `]`

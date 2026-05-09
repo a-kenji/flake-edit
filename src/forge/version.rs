@@ -6,7 +6,7 @@ pub struct ParsedRef {
     pub has_refs_tags_prefix: bool,
 }
 
-pub fn normalize_semver(tag: &str) -> String {
+pub(crate) fn normalize_semver(tag: &str) -> String {
     let (core, suffix) = tag
         .find(|c| ['-', '+'].contains(&c))
         .map(|idx| (&tag[..idx], &tag[idx..]))

@@ -44,7 +44,7 @@ pub enum ApiError {
     HttpStatus { url: String, status: u16 },
 
     /// Failed to parse the JSON response body returned by the forge.
-    #[error("failed to parse JSON response from {url}: {source}")]
+    #[error("failed to parse JSON response from {url}")]
     Json {
         url: String,
         #[source]
@@ -55,7 +55,7 @@ pub enum ApiError {
     /// a new variant or a bespoke connector chain returns one of the
     /// rarer existing variants (`Tls`, `Protocol`, ...). Treat as a
     /// transient failure.
-    #[error("unexpected HTTP error for {url}: {source}")]
+    #[error("unexpected HTTP error for {url}")]
     Other {
         url: String,
         #[source]
@@ -66,9 +66,10 @@ pub enum ApiError {
     #[error("no tags found for repository")]
     NoTagsFound,
 
-    /// The supplied domain or repository identifier was invalid.
-    #[error("invalid domain or repository: {0}")]
-    InvalidInput(String),
+    /// Branch listing exhausted retries (both schemes, all pages) without
+    /// returning usable data.
+    #[error("no branches found for repository")]
+    NoBranchesFound,
 }
 
 /// Classify a `ureq::Error` from establishing the request (DNS,
@@ -392,7 +393,7 @@ impl Forge for Gitea {
             page = 1; // Reset for next scheme
         }
 
-        Err(ApiError::InvalidInput("Could not fetch branches".into()))
+        Err(ApiError::NoBranchesFound)
     }
 
     fn branch_exists(&self, owner: &str, repo: &str, branch: &str) -> Result<bool, ApiError> {
@@ -430,13 +431,13 @@ pub(crate) fn forge_for(domain: Option<&str>) -> Box<dyn Forge> {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct IntermediaryTags(Vec<IntermediaryTag>);
+pub(crate) struct IntermediaryTags(Vec<IntermediaryTag>);
 
 #[derive(Deserialize, Debug)]
-pub struct IntermediaryBranches(Vec<IntermediaryBranch>);
+pub(crate) struct IntermediaryBranches(Vec<IntermediaryBranch>);
 
 #[derive(Deserialize, Debug)]
-pub struct IntermediaryBranch {
+pub(crate) struct IntermediaryBranch {
     name: String,
 }
 
@@ -462,7 +463,7 @@ impl Tags {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct IntermediaryTag {
+pub(crate) struct IntermediaryTag {
     name: String,
 }
 
@@ -494,28 +495,6 @@ pub fn branch_exists(
     domain: Option<&str>,
 ) -> Result<bool, ApiError> {
     forge_for(domain).branch_exists(owner, repo, branch)
-}
-
-/// Check multiple branches and return which ones exist.
-/// More efficient than get_branches for known candidate branches.
-///
-/// Fails loudly on the first transient error: a flaky network must
-/// not silently shrink the candidate set, which would tell the user
-/// their branch is gone when in fact the forge was unreachable.
-pub fn filter_existing_branches(
-    owner: &str,
-    repo: &str,
-    candidates: &[String],
-    domain: Option<&str>,
-) -> Result<Vec<String>, ApiError> {
-    let forge = forge_for(domain);
-    let mut existing = Vec::new();
-    for branch in candidates {
-        if forge.branch_exists(owner, repo, branch)? {
-            existing.push(branch.clone());
-        }
-    }
-    Ok(existing)
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -657,6 +636,131 @@ mod tests {
             ApiError::Other { url, .. } => assert_eq!(url, URL),
             other => panic!("expected Other, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn tags_parsing_with_refs_tags_prefix() {
+        let json = r#"[
+            {"name": "refs/tags/v1.0.0"},
+            {"name": "refs/tags/v2.0.0"},
+            {"name": "refs/tags/v1.5.0"}
+        ]"#;
+
+        let intermediary: IntermediaryTags = serde_json::from_str(json).unwrap();
+        let mut tags: Tags = intermediary.into();
+
+        assert_eq!(tags.get_latest_tag(), Some("refs/tags/v2.0.0".to_string()));
+    }
+
+    #[test]
+    fn tags_parsing_with_short_versions() {
+        let json = r#"[
+            {"name": "v1"},
+            {"name": "v1.1"}
+        ]"#;
+
+        let intermediary: IntermediaryTags = serde_json::from_str(json).unwrap();
+        let mut tags: Tags = intermediary.into();
+
+        assert_eq!(tags.get_latest_tag(), Some("v1.1".to_string()));
+    }
+
+    #[test]
+    fn tags_parsing_without_prefix() {
+        let json = r#"[
+            {"name": "1.0.0"},
+            {"name": "2.0.0"},
+            {"name": "1.5.0"}
+        ]"#;
+
+        let intermediary: IntermediaryTags = serde_json::from_str(json).unwrap();
+        let mut tags: Tags = intermediary.into();
+
+        assert_eq!(tags.get_latest_tag(), Some("2.0.0".to_string()));
+    }
+
+    #[test]
+    fn tags_parsing_with_dash_prefix() {
+        let json = r#"[
+            {"name": "release-1.0.0"},
+            {"name": "release-2.0.0"},
+            {"name": "release-1.5.0"}
+        ]"#;
+
+        let intermediary: IntermediaryTags = serde_json::from_str(json).unwrap();
+        let mut tags: Tags = intermediary.into();
+
+        assert_eq!(tags.get_latest_tag(), Some("release-2.0.0".to_string()));
+    }
+
+    #[test]
+    fn tags_parsing_mixed_valid_invalid() {
+        let json = r#"[
+            {"name": "v1.0.0"},
+            {"name": "v2.0.0"},
+            {"name": "invalid-tag"},
+            {"name": "v1.5.0"}
+        ]"#;
+
+        let intermediary: IntermediaryTags = serde_json::from_str(json).unwrap();
+        let mut tags: Tags = intermediary.into();
+
+        assert_eq!(tags.get_latest_tag(), Some("v2.0.0".to_string()));
+    }
+
+    #[test]
+    fn tags_parsing_empty() {
+        let json = r#"[]"#;
+
+        let intermediary: IntermediaryTags = serde_json::from_str(json).unwrap();
+        let mut tags: Tags = intermediary.into();
+
+        assert_eq!(tags.get_latest_tag(), None);
+    }
+
+    #[test]
+    fn tags_parsing_drops_prerelease() {
+        let json = r#"[
+            {"name": "v1.0.0"},
+            {"name": "v2.0.0-beta.1"},
+            {"name": "v1.5.0"}
+        ]"#;
+
+        let intermediary: IntermediaryTags = serde_json::from_str(json).unwrap();
+        let mut tags: Tags = intermediary.into();
+
+        // `parse_ref` strips everything after the first `-`, leaving
+        // a non-numeric "beta.1" which `Version::parse` rejects, so
+        // the prerelease tag is filtered out and the latest stable
+        // wins.
+        assert_eq!(tags.get_latest_tag(), Some("v1.5.0".to_string()));
+    }
+
+    #[test]
+    fn tags_parsing_combined_prefixes() {
+        let json = r#"[
+            {"name": "refs/tags/v1.0.0"},
+            {"name": "refs/tags/v2.0.0"}
+        ]"#;
+
+        let intermediary: IntermediaryTags = serde_json::from_str(json).unwrap();
+        let mut tags: Tags = intermediary.into();
+
+        assert_eq!(tags.get_latest_tag(), Some("refs/tags/v2.0.0".to_string()));
+    }
+
+    #[test]
+    fn tags_sort_by_semver_not_lex() {
+        let json = r#"[
+            {"name": "v10.0.0"},
+            {"name": "v2.0.0"},
+            {"name": "v1.0.0"}
+        ]"#;
+
+        let intermediary: IntermediaryTags = serde_json::from_str(json).unwrap();
+        let mut tags: Tags = intermediary.into();
+
+        assert_eq!(tags.get_latest_tag(), Some("v10.0.0".to_string()));
     }
 
     #[test]

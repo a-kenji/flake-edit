@@ -1,5 +1,6 @@
 ---
 source: tests/cli.rs
+assertion_line: 526
 info:
   program: flake-edit
   args:
@@ -17,7 +18,6 @@ exit_code: 1
 ----- stdout -----
 
 ----- stderr -----
-Error: 
-   0: `add-follow` accepts only depth-1 paths of the form `parent.child`; got 'neovim.nixvim.flake-parts' (3 segments).
+error: `add-follow` accepts only depth-1 paths of the form `parent.child`; got 'neovim.nixvim.flake-parts' (3 segments)
 
-      Use `flake-edit follow` for deeper paths (depth bounded by `follow.max_depth` in your config).
+hint: use `flake-edit follow` for deeper paths (depth bounded by `follow.max_depth` in your config)

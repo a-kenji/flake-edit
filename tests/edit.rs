@@ -335,20 +335,3 @@ fn test_remove_nonexistent_input_panics() {
     };
     flake_edit.apply_change(change).unwrap().text.unwrap();
 }
-
-#[rstest]
-#[case("one_level_nesting_flat")]
-#[case("first_nested_node")]
-fn test_walker_inputs(#[case] fixture: &str) {
-    let content = load_flake(fixture);
-    let mut walker = Walker::new(&content);
-    let _ = walker.walk(&Change::None);
-    let info = Info::empty();
-    insta::with_settings!({
-        sort_maps => true,
-        info => &info,
-        snapshot_suffix => fixture
-    }, {
-        insta::assert_yaml_snapshot!(ListOutput::from(&walker.inputs));
-    });
-}

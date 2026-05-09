@@ -29,9 +29,9 @@ const HYPERCONFIG_LOCK: &str = include_str!(concat!(
 
 fn collect_inputs() {
     let mut walker = Walker::new(INPUTS);
-    let _ = walker.walk(&Change::None);
-    // a simple sanity check
-    assert!(!walker.inputs.is_empty())
+    walker
+        .walk(&Change::None)
+        .expect("bug: bench fixture must walk cleanly");
 }
 
 fn add_input() {
@@ -41,9 +41,9 @@ fn add_input() {
         uri: Some("github/nixos/nixpkgs".to_owned()),
         flake: false,
     };
-    let _ = walker.walk(&change);
-    // a simple sanity check
-    assert!(!walker.inputs.is_empty())
+    walker
+        .walk(&change)
+        .expect("bug: bench fixture must walk cleanly");
 }
 
 fn remove_input() {
@@ -51,9 +51,9 @@ fn remove_input() {
     let change = Change::Remove {
         ids: vec![flake_edit::change::ChangeId::parse("nixpkgs").unwrap()],
     };
-    let _ = walker.walk(&change);
-    // a simple sanity check
-    assert!(!walker.inputs.is_empty())
+    walker
+        .walk(&change)
+        .expect("bug: bench fixture must walk cleanly");
 }
 
 fn criterion_benchmark(c: &mut Criterion) {

@@ -1,28 +1,22 @@
+use std::process::ExitCode;
+
 use clap::Parser;
-use color_eyre::eyre;
 use flake_edit::cli::CliArgs;
 
 mod log;
+mod render;
 
-fn main() -> eyre::Result<()> {
+fn main() -> ExitCode {
     let args = CliArgs::parse();
-
-    // Hide internal source locations from error output
-    let builder = color_eyre::config::HookBuilder::new()
-        .display_location_section(false)
-        .display_env_section(false);
-
-    let builder = if std::env::var("NO_COLOR").is_ok() {
-        builder.theme(color_eyre::config::Theme::new())
-    } else {
-        builder
-    };
-    builder.install()?;
 
     log::init().ok();
     tracing::debug!("Cli args: {args:?}");
 
-    flake_edit::app::run(args)?;
-
-    Ok(())
+    match flake_edit::app::run(args) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            render::report(&err);
+            ExitCode::FAILURE
+        }
+    }
 }
