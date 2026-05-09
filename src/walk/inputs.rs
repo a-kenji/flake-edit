@@ -10,7 +10,7 @@ use crate::input::Input;
 use super::context::Context;
 use super::node::{
     FollowsKind, adjacent_whitespace_index, empty_node, extract_indent, get_sibling_whitespace,
-    insertion_index_after, is_attrset_content_empty, make_attrset_url_attr,
+    insertion_index_after, is_attrset_content_empty, last_line_with_newline, make_attrset_url_attr,
     make_attrset_url_flake_false_attr, make_flake_false_attr, make_quoted_string, make_url_attr,
     parse_node, remove_child_with_whitespace, should_remove_input, should_remove_nested_input,
     substitute_child, uses_attrset_style,
@@ -69,159 +69,43 @@ pub(crate) fn walk_inputs(
     ctx: &Option<Context>,
     change: &Change,
 ) -> Option<SyntaxNode> {
-    match node.kind() {
-        SyntaxKind::NODE_ATTRPATH => {
-            if let Some(result) = handle_attrpath_follows(inputs, &node, change) {
-                return Some(result);
-            }
-        }
-        SyntaxKind::NODE_ATTR_SET | SyntaxKind::NODE_ATTRPATH_VALUE | SyntaxKind::NODE_IDENT => {}
-        _ => {}
-    }
-
-    // Add follows on flat-style inputs declared inside an `inputs = { ... }`
-    // attr set, when the parent input has no nested `{ ... }` block.
-    if let Change::Follows { input, target } = change
-        && node.kind() == SyntaxKind::NODE_ATTR_SET
-        && ctx.is_none()
+    if node.kind() == SyntaxKind::NODE_ATTRPATH
+        && let Some(result) = handle_attrpath_follows(inputs, &node, change)
     {
-        let full_path = input.path();
-        let parent_id = input.input();
-        let parent_id_str = parent_id.as_str();
-        let target_str = target.to_flake_follows_string();
-
-        if full_path.len() >= 2 {
-            let parent_exists = inputs.contains_key(parent_id_str);
-
-            let has_nested_block = node.children().any(|child| {
-                if child.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
-                    return false;
-                }
-                child
-                    .first_child()
-                    .and_then(|attrpath| attrpath.first_child())
-                    .map(|first_ident| {
-                        strip_outer_quotes(&first_ident.to_string()) == parent_id_str
-                    })
-                    .unwrap_or(false)
-                    && child
-                        .children()
-                        .any(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
-            });
-
-            if parent_exists && !has_nested_block {
-                if let Some(result) =
-                    find_existing_flat_follows(&node, full_path.segments(), &target_str)
-                {
-                    return result;
-                }
-
-                let follows_node = FollowsKind::InputsBlockNested {
-                    path: full_path,
-                    target: &target_str,
-                }
-                .emit();
-
-                // Bail out (None) when the parent isn't declared in this
-                // block - `Walker::handle_follows_flat_toplevel` owns the
-                // split-declaration placement instead.
-                let children: Vec<_> = node.children().collect();
-                let insert_after = children.iter().rev().find(|child| {
-                    child
-                        .first_child()
-                        .and_then(|attrpath| attrpath.first_child())
-                        .map(|first_ident| {
-                            strip_outer_quotes(&first_ident.to_string()) == parent_id_str
-                        })
-                        .unwrap_or(false)
-                });
-
-                if let Some(ref_child) = insert_after {
-                    let insert_index = insertion_index_after(ref_child);
-
-                    let mut green = node
-                        .green()
-                        .insert_child(insert_index, follows_node.green().into());
-
-                    if let Some(whitespace) = get_sibling_whitespace(ref_child) {
-                        let ws_str = whitespace.to_string();
-                        let normalized = if let Some(last_nl) = ws_str.rfind('\n') {
-                            &ws_str[last_nl..]
-                        } else {
-                            &ws_str
-                        };
-                        let ws_node = parse_node(normalized);
-                        green = green.insert_child(insert_index, ws_node.green().into());
-                    }
-
-                    return Some(SyntaxNode::new_root(green));
-                }
-            }
-        }
-
-        if full_path.len() == 1 {
-            let has_nested_block = node.children().any(|child| {
-                if child.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
-                    return false;
-                }
-                child
-                    .first_child()
-                    .and_then(|attrpath| attrpath.first_child())
-                    .map(|first_ident| {
-                        strip_outer_quotes(&first_ident.to_string()) == parent_id_str
-                    })
-                    .unwrap_or(false)
-                    && child
-                        .children()
-                        .any(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
-            });
-
-            if !has_nested_block {
-                let follows_node = FollowsKind::TopLevelFlat {
-                    id: parent_id,
-                    target: &target_str,
-                }
-                .emit();
-
-                let children: Vec<_> = node.children().collect();
-                let insert_after = children.iter().rev().find(|child| {
-                    child
-                        .first_child()
-                        .and_then(|attrpath| attrpath.first_child())
-                        .map(|first_ident| {
-                            strip_outer_quotes(&first_ident.to_string()) == parent_id_str
-                        })
-                        .unwrap_or(false)
-                });
-
-                if let Some(ref_child) = insert_after {
-                    let insert_index = insertion_index_after(ref_child);
-                    let mut green = node
-                        .green()
-                        .insert_child(insert_index, follows_node.green().into());
-
-                    if let Some(whitespace) = get_sibling_whitespace(ref_child) {
-                        let ws_str = whitespace.to_string();
-                        let normalized = if let Some(last_nl) = ws_str.rfind('\n') {
-                            &ws_str[last_nl..]
-                        } else {
-                            &ws_str
-                        };
-                        let ws_node = parse_node(normalized);
-                        green = green.insert_child(insert_index, ws_node.green().into());
-                    }
-
-                    return Some(SyntaxNode::new_root(green));
-                }
-            }
-        }
+        return Some(result);
     }
 
+    match change {
+        Change::None => apply_none(inputs, &node, ctx, change),
+        Change::Add { .. } => apply_add(inputs, node, ctx, change),
+        Change::Remove { .. } => apply_remove(inputs, &node, ctx, change),
+        Change::Change { .. } => apply_change_uri(inputs, &node, ctx, change),
+        Change::Follows { .. } => apply_follows(inputs, node, ctx, change),
+    }
+}
+
+/// `FlakeEdit::list` drives a `Change::None` walk purely for the side effect
+/// of populating the `inputs` map via the per-attr handlers, so this branch
+/// must traverse children even though it never rewrites.
+fn apply_none(
+    inputs: &mut HashMap<String, Input>,
+    node: &SyntaxNode,
+    ctx: &Option<Context>,
+    change: &Change,
+) -> Option<SyntaxNode> {
+    walk_children(inputs, node, ctx, change)
+}
+
+fn walk_children(
+    inputs: &mut HashMap<String, Input>,
+    node: &SyntaxNode,
+    ctx: &Option<Context>,
+    change: &Change,
+) -> Option<SyntaxNode> {
     for child in node.children_with_tokens() {
         match child.kind() {
             SyntaxKind::NODE_ATTRPATH_VALUE => {
-                if let Some(result) =
-                    handle_child_attrpath_value(inputs, &node, &child, ctx, change)
+                if let Some(result) = handle_child_attrpath_value(inputs, node, &child, ctx, change)
                 {
                     return Some(result);
                 }
@@ -234,80 +118,248 @@ pub(crate) fn walk_inputs(
             _ => {}
         }
     }
+    None
+}
 
-    // Add an entry into an empty `inputs = { }` attr set.
-    // Indentation comes from the whitespace preceding the `inputs`
-    // attrpath-value node. Contents indent one level deeper.
-    if node.kind() == SyntaxKind::NODE_ATTR_SET
-        && ctx.is_none()
-        && let Change::Add {
-            id: Some(id),
-            uri: Some(uri),
-            flake,
-        } = change
-        && !node
-            .children()
-            .any(|c| c.kind() == SyntaxKind::NODE_ATTRPATH_VALUE)
+fn apply_remove(
+    inputs: &mut HashMap<String, Input>,
+    node: &SyntaxNode,
+    ctx: &Option<Context>,
+    change: &Change,
+) -> Option<SyntaxNode> {
+    walk_children(inputs, node, ctx, change)
+}
+
+fn apply_change_uri(
+    inputs: &mut HashMap<String, Input>,
+    node: &SyntaxNode,
+    ctx: &Option<Context>,
+    change: &Change,
+) -> Option<SyntaxNode> {
+    walk_children(inputs, node, ctx, change)
+}
+
+/// An empty `inputs = { }` block has no `NODE_ATTRPATH_VALUE` children for
+/// [`walk_children`] to splice into, so the rebuild step below kicks in
+/// only when traversal returned nothing.
+fn apply_add(
+    inputs: &mut HashMap<String, Input>,
+    node: SyntaxNode,
+    ctx: &Option<Context>,
+    change: &Change,
+) -> Option<SyntaxNode> {
+    if let Some(result) = walk_children(inputs, &node, ctx, change) {
+        return Some(result);
+    }
+
+    let Change::Add {
+        id: Some(id),
+        uri: Some(uri),
+        flake,
+    } = change
+    else {
+        return None;
+    };
+
+    if node.kind() != SyntaxKind::NODE_ATTR_SET || ctx.is_some() {
+        return None;
+    }
+    if node
+        .children()
+        .any(|c| c.kind() == SyntaxKind::NODE_ATTRPATH_VALUE)
     {
-        let base_indent = node
-            .parent()
-            .and_then(|p| p.prev_sibling_or_token())
-            .filter(|t| t.kind() == SyntaxKind::TOKEN_WHITESPACE)
-            .map(|t| {
-                let ws = t.to_string();
-                ws.rfind('\n')
-                    .map(|i| &ws[i + 1..])
-                    .unwrap_or(&ws)
-                    .to_string()
-            })
-            .unwrap_or_else(|| "  ".to_string());
-        let entry_indent = format!("\n{}  ", base_indent);
-        let closing_indent = format!("\n{}", base_indent);
+        return None;
+    }
 
-        let uri_node = make_url_attr(id, uri);
+    Some(insert_into_empty_inputs(&node, id, uri, *flake))
+}
 
-        // Drop any whitespace already sitting between the braces, then
-        // rebuild the contents from scratch.
-        let ws_index = node
-            .children_with_tokens()
-            .find(|t| t.kind() == SyntaxKind::TOKEN_WHITESPACE)
-            .map(|t| t.index());
+/// Indentation copies the whitespace preceding the `inputs` attrpath-value
+/// node so the inserted entry lines up with whatever the user already wrote
+/// elsewhere in the file. Contents indent one level deeper.
+fn insert_into_empty_inputs(node: &SyntaxNode, id: &str, uri: &str, flake: bool) -> SyntaxNode {
+    let base_indent = node
+        .parent()
+        .and_then(|p| p.prev_sibling_or_token())
+        .filter(|t| t.kind() == SyntaxKind::TOKEN_WHITESPACE)
+        .map(|t| extract_indent(&t.to_string()).to_string())
+        .unwrap_or_else(|| "  ".to_string());
+    let entry_indent = format!("\n{}  ", base_indent);
+    let closing_indent = format!("\n{}", base_indent);
 
-        let mut green = if let Some(idx) = ws_index {
-            node.green().remove_child(idx)
-        } else {
-            node.green().into_owned()
-        };
+    let uri_node = make_url_attr(id, uri);
 
-        let brace_index = green
-            .children()
-            .position(|c| c.as_token().map(|t| t.text() == "}").unwrap_or(false))
-            .unwrap_or(green.children().count());
+    // Drop any whitespace already sitting between the braces, then rebuild
+    // the contents from scratch.
+    let ws_index = node
+        .children_with_tokens()
+        .find(|t| t.kind() == SyntaxKind::TOKEN_WHITESPACE)
+        .map(|t| t.index());
 
-        green = green.insert_child(brace_index, uri_node.green().into());
-        green = green.insert_child(brace_index, parse_node(&entry_indent).green().into());
+    let mut green = if let Some(idx) = ws_index {
+        node.green().remove_child(idx)
+    } else {
+        node.green().into_owned()
+    };
 
-        let mut offset = 2;
-        if !flake {
-            let no_flake = make_flake_false_attr(id);
-            green = green.insert_child(
-                brace_index + offset,
-                parse_node(&entry_indent).green().into(),
-            );
-            offset += 1;
-            green = green.insert_child(brace_index + offset, no_flake.green().into());
-            offset += 1;
-        }
+    let brace_index = green
+        .children()
+        .position(|c| c.as_token().map(|t| t.text() == "}").unwrap_or(false))
+        .unwrap_or(green.children().count());
 
+    green = green.insert_child(brace_index, uri_node.green().into());
+    green = green.insert_child(brace_index, parse_node(&entry_indent).green().into());
+
+    let mut offset = 2;
+    if !flake {
+        let no_flake = make_flake_false_attr(id);
         green = green.insert_child(
             brace_index + offset,
-            parse_node(&closing_indent).green().into(),
+            parse_node(&entry_indent).green().into(),
         );
+        offset += 1;
+        green = green.insert_child(brace_index + offset, no_flake.green().into());
+        offset += 1;
+    }
 
-        return Some(SyntaxNode::new_root(green));
+    green = green.insert_child(
+        brace_index + offset,
+        parse_node(&closing_indent).green().into(),
+    );
+
+    SyntaxNode::new_root(green)
+}
+
+/// When the parent is declared in attrset shape (`parent = { ... }`)
+/// [`handle_input_attr_set`] owns the follows insertion via the child
+/// traversal step. This function only handles the flat-toplevel shape
+/// (`parent.url = "..."`), where the follows entry must be spliced next
+/// to the `url` declaration before traversal happens.
+fn apply_follows(
+    inputs: &mut HashMap<String, Input>,
+    node: SyntaxNode,
+    ctx: &Option<Context>,
+    change: &Change,
+) -> Option<SyntaxNode> {
+    let Change::Follows { input, target } = change else {
+        return None;
+    };
+
+    if ctx.is_none()
+        && node.kind() == SyntaxKind::NODE_ATTR_SET
+        && let Some(result) = insert_flat_toplevel_follows(inputs, &node, input, target)
+    {
+        return result;
+    }
+
+    walk_children(inputs, &node, ctx, change)
+}
+
+/// The `Option<Option<_>>` return distinguishes "this branch claims the
+/// rewrite" from "this branch does not apply". `Some(Some(node))` means
+/// the rewrite has been performed (or the desired follows already exists,
+/// in which case `node` is the unchanged input). `Some(None)` is reserved
+/// for hits that intentionally short-circuit without producing a rewrite.
+/// `None` lets the caller fall through to child traversal.
+fn insert_flat_toplevel_follows(
+    inputs: &HashMap<String, Input>,
+    node: &SyntaxNode,
+    input: &crate::change::ChangeId,
+    target: &AttrPath,
+) -> Option<Option<SyntaxNode>> {
+    let full_path = input.path();
+    let parent_id = input.input();
+    let parent_id_str = parent_id.as_str();
+    let target_str = target.to_flake_follows_string();
+
+    if full_path.len() >= 2 {
+        let parent_exists = inputs.contains_key(parent_id_str);
+        if parent_exists && !flat_input_has_nested_block(node, parent_id_str) {
+            if let Some(result) =
+                find_existing_flat_follows(node, full_path.segments(), &target_str)
+            {
+                return Some(result);
+            }
+            let follows_node = FollowsKind::InputsBlockNested {
+                path: full_path,
+                target: &target_str,
+            }
+            .emit();
+            // `None` when the parent isn't declared in this block.
+            // `Walker::handle_follows_flat_toplevel` owns the split-declaration
+            // placement instead.
+            let inserted = insert_after_flat_input(node, parent_id_str, &follows_node);
+            if inserted.is_some() {
+                return Some(inserted);
+            }
+        }
+    }
+
+    if full_path.len() == 1 && !flat_input_has_nested_block(node, parent_id_str) {
+        let follows_node = FollowsKind::TopLevelFlat {
+            id: parent_id,
+            target: &target_str,
+        }
+        .emit();
+        let inserted = insert_after_flat_input(node, parent_id_str, &follows_node);
+        if inserted.is_some() {
+            return Some(inserted);
+        }
     }
 
     None
+}
+
+/// Discriminator between the two ways a parent input can be declared.
+/// Returns `true` for `parent = { ... }` (attrset) and `false` for
+/// `parent.url = "..."` (flat). The flat-toplevel follows insertion path
+/// must skip the attrset case so [`handle_input_attr_set`] can splice the
+/// follows entry into the parent's own block instead.
+fn flat_input_has_nested_block(node: &SyntaxNode, parent_id_str: &str) -> bool {
+    node.children().any(|child| {
+        if child.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
+            return false;
+        }
+        child
+            .first_child()
+            .and_then(|attrpath| attrpath.first_child())
+            .map(|first_ident| strip_outer_quotes(&first_ident.to_string()) == parent_id_str)
+            .unwrap_or(false)
+            && child
+                .children()
+                .any(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
+    })
+}
+
+/// Reuses the whitespace before the anchor attr so the inserted line
+/// inherits the user's indentation. Returns `None` when `parent_id_str`
+/// has no flat-style declaration in this block.
+fn insert_after_flat_input(
+    node: &SyntaxNode,
+    parent_id_str: &str,
+    follows_node: &SyntaxNode,
+) -> Option<SyntaxNode> {
+    let children: Vec<_> = node.children().collect();
+    let ref_child = children.iter().rev().find(|child| {
+        child
+            .first_child()
+            .and_then(|attrpath| attrpath.first_child())
+            .map(|first_ident| strip_outer_quotes(&first_ident.to_string()) == parent_id_str)
+            .unwrap_or(false)
+    })?;
+
+    let insert_index = insertion_index_after(ref_child);
+    let mut green = node
+        .green()
+        .insert_child(insert_index, follows_node.green().into());
+
+    if let Some(whitespace) = get_sibling_whitespace(ref_child) {
+        let ws_str = whitespace.to_string();
+        let ws_node = parse_node(last_line_with_newline(&ws_str));
+        green = green.insert_child(insert_index, ws_node.green().into());
+    }
+
+    Some(SyntaxNode::new_root(green))
 }
 
 /// Handle a flat-style URL attribute (`inputs.foo.url = "..."`), returning the
@@ -496,80 +548,89 @@ fn handle_child_attrpath_value(
             flake,
         } = change
     {
-        let last_attr = parent
-            .children()
-            .filter(|c| c.kind() == SyntaxKind::NODE_ATTRPATH_VALUE)
-            .last();
-        let insert_index = last_attr
-            .as_ref()
-            .map(|c| {
-                let elem: rnix::SyntaxElement = c.clone().into();
-                elem.index() + 1
-            })
-            .unwrap_or(child.index());
-
-        let use_attrset = uses_attrset_style(parent);
-
-        // Reuse the whitespace before the last input but normalize to a single
-        // newline + indent. Copying the raw inter-entry whitespace would
-        // duplicate blank lines when the closing brace already has one.
-        let ws_reference = last_attr.as_ref().unwrap_or(child_node);
-        if let Some(whitespace) = get_sibling_whitespace(ws_reference) {
-            let ws_str = whitespace.to_string();
-            let normalized = if let Some(last_nl) = ws_str.rfind('\n') {
-                &ws_str[last_nl..]
-            } else {
-                &ws_str
-            };
-            let ws_node = parse_node(normalized);
-            let mut green = parent
-                .green()
-                .insert_child(insert_index, ws_node.green().into());
-            let mut offset = 1;
-
-            if use_attrset {
-                let indent = extract_indent(&ws_str);
-                let uri_node = if *flake {
-                    make_attrset_url_attr(id, uri, indent)
-                } else {
-                    make_attrset_url_flake_false_attr(id, uri, indent)
-                };
-                green = green.insert_child(insert_index + offset, uri_node.green().into());
-            } else {
-                let uri_node = make_url_attr(id, uri);
-                green = green.insert_child(insert_index + offset, uri_node.green().into());
-                offset += 1;
-
-                if !flake {
-                    let no_flake = make_flake_false_attr(id);
-                    let compact_ws = if let Some(last_nl) = ws_str.rfind('\n') {
-                        &ws_str[last_nl..]
-                    } else {
-                        &ws_str
-                    };
-                    let compact_ws_node = parse_node(compact_ws);
-                    green =
-                        green.insert_child(insert_index + offset, compact_ws_node.green().into());
-                    offset += 1;
-                    green = green.insert_child(insert_index + offset, no_flake.green().into());
-                }
-            }
-            return Some(SyntaxNode::new_root(green));
-        }
-
-        let uri_node = make_url_attr(id, uri);
-        let mut green = parent
-            .green()
-            .insert_child(insert_index, uri_node.green().into());
-
-        if !flake {
-            let no_flake = make_flake_false_attr(id);
-            green = green.insert_child(insert_index + 1, no_flake.green().into());
-        }
-        return Some(SyntaxNode::new_root(green));
+        return Some(insert_added_input_into_block(
+            parent, child, child_node, id, uri, *flake,
+        ));
     }
 
     None
+}
+
+/// Splice a new `id = ...` entry into a non-empty `inputs = { ... }` block.
+///
+/// `child` is the iteration cursor that triggered the add; `child_node` is the
+/// same node typed as `SyntaxNode`. Both are kept as fallbacks for the
+/// degenerate case where `parent` has no `NODE_ATTRPATH_VALUE` children at all:
+/// the caller has only verified that `child` itself is one, but the lookup below
+/// re-scans `parent.children()` and is paranoid about an empty result.
+fn insert_added_input_into_block(
+    parent: &SyntaxNode,
+    child: &rnix::SyntaxElement,
+    child_node: &SyntaxNode,
+    id: &str,
+    uri: &str,
+    flake: bool,
+) -> SyntaxNode {
+    let last_attr = parent
+        .children()
+        .filter(|c| c.kind() == SyntaxKind::NODE_ATTRPATH_VALUE)
+        .last();
+    let insert_index = last_attr
+        .as_ref()
+        .map(|c| {
+            let elem: rnix::SyntaxElement = c.clone().into();
+            elem.index() + 1
+        })
+        .unwrap_or(child.index());
+
+    let use_attrset = uses_attrset_style(parent);
+
+    // Reuse the whitespace before the last input but normalize to a single
+    // newline + indent. Copying the raw inter-entry whitespace would
+    // duplicate blank lines when the closing brace already has one.
+    let ws_reference = last_attr.as_ref().unwrap_or(child_node);
+    if let Some(whitespace) = get_sibling_whitespace(ws_reference) {
+        let ws_str = whitespace.to_string();
+        let ws_node = parse_node(last_line_with_newline(&ws_str));
+        let mut green = parent
+            .green()
+            .insert_child(insert_index, ws_node.green().into());
+        let mut offset = 1;
+
+        if use_attrset {
+            let indent = extract_indent(&ws_str);
+            let uri_node = if flake {
+                make_attrset_url_attr(id, uri, indent)
+            } else {
+                make_attrset_url_flake_false_attr(id, uri, indent)
+            };
+            green = green.insert_child(insert_index + offset, uri_node.green().into());
+        } else {
+            let uri_node = make_url_attr(id, uri);
+            green = green.insert_child(insert_index + offset, uri_node.green().into());
+            offset += 1;
+
+            if !flake {
+                let no_flake = make_flake_false_attr(id);
+                let compact_ws_node = parse_node(last_line_with_newline(&ws_str));
+                green = green.insert_child(insert_index + offset, compact_ws_node.green().into());
+                offset += 1;
+                green = green.insert_child(insert_index + offset, no_flake.green().into());
+            }
+        }
+        return SyntaxNode::new_root(green);
+    }
+
+    let uri_node = make_url_attr(id, uri);
+    let mut green = parent
+        .green()
+        .insert_child(insert_index, uri_node.green().into());
+
+    if !flake {
+        let no_flake = make_flake_false_attr(id);
+        green = green.insert_child(insert_index + 1, no_flake.green().into());
+    }
+    SyntaxNode::new_root(green)
 }
 
 /// Handle a `NODE_ATTRPATH` whose last segment is `follows`, at any depth.
@@ -583,97 +644,132 @@ fn handle_attrpath_follows(
     node: &SyntaxNode,
     change: &Change,
 ) -> Option<SyntaxNode> {
+    let parts = parse_follows_attrpath_parts(node)?;
+    if parts.rest.is_empty() {
+        record_depth_one_follows_attr(inputs, &parts.owner_seg, &parts.url_node, change)
+    } else {
+        record_depth_n_follows_attr(inputs, &parts, change)
+    }
+}
+
+struct FollowsAttrPathParts {
+    /// Kept alongside [`Self::owner_seg`] because the depth-2 remove path
+    /// matches against a segment built from the syntax node, not from the
+    /// already-derived owner segment.
+    owner_node: SyntaxNode,
+    owner_seg: Segment,
+    rest: Vec<Segment>,
+    url_node: SyntaxNode,
+}
+
+/// Returns `None` for any non-follows attrpath, for an attrpath that is
+/// nothing but `inputs` keywords, or when the binding has no value sibling.
+fn parse_follows_attrpath_parts(node: &SyntaxNode) -> Option<FollowsAttrPathParts> {
     let children: Vec<SyntaxNode> = node.children().collect();
     let last = children.last()?;
     if last.to_string() != "follows" {
         return None;
     }
 
-    // First non-`inputs` segment owns the follows. Remaining non-`inputs`
-    // segments form the nested path beneath it.
     let path_segments: Vec<(SyntaxNode, Segment)> = children[..children.len() - 1]
         .iter()
         .filter(|c| c.to_string() != "inputs")
         .map(|c| (c.clone(), Segment::from_syntax_or_sentinel(c)))
         .collect();
 
-    let owner_node = path_segments.first()?.0.clone();
-    let owner_seg = path_segments.first()?.1.clone();
+    let (owner_node, owner_seg) = path_segments.first().cloned()?;
     let rest: Vec<Segment> = path_segments[1..].iter().map(|(_, s)| s.clone()).collect();
-
     let url_node = node.next_sibling()?;
 
-    if rest.is_empty() {
-        // Toplevel direct follows: `inputs.<owner>.follows = "T"`. Store the
-        // target text as a synthetic url on the owning input so depth-1
-        // ctx-driven flows keep working, and honor a `Change::Remove`
-        // matching this owner.
-        let input = Input::with_url(
-            owner_seg.clone(),
-            url_node.to_string(),
-            url_node.text_range(),
-        );
-        insert_with_ctx(inputs, owner_seg.clone(), input, &None);
-        if change.is_remove()
-            && let Some(id) = change.id()
-            && id.matches_with_follows(&owner_seg, Some(&owner_seg))
-        {
-            return Some(empty_node());
-        }
-        return None;
-    }
+    Some(FollowsAttrPathParts {
+        owner_node,
+        owner_seg,
+        rest,
+        url_node,
+    })
+}
 
-    let follows_seg = rest.last().cloned().expect("rest is non-empty");
-    let leaf_input = Input::with_url(
-        follows_seg.clone(),
+/// `inputs.<owner>.follows = "T"`. The target text is stored as a synthetic
+/// url on the owning input so depth-1 ctx-driven flows downstream
+/// (`insert_with_ctx` and the follows-graph build) keep seeing a populated
+/// `url` field where they expect one.
+fn record_depth_one_follows_attr(
+    inputs: &mut HashMap<String, Input>,
+    owner_seg: &Segment,
+    url_node: &SyntaxNode,
+    change: &Change,
+) -> Option<SyntaxNode> {
+    let input = Input::with_url(
+        owner_seg.clone(),
         url_node.to_string(),
         url_node.text_range(),
     );
+    insert_with_ctx(inputs, owner_seg.clone(), input, &None);
+    if change.is_remove()
+        && let Some(id) = change.id()
+        && id.matches_with_follows(owner_seg, Some(owner_seg))
+    {
+        return Some(empty_node());
+    }
+    None
+}
 
-    // Build the [`crate::input::Follows::Indirect`] directly so we can carry
-    // the full multi-segment chain. `insert_with_ctx`'s single-segment path
-    // would truncate intermediate segments here.
-    let target = AttrPath::parse_follows_target(&leaf_input.url, &follows_seg);
-    let mut path_iter = rest.iter().cloned();
-    let mut nested_path = AttrPath::new(path_iter.next().expect("rest non-empty"));
+/// `insert_with_ctx`'s single-segment path would truncate intermediate
+/// segments at depth ≥ 2, so the indirect edge is built and pushed
+/// directly.
+fn record_depth_n_follows_attr(
+    inputs: &mut HashMap<String, Input>,
+    parts: &FollowsAttrPathParts,
+    change: &Change,
+) -> Option<SyntaxNode> {
+    let follows_seg = parts.rest.last().cloned().expect("rest is non-empty");
+    let leaf_url = parts.url_node.to_string();
+    let target = AttrPath::parse_follows_target(&leaf_url, &follows_seg);
+
+    let mut path_iter = parts.rest.iter().cloned();
+    let mut nested_path = AttrPath::new(path_iter.next().expect("rest is non-empty"));
     for seg in path_iter {
         nested_path.push(seg);
     }
 
-    let key = owner_seg.as_str().to_string();
+    let key = parts.owner_seg.as_str().to_string();
     let entry = inputs
         .entry(key)
-        .or_insert_with(|| Input::new(owner_seg.clone()));
+        .or_insert_with(|| Input::new(parts.owner_seg.clone()));
     entry.push_indirect_follows(nested_path, target);
 
-    // Remove the follows node when the change targets it. Depth-1 uses the
-    // existing two-segment matcher; depth-N walks the full
-    // [`crate::change::ChangeId`] path because
-    // [`crate::change::ChangeId::input`] / [`crate::change::ChangeId::follows`]
-    // only expose the first two segments.
     if change.is_remove()
         && let Some(id) = change.id()
+        && depth_n_follows_attr_matches_remove(parts, &id, &follows_seg)
     {
-        if rest.len() == 1 {
-            let owner_match_seg = Segment::from_syntax_or_sentinel(&owner_node);
-            if id.matches_with_follows(&owner_match_seg, Some(&follows_seg)) {
-                return Some(empty_node());
-            }
-        } else if rest.len() >= 2 {
-            let id_segs = id.path().segments();
-            if id_segs.len() == rest.len() + 1
-                && id_segs[0] == owner_seg
-                && id_segs[1..].iter().zip(rest.iter()).all(|(a, b)| a == b)
-            {
-                return Some(empty_node());
-            }
-        }
+        return Some(empty_node());
     }
-
     None
 }
 
-/// Handle a `url = ...` binding inside an input's attrset.
+/// Depth-2 uses the two-segment
+/// [`crate::change::ChangeId::matches_with_follows`] matcher because
+/// [`crate::change::ChangeId::input`] /
+/// [`crate::change::ChangeId::follows`] only expose the first two segments
+/// of the id. Depth-N has to compare the full id path against the chain.
+fn depth_n_follows_attr_matches_remove(
+    parts: &FollowsAttrPathParts,
+    id: &crate::change::ChangeId,
+    follows_seg: &Segment,
+) -> bool {
+    if parts.rest.len() == 1 {
+        let owner_match_seg = Segment::from_syntax_or_sentinel(&parts.owner_node);
+        return id.matches_with_follows(&owner_match_seg, Some(follows_seg));
+    }
+    let id_segs = id.path().segments();
+    id_segs.len() == parts.rest.len() + 1
+        && id_segs[0] == parts.owner_seg
+        && id_segs[1..]
+            .iter()
+            .zip(parts.rest.iter())
+            .all(|(a, b)| a == b)
+}
+
 fn handle_url_attr(
     inputs: &mut HashMap<String, Input>,
     node: &SyntaxNode,
@@ -682,98 +778,142 @@ fn handle_url_attr(
     ctx: &Option<Context>,
     change: &Change,
 ) -> Option<SyntaxNode> {
-    if let Some(prev_id) = attr.prev_sibling() {
-        // `inputs.X.url = "..."` inside another input's attrset is a
-        // transitive URL override, not a follows. With ctx set,
-        // `insert_with_ctx` would read the URL string as a follows target.
-        if ctx.is_some() {
-            return None;
-        }
-        let prev_seg = Segment::from_syntax_or_sentinel(&prev_id);
-        let prev_str = prev_seg.as_str().to_string();
-        if let Change::Remove { ids } = change
-            && ids
-                .iter()
-                .any(|id| id.input().as_str() == prev_str && id.follows().is_none())
-        {
-            return Some(empty_node());
-        }
-        if let Change::Change { id, uri, .. } = change
-            && let Some(id) = id
-            && *id == prev_str
-            && let Some(uri) = uri
-            && let Some(url_node) = child.next_sibling()
-        {
-            let new_url = make_quoted_string(uri);
-            return Some(substitute_child(node, url_node.index(), &new_url));
-        }
-        if let Some(sibling) = child.next_sibling() {
-            let input =
-                Input::with_url(prev_seg.clone(), sibling.to_string(), sibling.text_range());
-            insert_with_ctx(inputs, prev_seg, input, ctx);
-        }
+    if let Some(result) = apply_flat_url_attr(inputs, node, child, attr, ctx, change) {
+        return Some(result);
+    }
+    record_url_sibling_nested_follows(inputs, child, ctx, change)
+}
+
+/// `inputs.<id>.url = "..."` at the inputs-block level. With `ctx` set, the
+/// same shape inside another input's attrset is a transitive URL override,
+/// not a follows; returning `None` here keeps `insert_with_ctx` from
+/// misreading the URL string as a follows target.
+fn apply_flat_url_attr(
+    inputs: &mut HashMap<String, Input>,
+    node: &SyntaxNode,
+    child: &SyntaxNode,
+    attr: &SyntaxNode,
+    ctx: &Option<Context>,
+    change: &Change,
+) -> Option<SyntaxNode> {
+    let prev_id = attr.prev_sibling()?;
+    if ctx.is_some() {
+        return None;
+    }
+    let prev_seg = Segment::from_syntax_or_sentinel(&prev_id);
+    let prev_str = prev_seg.as_str().to_string();
+    if let Change::Remove { ids } = change
+        && ids
+            .iter()
+            .any(|id| id.input().as_str() == prev_str && id.follows().is_none())
+    {
+        return Some(empty_node());
+    }
+    if let Change::Change { id, uri, .. } = change
+        && let Some(id) = id
+        && *id == prev_str
+        && let Some(uri) = uri
+        && let Some(url_node) = child.next_sibling()
+    {
+        let new_url = make_quoted_string(uri);
+        return Some(substitute_child(node, url_node.index(), &new_url));
+    }
+    if let Some(sibling) = child.next_sibling() {
+        let input = Input::with_url(prev_seg.clone(), sibling.to_string(), sibling.text_range());
+        insert_with_ctx(inputs, prev_seg, input, ctx);
+    }
+    None
+}
+
+fn record_url_sibling_nested_follows(
+    inputs: &mut HashMap<String, Input>,
+    child: &SyntaxNode,
+    ctx: &Option<Context>,
+    change: &Change,
+) -> Option<SyntaxNode> {
+    let parent = child.parent()?;
+    let sibling = parent.next_sibling()?;
+    let nested_child = sibling.first_child()?;
+    if nested_child.to_string() != "inputs" {
+        return None;
+    }
+    let attr_set = nested_child.next_sibling()?;
+    if attr_set.kind() != SyntaxKind::NODE_ATTR_SET {
+        return None;
     }
 
-    // Nested follows that live as siblings of the `url` attribute.
-    if let Some(parent) = child.parent()
-        && let Some(sibling) = parent.next_sibling()
-        && let Some(nested_child) = sibling.first_child()
-        && nested_child.to_string() == "inputs"
-        && let Some(attr_set) = nested_child.next_sibling()
-        && SyntaxKind::NODE_ATTR_SET == attr_set.kind()
-    {
-        for nested_attr in attr_set.children() {
-            let Some(attrpath) = nested_attr.first_child() else {
-                continue;
-            };
-            let Some(first_ident) = attrpath.first_child() else {
-                continue;
-            };
+    for nested_attr in attr_set.children() {
+        let Some(attrpath) = nested_attr.first_child() else {
+            continue;
+        };
+        let Some(first_ident) = attrpath.first_child() else {
+            continue;
+        };
 
-            if let Some(follows_ident) = first_ident.next_sibling() {
-                // Flat attrpath style: `nixpkgs.follows = "nixpkgs"`.
-                if follows_ident.to_string() == "follows" {
-                    let id_seg = Segment::from_syntax_or_sentinel(&first_ident);
-                    let Some(follows) = attrpath.next_sibling() else {
-                        continue;
-                    };
-                    let input =
-                        Input::with_url(id_seg.clone(), follows.to_string(), follows.text_range());
-                    insert_with_ctx(inputs, id_seg, input, ctx);
-                    let follows_target_seg = Segment::from_syntax_or_sentinel(&follows);
-                    if should_remove_nested_input(change, ctx, &follows_target_seg) {
-                        return Some(empty_node());
-                    }
-                }
-            } else if let Some(value_node) = attrpath.next_sibling()
-                && SyntaxKind::NODE_ATTR_SET == value_node.kind()
-            {
-                // Nested attrset style: `nixpkgs = { follows = "nixpkgs"; }`.
-                let id_seg = Segment::from_syntax_or_sentinel(&first_ident);
-                for inner_attr in value_node.children() {
-                    let Some(inner_path) = inner_attr.first_child() else {
-                        continue;
-                    };
-                    let Some(inner_ident) = inner_path.first_child() else {
-                        continue;
-                    };
-                    if inner_ident.to_string() == "follows" {
-                        let Some(follows) = inner_path.next_sibling() else {
-                            continue;
-                        };
-                        let input = Input::with_url(
-                            id_seg.clone(),
-                            follows.to_string(),
-                            follows.text_range(),
-                        );
-                        insert_with_ctx(inputs, id_seg.clone(), input, ctx);
-                        let follows_target_seg = Segment::from_syntax_or_sentinel(&follows);
-                        if should_remove_nested_input(change, ctx, &follows_target_seg) {
-                            return Some(empty_node());
-                        }
-                    }
-                }
+        let result = if let Some(follows_ident) = first_ident.next_sibling() {
+            if follows_ident.to_string() != "follows" {
+                continue;
             }
+            record_nested_flat_follows(inputs, &attrpath, &first_ident, ctx, change)
+        } else if let Some(value_node) = attrpath.next_sibling()
+            && value_node.kind() == SyntaxKind::NODE_ATTR_SET
+        {
+            record_nested_attrset_follows(inputs, &first_ident, &value_node, ctx, change)
+        } else {
+            None
+        };
+
+        if result.is_some() {
+            return result;
+        }
+    }
+    None
+}
+
+fn record_nested_flat_follows(
+    inputs: &mut HashMap<String, Input>,
+    attrpath: &SyntaxNode,
+    first_ident: &SyntaxNode,
+    ctx: &Option<Context>,
+    change: &Change,
+) -> Option<SyntaxNode> {
+    let id_seg = Segment::from_syntax_or_sentinel(first_ident);
+    let follows = attrpath.next_sibling()?;
+    let input = Input::with_url(id_seg.clone(), follows.to_string(), follows.text_range());
+    insert_with_ctx(inputs, id_seg, input, ctx);
+    let follows_target_seg = Segment::from_syntax_or_sentinel(&follows);
+    if should_remove_nested_input(change, ctx, &follows_target_seg) {
+        return Some(empty_node());
+    }
+    None
+}
+
+fn record_nested_attrset_follows(
+    inputs: &mut HashMap<String, Input>,
+    first_ident: &SyntaxNode,
+    value_node: &SyntaxNode,
+    ctx: &Option<Context>,
+    change: &Change,
+) -> Option<SyntaxNode> {
+    let id_seg = Segment::from_syntax_or_sentinel(first_ident);
+    for inner_attr in value_node.children() {
+        let Some(inner_path) = inner_attr.first_child() else {
+            continue;
+        };
+        let Some(inner_ident) = inner_path.first_child() else {
+            continue;
+        };
+        if inner_ident.to_string() != "follows" {
+            continue;
+        }
+        let Some(follows) = inner_path.next_sibling() else {
+            continue;
+        };
+        let input = Input::with_url(id_seg.clone(), follows.to_string(), follows.text_range());
+        insert_with_ctx(inputs, id_seg.clone(), input, ctx);
+        let follows_target_seg = Segment::from_syntax_or_sentinel(&follows);
+        if should_remove_nested_input(change, ctx, &follows_target_seg) {
+            return Some(empty_node());
         }
     }
     None
@@ -826,41 +966,7 @@ fn handle_follows_attr(
         return None;
     }
 
-    // Discriminator: the raw attrpath's first ident is `inputs` for the
-    // inside-an-input-block shape (chain is the nested path under the
-    // ctx-supplied owner), and the owner ident otherwise (chain[0] is the
-    // owner and must be stripped to produce the nested path).
-    let attrpath_starts_with_inputs = attrpath
-        .children()
-        .next()
-        .map(|c| c.to_string() == "inputs")
-        .unwrap_or(false);
-    let chain_first = Segment::from_syntax_or_sentinel(&chain[0]);
-    let (owner_seg, nested_segs): (Segment, Vec<Segment>) =
-        match ctx.as_ref().and_then(|c| c.first().cloned()) {
-            Some(ctx_owner) if attrpath_starts_with_inputs => (
-                ctx_owner,
-                chain.iter().map(Segment::from_syntax_or_sentinel).collect(),
-            ),
-            Some(ctx_owner) if ctx_owner == chain_first => (
-                ctx_owner,
-                chain[1..]
-                    .iter()
-                    .map(Segment::from_syntax_or_sentinel)
-                    .collect(),
-            ),
-            Some(ctx_owner) => (
-                ctx_owner,
-                chain.iter().map(Segment::from_syntax_or_sentinel).collect(),
-            ),
-            None => (
-                chain_first,
-                chain[1..]
-                    .iter()
-                    .map(Segment::from_syntax_or_sentinel)
-                    .collect(),
-            ),
-        };
+    let (owner_seg, nested_segs) = resolve_follows_owner_and_nested(&attrpath, &chain, ctx);
 
     if nested_segs.len() <= 1 {
         // Depth-1 stores a single-segment leaf and runs the remove-flow.
@@ -918,6 +1024,53 @@ fn handle_follows_attr(
     }
 
     None
+}
+
+/// Resolve the `(owner, nested)` pair for a follows attrpath.
+///
+/// Discriminator: the raw attrpath's first ident is `inputs` for the
+/// inside-an-input-block shape (chain is the nested path under the
+/// ctx-supplied owner). Otherwise chain[0] is treated as the owner ident
+/// and stripped from the nested path; a `ctx` that already names the owner
+/// still wins the owner slot, but chain handling matches by structural shape,
+/// not by ident equality.
+///
+/// Precondition: `chain` is non-empty.
+fn resolve_follows_owner_and_nested(
+    attrpath: &SyntaxNode,
+    chain: &[SyntaxNode],
+    ctx: &Option<Context>,
+) -> (Segment, Vec<Segment>) {
+    let attrpath_starts_with_inputs = attrpath
+        .children()
+        .next()
+        .map(|c| c.to_string() == "inputs")
+        .unwrap_or(false);
+    let chain_first = Segment::from_syntax_or_sentinel(&chain[0]);
+    match ctx.as_ref().and_then(|c| c.first().cloned()) {
+        Some(ctx_owner) if attrpath_starts_with_inputs => (
+            ctx_owner,
+            chain.iter().map(Segment::from_syntax_or_sentinel).collect(),
+        ),
+        Some(ctx_owner) if ctx_owner == chain_first => (
+            ctx_owner,
+            chain[1..]
+                .iter()
+                .map(Segment::from_syntax_or_sentinel)
+                .collect(),
+        ),
+        Some(ctx_owner) => (
+            ctx_owner,
+            chain.iter().map(Segment::from_syntax_or_sentinel).collect(),
+        ),
+        None => (
+            chain_first,
+            chain[1..]
+                .iter()
+                .map(Segment::from_syntax_or_sentinel)
+                .collect(),
+        ),
+    }
 }
 
 /// Dispatch a `NODE_ATTRPATH` inside an input attrset to the `url`, `flake`,
@@ -1050,8 +1203,109 @@ fn find_existing_flat_follows(
     Some(Some(substitute_child(node, found.attr.index(), &new_attr)))
 }
 
-/// Handle a `NODE_ATTR_SET` inside an input node, processing nested
-/// `url` and `inputs` bindings.
+fn handle_url_leaf(
+    inputs: &mut HashMap<String, Input>,
+    node: &SyntaxNode,
+    child: &SyntaxNode,
+    attr: &SyntaxNode,
+    leaf: &SyntaxNode,
+    ctx: &Option<Context>,
+    change: &Change,
+) -> Option<SyntaxNode> {
+    let id_node = child.prev_sibling().unwrap();
+    let id_seg = Segment::from_syntax_or_sentinel(&id_node);
+    let id_str = id_seg.as_str().to_string();
+    let uri = leaf.next_sibling().unwrap();
+    let input = Input::with_url(id_seg.clone(), uri.to_string(), uri.text_range());
+    insert_with_ctx(inputs, id_seg.clone(), input, ctx);
+
+    if let Change::Remove { ids } = change
+        && ids
+            .iter()
+            .any(|candidate| candidate.input().as_str() == id_str && candidate.follows().is_none())
+    {
+        return Some(empty_node());
+    }
+
+    if let Change::Change {
+        id: Some(change_id),
+        uri: Some(new_uri),
+        ..
+    } = change
+        && *change_id == id_str
+    {
+        let new_url = make_quoted_string(new_uri);
+        let new_attr = substitute_child(attr, leaf.next_sibling().unwrap().index(), &new_url);
+        let new_child = substitute_child(child, attr.index(), &new_attr);
+        return Some(substitute_child(node, child.index(), &new_child));
+    }
+
+    None
+}
+
+/// The bare `inputs = { ... }` shape needs its own removal-with-pruning
+/// path: recursing through [`walk_inputs`] strips the matching entry
+/// inside the nested attrset, but cannot prune the now-empty `inputs`
+/// binding from the outer input block.
+fn handle_inputs_leaf(
+    inputs: &mut HashMap<String, Input>,
+    node: &SyntaxNode,
+    child: &SyntaxNode,
+    attr: &SyntaxNode,
+    leaf: &SyntaxNode,
+    change: &Change,
+) -> Option<SyntaxNode> {
+    let id_node = child.prev_sibling().unwrap();
+    let id_seg = Segment::from_syntax_or_sentinel(&id_node);
+    let context: Context = id_seg.clone().into();
+    let ctx_some = Some(context);
+    if let Some(replacement) = walk_inputs(inputs, child.clone(), &ctx_some, change) {
+        return Some(substitute_child(node, child.index(), &replacement));
+    }
+
+    if leaf.to_string() == "inputs"
+        && change.is_remove()
+        && let Some(inputs_attrset) = attr
+            .children()
+            .find(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
+    {
+        for nested_entry in inputs_attrset.children() {
+            if nested_entry.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
+                continue;
+            }
+            let Some(nested_path) = nested_entry.first_child() else {
+                continue;
+            };
+            let Some(nested_id) = nested_path.first_child() else {
+                continue;
+            };
+            let nested_seg = Segment::from_syntax_or_sentinel(&nested_id);
+            if should_remove_nested_input(change, &ctx_some, &nested_seg) {
+                let new_inputs_attrset = remove_child_with_whitespace(
+                    &inputs_attrset,
+                    &nested_entry,
+                    nested_entry.index(),
+                );
+
+                // Comments inside the block count as user-authored content
+                // and suppress pruning; only bindings count toward
+                // emptiness.
+                let new_child = if is_attrset_content_empty(&new_inputs_attrset) {
+                    remove_child_with_whitespace(child, attr, attr.index())
+                } else {
+                    let new_attr =
+                        substitute_child(attr, inputs_attrset.index(), &new_inputs_attrset);
+                    substitute_child(child, attr.index(), &new_attr)
+                };
+
+                return Some(substitute_child(node, child.index(), &new_child));
+            }
+        }
+    }
+
+    None
+}
+
 fn handle_input_attr_set(
     inputs: &mut HashMap<String, Input>,
     node: &SyntaxNode,
@@ -1061,97 +1315,18 @@ fn handle_input_attr_set(
 ) -> Option<SyntaxNode> {
     for attr in child.children() {
         for leaf in attr.children() {
-            if leaf.to_string() == "url" {
-                let id_node = child.prev_sibling().unwrap();
-                let id_seg = Segment::from_syntax_or_sentinel(&id_node);
-                let id_str = id_seg.as_str().to_string();
-                let uri = leaf.next_sibling().unwrap();
-                let input = Input::with_url(id_seg.clone(), uri.to_string(), uri.text_range());
-                insert_with_ctx(inputs, id_seg.clone(), input, ctx);
-
-                if let Change::Remove { ids } = change
-                    && ids.iter().any(|candidate| {
-                        candidate.input().as_str() == id_str && candidate.follows().is_none()
-                    })
-                {
-                    return Some(empty_node());
-                }
-
-                if let Change::Change {
-                    id: Some(change_id),
-                    uri: Some(new_uri),
-                    ..
-                } = change
-                    && *change_id == id_str
-                {
-                    let new_url = make_quoted_string(new_uri);
-                    let new_attr =
-                        substitute_child(&attr, leaf.next_sibling().unwrap().index(), &new_url);
-                    let new_child = substitute_child(child, attr.index(), &new_attr);
-                    return Some(substitute_child(node, child.index(), &new_child));
-                }
+            let leaf_text = leaf.to_string();
+            if leaf_text == "url"
+                && let Some(result) =
+                    handle_url_leaf(inputs, node, child, &attr, &leaf, ctx, change)
+            {
+                return Some(result);
             }
 
-            if leaf.to_string().starts_with("inputs") {
-                let id_node = child.prev_sibling().unwrap();
-                let id_seg = Segment::from_syntax_or_sentinel(&id_node);
-                let context: Context = id_seg.clone().into();
-                let ctx_some = Some(context);
-                if let Some(replacement) = walk_inputs(inputs, child.clone(), &ctx_some, change) {
-                    return Some(substitute_child(node, child.index(), &replacement));
-                }
-
-                // Removal inside a nested inputs attrset:
-                // `inputs = { nixpkgs = { follows = "nixpkgs"; }; }`.
-                if leaf.to_string() == "inputs"
-                    && change.is_remove()
-                    && let Some(inputs_attrset) = attr
-                        .children()
-                        .find(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
-                {
-                    for nested_entry in inputs_attrset.children() {
-                        if nested_entry.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
-                            continue;
-                        }
-                        let Some(nested_path) = nested_entry.first_child() else {
-                            continue;
-                        };
-                        let Some(nested_id) = nested_path.first_child() else {
-                            continue;
-                        };
-                        let nested_seg = Segment::from_syntax_or_sentinel(&nested_id);
-                        if should_remove_nested_input(change, &ctx_some, &nested_seg) {
-                            let new_inputs_attrset = remove_child_with_whitespace(
-                                &inputs_attrset,
-                                &nested_entry,
-                                nested_entry.index(),
-                            );
-
-                            // Prune the now-empty `inputs = { ... }` binding
-                            // when it became content-empty as a consequence
-                            // of this removal. Comments inside the block are
-                            // user-authored content and suppress pruning.
-                            //
-                            // The pruning is bounded to the `inputs` binding:
-                            // the input's own outer block (e.g. `disko = { url
-                            // = "..."; inputs = { ... }; }`) keeps its url and
-                            // any other siblings intact even if the binding
-                            // itself disappears.
-                            let new_child = if is_attrset_content_empty(&new_inputs_attrset) {
-                                remove_child_with_whitespace(child, &attr, attr.index())
-                            } else {
-                                let new_attr = substitute_child(
-                                    &attr,
-                                    inputs_attrset.index(),
-                                    &new_inputs_attrset,
-                                );
-                                substitute_child(child, attr.index(), &new_attr)
-                            };
-
-                            return Some(substitute_child(node, child.index(), &new_child));
-                        }
-                    }
-                }
+            if leaf_text.starts_with("inputs")
+                && let Some(result) = handle_inputs_leaf(inputs, node, child, &attr, &leaf, change)
+            {
+                return Some(result);
             }
         }
     }
@@ -1269,8 +1444,43 @@ pub(crate) fn walk_input(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
+    use rnix::{Root, SyntaxKind, SyntaxNode};
+
+    use super::{
+        apply_add, apply_change_uri, apply_follows, apply_remove, handle_inputs_leaf,
+        handle_url_leaf, insert_added_input_into_block, resolve_follows_owner_and_nested,
+    };
     use crate::change::{Change, ChangeId};
+    use crate::follows::{AttrPath, Segment};
     use crate::walk::Walker;
+    use crate::walk::context::Context;
+
+    /// Locate the `inputs = { ... }` value attrset inside a parsed flake. The
+    /// returned node is the right-hand side `NODE_ATTR_SET`, ready to feed into
+    /// the per-variant apply functions.
+    fn parse_inputs_block(flake: &str) -> SyntaxNode {
+        let root = Root::parse(flake).syntax();
+        fn find(node: &SyntaxNode) -> Option<SyntaxNode> {
+            for child in node.children() {
+                if child.kind() == SyntaxKind::NODE_ATTRPATH_VALUE
+                    && let Some(attrpath) = child.first_child()
+                    && let Some(first) = attrpath.first_child()
+                    && first.to_string() == "inputs"
+                    && let Some(value) = attrpath.next_sibling()
+                    && value.kind() == SyntaxKind::NODE_ATTR_SET
+                {
+                    return Some(value);
+                }
+                if let Some(found) = find(&child) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        find(&root).expect("inputs = { ... } block not found")
+    }
 
     /// Apply `change` to `flake_text` via [`Walker`] and return the resulting
     /// flake.nix text. Asserts the walker actually rewrites the tree.
@@ -1560,6 +1770,759 @@ mod tests {
         assert!(
             result.contains("nixpkgs.url ="),
             "top-level nixpkgs.url must remain intact, got:\n{result}"
+        );
+    }
+
+    #[test]
+    fn apply_remove_strips_matching_flat_url() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    other.url = "github:owner/other";
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let inputs_block = parse_inputs_block(flake);
+        let mut map = HashMap::new();
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("other").unwrap()],
+        };
+        let result = apply_remove(&mut map, &inputs_block, &None, &change)
+            .expect("apply_remove must rewrite the tree");
+        let text = result.to_string();
+        assert!(!text.contains("other.url"), "got:\n{text}");
+        assert!(text.contains("nixpkgs.url"), "got:\n{text}");
+    }
+
+    #[test]
+    fn apply_change_uri_rewrites_flat_url() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let inputs_block = parse_inputs_block(flake);
+        let mut map = HashMap::new();
+        let change = Change::Change {
+            id: Some("nixpkgs".to_string()),
+            uri: Some("github:NixOS/nixpkgs/nixos-23.11".to_string()),
+        };
+        let result = apply_change_uri(&mut map, &inputs_block, &None, &change)
+            .expect("apply_change_uri must rewrite the tree");
+        let text = result.to_string();
+        assert!(text.contains("nixos-23.11"), "got:\n{text}");
+        assert!(!text.contains("nixos-unstable"), "got:\n{text}");
+    }
+
+    #[test]
+    fn apply_add_inserts_into_empty_inputs_block() {
+        let flake = r#"{
+  inputs = { };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let inputs_block = parse_inputs_block(flake);
+        let mut map = HashMap::new();
+        let change = Change::Add {
+            id: Some("nixpkgs".to_string()),
+            uri: Some("github:NixOS/nixpkgs/nixos-unstable".to_string()),
+            flake: true,
+        };
+        let result = apply_add(&mut map, inputs_block, &None, &change)
+            .expect("apply_add must rewrite the tree");
+        let text = result.to_string();
+        assert!(
+            text.contains("nixpkgs.url = \"github:NixOS/nixpkgs/nixos-unstable\""),
+            "got:\n{text}"
+        );
+    }
+
+    #[test]
+    fn apply_add_inserts_into_nonempty_inputs_block() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let inputs_block = parse_inputs_block(flake);
+        let mut map = HashMap::new();
+        let change = Change::Add {
+            id: Some("flake-utils".to_string()),
+            uri: Some("github:numtide/flake-utils".to_string()),
+            flake: true,
+        };
+        let result = apply_add(&mut map, inputs_block, &None, &change)
+            .expect("apply_add must rewrite the tree");
+        let text = result.to_string();
+        assert!(text.contains("nixpkgs.url ="), "got:\n{text}");
+        assert!(
+            text.contains("flake-utils.url = \"github:numtide/flake-utils\""),
+            "got:\n{text}"
+        );
+    }
+
+    #[test]
+    fn apply_follows_inserts_flat_block_nested() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-edit.url = "github:a-kenji/flake-edit";
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let inputs_block = parse_inputs_block(flake);
+        let mut map = HashMap::new();
+        // Pre-seed the parent_exists check.
+        map.insert(
+            "flake-edit".to_string(),
+            crate::input::Input::new(crate::follows::Segment::from_unquoted("flake-edit").unwrap()),
+        );
+        let change = Change::Follows {
+            input: ChangeId::parse("flake-edit.nixpkgs").unwrap(),
+            target: AttrPath::parse("nixpkgs").unwrap(),
+        };
+        let result = apply_follows(&mut map, inputs_block, &None, &change)
+            .expect("apply_follows must rewrite the tree");
+        let text = result.to_string();
+        assert!(
+            text.contains("flake-edit.inputs.nixpkgs.follows = \"nixpkgs\""),
+            "got:\n{text}"
+        );
+    }
+
+    #[test]
+    fn apply_follows_inserts_top_level_flat_for_single_segment_input() {
+        // Single-segment ChangeId hits the `full_path.len() == 1` branch of
+        // [`insert_flat_toplevel_follows`], which emits `FollowsKind::TopLevelFlat`
+        // (`inputs.<id>.follows = "<target>"`) and splices it after the matching
+        // flat declaration. This is the second of the two shapes apply_follows
+        // handles directly (the first is the `>= 2` BlockNested branch).
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-edit.url = "github:a-kenji/flake-edit";
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let inputs_block = parse_inputs_block(flake);
+        let mut map = HashMap::new();
+        let change = Change::Follows {
+            input: ChangeId::parse("flake-edit").unwrap(),
+            target: AttrPath::parse("nixpkgs").unwrap(),
+        };
+        let result = apply_follows(&mut map, inputs_block, &None, &change)
+            .expect("apply_follows must rewrite the tree");
+        let text = result.to_string();
+        assert!(
+            text.contains("inputs.flake-edit.follows = \"nixpkgs\""),
+            "got:\n{text}"
+        );
+        // Both original entries must remain.
+        assert!(text.contains("nixpkgs.url ="), "got:\n{text}");
+        assert!(text.contains("flake-edit.url ="), "got:\n{text}");
+    }
+
+    /// Locate the four CST nodes [`handle_url_leaf`] / [`handle_inputs_leaf`]
+    /// expect, returned in `(node, child, attr, leaf)` order:
+    ///
+    /// * `node`: the input's `NODE_ATTRPATH_VALUE` (`<id> = { ... };`).
+    /// * `child`: its `NODE_ATTR_SET` value (`{ url = ...; ... }`).
+    /// * `attr`: a `NODE_ATTRPATH_VALUE` inside `child`.
+    /// * `leaf`: the leading `NODE_ATTRPATH` inside `attr`, whose text
+    ///   starts with `leaf_prefix` (`"url"`, `"inputs"`, ...).
+    fn find_input_attrset_leaf(
+        flake: &str,
+        input_id: &str,
+        leaf_prefix: &str,
+    ) -> (SyntaxNode, SyntaxNode, SyntaxNode, SyntaxNode) {
+        let inputs_block = parse_inputs_block(flake);
+        for input_node in inputs_block.children() {
+            if input_node.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
+                continue;
+            }
+            let Some(attrpath) = input_node.first_child() else {
+                continue;
+            };
+            let id = attrpath
+                .first_child()
+                .map(|n| n.to_string())
+                .unwrap_or_default();
+            if id != input_id {
+                continue;
+            }
+            let Some(value) = attrpath.next_sibling() else {
+                continue;
+            };
+            if value.kind() != SyntaxKind::NODE_ATTR_SET {
+                continue;
+            }
+            for attr in value.children() {
+                if attr.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
+                    continue;
+                }
+                for leaf in attr.children() {
+                    if leaf.to_string().starts_with(leaf_prefix) {
+                        return (input_node, value, attr, leaf);
+                    }
+                }
+            }
+        }
+        panic!("input '{input_id}' with attrset leaf '{leaf_prefix}' not found");
+    }
+
+    #[test]
+    fn handle_url_leaf_records_input_for_change_none() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs = { url = "github:NixOS/nixpkgs/nixos-unstable"; };
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let (node, child, attr, leaf) = find_input_attrset_leaf(flake, "nixpkgs", "url");
+        let mut map = HashMap::new();
+        let result = handle_url_leaf(&mut map, &node, &child, &attr, &leaf, &None, &Change::None);
+        assert!(result.is_none(), "Change::None must not rewrite");
+        assert!(map.contains_key("nixpkgs"), "input should be captured");
+    }
+
+    #[test]
+    fn handle_url_leaf_returns_empty_for_matching_remove() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs = { url = "github:NixOS/nixpkgs/nixos-unstable"; };
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let (node, child, attr, leaf) = find_input_attrset_leaf(flake, "nixpkgs", "url");
+        let mut map = HashMap::new();
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("nixpkgs").unwrap()],
+        };
+        let result = handle_url_leaf(&mut map, &node, &child, &attr, &leaf, &None, &change)
+            .expect("matching Change::Remove must rewrite");
+        assert_eq!(
+            result.to_string(),
+            "",
+            "matching remove should return the empty placeholder node",
+        );
+    }
+
+    #[test]
+    fn handle_url_leaf_rewrites_uri_for_matching_change() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs = { url = "github:NixOS/nixpkgs/nixos-unstable"; };
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let (node, child, attr, leaf) = find_input_attrset_leaf(flake, "nixpkgs", "url");
+        let mut map = HashMap::new();
+        let change = Change::Change {
+            id: Some("nixpkgs".to_string()),
+            uri: Some("github:NixOS/nixpkgs/nixos-23.11".to_string()),
+        };
+        let result = handle_url_leaf(&mut map, &node, &child, &attr, &leaf, &None, &change)
+            .expect("matching Change::Change must rewrite");
+        let text = result.to_string();
+        assert!(text.contains("nixos-23.11"), "got:\n{text}");
+        assert!(!text.contains("nixos-unstable"), "got:\n{text}");
+    }
+
+    #[test]
+    fn handle_inputs_leaf_recurses_for_nested_remove() {
+        let flake = r#"{
+  inputs = {
+    flake-edit = {
+      url = "github:a-kenji/flake-edit";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let (node, child, attr, leaf) = find_input_attrset_leaf(flake, "flake-edit", "inputs");
+        let mut map = HashMap::new();
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("flake-edit.nixpkgs").unwrap()],
+        };
+        let result = handle_inputs_leaf(&mut map, &node, &child, &attr, &leaf, &change)
+            .expect("nested follows removal must rewrite");
+        assert!(
+            !result.to_string().contains("inputs.nixpkgs.follows"),
+            "nested follow should be gone, got:\n{}",
+            result
+        );
+    }
+
+    #[test]
+    fn handle_inputs_leaf_returns_none_for_nonmatching_remove() {
+        // Removal target unrelated to anything in this input must leave
+        // the recursion empty-handed and fall through to None, since the
+        // dispatcher relies on a None return to keep iterating.
+        let flake = r#"{
+  inputs = {
+    flake-edit = {
+      url = "github:a-kenji/flake-edit";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let (node, child, attr, leaf) = find_input_attrset_leaf(flake, "flake-edit", "inputs");
+        let mut map = HashMap::new();
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("unrelated").unwrap()],
+        };
+        let result = handle_inputs_leaf(&mut map, &node, &child, &attr, &leaf, &change);
+        assert!(result.is_none(), "unrelated removal must not rewrite");
+    }
+
+    /// Locate the first `NODE_ATTRPATH_VALUE` child of an inputs block, returned
+    /// as the `(SyntaxElement, SyntaxNode)` pair the per-variant handlers expect.
+    fn first_attrpath_value_in_inputs(flake: &str) -> (rnix::SyntaxElement, SyntaxNode) {
+        let inputs_block = parse_inputs_block(flake);
+        let element = inputs_block
+            .children_with_tokens()
+            .find(|c| c.kind() == SyntaxKind::NODE_ATTRPATH_VALUE)
+            .expect("at least one NODE_ATTRPATH_VALUE child");
+        let node = element.as_node().unwrap().clone();
+        (element, node)
+    }
+
+    #[test]
+    fn insert_added_input_appends_flat_url_after_last_entry() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let inputs_block = parse_inputs_block(flake);
+        let (child, child_node) = first_attrpath_value_in_inputs(flake);
+        let result = insert_added_input_into_block(
+            &inputs_block,
+            &child,
+            &child_node,
+            "flake-utils",
+            "github:numtide/flake-utils",
+            true,
+        );
+        let text = result.to_string();
+        assert!(text.contains("nixpkgs.url ="), "got:\n{text}");
+        assert!(
+            text.contains("flake-utils.url = \"github:numtide/flake-utils\""),
+            "got:\n{text}"
+        );
+    }
+
+    #[test]
+    fn insert_added_input_appends_flake_false_pair_when_flake_disabled() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let inputs_block = parse_inputs_block(flake);
+        let (child, child_node) = first_attrpath_value_in_inputs(flake);
+        let result = insert_added_input_into_block(
+            &inputs_block,
+            &child,
+            &child_node,
+            "naked",
+            "github:owner/naked",
+            false,
+        );
+        let text = result.to_string();
+        assert!(
+            text.contains("naked.url = \"github:owner/naked\""),
+            "got:\n{text}"
+        );
+        assert!(
+            text.contains("naked.flake = false"),
+            "flake = false attr must be emitted alongside the url, got:\n{text}"
+        );
+    }
+
+    #[test]
+    fn insert_added_input_uses_attrset_style_when_block_does() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs = { url = "github:NixOS/nixpkgs/nixos-unstable"; };
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let inputs_block = parse_inputs_block(flake);
+        let (child, child_node) = first_attrpath_value_in_inputs(flake);
+        let result = insert_added_input_into_block(
+            &inputs_block,
+            &child,
+            &child_node,
+            "flake-utils",
+            "github:numtide/flake-utils",
+            true,
+        );
+        let text = result.to_string();
+        assert!(
+            text.contains("flake-utils = {")
+                && text.contains("url = \"github:numtide/flake-utils\""),
+            "added entry must be in attrset shape to match siblings, got:\n{text}"
+        );
+        assert!(
+            !text.contains("flake-utils.url ="),
+            "attrset block must not fall back to flat shape, got:\n{text}"
+        );
+    }
+
+    /// Find the first `NODE_ATTRPATH` whose last ident is `follows` anywhere
+    /// in the parsed flake. Mirrors how `handle_input_attrpath` reaches the
+    /// follows attr in production.
+    fn find_follows_attrpath(flake: &str) -> SyntaxNode {
+        fn search(node: &SyntaxNode) -> Option<SyntaxNode> {
+            for child in node.children() {
+                if child.kind() == SyntaxKind::NODE_ATTRPATH
+                    && child
+                        .children()
+                        .last()
+                        .map(|c| c.to_string() == "follows")
+                        .unwrap_or(false)
+                {
+                    return Some(child);
+                }
+                if let Some(found) = search(&child) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        search(&Root::parse(flake).syntax()).expect("no follows attrpath in flake")
+    }
+
+    /// Extract the chain (attrpath children minus `inputs` / `follows`) the same
+    /// way [`super::handle_follows_attr`] does.
+    fn chain_for(attrpath: &SyntaxNode) -> Vec<SyntaxNode> {
+        attrpath
+            .children()
+            .filter(|c| c.to_string() != "inputs" && c.to_string() != "follows")
+            .collect()
+    }
+
+    fn segs_to_strings(segs: &[Segment]) -> Vec<String> {
+        segs.iter().map(|s| s.as_str().to_string()).collect()
+    }
+
+    #[test]
+    fn resolve_follows_owner_uses_chain_first_when_ctx_is_none() {
+        let flake = r#"{
+  inputs.flake-edit.inputs.nixpkgs.follows = "nixpkgs";
+}
+"#;
+        let attrpath = find_follows_attrpath(flake);
+        let chain = chain_for(&attrpath);
+        let (owner, nested) = resolve_follows_owner_and_nested(&attrpath, &chain, &None);
+        assert_eq!(owner.as_str(), "flake-edit");
+        assert_eq!(segs_to_strings(&nested), vec!["nixpkgs".to_string()]);
+    }
+
+    #[test]
+    fn resolve_follows_owner_uses_ctx_when_attrpath_starts_with_inputs() {
+        let flake = r#"{
+  inputs.flake-edit = {
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
+}
+"#;
+        let attrpath = find_follows_attrpath(flake);
+        let chain = chain_for(&attrpath);
+        let ctx: Option<Context> = Some(Segment::from_unquoted("flake-edit").unwrap().into());
+        let (owner, nested) = resolve_follows_owner_and_nested(&attrpath, &chain, &ctx);
+        assert_eq!(owner.as_str(), "flake-edit");
+        assert_eq!(segs_to_strings(&nested), vec!["nixpkgs".to_string()]);
+    }
+
+    #[test]
+    fn resolve_follows_owner_strips_repeated_owner_when_chain_first_matches_ctx() {
+        let flake = r#"{
+  flake-edit.nixpkgs.follows = "nixpkgs";
+}
+"#;
+        let attrpath = find_follows_attrpath(flake);
+        let chain = chain_for(&attrpath);
+        let ctx: Option<Context> = Some(Segment::from_unquoted("flake-edit").unwrap().into());
+        let (owner, nested) = resolve_follows_owner_and_nested(&attrpath, &chain, &ctx);
+        assert_eq!(owner.as_str(), "flake-edit");
+        assert_eq!(segs_to_strings(&nested), vec!["nixpkgs".to_string()]);
+    }
+
+    #[test]
+    fn resolve_follows_owner_keeps_full_chain_when_ctx_owner_is_unrelated() {
+        let flake = r#"{
+  bar.nixpkgs.follows = "nixpkgs";
+}
+"#;
+        let attrpath = find_follows_attrpath(flake);
+        let chain = chain_for(&attrpath);
+        let ctx: Option<Context> = Some(Segment::from_unquoted("foo").unwrap().into());
+        let (owner, nested) = resolve_follows_owner_and_nested(&attrpath, &chain, &ctx);
+        assert_eq!(owner.as_str(), "foo");
+        assert_eq!(
+            segs_to_strings(&nested),
+            vec!["bar".to_string(), "nixpkgs".to_string()]
+        );
+    }
+
+    #[test]
+    fn handle_url_attr_strips_flat_input_on_matching_remove() {
+        let flake = "{
+  inputs = {
+    nixpkgs.url = \"github:NixOS/nixpkgs/nixos-unstable\";
+    flake-edit.url = \"github:a-kenji/flake-edit\";
+  };
+
+  outputs = { self, ... }: { };
+}
+";
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("flake-edit").unwrap()],
+        };
+        let result = apply(flake, &change);
+        assert_eq!(
+            result,
+            "{
+  inputs = {
+    nixpkgs.url = \"github:NixOS/nixpkgs/nixos-unstable\";
+  };
+
+  outputs = { self, ... }: { };
+}
+"
+        );
+    }
+
+    #[test]
+    fn handle_url_attr_rewrites_uri_for_matching_flat_change() {
+        let flake = "{
+  inputs = {
+    nixpkgs.url = \"github:NixOS/nixpkgs/nixos-unstable\";
+  };
+
+  outputs = { self, ... }: { };
+}
+";
+        let change = Change::Change {
+            id: Some("nixpkgs".to_string()),
+            uri: Some("github:NixOS/nixpkgs/nixos-23.11".to_string()),
+        };
+        let result = apply(flake, &change);
+        assert_eq!(
+            result,
+            "{
+  inputs = {
+    nixpkgs.url = \"github:NixOS/nixpkgs/nixos-23.11\";
+  };
+
+  outputs = { self, ... }: { };
+}
+"
+        );
+    }
+
+    #[test]
+    fn handle_url_attr_leaves_flat_input_alone_for_unrelated_change() {
+        let flake = "{
+  inputs = {
+    nixpkgs.url = \"github:NixOS/nixpkgs/nixos-unstable\";
+  };
+
+  outputs = { self, ... }: { };
+}
+";
+        let change = Change::Change {
+            id: Some("flake-edit".to_string()),
+            uri: Some("github:a-kenji/flake-edit".to_string()),
+        };
+        assert!(apply_maybe(flake, &change).is_none());
+    }
+
+    #[test]
+    fn handle_attrpath_follows_strips_depth_one_on_owner_remove() {
+        let flake = "{
+  inputs = {
+    nixpkgs.url = \"github:NixOS/nixpkgs/nixos-unstable\";
+    flake-edit.follows = \"nixpkgs\";
+  };
+
+  outputs = { self, ... }: { };
+}
+";
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("flake-edit").unwrap()],
+        };
+        let result = apply(flake, &change);
+        assert_eq!(
+            result,
+            "{
+  inputs = {
+    nixpkgs.url = \"github:NixOS/nixpkgs/nixos-unstable\";
+  };
+
+  outputs = { self, ... }: { };
+}
+"
+        );
+    }
+
+    #[test]
+    fn handle_attrpath_follows_strips_depth_two_on_remove() {
+        let flake = "{
+  inputs = {
+    nixpkgs.url = \"github:NixOS/nixpkgs/nixos-unstable\";
+    flake-edit.url = \"github:a-kenji/flake-edit\";
+    flake-edit.inputs.nixpkgs.follows = \"nixpkgs\";
+  };
+
+  outputs = { self, ... }: { };
+}
+";
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("flake-edit.nixpkgs").unwrap()],
+        };
+        let result = apply(flake, &change);
+        assert_eq!(
+            result,
+            "{
+  inputs = {
+    nixpkgs.url = \"github:NixOS/nixpkgs/nixos-unstable\";
+    flake-edit.url = \"github:a-kenji/flake-edit\";
+  };
+
+  outputs = { self, ... }: { };
+}
+"
+        );
+    }
+
+    #[test]
+    fn handle_attrpath_follows_strips_depth_three_on_full_path_remove() {
+        let flake = "{
+  inputs = {
+    nixpkgs.url = \"github:NixOS/nixpkgs/nixos-unstable\";
+    flake-edit.url = \"github:a-kenji/flake-edit\";
+    flake-edit.inputs.helper.inputs.nixpkgs.follows = \"nixpkgs\";
+  };
+
+  outputs = { self, ... }: { };
+}
+";
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("flake-edit.helper.nixpkgs").unwrap()],
+        };
+        let result = apply(flake, &change);
+        assert_eq!(
+            result,
+            "{
+  inputs = {
+    nixpkgs.url = \"github:NixOS/nixpkgs/nixos-unstable\";
+    flake-edit.url = \"github:a-kenji/flake-edit\";
+  };
+
+  outputs = { self, ... }: { };
+}
+"
+        );
+    }
+
+    #[test]
+    fn handle_attrpath_follows_leaves_depth_three_alone_for_unrelated_remove() {
+        let flake = "{
+  inputs = {
+    nixpkgs.url = \"github:NixOS/nixpkgs/nixos-unstable\";
+    flake-edit.url = \"github:a-kenji/flake-edit\";
+    flake-edit.inputs.helper.inputs.nixpkgs.follows = \"nixpkgs\";
+  };
+
+  outputs = { self, ... }: { };
+}
+";
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("flake-edit.helper.flake-utils").unwrap()],
+        };
+        assert!(apply_maybe(flake, &change).is_none());
+    }
+
+    #[test]
+    fn handle_attrpath_follows_records_indirect_edge_for_change_none() {
+        let flake = "{
+  inputs = {
+    nixpkgs.url = \"github:NixOS/nixpkgs/nixos-unstable\";
+    flake-edit.url = \"github:a-kenji/flake-edit\";
+    flake-edit.inputs.nixpkgs.follows = \"nixpkgs\";
+  };
+
+  outputs = { self, ... }: { };
+}
+";
+        let mut walker = Walker::new(flake);
+        let _ = walker.walk(&Change::None).expect("walker error");
+        let entry = walker
+            .inputs
+            .get("flake-edit")
+            .expect("owner must be present in walker map");
+        let expected = vec![crate::input::Follows::Indirect {
+            path: AttrPath::parse("nixpkgs").unwrap(),
+            target: Some(AttrPath::parse("nixpkgs").unwrap()),
+        }];
+        assert_eq!(entry.follows, expected);
+    }
+
+    #[test]
+    fn handle_url_attr_records_flat_input_url_for_change_none() {
+        let flake = "{
+  inputs = {
+    nixpkgs.url = \"github:NixOS/nixpkgs/nixos-unstable\";
+    flake-edit.url = \"github:a-kenji/flake-edit\";
+  };
+
+  outputs = { self, ... }: { };
+}
+";
+        let mut walker = Walker::new(flake);
+        let _ = walker.walk(&Change::None).expect("walker error");
+        assert_eq!(
+            walker.inputs["nixpkgs"].url(),
+            "github:NixOS/nixpkgs/nixos-unstable"
+        );
+        assert_eq!(
+            walker.inputs["flake-edit"].url(),
+            "github:a-kenji/flake-edit"
         );
     }
 }

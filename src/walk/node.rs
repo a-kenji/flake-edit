@@ -160,6 +160,17 @@ pub(crate) fn extract_indent(ws_str: &str) -> &str {
     }
 }
 
+/// Indent slice including the leading newline: everything from the last `\n`
+/// onward. For `"  \n    "` returns `"\n    "`. Used when re-emitting an entry
+/// at the same column as its neighbour without duplicating prior blank lines.
+pub(crate) fn last_line_with_newline(ws_str: &str) -> &str {
+    if let Some(last_nl) = ws_str.rfind('\n') {
+        &ws_str[last_nl..]
+    } else {
+        ws_str
+    }
+}
+
 /// Index of `child`'s adjacent whitespace token (preferring the previous sibling)
 /// for stripping after a removal or replacement.
 pub(crate) fn adjacent_whitespace_index(child: &rnix::SyntaxElement) -> Option<usize> {

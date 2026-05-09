@@ -22,8 +22,8 @@ pub use error::WalkerError;
 use inputs::walk_inputs;
 use node::{
     FollowsKind, adjacent_whitespace_index, get_sibling_whitespace, insertion_index_after,
-    make_quoted_string, make_toplevel_flake_false_attr, make_toplevel_url_attr, parse_node,
-    substitute_child,
+    last_line_with_newline, make_quoted_string, make_toplevel_flake_false_attr,
+    make_toplevel_url_attr, parse_node, substitute_child,
 };
 
 /// Whether a CST attrpath (idents may carry surrounding `"..."`) matches `expected`
@@ -35,6 +35,78 @@ fn idents_match(have: &[String], expected: &[&str]) -> bool {
     have.iter()
         .zip(expected.iter())
         .all(|(h, e)| strip_outer_quotes(h) == *e)
+}
+
+fn is_flat_inputs_attr_for(idents: &[String], parent_id: &str) -> bool {
+    idents.len() >= 2 && idents[0] == "inputs" && strip_outer_quotes(&idents[1]) == parent_id
+}
+
+fn block_parent_attrset(
+    toplevel: &SyntaxNode,
+    idents: &[String],
+    parent_id: &str,
+) -> Option<SyntaxNode> {
+    if idents.len() != 2 {
+        return None;
+    }
+    if !is_flat_inputs_attr_for(idents, parent_id) {
+        return None;
+    }
+    toplevel
+        .children()
+        .find(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
+}
+
+/// Same-target hits return the unchanged root. The caller treats `Some` as
+/// "claimed", so the no-op variant must still return `Some` to short-circuit
+/// the surrounding scan.
+fn retarget_existing_flat_follows(
+    attr_set: &SyntaxNode,
+    toplevel: &SyntaxNode,
+    value_node: Option<SyntaxNode>,
+    target: &str,
+) -> Option<SyntaxNode> {
+    let current_target = value_node
+        .as_ref()
+        .map(|v| strip_outer_quotes(&v.to_string()).to_string())
+        .unwrap_or_default();
+
+    if current_target == target {
+        return Some(attr_set.parent().unwrap().clone());
+    }
+
+    let value = value_node?;
+    let new_value = make_quoted_string(target);
+    let new_toplevel = substitute_child(toplevel, value.index(), &new_value);
+    let green = attr_set
+        .green()
+        .replace_child(toplevel.index(), new_toplevel.green().into());
+    Some(SyntaxNode::new_root(attr_set.replace_with(green)))
+}
+
+/// Mirrors `ref_child`'s leading newline + indent so the inserted line
+/// reads at the same column as its neighbour. Without normalization, the
+/// raw whitespace token includes any pre-`ref_child` spacing too.
+fn insert_flat_follows_after(
+    attr_set: &SyntaxNode,
+    ref_child: &SyntaxNode,
+    path: &AttrPath,
+    target: &str,
+) -> SyntaxNode {
+    let follows_node = FollowsKind::TopLevelNested { path, target }.emit();
+    let insert_index = insertion_index_after(ref_child);
+
+    let mut green = attr_set
+        .green()
+        .insert_child(insert_index, follows_node.green().into());
+
+    if let Some(whitespace) = get_sibling_whitespace(ref_child) {
+        let ws_str = whitespace.to_string();
+        let ws_node = parse_node(last_line_with_newline(&ws_str));
+        green = green.insert_child(insert_index, ws_node.green().into());
+    }
+
+    SyntaxNode::new_root(attr_set.replace_with(green))
 }
 
 #[derive(Debug, Clone)]
@@ -179,8 +251,6 @@ impl<'a> Walker {
         target: &str,
     ) -> Result<Option<SyntaxNode>, WalkerError> {
         let parent_id = path.first();
-        // Toplevel-flat shape: `inputs.S0.inputs.S1...inputs.SN.follows`
-        // (2 * len + 1 idents).
         let expected_flat = follows_idents_prefixed(path.segments());
         let mut last_parent_attr: Option<SyntaxNode> = None;
         let mut block_parent: Option<(SyntaxNode, SyntaxNode)> = None;
@@ -197,45 +267,24 @@ impl<'a> Walker {
             };
             let idents: Vec<String> = attrpath.children().map(|c| c.to_string()).collect();
 
-            // Detect `inputs.{parent_id} = { ... }` block style
-            if idents.len() == 2
-                && idents[0] == "inputs"
-                && strip_outer_quotes(&idents[1]) == parent_id.as_str()
-                && let Some(block_attr_set) = toplevel
-                    .children()
-                    .find(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
+            if let Some(block_attr_set) =
+                block_parent_attrset(&toplevel, &idents, parent_id.as_str())
             {
                 block_parent = Some((toplevel.clone(), block_attr_set));
             }
 
-            // Check for existing follows: inputs.S0.inputs.S1...inputs.SN.follows
-            if idents_match(&idents, &expected_flat) {
-                let value_node = attrpath.next_sibling();
-                let current_target = value_node
-                    .as_ref()
-                    .map(|v| strip_outer_quotes(&v.to_string()).to_string())
-                    .unwrap_or_default();
-
-                if current_target == target {
-                    // Same target, no-op.
-                    return Ok(Some(attr_set.parent().unwrap().clone()));
-                }
-                // Different target, retarget
-                if let Some(value) = value_node {
-                    let new_value = make_quoted_string(target);
-                    let new_toplevel = substitute_child(&toplevel, value.index(), &new_value);
-                    let green = attr_set
-                        .green()
-                        .replace_child(toplevel.index(), new_toplevel.green().into());
-                    return Ok(Some(SyntaxNode::new_root(attr_set.replace_with(green))));
-                }
+            if idents_match(&idents, &expected_flat)
+                && let Some(rebuilt) = retarget_existing_flat_follows(
+                    attr_set,
+                    &toplevel,
+                    attrpath.next_sibling(),
+                    target,
+                )
+            {
+                return Ok(Some(rebuilt));
             }
 
-            // Track last inputs.{parent_id}.* attribute
-            if idents.len() >= 2
-                && idents[0] == "inputs"
-                && strip_outer_quotes(&idents[1]) == parent_id.as_str()
-            {
+            if is_flat_inputs_attr_for(&idents, parent_id.as_str()) {
                 last_parent_attr = Some(toplevel.clone());
             }
         }
@@ -251,27 +300,10 @@ impl<'a> Walker {
             );
         }
 
-        // No existing follows, insert after the last parent attribute
         if let Some(ref_child) = last_parent_attr {
-            let follows_node = FollowsKind::TopLevelNested { path, target }.emit();
-            let insert_index = insertion_index_after(&ref_child);
-
-            let mut green = attr_set
-                .green()
-                .insert_child(insert_index, follows_node.green().into());
-
-            if let Some(whitespace) = get_sibling_whitespace(&ref_child) {
-                let ws_str = whitespace.to_string();
-                let normalized = if let Some(last_nl) = ws_str.rfind('\n') {
-                    &ws_str[last_nl..]
-                } else {
-                    &ws_str
-                };
-                let ws_node = parse_node(normalized);
-                green = green.insert_child(insert_index, ws_node.green().into());
-            }
-
-            return Ok(Some(SyntaxNode::new_root(attr_set.replace_with(green))));
+            return Ok(Some(insert_flat_follows_after(
+                attr_set, &ref_child, path, target,
+            )));
         }
 
         Ok(None)
@@ -437,12 +469,7 @@ impl<'a> Walker {
             while let Some(ref tok) = cursor {
                 if tok.kind() == SyntaxKind::TOKEN_WHITESPACE {
                     let ws_str = tok.to_string();
-                    let normalized = if let Some(last_nl) = ws_str.rfind('\n') {
-                        &ws_str[last_nl..]
-                    } else {
-                        &ws_str
-                    };
-                    ws = Some(parse_node(normalized));
+                    ws = Some(parse_node(last_line_with_newline(&ws_str)));
                     break;
                 }
                 cursor = tok.prev_sibling_or_token();
@@ -472,5 +499,140 @@ impl<'a> Walker {
         }
 
         Some(SyntaxNode::new_root(attr_set.replace_with(green)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::change::{Change, ChangeId};
+    use crate::follows::AttrPath;
+
+    fn apply(flake_text: &str, change: &Change) -> String {
+        let mut walker = Walker::new(flake_text);
+        walker
+            .walk(change)
+            .expect("walker error")
+            .expect("walker did not rewrite the tree")
+            .to_string()
+    }
+
+    fn follows_change(input: &str, target: &str) -> Change {
+        Change::Follows {
+            input: ChangeId::parse(input).unwrap(),
+            target: AttrPath::parse(target).unwrap(),
+        }
+    }
+
+    #[test]
+    fn handle_follows_flat_toplevel_inserts_follows_after_last_parent_attr() {
+        let flake = "{
+  inputs.flake-edit.url = \"github:a-kenji/flake-edit\";
+  inputs.nixpkgs.url = \"github:NixOS/nixpkgs\";
+
+  outputs = { self, ... }: { };
+}
+";
+        let result = apply(flake, &follows_change("flake-edit.nixpkgs", "nixpkgs"));
+        assert_eq!(
+            result,
+            "{
+  inputs.flake-edit.url = \"github:a-kenji/flake-edit\";
+  inputs.flake-edit.inputs.nixpkgs.follows = \"nixpkgs\";
+  inputs.nixpkgs.url = \"github:NixOS/nixpkgs\";
+
+  outputs = { self, ... }: { };
+}
+"
+        );
+    }
+
+    #[test]
+    fn handle_follows_flat_toplevel_retargets_existing_follows() {
+        let flake = "{
+  inputs.flake-edit.url = \"github:a-kenji/flake-edit\";
+  inputs.flake-edit.inputs.nixpkgs.follows = \"old-pkgs\";
+  inputs.nixpkgs.url = \"github:NixOS/nixpkgs\";
+
+  outputs = { self, ... }: { };
+}
+";
+        let result = apply(flake, &follows_change("flake-edit.nixpkgs", "nixpkgs"));
+        assert_eq!(
+            result,
+            "{
+  inputs.flake-edit.url = \"github:a-kenji/flake-edit\";
+  inputs.flake-edit.inputs.nixpkgs.follows = \"nixpkgs\";
+  inputs.nixpkgs.url = \"github:NixOS/nixpkgs\";
+
+  outputs = { self, ... }: { };
+}
+"
+        );
+    }
+
+    #[test]
+    fn handle_follows_flat_toplevel_is_noop_when_target_already_matches() {
+        let flake = "{
+  inputs.flake-edit.url = \"github:a-kenji/flake-edit\";
+  inputs.flake-edit.inputs.nixpkgs.follows = \"nixpkgs\";
+  inputs.nixpkgs.url = \"github:NixOS/nixpkgs\";
+
+  outputs = { self, ... }: { };
+}
+";
+        let result = apply(flake, &follows_change("flake-edit.nixpkgs", "nixpkgs"));
+        assert_eq!(result, flake);
+    }
+
+    #[test]
+    fn handle_follows_flat_toplevel_delegates_to_block_parent_when_present() {
+        let flake = "{
+  inputs.nixpkgs.url = \"github:NixOS/nixpkgs\";
+  inputs.flake-edit = {
+    url = \"github:a-kenji/flake-edit\";
+  };
+
+  outputs = { self, ... }: { };
+}
+";
+        let result = apply(flake, &follows_change("flake-edit.nixpkgs", "nixpkgs"));
+        assert_eq!(
+            result,
+            "{
+  inputs.nixpkgs.url = \"github:NixOS/nixpkgs\";
+  inputs.flake-edit = {
+    url = \"github:a-kenji/flake-edit\";
+    inputs.nixpkgs.follows = \"nixpkgs\";
+  };
+
+  outputs = { self, ... }: { };
+}
+"
+        );
+    }
+
+    #[test]
+    fn is_flat_inputs_attr_for_only_matches_matching_parent_id() {
+        let yes = [
+            "inputs".to_string(),
+            "flake-edit".to_string(),
+            "url".to_string(),
+        ];
+        let no = [
+            "inputs".to_string(),
+            "nixpkgs".to_string(),
+            "url".to_string(),
+        ];
+        assert!(is_flat_inputs_attr_for(&yes, "flake-edit"));
+        assert!(!is_flat_inputs_attr_for(&no, "flake-edit"));
+        // The CST keeps surrounding `"..."` on quoted idents; the comparison
+        // must unquote them, otherwise `"flake-edit" != flake-edit`.
+        let quoted = [
+            "inputs".to_string(),
+            "\"flake-edit\"".to_string(),
+            "url".to_string(),
+        ];
+        assert!(is_flat_inputs_attr_for(&quoted, "flake-edit"));
     }
 }

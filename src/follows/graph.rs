@@ -574,16 +574,12 @@ impl FollowsGraph {
             return true;
         }
         on_stack.insert(node.clone());
-        let direct_hops = self.expanded_outgoing(node).into_iter().filter_map(|edge| {
-            if let Some(skip) = exclude
-                && edge.source == skip.source
-                && edge.follows == skip.follows
-            {
-                return None;
-            }
-            Some(edge.follows.clone())
-        });
-        for next in direct_hops.collect::<Vec<_>>() {
+
+        let mut candidates = self.direct_hop_targets(node, exclude);
+        candidates.extend(Self::extra_edge_targets(node, extra_edges, exclude));
+        candidates.extend(self.ancestor_rewrite_targets(node, extra_edges, exclude));
+
+        for next in candidates {
             if self.dfs_routes_to(
                 &next,
                 target,
@@ -598,93 +594,76 @@ impl FollowsGraph {
                 return true;
             }
         }
-        for (src, dst) in extra_edges {
-            if src != node && !node.is_prefix_of(src) {
-                continue;
-            }
-            if let Some(skip) = exclude
-                && src == &skip.source
-                && dst == &skip.follows
-            {
-                continue;
-            }
-            if self.dfs_routes_to(
-                dst,
-                target,
-                exclude,
-                extra_edges,
-                depth + 1,
-                visited,
-                on_stack,
-            ) {
-                on_stack.remove(node);
-                visited.insert(node.clone());
-                return true;
-            }
-        }
-        // Ancestor rewriting: when `A.B` follows `C`, `A.B.X` resolves to
-        // `C.X`. Splice the suffix-after-ancestor onto the target and recurse.
-        let mut ancestor: Option<AttrPath> = node.parent();
-        while let Some(anc) = ancestor.clone() {
-            for edge in self.outgoing(&anc) {
-                if let Some(skip) = exclude
-                    && edge.source == skip.source
-                    && edge.follows == skip.follows
-                {
-                    continue;
-                }
-                let mut next = edge.follows.clone();
-                for seg in &node.segments()[anc.len()..] {
-                    next.push(seg.clone());
-                }
-                if self.dfs_routes_to(
-                    &next,
-                    target,
-                    exclude,
-                    extra_edges,
-                    depth + 1,
-                    visited,
-                    on_stack,
-                ) {
-                    on_stack.remove(node);
-                    visited.insert(node.clone());
-                    return true;
-                }
-            }
-            for (src, dst) in extra_edges {
-                if src != &anc {
-                    continue;
-                }
-                if let Some(skip) = exclude
-                    && src == &skip.source
-                    && dst == &skip.follows
-                {
-                    continue;
-                }
-                let mut next = dst.clone();
-                for seg in &node.segments()[anc.len()..] {
-                    next.push(seg.clone());
-                }
-                if self.dfs_routes_to(
-                    &next,
-                    target,
-                    exclude,
-                    extra_edges,
-                    depth + 1,
-                    visited,
-                    on_stack,
-                ) {
-                    on_stack.remove(node);
-                    visited.insert(node.clone());
-                    return true;
-                }
-            }
-            ancestor = anc.parent();
-        }
         on_stack.remove(node);
         visited.insert(node.clone());
         false
     }
+
+    /// Includes edges sourced at any descendant of `node`, since a declared
+    /// `parent.child.follows = target` encodes an implicit dependency of
+    /// `parent` on `target`.
+    fn direct_hop_targets(&self, node: &AttrPath, exclude: Option<&Edge>) -> Vec<AttrPath> {
+        self.expanded_outgoing(node)
+            .into_iter()
+            .filter(|edge| !matches_excluded(&edge.source, &edge.follows, exclude))
+            .map(|edge| edge.follows.clone())
+            .collect()
+    }
+
+    fn extra_edge_targets(
+        node: &AttrPath,
+        extra_edges: &[(AttrPath, AttrPath)],
+        exclude: Option<&Edge>,
+    ) -> Vec<AttrPath> {
+        extra_edges
+            .iter()
+            .filter(|(src, _)| src == node || node.is_prefix_of(src))
+            .filter(|(src, dst)| !matches_excluded(src, dst, exclude))
+            .map(|(_, dst)| dst.clone())
+            .collect()
+    }
+
+    /// When `A.B` follows `C`, `A.B.X` resolves to `C.X`: an edge sourced
+    /// at any ancestor of `node` rewrites the suffix after that ancestor
+    /// onto the edge's target.
+    fn ancestor_rewrite_targets(
+        &self,
+        node: &AttrPath,
+        extra_edges: &[(AttrPath, AttrPath)],
+        exclude: Option<&Edge>,
+    ) -> Vec<AttrPath> {
+        let mut out: Vec<AttrPath> = Vec::new();
+        let mut ancestor = node.parent();
+        while let Some(anc) = ancestor.clone() {
+            let suffix = &node.segments()[anc.len()..];
+            for edge in self.outgoing(&anc) {
+                if matches_excluded(&edge.source, &edge.follows, exclude) {
+                    continue;
+                }
+                out.push(splice_suffix(&edge.follows, suffix));
+            }
+            for (src, dst) in extra_edges {
+                if src != &anc || matches_excluded(src, dst, exclude) {
+                    continue;
+                }
+                out.push(splice_suffix(dst, suffix));
+            }
+            ancestor = anc.parent();
+        }
+        out
+    }
+}
+
+fn matches_excluded(source: &AttrPath, follows: &AttrPath, exclude: Option<&Edge>) -> bool {
+    matches!(exclude, Some(e) if &e.source == source && &e.follows == follows)
+}
+
+fn splice_suffix(base: &AttrPath, suffix: &[Segment]) -> AttrPath {
+    let mut out = base.clone();
+    for seg in suffix {
+        out.push(seg.clone());
+    }
+    out
 }
 
 fn collect_declared_edges(input: &Input, graph: &mut FollowsGraph) {
@@ -1523,5 +1502,115 @@ mod tests {
             new_text.contains("omnibus.inputs.nixpkgs.follows = \"nixpkgs\""),
             "load-bearing depth-1 follows must remain, got:\n{new_text}"
         );
+    }
+
+    #[test]
+    fn matches_excluded_compares_source_and_follows() {
+        let edge = declared_edge("a.b", "nixpkgs");
+        assert!(matches_excluded(
+            &path("a.b"),
+            &path("nixpkgs"),
+            Some(&edge)
+        ));
+        assert!(!matches_excluded(&path("a.b"), &path("other"), Some(&edge)));
+        assert!(!matches_excluded(
+            &path("a.c"),
+            &path("nixpkgs"),
+            Some(&edge)
+        ));
+        assert!(!matches_excluded(&path("a.b"), &path("nixpkgs"), None));
+    }
+
+    #[test]
+    fn splice_suffix_appends_segments_in_order() {
+        let spliced = splice_suffix(&path("c"), &[seg("x"), seg("y")]);
+        assert_eq!(spliced, path("c.x.y"));
+        let empty = splice_suffix(&path("c"), &[]);
+        assert_eq!(empty, path("c"));
+    }
+
+    #[test]
+    fn direct_hop_targets_lists_outgoing_follows() {
+        let mut g = FollowsGraph::default();
+        g.insert_edge(declared_edge("a.b", "nixpkgs"));
+        g.insert_edge(declared_edge("a.b", "flake-utils"));
+        let mut got = g.direct_hop_targets(&path("a.b"), None);
+        got.sort();
+        assert_eq!(got, vec![path("flake-utils"), path("nixpkgs")]);
+    }
+
+    #[test]
+    fn direct_hop_targets_includes_edges_at_descendant_sources() {
+        let mut g = FollowsGraph::default();
+        g.insert_edge(declared_edge("a.b.c", "nixpkgs"));
+        let got = g.direct_hop_targets(&path("a"), None);
+        assert_eq!(got, vec![path("nixpkgs")]);
+    }
+
+    #[test]
+    fn direct_hop_targets_drops_excluded_edge() {
+        let mut g = FollowsGraph::default();
+        let candidate = declared_edge("a.b", "nixpkgs");
+        g.insert_edge(candidate.clone());
+        g.insert_edge(declared_edge("a.b", "flake-utils"));
+        let got = g.direct_hop_targets(&path("a.b"), Some(&candidate));
+        assert_eq!(got, vec![path("flake-utils")]);
+    }
+
+    #[test]
+    fn extra_edge_targets_matches_exact_source_or_prefix() {
+        let extra = vec![
+            (path("a.b"), path("dst1")),
+            (path("a.b.x"), path("dst2")),
+            (path("c"), path("dst3")),
+        ];
+        let mut got = FollowsGraph::extra_edge_targets(&path("a.b"), &extra, None);
+        got.sort();
+        assert_eq!(got, vec![path("dst1"), path("dst2")]);
+    }
+
+    #[test]
+    fn extra_edge_targets_drops_excluded_pair() {
+        let extra = vec![
+            (path("a.b"), path("nixpkgs")),
+            (path("a.b"), path("flake-utils")),
+        ];
+        let exclude = declared_edge("a.b", "nixpkgs");
+        let got = FollowsGraph::extra_edge_targets(&path("a.b"), &extra, Some(&exclude));
+        assert_eq!(got, vec![path("flake-utils")]);
+    }
+
+    #[test]
+    fn ancestor_rewrite_targets_splices_outgoing_suffix() {
+        let mut g = FollowsGraph::default();
+        g.insert_edge(declared_edge("a.b", "c"));
+        let got = g.ancestor_rewrite_targets(&path("a.b.x.y"), &[], None);
+        assert_eq!(got, vec![path("c.x.y")]);
+    }
+
+    #[test]
+    fn ancestor_rewrite_targets_uses_extra_edges_at_ancestor() {
+        let g = FollowsGraph::default();
+        let extra = vec![(path("a.b"), path("c"))];
+        let got = g.ancestor_rewrite_targets(&path("a.b.x"), &extra, None);
+        assert_eq!(got, vec![path("c.x")]);
+    }
+
+    #[test]
+    fn ancestor_rewrite_targets_walks_to_grandparent() {
+        let mut g = FollowsGraph::default();
+        g.insert_edge(declared_edge("a", "z"));
+        let got = g.ancestor_rewrite_targets(&path("a.b.c"), &[], None);
+        assert_eq!(got, vec![path("z.b.c")]);
+    }
+
+    #[test]
+    fn ancestor_rewrite_targets_skips_excluded_ancestor_edge() {
+        let mut g = FollowsGraph::default();
+        let exclude = declared_edge("a.b", "c");
+        g.insert_edge(exclude.clone());
+        g.insert_edge(declared_edge("a.b", "d"));
+        let got = g.ancestor_rewrite_targets(&path("a.b.x"), &[], Some(&exclude));
+        assert_eq!(got, vec![path("d.x")]);
     }
 }
