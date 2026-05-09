@@ -16,7 +16,7 @@ use crate::follows::path::follows_idents_prefixed;
 use crate::follows::{AttrPath, Segment, strip_outer_quotes};
 use crate::input::Input;
 
-pub use context::Context;
+pub(crate) use context::Context;
 pub use error::WalkerError;
 
 use inputs::walk_inputs;
@@ -39,9 +39,9 @@ fn idents_match(have: &[String], expected: &[&str]) -> bool {
 
 #[derive(Debug, Clone)]
 pub struct Walker {
-    pub root: SyntaxNode,
-    pub inputs: HashMap<String, Input>,
-    pub add_toplevel: bool,
+    pub(crate) root: SyntaxNode,
+    pub(crate) inputs: HashMap<String, Input>,
+    pub(crate) add_toplevel: bool,
 }
 
 impl<'a> Walker {

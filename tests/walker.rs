@@ -5,6 +5,7 @@ mod common;
 use common::{Info, load_flake};
 use flake_edit::app::commands::list::ListOutput;
 use flake_edit::change::Change;
+use flake_edit::edit::FlakeEdit;
 use flake_edit::walk::Walker;
 use rstest::rstest;
 
@@ -17,17 +18,17 @@ use rstest::rstest;
 #[case("one_level_nesting_flat")]
 #[case("flat_nested_flat")]
 #[case("deeply_nested_inputs")]
+#[case("first_nested_node")]
 fn test_walker_list_inputs(#[case] fixture: &str) {
     let content = load_flake(fixture);
-    let mut walker = Walker::new(&content);
-    let _ = walker.walk(&Change::None);
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let info = Info::empty();
     insta::with_settings!({
         sort_maps => true,
         info => &info,
         snapshot_suffix => fixture
     }, {
-        insta::assert_yaml_snapshot!(ListOutput::from(&walker.inputs));
+        insta::assert_yaml_snapshot!(ListOutput::from(flake_edit.list()));
     });
 }
 

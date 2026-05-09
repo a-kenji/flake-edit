@@ -12,7 +12,14 @@ use crate::follows::AttrPath;
 
 use super::super::editor::Editor;
 use super::super::state::AppState;
-use super::{CommandError, Result, interactive_single_select, load_flake_lock, updater};
+use super::{Error, Result, interactive_single_select, load_flake_lock, updater};
+
+fn lock_path_display(state: &AppState) -> std::path::PathBuf {
+    state
+        .lock_file
+        .clone()
+        .unwrap_or_else(|| std::path::PathBuf::from("flake.lock"))
+}
 
 pub fn pin(
     editor: &Editor,
@@ -28,25 +35,23 @@ pub fn pin(
         .collect::<Vec<_>>();
 
     if let Some(id) = id {
-        let lock = load_flake_lock(state).map_err(|e| CommandError::LockFileError {
-            path: state
-                .lock_file
-                .as_ref()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|| "flake.lock".to_string()),
-            source: e,
+        let lock = load_flake_lock(state).map_err(|source| Error::LockFile {
+            path: lock_path_display(state),
+            source,
         })?;
         let target_rev = if let Some(rev) = rev {
             rev
         } else {
-            let path = AttrPath::parse(&id).map_err(|_| CommandError::InputNotFound(id.clone()))?;
-            lock.rev_for(&path)
-                .map_err(|_| CommandError::InputNotFound(id.clone()))?
+            let path = AttrPath::parse(&id).map_err(|source| Error::InvalidInputId {
+                id: id.clone(),
+                source,
+            })?;
+            lock.rev_for(&path)?
         };
         let mut updater = updater(editor, inputs);
         updater
             .pin_input_to_ref(&id, &target_rev)
-            .map_err(CommandError::InputNotPinnable)?;
+            .map_err(|id| Error::InputNotPinnable { id })?;
         let change = updater.get_changes();
         editor.apply_or_diff(&change, state)?;
         if !state.diff {
@@ -54,15 +59,11 @@ pub fn pin(
         }
     } else if state.interactive {
         if input_ids.is_empty() {
-            return Err(CommandError::NoInputs);
+            return Err(Error::NoInputs);
         }
-        let lock = load_flake_lock(state).map_err(|e| CommandError::LockFileError {
-            path: state
-                .lock_file
-                .as_ref()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|| "flake.lock".to_string()),
-            source: e,
+        let lock = load_flake_lock(state).map_err(|source| Error::LockFile {
+            path: lock_path_display(state),
+            source,
         })?;
 
         interactive_single_select(
@@ -72,21 +73,21 @@ pub fn pin(
             "Select input",
             input_ids,
             |id| {
-                let path =
-                    AttrPath::parse(id).map_err(|_| CommandError::InputNotFound(id.to_string()))?;
-                let target_rev = lock
-                    .rev_for(&path)
-                    .map_err(|_| CommandError::InputNotFound(id.to_string()))?;
+                let path = AttrPath::parse(id).map_err(|source| Error::InvalidInputId {
+                    id: id.to_string(),
+                    source,
+                })?;
+                let target_rev = lock.rev_for(&path)?;
                 let mut updater = updater(editor, inputs.clone());
                 updater
                     .pin_input_to_ref(id, &target_rev)
-                    .map_err(CommandError::InputNotPinnable)?;
+                    .map_err(|id| Error::InputNotPinnable { id })?;
                 Ok((updater.get_changes(), target_rev))
             },
             |id, target_rev| println!("Pinned input: {} to {}", id, target_rev),
         )?;
     } else {
-        return Err(CommandError::NoId);
+        return Err(Error::NoId);
     }
 
     Ok(())
@@ -108,7 +109,7 @@ pub fn unpin(
         let mut updater = updater(editor, inputs);
         updater
             .unpin_input(&id)
-            .map_err(CommandError::InputNotPinnable)?;
+            .map_err(|id| Error::InputNotPinnable { id })?;
         let change = updater.get_changes();
         editor.apply_or_diff(&change, state)?;
         if !state.diff {
@@ -129,7 +130,7 @@ pub fn unpin(
             .collect();
 
         if pinned_ids.is_empty() {
-            return Err(CommandError::NoInputs);
+            return Err(Error::NoInputs);
         }
 
         interactive_single_select(
@@ -142,13 +143,13 @@ pub fn unpin(
                 let mut updater = updater(editor, inputs.clone());
                 updater
                     .unpin_input(id)
-                    .map_err(CommandError::InputNotPinnable)?;
+                    .map_err(|id| Error::InputNotPinnable { id })?;
                 Ok((updater.get_changes(), ()))
             },
             |id, ()| println!("Unpinned input: {}", id),
         )?;
     } else {
-        return Err(CommandError::NoId);
+        return Err(Error::NoId);
     }
 
     Ok(())

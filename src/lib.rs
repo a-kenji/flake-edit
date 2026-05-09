@@ -15,8 +15,8 @@
 //!   `forge::version`, `forge::update`).
 //! - [`config`] loads `flake-edit.toml`.
 //! - [`cache`] persists URI completion state.
-//! - [`validate`] runs pre-edit lint passes. [`error::FlakeEditError`] is the
-//!   crate-wide error.
+//! - [`validate`] runs pre-edit lint passes. [`Error`] is the crate-wide
+//!   error.
 //!
 //! Feature flags: `application` (default) enables the binary-side glue
 //! ([`app`], [`cli`], [`diff`], [`tui`]) and pulls in `clap`, `ratatui`,
@@ -43,3 +43,5 @@ pub mod tui;
 pub mod uri;
 pub mod validate;
 pub mod walk;
+
+pub use error::Error;

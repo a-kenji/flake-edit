@@ -1,37 +1,41 @@
-use thiserror::Error;
+use std::path::PathBuf;
 
+use crate::lock::LockError;
 use crate::validate::ValidationError;
 use crate::walk::WalkerError;
 
 /// Error for [`crate::edit::FlakeEdit`] operations.
-#[derive(Debug, Error)]
-pub enum FlakeEditError {
-    /// An I/O operation on `flake.nix` or `flake.lock` failed.
-    #[error("IoError: {0}")]
-    Io(#[from] std::io::Error),
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum Error {
+    /// Failed to read a flake file. Carries the path that the read was
+    /// attempted against so the caller can surface it.
+    #[error("failed to read {path}", path = path.display())]
+    Read {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    /// Failed to write a flake file.
+    #[error("failed to write {path}", path = path.display())]
+    Write {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
     /// The CST walker rejected a change. See [`WalkerError`] for details.
     #[error(transparent)]
     Walker(#[from] WalkerError),
-    /// `flake.lock` has no `root` node referenced by `nodes`.
-    #[error("Lock file missing root node")]
-    LockMissingRoot,
-    /// Generic lockfile-shape failure: missing fields, malformed paths,
-    /// unresolvable input references.
-    #[error("There is an error in the Lockfile: {0}")]
-    LockError(String),
-    /// JSON deserialization of `flake.lock` failed.
-    #[error("Deserialization Error: {0}")]
-    Serde(#[from] serde_json::Error),
+    /// A failure parsing or walking `flake.lock`. See [`LockError`] for the
+    /// per-variant breakdown.
+    #[error(transparent)]
+    Lock(#[from] LockError),
     /// Tried to add an input that already exists. The wrapped string is the
     /// existing input id.
-    #[error(
-        "Input '{0}' already exists in the flake.\n\nTo replace it:\n  1. Remove it first: flake-edit remove {0}\n  2. Then add it again: flake-edit add {0} <flakeref>\n\nOr add it with a different [ID]:\n  flake-edit add [ID] <flakeref>\n\nTo see all current inputs: flake-edit list"
-    )]
+    #[error("input '{0}' already exists in the flake")]
     DuplicateInput(String),
     /// Tried to operate on an input id that is not declared in the flake.
-    #[error(
-        "Input '{0}' not found in the flake.\n\nTo add it:\n  flake-edit add {0} <flakeref>\n\nTo see all current inputs: flake-edit list"
-    )]
+    #[error("input '{0}' not found in the flake")]
     InputNotFound(String),
     /// The `add-follow` subcommand received a path deeper than `parent.child`.
     /// `flake-edit follow` accepts deeper paths up to
@@ -39,18 +43,44 @@ pub enum FlakeEditError {
     /// in the explicit-path command before they produce nested
     /// `inputs.*.inputs.*.follows` chains.
     #[error(
-        "`add-follow` accepts only depth-1 paths of the form `parent.child`; got '{path}' ({segments} segments).\n\nUse `flake-edit follow` for deeper paths (depth bounded by `follow.max_depth` in your config)."
+        "`add-follow` accepts only depth-1 paths of the form `parent.child`; got '{path}' ({segments} segments)"
     )]
     AddFollowDepthLimit { path: String, segments: usize },
     /// Pre-edit validation found one or more fatal issues in `flake.nix`.
-    #[error("Validation error in flake.nix:\n{}", format_validation_errors(.0))]
+    #[error("validation failed in flake.nix ({} issue(s))", .0.len())]
     Validation(Vec<ValidationError>),
 }
 
-fn format_validation_errors(errors: &[ValidationError]) -> String {
-    errors
-        .iter()
-        .map(|e| format!("  - {}", e))
-        .collect::<Vec<_>>()
-        .join("\n")
+impl Error {
+    /// Actionable hint to display alongside the error, when one exists.
+    ///
+    /// Hints live here rather than in `#[error(...)]` strings so the binary
+    /// can render them on a separate `hint:` line and library callers can
+    /// choose to surface or ignore them.
+    pub fn hint(&self) -> Option<String> {
+        match self {
+            Self::DuplicateInput(id) => Some(format!(
+                "to replace it, run `flake-edit remove {id}` then `flake-edit add {id} <flakeref>`; \
+                 or add it under a different id with `flake-edit add [ID] <flakeref>`"
+            )),
+            Self::InputNotFound(id) => Some(format!(
+                "to add it, run `flake-edit add {id} <flakeref>`; \
+                 see declared inputs with `flake-edit list`"
+            )),
+            Self::AddFollowDepthLimit { .. } => Some(
+                "use `flake-edit follow` for deeper paths (depth bounded by `follow.max_depth` in your config)"
+                    .into(),
+            ),
+            _ => None,
+        }
+    }
+
+    /// Per-error rendering of a `Validation` aggregate as one bullet per
+    /// inner error. Returns `None` for non-aggregate variants.
+    pub fn bullets(&self) -> Option<Vec<String>> {
+        match self {
+            Self::Validation(errors) => Some(errors.iter().map(|e| e.to_string()).collect()),
+            _ => None,
+        }
+    }
 }

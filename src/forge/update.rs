@@ -278,7 +278,7 @@ impl Updater {
     }
 
     /// Rewrite `input`'s URL to pin it to `rev`.
-    pub fn change_input_to_rev(&mut self, input: &UpdateInput, rev: &str) {
+    pub(crate) fn change_input_to_rev(&mut self, input: &UpdateInput, rev: &str) {
         let uri = self.get_input_text(input);
         match uri.parse::<FlakeRef>() {
             Ok(mut parsed) => {
@@ -312,7 +312,7 @@ impl Updater {
     }
     /// Query the forge API for `input`'s latest release and rewrite the URL
     /// when newer.
-    pub fn query_and_update_all_inputs(&mut self, input: &UpdateInput, init: bool) {
+    pub(crate) fn query_and_update_all_inputs(&mut self, input: &UpdateInput, init: bool) {
         let uri = self.get_input_text(input);
 
         let parsed = match uri.parse::<FlakeRef>() {
@@ -433,7 +433,7 @@ impl Updater {
 
 /// Wrapper that lets [`Updater`] sort inputs by source position.
 #[derive(Debug, Clone)]
-pub struct UpdateInput {
+pub(crate) struct UpdateInput {
     input: Input,
     /// Char index of the first URL character (inside the quotes) in the
     /// original, unmodified text.

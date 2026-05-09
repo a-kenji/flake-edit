@@ -1,8 +1,8 @@
-use nix_uri::FlakeRef;
+use nix_uri::{FlakeRef, NixUriError};
 
 use crate::change::Change;
 
-use super::{CommandError, Result};
+use super::{Error, Result};
 
 /// URI rewriting options that apply to both `add` and `change`.
 ///
@@ -50,22 +50,16 @@ pub(super) fn build_uri_change(
 ///
 /// # Errors
 ///
-/// Returns the human-facing diagnostic surfaced to the user when the
-/// underlying URI type does not accept `--ref-or-rev`.
+/// Returns the typed `nix_uri` error when the underlying URI type does
+/// not accept the requested option. The renderer attaches an actionable
+/// hint at the binary boundary; the library error stays clean.
 pub(super) fn apply_uri_options(
     mut flake_ref: FlakeRef,
     ref_or_rev: Option<&str>,
     shallow: bool,
-) -> std::result::Result<FlakeRef, String> {
+) -> std::result::Result<FlakeRef, NixUriError> {
     if let Some(ror) = ref_or_rev {
-        flake_ref.r#type.ref_or_rev(Some(ror.to_string())).map_err(|e| {
-            format!(
-                "Cannot apply --ref-or-rev: {}. \
-                The --ref-or-rev option only works with git forge types (github:, gitlab:, sourcehut:) and indirect types (flake:). \
-                For other URI types, use ?ref= or ?rev= query parameters in the URI itself.",
-                e
-            )
-        })?;
+        flake_ref.r#type.ref_or_rev(Some(ror.to_string()))?;
     }
     if shallow {
         flake_ref.params.set_shallow(Some("1".to_string()));
@@ -77,17 +71,18 @@ pub(super) fn apply_uri_options(
 /// rewritten form.
 ///
 /// The URI is always parsed through `nix-uri` so callers get an
-/// early [`CommandError::InvalidUri`] on malformed input. When
-/// neither option is set the original `uri` is returned verbatim to
-/// avoid re-rendering query parameters the user typed deliberately.
+/// early [`Error::InvalidUri`] on malformed input. When neither option
+/// is set the original `uri` is returned verbatim to avoid re-rendering
+/// query parameters the user typed deliberately.
 pub(super) fn transform_uri(
     uri: String,
     ref_or_rev: Option<&str>,
     shallow: bool,
 ) -> Result<String> {
-    let flake_ref: FlakeRef = uri
-        .parse()
-        .map_err(|e| CommandError::InvalidUri(format!("{}: {}", uri, e)))?;
+    let flake_ref: FlakeRef = uri.parse().map_err(|source| Error::InvalidUri {
+        uri: uri.clone(),
+        source,
+    })?;
 
     if ref_or_rev.is_none() && !shallow {
         return Ok(uri);
@@ -95,5 +90,8 @@ pub(super) fn transform_uri(
 
     apply_uri_options(flake_ref, ref_or_rev, shallow)
         .map(|f| f.to_string())
-        .map_err(CommandError::CouldNotInferId)
+        .map_err(|source| Error::ApplyUriOptions {
+            uri: uri.clone(),
+            source,
+        })
 }

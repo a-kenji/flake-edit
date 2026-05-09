@@ -26,28 +26,15 @@ pub(crate) const INVALID_SEGMENT_SENTINEL: &str = "__invalid__";
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Segment(String);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SegmentError {
+    #[error("segment must not be empty")]
     Empty,
+    #[error("segment must not contain an embedded double quote")]
     ContainsQuote,
+    #[error("segment must not contain control characters")]
     ContainsControl,
 }
-
-impl fmt::Display for SegmentError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SegmentError::Empty => write!(f, "segment must not be empty"),
-            SegmentError::ContainsQuote => {
-                write!(f, "segment must not contain an embedded double quote")
-            }
-            SegmentError::ContainsControl => {
-                write!(f, "segment must not contain control characters")
-            }
-        }
-    }
-}
-
-impl std::error::Error for SegmentError {}
 
 impl Segment {
     /// Construct from already-unquoted text.
@@ -169,29 +156,14 @@ impl<'de> Deserialize<'de> for Segment {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct AttrPath(SmallVec<[Segment; 2]>);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum AttrPathParseError {
+    #[error("attribute path must not be empty")]
     Empty,
+    #[error("attribute path has an empty segment")]
     EmptySegment,
-    SegmentInvalid(SegmentError),
-}
-
-impl fmt::Display for AttrPathParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AttrPathParseError::Empty => write!(f, "attribute path must not be empty"),
-            AttrPathParseError::EmptySegment => write!(f, "attribute path has an empty segment"),
-            AttrPathParseError::SegmentInvalid(e) => write!(f, "invalid segment: {e}"),
-        }
-    }
-}
-
-impl std::error::Error for AttrPathParseError {}
-
-impl From<SegmentError> for AttrPathParseError {
-    fn from(value: SegmentError) -> Self {
-        AttrPathParseError::SegmentInvalid(value)
-    }
+    #[error("invalid segment: {0}")]
+    SegmentInvalid(#[from] SegmentError),
 }
 
 impl AttrPath {

@@ -78,7 +78,7 @@ pub(crate) fn lint_follows_stale_lock<F: Fn(usize) -> Location>(
         .stale_lock_declarations(lock)
         .into_iter()
         .map(|item| ValidationError::FollowsStaleLock {
-            source: item.declared.source.clone(),
+            source_path: item.declared.source.clone(),
             declared_target: item.declared.follows.clone(),
             lock_target: item.lock_target,
             location: edge_location(item.declared, offset_to_location),
@@ -345,12 +345,12 @@ mod tests {
         assert_eq!(errs.len(), 1);
         match &errs[0] {
             ValidationError::FollowsStaleLock {
-                source,
+                source_path,
                 declared_target,
                 lock_target,
                 location,
             } => {
-                assert_eq!(source.to_string(), "crane.nixpkgs");
+                assert_eq!(source_path.to_string(), "crane.nixpkgs");
                 assert_eq!(declared_target.to_string(), "nixpkgs");
                 assert_eq!(
                     lock_target.as_ref().map(|p| p.to_string()),

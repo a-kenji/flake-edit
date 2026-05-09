@@ -1,5 +1,6 @@
 ---
 source: tests/cli.rs
+assertion_line: 318
 info:
   program: flake-edit
   args:
@@ -16,5 +17,4 @@ exit_code: 1
 ----- stdout -----
 
 ----- stderr -----
-Error: 
-   0: The input could not be removed: nonexistent-input
+error: could not remove input 'nonexistent-input'

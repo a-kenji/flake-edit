@@ -1,16 +1,15 @@
-use std::path::PathBuf;
-
 use ropey::Rope;
 
 use crate::change::Change;
 use crate::edit::{FlakeEdit, InputMap};
-use crate::error::FlakeEditError;
+use crate::error::Error as FlakeError;
 use crate::forge::update::Updater;
 use crate::lock::FlakeLock;
 use crate::tui;
 use crate::validate;
 
 use super::editor::Editor;
+use super::error::{Error, Result};
 use super::state::AppState;
 
 mod add;
@@ -36,67 +35,8 @@ pub(super) fn updater(editor: &Editor, inputs: InputMap) -> Updater {
     Updater::new(Rope::from_str(&editor.text()), inputs)
 }
 
-pub type Result<T> = std::result::Result<T, CommandError>;
-
-#[derive(Debug, thiserror::Error)]
-pub enum CommandError {
-    #[error(transparent)]
-    FlakeEdit(#[from] FlakeEditError),
-
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-
-    #[error(transparent)]
-    Config(#[from] crate::config::ConfigError),
-
-    #[error("No URI provided")]
-    NoUri,
-
-    #[error("No ID provided")]
-    NoId,
-
-    #[error("Could not infer ID from flake reference: {0}")]
-    CouldNotInferId(String),
-
-    #[error("Invalid URI: {0}")]
-    InvalidUri(String),
-
-    #[error("No inputs found in the flake")]
-    NoInputs,
-
-    #[error("Could not read lock file '{path}': {source}")]
-    LockFileError {
-        path: String,
-        source: FlakeEditError,
-    },
-
-    #[error("Input not found: {0}")]
-    InputNotFound(String),
-
-    #[error("Input '{0}' has no pinnable URL (it may use follows or a non-standard format)")]
-    InputNotPinnable(String),
-
-    #[error("The input could not be removed: {0}")]
-    CouldNotRemove(String),
-
-    /// Aggregated failures from a `follow [PATHS...]` batch. Each entry
-    /// pairs the offending path with the error processing it produced.
-    #[error("{} file(s) failed during batch processing:\n{}", failures.len(), format_batch_failures(failures))]
-    Batch {
-        failures: Vec<(PathBuf, CommandError)>,
-    },
-}
-
-fn format_batch_failures(failures: &[(PathBuf, CommandError)]) -> String {
-    failures
-        .iter()
-        .map(|(path, err)| format!("  - {}: {}", path.display(), err))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 /// Load `flake.lock`, using the path from `state` if provided.
-pub(super) fn load_flake_lock(state: &AppState) -> std::result::Result<FlakeLock, FlakeEditError> {
+pub(super) fn load_flake_lock(state: &AppState) -> std::result::Result<FlakeLock, FlakeError> {
     if let Some(lock_path) = &state.lock_file {
         FlakeLock::from_file(lock_path)
     } else {
@@ -234,19 +174,14 @@ pub(super) fn apply_change(
         Some(t) => t,
         None => {
             if change.is_remove() {
-                return Err(CommandError::CouldNotRemove(
-                    change.id().map(|id| id.to_string()).unwrap_or_default(),
-                ));
+                let id = change
+                    .id()
+                    .expect("bug: Change::Remove always carries an id");
+                return Err(Error::CouldNotRemove { id });
             }
             if change.is_follows() {
                 let id = change.id().map(|id| id.to_string()).unwrap_or_default();
-                eprintln!("The follows relationship for {} could not be created.", id);
-                eprintln!(
-                    "\nPlease check that the input exists in the flake.nix file.\n\
-                     Use dot notation: `flake-edit follow <input>.<nested-input> <target>`\n\
-                     Example: `flake-edit follow rust-overlay.nixpkgs nixpkgs`"
-                );
-                std::process::exit(1);
+                return Err(Error::FollowsCreateFailed { id });
             }
             println!("Nothing changed.");
             return Ok(());
@@ -275,13 +210,10 @@ pub(super) fn apply_change(
 
     let validation = validate::validate(&resulting_change);
     if validation.has_errors() {
-        eprintln!("There are errors in the changes:");
         for e in &validation.errors {
-            tracing::error!("Error: {e}");
+            tracing::error!("validation error: {e}");
         }
-        eprintln!("{}", resulting_change);
-        eprintln!("There were errors in the changes, the changes have not been applied.");
-        std::process::exit(1);
+        return Err(Error::ValidationAfterEdit(validation.errors));
     }
 
     editor.apply_or_diff(&resulting_change, state)?;

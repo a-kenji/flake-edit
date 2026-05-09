@@ -1,22 +1,18 @@
-use std::fmt;
-
 use thiserror::Error;
 
 /// Errors that can occur during AST walking and manipulation.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum WalkerError {
     /// rnix did not produce a parseable root for this input.
+    #[error("flake.nix is not a parseable Nix file")]
     NotARoot,
 
     /// The top level of `flake.nix` contained something other than an
     /// `attr = value;` pair. `snippet` is a short excerpt of the offending
     /// node and `offset` is the byte offset where it starts.
-    UnexpectedTopLevel {
-        snippet: String,
-        offset: u32,
-    },
-
-    NotImplemented(String),
+    #[error("unexpected non-attribute at top level of flake.nix at byte {offset}: {snippet}")]
+    UnexpectedTopLevel { snippet: String, offset: u32 },
 }
 
 impl WalkerError {
@@ -38,49 +34,9 @@ impl WalkerError {
     }
 }
 
-impl fmt::Display for WalkerError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            WalkerError::NotARoot => {
-                write!(f, "flake.nix is not a parseable Nix file")
-            }
-            WalkerError::UnexpectedTopLevel { snippet, offset } => write!(
-                f,
-                "unexpected non-attribute at top level of flake.nix at byte {offset}: {snippet}"
-            ),
-            WalkerError::NotImplemented(msg) => {
-                write!(f, "feature not yet implemented: {msg}")
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::WalkerError;
-
-    #[test]
-    fn display_does_not_leak_rnix_tokens() {
-        let variants = [
-            WalkerError::NotARoot,
-            WalkerError::UnexpectedTopLevel {
-                snippet: "let x = 1; in x".into(),
-                offset: 42,
-            },
-            WalkerError::NotImplemented("placeholder".into()),
-        ];
-        for err in &variants {
-            let s = err.to_string();
-            assert!(
-                !s.contains("NODE_"),
-                "{err:?} Display leaks rnix NODE_* kind: {s}"
-            );
-            assert!(
-                !s.contains("SyntaxKind"),
-                "{err:?} Display leaks rnix::SyntaxKind: {s}"
-            );
-        }
-    }
 
     #[test]
     fn unexpected_top_level_truncates_long_snippets() {

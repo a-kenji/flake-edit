@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::change::Change;
-use crate::error::FlakeEditError;
+use crate::error::Error;
 use crate::input::{Follows, Input};
 use crate::validate;
 use crate::walk::Walker;
@@ -45,11 +45,11 @@ pub struct ApplyOutcome {
 }
 
 impl FlakeEdit {
-    pub fn from_text(stream: &str) -> Result<Self, FlakeEditError> {
+    pub fn from_text(stream: &str) -> Result<Self, Error> {
         let parsed = validate::ParsedSource::new(stream);
         let validation = validate::validate_parsed(&parsed);
         if validation.has_errors() {
-            return Err(FlakeEditError::Validation(validation.errors));
+            return Err(Error::Validation(validation.errors));
         }
 
         let walker = Walker::from_root(parsed.syntax);
@@ -87,19 +87,19 @@ impl FlakeEdit {
     ///
     /// Some edits require multiple walker passes. This method drives them all.
     /// A fatal validation failure surfaces as
-    /// [`FlakeEditError::Validation`].
+    /// [`Error::Validation`].
     ///
     /// # Errors
     ///
-    /// Returns [`FlakeEditError`] if the underlying walker fails or the change
-    /// is rejected (e.g. [`FlakeEditError::DuplicateInput`],
-    /// [`FlakeEditError::InputNotFound`]).
-    pub fn apply_change(&mut self, change: Change) -> Result<ApplyOutcome, FlakeEditError> {
+    /// Returns [`Error`] if the underlying walker fails or the change
+    /// is rejected (e.g. [`Error::DuplicateInput`],
+    /// [`Error::InputNotFound`]).
+    pub fn apply_change(&mut self, change: Change) -> Result<ApplyOutcome, Error> {
         let text = self.apply_change_text(change)?;
         Ok(ApplyOutcome { text })
     }
 
-    fn apply_change_text(&mut self, change: Change) -> Result<Option<String>, FlakeEditError> {
+    fn apply_change_text(&mut self, change: Change) -> Result<Option<String>, Error> {
         match change {
             Change::None => Ok(None),
             Change::Add { .. } => {
@@ -109,7 +109,7 @@ impl FlakeEdit {
 
                     let input_id_string = input_id.input().as_str().to_string();
                     if self.walker.inputs.contains_key(&input_id_string) {
-                        return Err(FlakeEditError::DuplicateInput(input_id_string));
+                        return Err(Error::DuplicateInput(input_id_string));
                     }
                 }
 
@@ -194,7 +194,7 @@ impl FlakeEdit {
 
                 let parent_id = input.input().as_str();
                 if !self.walker.inputs.contains_key(parent_id) {
-                    return Err(FlakeEditError::InputNotFound(parent_id.to_string()));
+                    return Err(Error::InputNotFound(parent_id.to_string()));
                 }
 
                 if let Some(maybe_changed_node) = self.walker.walk(&change)? {
@@ -209,7 +209,7 @@ impl FlakeEdit {
 
                     let input_id_string = input_id.input().as_str().to_string();
                     if !self.walker.inputs.contains_key(&input_id_string) {
-                        return Err(FlakeEditError::InputNotFound(input_id_string));
+                        return Err(Error::InputNotFound(input_id_string));
                     }
                 }
 
@@ -227,7 +227,7 @@ impl FlakeEdit {
     }
 
     /// Walk once if the inputs map is empty.
-    fn ensure_inputs_populated(&mut self) -> Result<(), FlakeEditError> {
+    fn ensure_inputs_populated(&mut self) -> Result<(), Error> {
         if self.walker.inputs.is_empty() {
             let _ = self.walker.walk(&Change::None)?;
         }

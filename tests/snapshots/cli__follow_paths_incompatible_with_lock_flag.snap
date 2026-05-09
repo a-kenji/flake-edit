@@ -1,5 +1,6 @@
 ---
 source: tests/cli.rs
+assertion_line: 770
 info:
   program: flake-edit
   args:
@@ -15,5 +16,4 @@ exit_code: 1
 ----- stdout -----
 
 ----- stderr -----
-Error: 
-   0: --flake and --lock cannot be used with 'follow [PATHS]'
+error: `--flake` and `--lock` cannot be used with `follow [PATHS]`

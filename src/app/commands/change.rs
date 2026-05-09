@@ -15,7 +15,7 @@ use crate::tui;
 use super::super::editor::Editor;
 use super::super::state::AppState;
 use super::uri::{BuildKind, UriOptions, apply_uri_options, build_uri_change, transform_uri};
-use super::{CommandError, Result, apply_change};
+use super::{Error, Result, apply_change};
 
 pub fn change(
     editor: &Editor,
@@ -42,7 +42,7 @@ pub fn change(
         // Only one positional arg: infer ID from URI.
         (Some(uri), None, false) | (None, Some(uri), false) => change_infer_id(uri, &opts)?,
         (None, None, false) => {
-            return Err(CommandError::NoId);
+            return Err(Error::NoId);
         }
     };
 
@@ -63,7 +63,7 @@ fn change_full_interactive(
         .collect();
 
     if input_pairs.is_empty() {
-        return Err(CommandError::NoInputs);
+        return Err(Error::NoInputs);
     }
 
     let tui_app = tui::App::change("Change", editor.text(), input_pairs, state.cache_config());
@@ -116,7 +116,7 @@ fn change_uri_interactive(
             uri: Some(final_uri),
         })
     } else {
-        Err(CommandError::NoUri)
+        Err(Error::NoUri)
     }
 }
 
@@ -125,9 +125,17 @@ fn change_uri_interactive(
 fn change_infer_id(uri: String, opts: &UriOptions<'_>) -> Result<Change> {
     let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(&uri);
 
-    let flake_ref = flake_ref.map_err(|_| CommandError::CouldNotInferId(uri.clone()))?;
-    let flake_ref = apply_uri_options(flake_ref, opts.ref_or_rev, opts.shallow)
-        .map_err(CommandError::CouldNotInferId)?;
+    let flake_ref = flake_ref.map_err(|source| Error::InvalidUri {
+        uri: uri.clone(),
+        source,
+    })?;
+    let flake_ref =
+        apply_uri_options(flake_ref, opts.ref_or_rev, opts.shallow).map_err(|source| {
+            Error::ApplyUriOptions {
+                uri: uri.clone(),
+                source,
+            }
+        })?;
 
     let final_uri = if flake_ref.to_string().is_empty() {
         uri.clone()
@@ -135,7 +143,9 @@ fn change_infer_id(uri: String, opts: &UriOptions<'_>) -> Result<Change> {
         flake_ref.to_string()
     };
 
-    let id = flake_ref.id().ok_or(CommandError::CouldNotInferId(uri))?;
+    let id = flake_ref
+        .id()
+        .ok_or_else(|| Error::CouldNotInferId { uri: uri.clone() })?;
 
     Ok(Change::Change {
         id: Some(id),

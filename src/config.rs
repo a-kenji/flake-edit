@@ -7,16 +7,17 @@ pub const DEFAULT_CONFIG_TOML: &str = include_str!("assets/config.toml");
 
 /// Configuration loading failures.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ConfigError {
     /// Failed to read the configuration file from disk.
-    #[error("Failed to read config file '{path}': {source}")]
+    #[error("failed to read config file '{}'", path.display())]
     Io {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
     /// Failed to parse a configuration file as TOML.
-    #[error("Failed to parse config file '{path}':\n{source}")]
+    #[error("failed to parse config file '{}'", path.display())]
     Parse {
         path: PathBuf,
         #[source]

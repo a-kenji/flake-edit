@@ -7,7 +7,7 @@ use ropey::Rope;
 
 use crate::diff::Diff;
 use crate::edit::FlakeEdit;
-use crate::error::FlakeEditError;
+use crate::error::Error;
 use crate::validate;
 
 use super::state::AppState;
@@ -64,7 +64,7 @@ impl Editor {
         self.flake.path()
     }
 
-    pub fn create_flake_edit(&self) -> Result<FlakeEdit, FlakeEditError> {
+    pub fn create_flake_edit(&self) -> Result<FlakeEdit, Error> {
         FlakeEdit::from_text(&self.text())
     }
 
@@ -83,7 +83,6 @@ impl Editor {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            eprintln!("Warning: nix flake lock failed: {}", stderr);
             return Err(io::Error::other(format!(
                 "nix flake lock failed: {}",
                 stderr
@@ -97,10 +96,10 @@ impl Editor {
     /// Apply changes to the flake file, or show diff if in diff mode.
     ///
     /// Validates the new content for duplicate attributes before writing.
-    pub fn apply_or_diff(&self, new_content: &str, state: &AppState) -> Result<(), FlakeEditError> {
+    pub fn apply_or_diff(&self, new_content: &str, state: &AppState) -> Result<(), Error> {
         let validation = validate::validate(new_content);
         if validation.has_errors() {
-            return Err(FlakeEditError::Validation(validation.errors));
+            return Err(Error::Validation(validation.errors));
         }
 
         if state.diff {
@@ -108,12 +107,17 @@ impl Editor {
             let diff = Diff::new(&old, new_content);
             diff.compare();
         } else {
-            self.flake.write(new_content)?;
+            self.flake
+                .write(new_content)
+                .map_err(|source| Error::Write {
+                    path: self.flake.path().clone(),
+                    source,
+                })?;
 
             if !state.no_lock
                 && let Err(e) = self.run_nix_flake_lock(state.lock_offline)
             {
-                eprintln!("Warning: Failed to update lockfile: {}", e);
+                tracing::warn!("failed to update lockfile: {e}");
             }
         }
         Ok(())

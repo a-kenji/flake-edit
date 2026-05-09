@@ -1,38 +1,15 @@
 use std::path::PathBuf;
 
 use crate::cli::{CliArgs, Command};
-use crate::config::ConfigError;
 use crate::tui;
 
 use super::commands::follow;
-use super::commands::{self, CommandError};
+use super::commands::{self};
 use super::editor::Editor;
+use super::error::{Error, Result};
 use super::state::AppState;
 
 mod root;
-
-pub type Result<T> = std::result::Result<T, HandlerError>;
-
-#[derive(Debug, thiserror::Error)]
-pub enum HandlerError {
-    #[error(transparent)]
-    Command(#[from] CommandError),
-
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-
-    #[error(transparent)]
-    FlakeEdit(#[from] crate::error::FlakeEditError),
-
-    #[error(transparent)]
-    Config(#[from] ConfigError),
-
-    #[error("Flake not found")]
-    FlakeNotFound,
-
-    #[error("--flake and --lock cannot be used with 'follow [PATHS]'")]
-    IncompatibleFollowOptions,
-}
 
 /// Application entry point.
 ///
@@ -48,10 +25,9 @@ pub fn run(args: CliArgs) -> Result<()> {
         && !paths.is_empty()
     {
         if args.flake().is_some() || args.lock_file().is_some() {
-            return Err(HandlerError::IncompatibleFollowOptions);
+            return Err(Error::IncompatibleFollowOptions);
         }
-        return follow::auto::run_batch(paths, *transitive, *depth, &args)
-            .map_err(HandlerError::Command);
+        return follow::auto::run_batch(paths, *transitive, *depth, &args);
     }
 
     let flake_path = if let Some(flake) = args.flake() {
@@ -59,10 +35,7 @@ pub fn run(args: CliArgs) -> Result<()> {
         if path.is_dir() {
             let flake_nix = path.join("flake.nix");
             if !flake_nix.exists() {
-                return Err(HandlerError::Io(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("No `flake.nix` found in directory: {}", path.display()),
-                )));
+                return Err(Error::FlakeDirEmpty { path });
             }
             flake_nix
         } else {
@@ -70,11 +43,17 @@ pub fn run(args: CliArgs) -> Result<()> {
         }
     } else {
         let path = PathBuf::from("flake.nix");
-        let binding = root::Root::from_path(path).map_err(|_| HandlerError::FlakeNotFound)?;
+        let binding = root::Root::from_path(&path).map_err(|source| Error::FlakeNotFound {
+            path: path.clone(),
+            source,
+        })?;
         binding.path().to_path_buf()
     };
 
-    let editor = Editor::from_path(flake_path.clone())?;
+    let editor = Editor::from_path(flake_path.clone()).map_err(|source| Error::FlakeNotFound {
+        path: flake_path.clone(),
+        source,
+    })?;
     let mut flake_edit = editor.create_flake_edit()?;
     let interactive = tui::is_interactive(args.non_interactive());
 
@@ -187,7 +166,7 @@ pub fn run(args: CliArgs) -> Result<()> {
                     for uri in cache.list_uris() {
                         println!("{}", uri);
                     }
-                    std::process::exit(0);
+                    return Ok(());
                 }
                 CompletionMode::Change => {
                     let inputs = flake_edit.list();
@@ -195,7 +174,7 @@ pub fn run(args: CliArgs) -> Result<()> {
                     for id in inputs.keys() {
                         println!("{}", id);
                     }
-                    std::process::exit(0);
+                    return Ok(());
                 }
                 CompletionMode::Follow => {
                     if let Ok(lock) = crate::lock::FlakeLock::from_default_path() {
@@ -203,7 +182,7 @@ pub fn run(args: CliArgs) -> Result<()> {
                             println!("{}", nested.path);
                         }
                     }
-                    std::process::exit(0);
+                    return Ok(());
                 }
                 CompletionMode::None => {}
             }
