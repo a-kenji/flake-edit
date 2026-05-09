@@ -287,47 +287,9 @@ fn build_plan(
     let transitive_min = follow_config.transitive_min();
     let max_depth = follow_config.max_depth.max(1);
 
-    // `to_unfollow` carries two removal classes: stale declared edges
-    // (source absent from the lockfile) and depth-N edges that the
-    // lockfile already routes via upstream propagation. The
-    // [`FollowsGraph::lock_routes_to`] call passes `Some(edge)` so the
-    // edge under test is excluded; without that the user's own
-    // declaration counts as the route and every declared edge would
-    // qualify.
-    //
     // Seeding runs against the original `graph`: the post-removal clone
     // built below would chicken-and-egg this loop.
-    let mut to_unfollow: Vec<AttrPath> = graph
-        .stale_edges()
-        .into_iter()
-        .map(|e| e.source.clone())
-        .collect();
-    // Nulled twin of [`FollowsGraph::stale_edges`]: target-less follows
-    // skip [`FollowsGraph::declared_edges`], so seed them separately.
-    to_unfollow.extend(graph.stale_nulled_sources().into_iter().cloned());
-    let stale_set: HashSet<AttrPath> = to_unfollow.iter().cloned().collect();
-    for edge in graph.declared_edges() {
-        if stale_set.contains(&edge.source) {
-            continue;
-        }
-        // Depth-1 has no upstream parent to propagate from.
-        if edge.source.len() < 3 {
-            continue;
-        }
-        if edge.source.len() > max_depth + 1 {
-            continue;
-        }
-        if graph.lock_routes_to(&edge.source, &edge.follows, Some(edge), &[]) {
-            tracing::debug!(
-                "Marking redundant follow for removal: {} -> {} (covered by upstream propagation)",
-                edge.source,
-                edge.follows,
-            );
-            to_unfollow.push(edge.source.clone());
-        }
-    }
-    to_unfollow.sort();
-    to_unfollow.dedup();
+    let to_unfollow = seed_unfollow_set(graph, max_depth);
 
     // Discovery must see the post-removal graph. Without this, an edge
     // marked for removal still shapes the cycle and routing checks
@@ -381,6 +343,52 @@ fn build_plan(
     }
 
     Some(plan)
+}
+
+/// Seed the auto-follow plan's `to_unfollow` set with sources that
+/// should be removed before discovery runs.
+///
+/// Two removal classes are collected: stale declared edges (source
+/// absent from the lockfile, including target-less `follows = ""`
+/// twins that skip [`FollowsGraph::declared_edges`]) and depth-N
+/// edges that the lockfile already routes via upstream propagation.
+/// The [`FollowsGraph::lock_routes_to`] call passes `Some(edge)` so
+/// the edge under test is excluded; without that the user's own
+/// declaration counts as the route and every declared edge would
+/// qualify.
+///
+/// Result is lex-sorted and deduplicated.
+fn seed_unfollow_set(graph: &FollowsGraph, max_depth: usize) -> Vec<AttrPath> {
+    let mut to_unfollow: Vec<AttrPath> = graph
+        .stale_edges()
+        .into_iter()
+        .map(|e| e.source.clone())
+        .collect();
+    to_unfollow.extend(graph.stale_nulled_sources().into_iter().cloned());
+    let stale_set: HashSet<AttrPath> = to_unfollow.iter().cloned().collect();
+    for edge in graph.declared_edges() {
+        if stale_set.contains(&edge.source) {
+            continue;
+        }
+        // Depth-1 has no upstream parent to propagate from.
+        if edge.source.len() < 3 {
+            continue;
+        }
+        if edge.source.len() > max_depth + 1 {
+            continue;
+        }
+        if graph.lock_routes_to(&edge.source, &edge.follows, Some(edge), &[]) {
+            tracing::debug!(
+                "Marking redundant follow for removal: {} -> {} (covered by upstream propagation)",
+                edge.source,
+                edge.follows,
+            );
+            to_unfollow.push(edge.source.clone());
+        }
+    }
+    to_unfollow.sort();
+    to_unfollow.dedup();
+    to_unfollow
 }
 
 /// Depth-bounded path-shape filter shared by every collection function.
@@ -452,102 +460,109 @@ fn collect_direct_candidates(ax: &AnalysisCtx<'_>, plan: &mut FollowPlan) {
             .then_with(|| a.path.cmp(&b.path))
     });
     for nested in iter {
-        if !within_depth(&nested.path, ax.max_depth) {
-            continue;
-        }
-        let parent = nested.path.first().as_str();
-        let nested_name = nested.path.last().as_str();
-        let path_display = nested.path.to_string();
-
-        if ax.follow_config.is_ignored(&path_display, nested_name) {
-            tracing::debug!("Skipping {}: ignored by config", path_display);
-            continue;
-        }
-
-        if ax.existing_follows.contains(&nested.path) {
-            tracing::debug!("Skipping {}: already follows in flake.nix", path_display);
-            continue;
-        }
-
-        let Some(target) = ax
-            .top_level_inputs
-            .iter()
-            .find(|top| ax.follow_config.can_follow(nested_name, top))
-        else {
-            continue;
-        };
-
-        if let Some(target_input) = ax.inputs.get(target.as_str())
-            && is_follows_reference_to_parent(target_input.url(), parent)
-        {
-            tracing::debug!(
-                "Skipping {} -> {}: would create cycle (target follows {}/...)",
-                path_display,
-                target,
-                parent,
-            );
-            continue;
-        }
-
-        let target_path = match Segment::from_unquoted(target.clone()) {
-            Ok(seg) => AttrPath::new(seg),
-            Err(e) => {
-                tracing::warn!("Skipping {path_display} -> {target}: invalid input name: {e}");
-                continue;
-            }
-        };
-
-        if ancestor_overrides_subtree(&nested.path, &target_path, ax.graph) {
-            tracing::debug!(
-                "Skipping {} -> {}: ancestor declares a different follows for the same trailing name",
-                path_display,
-                target,
-            );
-            continue;
-        }
-
-        // Multi-hop / lockfile-only cycle detection. The URL-prefix check
-        // above catches only the immediate-parent case. The merged graph
-        // DFS catches the rest.
-        let proposed = Edge {
-            source: nested.path.clone(),
-            follows: target_path.clone(),
-            origin: EdgeOrigin::Declared {
-                range: Range { start: 0, end: 0 },
-            },
-        };
-        if ax.graph.would_create_cycle(&proposed) {
-            tracing::debug!(
-                "Skipping {} -> {}: would create cycle (multi-hop or lockfile-resolved)",
-                path_display,
-                target,
-            );
-            continue;
-        }
         // Same-run depth-1 emissions can close a depth-N chain.
         let extra_edges: Vec<(AttrPath, AttrPath)> = if nested.path.len() >= 3 {
-            plan.to_follow
-                .iter()
-                .map(|(src, tgt)| (src.clone(), tgt.clone()))
-                .collect()
+            plan.to_follow.to_vec()
         } else {
             Vec::new()
         };
-        if ax
-            .graph
-            .lock_routes_to(&nested.path, &target_path, None, &extra_edges)
-        {
-            tracing::debug!(
-                "Skipping {} -> {}: lockfile already routes via upstream propagation",
-                path_display,
-                target,
-            );
+        let Some(target_path) = resolve_direct_candidate(ax, nested, &extra_edges) else {
             continue;
-        }
-
+        };
         plan.seen_nested.insert(nested.path.clone());
         plan.to_follow.push((nested.path.clone(), target_path));
     }
+}
+
+/// `prior_emissions` carries the same-run `to_follow` entries already
+/// queued at shallower depths so [`FollowsGraph::lock_routes_to`] sees
+/// them when checking depth-N candidates.
+fn resolve_direct_candidate(
+    ax: &AnalysisCtx<'_>,
+    nested: &NestedInput,
+    prior_emissions: &[(AttrPath, AttrPath)],
+) -> Option<AttrPath> {
+    if !within_depth(&nested.path, ax.max_depth) {
+        return None;
+    }
+    let parent = nested.path.first().as_str();
+    let nested_name = nested.path.last().as_str();
+    let path_display = nested.path.to_string();
+
+    if ax.follow_config.is_ignored(&path_display, nested_name) {
+        tracing::debug!("Skipping {}: ignored by config", path_display);
+        return None;
+    }
+    if ax.existing_follows.contains(&nested.path) {
+        tracing::debug!("Skipping {}: already follows in flake.nix", path_display);
+        return None;
+    }
+
+    let target = ax
+        .top_level_inputs
+        .iter()
+        .find(|top| ax.follow_config.can_follow(nested_name, top))?;
+
+    if let Some(target_input) = ax.inputs.get(target.as_str())
+        && is_follows_reference_to_parent(target_input.url(), parent)
+    {
+        tracing::debug!(
+            "Skipping {} -> {}: would create cycle (target follows {}/...)",
+            path_display,
+            target,
+            parent,
+        );
+        return None;
+    }
+
+    let target_path = match Segment::from_unquoted(target.clone()) {
+        Ok(seg) => AttrPath::new(seg),
+        Err(e) => {
+            tracing::warn!("Skipping {path_display} -> {target}: invalid input name: {e}");
+            return None;
+        }
+    };
+
+    if ancestor_overrides_subtree(&nested.path, &target_path, ax.graph) {
+        tracing::debug!(
+            "Skipping {} -> {}: ancestor declares a different follows for the same trailing name",
+            path_display,
+            target,
+        );
+        return None;
+    }
+
+    // Multi-hop / lockfile-only cycle detection. The URL-prefix check
+    // above catches only the immediate-parent case. The merged graph
+    // DFS catches the rest.
+    let proposed = Edge {
+        source: nested.path.clone(),
+        follows: target_path.clone(),
+        origin: EdgeOrigin::Declared {
+            range: Range { start: 0, end: 0 },
+        },
+    };
+    if ax.graph.would_create_cycle(&proposed) {
+        tracing::debug!(
+            "Skipping {} -> {}: would create cycle (multi-hop or lockfile-resolved)",
+            path_display,
+            target,
+        );
+        return None;
+    }
+    if ax
+        .graph
+        .lock_routes_to(&nested.path, &target_path, None, prior_emissions)
+    {
+        tracing::debug!(
+            "Skipping {} -> {}: lockfile already routes via upstream propagation",
+            path_display,
+            target,
+        );
+        return None;
+    }
+
+    Some(target_path)
 }
 
 fn collect_transitive_groups(
@@ -557,80 +572,87 @@ fn collect_transitive_groups(
     let mut groups: HashMap<String, HashMap<AttrPath, Vec<AttrPath>>> = HashMap::new();
 
     for nested in ax.nested_inputs.iter() {
-        if !within_depth(&nested.path, ax.max_depth) {
-            continue;
-        }
-        let nested_name = nested.path.last().as_str();
-        let parent = nested.path.first().as_str();
-        let path_display = nested.path.to_string();
-
-        if ax.follow_config.is_ignored(&path_display, nested_name) {
-            continue;
-        }
-        if ax.existing_follows.contains(&nested.path) || plan.seen_nested.contains(&nested.path) {
-            continue;
-        }
-        // Handled by [`collect_direct_candidates`].
-        if ax
-            .top_level_inputs
-            .iter()
-            .any(|top| ax.follow_config.can_follow(nested_name, top))
-        {
-            continue;
-        }
-
-        let Some(transitive_target) = nested.follows.as_ref() else {
+        let Some((top_level_name, transitive_target)) =
+            resolve_transitive_candidate(ax, plan, nested)
+        else {
             continue;
         };
-        if ancestor_overrides_subtree(&nested.path, transitive_target, ax.graph) {
-            continue;
-        }
-        // Only transitive follows (path with a parent segment).
-        if transitive_target.len() < 2 {
-            continue;
-        }
-        // Skip self-follow.
-        if transitive_target.last().as_str() == nested_name {
-            continue;
-        }
-
-        let top_level_name = ax
-            .follow_config
-            .resolve_alias(nested_name)
-            .unwrap_or(nested_name)
-            .to_string();
-        if ax.top_level_inputs.contains(&top_level_name) {
-            continue;
-        }
-
-        if let Some(target_input) = ax.inputs.get(transitive_target.first().as_str())
-            && is_follows_reference_to_parent(target_input.url(), parent)
-        {
-            continue;
-        }
-
-        // Multi-hop / lockfile-only cycle detection, mirroring the
-        // direct-candidate filter applied to transitive promotions.
-        let proposed = Edge {
-            source: nested.path.clone(),
-            follows: transitive_target.clone(),
-            origin: EdgeOrigin::Declared {
-                range: Range { start: 0, end: 0 },
-            },
-        };
-        if ax.graph.would_create_cycle(&proposed) {
-            continue;
-        }
-
         groups
             .entry(top_level_name)
             .or_default()
-            .entry(transitive_target.clone())
+            .entry(transitive_target)
             .or_default()
             .push(nested.path.clone());
     }
 
     groups
+}
+
+fn resolve_transitive_candidate(
+    ax: &AnalysisCtx<'_>,
+    plan: &FollowPlan,
+    nested: &NestedInput,
+) -> Option<(String, AttrPath)> {
+    if !within_depth(&nested.path, ax.max_depth) {
+        return None;
+    }
+    let nested_name = nested.path.last().as_str();
+    let parent = nested.path.first().as_str();
+    let path_display = nested.path.to_string();
+
+    if ax.follow_config.is_ignored(&path_display, nested_name) {
+        return None;
+    }
+    if ax.existing_follows.contains(&nested.path) || plan.seen_nested.contains(&nested.path) {
+        return None;
+    }
+    // Handled by [`collect_direct_candidates`].
+    if ax
+        .top_level_inputs
+        .iter()
+        .any(|top| ax.follow_config.can_follow(nested_name, top))
+    {
+        return None;
+    }
+
+    let transitive_target = nested.follows.as_ref()?;
+    if ancestor_overrides_subtree(&nested.path, transitive_target, ax.graph) {
+        return None;
+    }
+    if transitive_target.len() < 2 {
+        return None;
+    }
+    if transitive_target.last().as_str() == nested_name {
+        return None;
+    }
+
+    let top_level_name = ax
+        .follow_config
+        .resolve_alias(nested_name)
+        .unwrap_or(nested_name)
+        .to_string();
+    if ax.top_level_inputs.contains(&top_level_name) {
+        return None;
+    }
+
+    if let Some(target_input) = ax.inputs.get(transitive_target.first().as_str())
+        && is_follows_reference_to_parent(target_input.url(), parent)
+    {
+        return None;
+    }
+
+    let proposed = Edge {
+        source: nested.path.clone(),
+        follows: transitive_target.clone(),
+        origin: EdgeOrigin::Declared {
+            range: Range { start: 0, end: 0 },
+        },
+    };
+    if ax.graph.would_create_cycle(&proposed) {
+        return None;
+    }
+
+    Some((top_level_name, transitive_target.clone()))
 }
 
 /// When several parents share the same dependency (e.g. `treefmt.nixpkgs`
@@ -757,68 +779,89 @@ fn emit_direct_promotions(
     let mut direct_groups_sorted: Vec<_> = direct_groups.into_iter().collect();
     direct_groups_sorted.sort_by(|a, b| a.0.cmp(&b.0));
     for (canonical_name, mut entries) in direct_groups_sorted {
-        if entries.len() < ax.transitive_min {
-            continue;
-        }
-
         entries.sort_by(|a, b| a.0.cmp(&b.0));
-
-        let Some(url) = entries.iter().find_map(|(_, u)| u.clone()) else {
+        let Some((url, target_attr)) =
+            decide_direct_promotion(ax, &probe_syntax, &canonical_name, &entries)
+        else {
             continue;
         };
+        plan.toplevel_adds.push((canonical_name.clone(), url));
+        record_direct_promotion_entries(plan, &target_attr, &canonical_name, &entries);
+    }
+}
 
-        let target_attr = match Segment::from_unquoted(canonical_name.clone()) {
-            Ok(seg) => AttrPath::new(seg),
-            Err(e) => {
-                tracing::warn!(
-                    "Skipping direct-reference promotion for `{canonical_name}`: invalid input name: {e}"
-                );
-                continue;
-            }
+/// `probe_syntax` is the original `flake.nix` parsed by the caller
+/// once and cloned per iteration. The speculative `apply_change`
+/// here only checks that an edit would land; the committing pass
+/// runs later against the live working text.
+fn decide_direct_promotion(
+    ax: &AnalysisCtx<'_>,
+    probe_syntax: &rnix::SyntaxNode,
+    canonical_name: &str,
+    entries: &[(AttrPath, Option<String>)],
+) -> Option<(String, AttrPath)> {
+    if entries.len() < ax.transitive_min {
+        return None;
+    }
+    let url = entries.iter().find_map(|(_, u)| u.clone())?;
+    let target_attr = match Segment::from_unquoted(canonical_name.to_string()) {
+        Ok(seg) => AttrPath::new(seg),
+        Err(e) => {
+            tracing::warn!(
+                "Skipping direct-reference promotion for `{canonical_name}`: invalid input name: {e}"
+            );
+            return None;
+        }
+    };
+    let can_follow = entries.iter().any(|(path, _)| {
+        let change = Change::Follows {
+            input: ChangeId::new(path.clone()),
+            target: target_attr.clone(),
         };
+        let mut fe = FlakeEdit::from_syntax(probe_syntax.clone());
+        fe.apply_change(change)
+            .ok()
+            .and_then(|outcome| outcome.text)
+            .is_some()
+    });
+    if !can_follow {
+        return None;
+    }
+    Some((url, target_attr))
+}
 
-        let can_follow = entries.iter().any(|(path, _)| {
-            let change = Change::Follows {
-                input: ChangeId::new(path.clone()),
-                target: target_attr.clone(),
-            };
-            let mut fe = FlakeEdit::from_syntax(probe_syntax.clone());
-            fe.apply_change(change)
-                .ok()
-                .and_then(|outcome| outcome.text)
-                .is_some()
-        });
-        if !can_follow {
+/// A descendant whose ancestor is also in the group is rewritten by
+/// the ancestor's follow, so the descendant is dropped from
+/// `plan.to_follow` but still claims `plan.seen_nested` so later
+/// passes do not reclaim it.
+fn record_direct_promotion_entries(
+    plan: &mut FollowPlan,
+    target_attr: &AttrPath,
+    canonical_name: &str,
+    entries: &[(AttrPath, Option<String>)],
+) {
+    let entry_paths: HashSet<AttrPath> = entries.iter().map(|(p, _)| p.clone()).collect();
+    for (path, _) in entries {
+        let mut covered_by_ancestor = false;
+        let mut anc = path.parent();
+        while let Some(a) = anc.clone() {
+            if entry_paths.contains(&a) {
+                covered_by_ancestor = true;
+                break;
+            }
+            anc = a.parent();
+        }
+        if covered_by_ancestor {
+            tracing::debug!(
+                "Skipping promotion {} -> {}: ancestor in same group covers it",
+                path,
+                canonical_name,
+            );
+            plan.seen_nested.insert(path.clone());
             continue;
         }
-
-        plan.toplevel_adds.push((canonical_name.clone(), url));
-
-        // Skip entries whose ancestor is also in this group: the
-        // ancestor's follow already rewrites the descendant's prefix.
-        let entry_paths: HashSet<AttrPath> = entries.iter().map(|(p, _)| p.clone()).collect();
-        for (path, _) in &entries {
-            let mut covered_by_ancestor = false;
-            let mut anc = path.parent();
-            while let Some(a) = anc.clone() {
-                if entry_paths.contains(&a) {
-                    covered_by_ancestor = true;
-                    break;
-                }
-                anc = a.parent();
-            }
-            if covered_by_ancestor {
-                tracing::debug!(
-                    "Skipping promotion {} -> {}: ancestor in same group covers it",
-                    path,
-                    canonical_name,
-                );
-                plan.seen_nested.insert(path.clone());
-                continue;
-            }
-            if plan.seen_nested.insert(path.clone()) {
-                plan.to_follow.push((path.clone(), target_attr.clone()));
-            }
+        if plan.seen_nested.insert(path.clone()) {
+            plan.to_follow.push((path.clone(), target_attr.clone()));
         }
     }
 }
@@ -887,145 +930,205 @@ fn apply_plan(
     apply_plan_text(&editor.text(), batch_lock.as_ref(), inputs, plan)
 }
 
+/// Pairing `current_text` with its `ParsedSource` lets each iteration
+/// share a single rnix parse: each accepted change replaces both fields
+/// in lockstep, sparing the next phase a re-parse of identical text.
+struct PlanState {
+    current_text: String,
+    current_parsed: validate::ParsedSource,
+    warnings: Vec<validate::ValidationError>,
+}
+
+enum StepOutcome {
+    /// Validation passed and `PlanState` has been updated. `text_changed`
+    /// is false when the change collapsed to the existing text; phases
+    /// that record applied work key off this flag to avoid logging a
+    /// follows that was already in place.
+    Accepted {
+        text_changed: bool,
+    },
+    Rejected(Vec<validate::ValidationError>),
+    /// `apply_change` returned `Ok` but produced no text. Distinct from
+    /// `ApplyError` because no error was raised: the underlying edit
+    /// declined to mutate (e.g. removing a path that does not exist).
+    NoText,
+    ApplyError(crate::error::Error),
+}
+
+impl PlanState {
+    /// The temporary [`FlakeEdit`] is built from the current parsed
+    /// syntax internally so each phase loop can hand off a `Change` and
+    /// inspect the outcome without juggling clone-vs-move of the syntax
+    /// tree itself.
+    fn try_apply_one(
+        &mut self,
+        change: Change,
+        lock_graph_ref: Option<&FollowsGraph>,
+    ) -> StepOutcome {
+        let mut temp = FlakeEdit::from_syntax(self.current_parsed.syntax.clone());
+        let outcome = match temp.apply_change(change) {
+            Ok(o) => o,
+            Err(e) => return StepOutcome::ApplyError(e),
+        };
+        let resulting_text = match outcome.text {
+            Some(t) => t,
+            None => return StepOutcome::NoText,
+        };
+        let text_changed = resulting_text != self.current_text;
+        let resulting_parsed = validate::ParsedSource::new(&resulting_text);
+        let validation = validate::validate_speculative_parsed(
+            &resulting_parsed,
+            temp.curr_list(),
+            lock_graph_ref,
+        );
+        if validation.is_ok() {
+            self.warnings.extend(validation.warnings);
+            self.current_text = resulting_text;
+            self.current_parsed = resulting_parsed;
+            StepOutcome::Accepted { text_changed }
+        } else {
+            StepOutcome::Rejected(validation.errors)
+        }
+    }
+}
+
 fn apply_plan_text(
     original_text: &str,
     batch_lock: Option<&FlakeLock>,
     inputs: &crate::edit::InputMap,
     plan: &FollowPlan,
 ) -> Result<AppliedPlan> {
-    let mut current_text = original_text.to_owned();
     let mut warnings: Vec<validate::ValidationError> = Vec::new();
 
     // Lock-drift lints fire only on the pre-batch text. Mid-batch they would
     // flag every in-progress edit as drift against the on-disk lockfile.
-    let pre_validation = validate::validate_full(&current_text, inputs, batch_lock);
+    let pre_validation = validate::validate_full(original_text, inputs, batch_lock);
     warnings.extend(pre_validation.warnings);
-
-    // The lockfile is fixed for the batch, so build its graph once and let
-    // each [`validate::validate_speculative_parsed`] call clone-and-merge.
-    let lock_graph: Option<FollowsGraph> = batch_lock.map(FollowsGraph::from_lock);
-    let lock_graph_ref = lock_graph.as_ref();
 
     // Each accepted change replaces `current_parsed` with the post-edit
     // [`validate::ParsedSource`], so the next iteration's walker and
     // validation share a single rnix parse of the new text.
-    let mut current_parsed = validate::ParsedSource::new(&current_text);
+    let current_parsed = validate::ParsedSource::new(original_text);
     if !current_parsed.parse_errors.is_empty() {
         return Err(Error::Flake(crate::error::Error::Validation(
             current_parsed.parse_errors.clone(),
         )));
     }
 
+    // The lockfile is fixed for the batch, so build its graph once and let
+    // each [`validate::validate_speculative_parsed`] call clone-and-merge.
+    let lock_graph: Option<FollowsGraph> = batch_lock.map(FollowsGraph::from_lock);
+    let lock_graph_ref = lock_graph.as_ref();
+
+    let mut state = PlanState {
+        current_text: original_text.to_owned(),
+        current_parsed,
+        warnings,
+    };
+
     // Top-level adds must precede follows that name them.
+    apply_toplevel_adds(plan, &mut state, lock_graph_ref);
+    let applied_follows = apply_follow_changes(plan, &mut state, lock_graph_ref);
+    let unfollowed = apply_unfollow_changes(plan, &mut state, lock_graph_ref);
+
+    Ok(AppliedPlan {
+        current_text: state.current_text,
+        applied_follows,
+        unfollowed,
+        warnings: state.warnings,
+    })
+}
+
+fn apply_toplevel_adds(
+    plan: &FollowPlan,
+    state: &mut PlanState,
+    lock_graph_ref: Option<&FollowsGraph>,
+) {
     for (id, url) in &plan.toplevel_adds {
         let change = Change::Add {
             id: Some(id.clone()),
             uri: Some(url.clone()),
             flake: true,
         };
-
-        let mut temp = FlakeEdit::from_syntax(current_parsed.syntax.clone());
-        match temp.apply_change(change) {
-            Ok(outcome) => match outcome.text {
-                Some(resulting_text) => {
-                    let resulting_parsed = validate::ParsedSource::new(&resulting_text);
-                    let validation = validate::validate_speculative_parsed(
-                        &resulting_parsed,
-                        temp.curr_list(),
-                        lock_graph_ref,
-                    );
-                    if validation.is_ok() {
-                        warnings.extend(validation.warnings);
-                        current_text = resulting_text;
-                        current_parsed = resulting_parsed;
-                    } else {
-                        for err in validation.errors {
-                            tracing::error!("could not add top-level input {id}: {err}");
-                        }
-                    }
+        match state.try_apply_one(change, lock_graph_ref) {
+            StepOutcome::Accepted { .. } => {}
+            StepOutcome::Rejected(errors) => {
+                for err in errors {
+                    tracing::error!("could not add top-level input {id}: {err}");
                 }
-                None => tracing::error!("could not add top-level input {id}"),
-            },
-            Err(e) => tracing::error!("could not add top-level input {id}: {e}"),
+            }
+            StepOutcome::NoText => {
+                tracing::error!("could not add top-level input {id}");
+            }
+            StepOutcome::ApplyError(e) => {
+                tracing::error!("could not add top-level input {id}: {e}");
+            }
         }
     }
+}
 
+fn apply_follow_changes(
+    plan: &FollowPlan,
+    state: &mut PlanState,
+    lock_graph_ref: Option<&FollowsGraph>,
+) -> Vec<(AttrPath, AttrPath)> {
     let mut follow_changes: Vec<(AttrPath, AttrPath)> = plan.toplevel_follows.clone();
     follow_changes.extend(plan.to_follow.iter().cloned());
 
     let mut applied_follows: Vec<(AttrPath, AttrPath)> = Vec::new();
-
     for (input_path, target) in &follow_changes {
         let change = Change::Follows {
             input: ChangeId::new(input_path.clone()),
             target: target.clone(),
         };
-
-        let mut temp = FlakeEdit::from_syntax(current_parsed.syntax.clone());
-        match temp.apply_change(change) {
-            Ok(outcome) => match outcome.text {
-                Some(resulting_text) => {
-                    if resulting_text == current_text {
-                        continue;
-                    }
-                    let resulting_parsed = validate::ParsedSource::new(&resulting_text);
-                    let validation = validate::validate_speculative_parsed(
-                        &resulting_parsed,
-                        temp.curr_list(),
-                        lock_graph_ref,
-                    );
-                    if validation.is_ok() {
-                        warnings.extend(validation.warnings);
-                        current_text = resulting_text;
-                        current_parsed = resulting_parsed;
-                        applied_follows.push((input_path.clone(), target.clone()));
-                    } else {
-                        for err in validation.errors {
-                            tracing::error!("{}", format_apply_error(input_path, &err));
-                        }
-                    }
+        match state.try_apply_one(change, lock_graph_ref) {
+            StepOutcome::Accepted { text_changed: true } => {
+                applied_follows.push((input_path.clone(), target.clone()));
+            }
+            // A Change::Follows that produced identical text means the
+            // declaration was already in place; recording it as a fresh
+            // application would inflate the success summary with a no-op.
+            StepOutcome::Accepted {
+                text_changed: false,
+            } => {}
+            StepOutcome::Rejected(errors) => {
+                for err in errors {
+                    tracing::error!("{}", format_apply_error(input_path, &err));
                 }
-                None => tracing::error!("could not create follows for {input_path}"),
-            },
-            Err(e) => tracing::error!("could not apply follows for {input_path}: {e}"),
+            }
+            StepOutcome::NoText => {
+                tracing::error!("could not create follows for {input_path}");
+            }
+            StepOutcome::ApplyError(e) => {
+                tracing::error!("could not apply follows for {input_path}: {e}");
+            }
         }
     }
+    applied_follows
+}
 
+fn apply_unfollow_changes(
+    plan: &FollowPlan,
+    state: &mut PlanState,
+    lock_graph_ref: Option<&FollowsGraph>,
+) -> Vec<AttrPath> {
     let mut unfollowed: Vec<AttrPath> = Vec::new();
-
     for nested_path in &plan.to_unfollow {
         let change = Change::Remove {
             ids: vec![ChangeId::new(nested_path.clone())],
         };
-
-        let mut temp = FlakeEdit::from_syntax(current_parsed.syntax.clone());
-        match temp.apply_change(change) {
-            Ok(outcome) => {
-                if let Some(resulting_text) = outcome.text {
-                    let resulting_parsed = validate::ParsedSource::new(&resulting_text);
-                    let validation = validate::validate_speculative_parsed(
-                        &resulting_parsed,
-                        temp.curr_list(),
-                        lock_graph_ref,
-                    );
-                    if validation.is_ok() {
-                        warnings.extend(validation.warnings);
-                        current_text = resulting_text;
-                        current_parsed = resulting_parsed;
-                        unfollowed.push(nested_path.clone());
-                    }
-                }
+        match state.try_apply_one(change, lock_graph_ref) {
+            StepOutcome::Accepted { .. } => unfollowed.push(nested_path.clone()),
+            // Validation failures and missing text are silently dropped:
+            // unfollow is a best-effort cleanup pass and a stale source
+            // that fails to remove is no worse than leaving it in place.
+            StepOutcome::Rejected(_) | StepOutcome::NoText => {}
+            StepOutcome::ApplyError(e) => {
+                tracing::error!("could not remove stale follows for {nested_path}: {e}");
             }
-            Err(e) => tracing::error!("could not remove stale follows for {nested_path}: {e}"),
         }
     }
-
-    Ok(AppliedPlan {
-        current_text,
-        applied_follows,
-        unfollowed,
-        warnings,
-    })
+    unfollowed
 }
 
 fn render_summary(
@@ -1161,7 +1264,8 @@ fn warning_dedup_key(err: &validate::ValidationError) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::input::Range;
+    use crate::config::FollowConfig;
+    use crate::input::{Follows, Input, Range};
     use crate::validate::Location;
     use clap::Parser;
 
@@ -1180,6 +1284,145 @@ mod tests {
             line: 60,
             column: 13,
         }
+    }
+
+    fn seg(s: &str) -> Segment {
+        Segment::from_unquoted(s).unwrap()
+    }
+
+    fn ap(s: &str) -> AttrPath {
+        AttrPath::parse(s).unwrap()
+    }
+
+    fn input_with_follows(id: &str, follows: Vec<(AttrPath, Option<AttrPath>)>) -> Input {
+        let mut input = Input::new(seg(id));
+        for (path, target) in follows {
+            input.follows.push(Follows::Indirect { path, target });
+        }
+        input.range = Range { start: 1, end: 2 };
+        input
+    }
+
+    fn make_input_map(items: Vec<Input>) -> InputMap {
+        let mut map = InputMap::new();
+        for item in items {
+            map.insert(item.id().as_str().to_string(), item);
+        }
+        map
+    }
+
+    /// Lockfile that places `parent.middle` and `parent.middle.nixpkgs`
+    /// in `resolved_universe` so neither is flagged stale by
+    /// [`seed_unfollow_set`].
+    fn parent_middle_lock() -> FlakeLock {
+        let lock_text = r#"{
+  "nodes": {
+    "top": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "a", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "nixpkgs_2": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "b", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "middle": {
+      "inputs": { "nixpkgs": "nixpkgs_2" },
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "c", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "parent": {
+      "inputs": { "middle": "middle" },
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "d", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "root": {
+      "inputs": { "top": "top", "parent": "parent" }
+    }
+  },
+  "root": "root",
+  "version": 7
+}"#;
+        FlakeLock::read_from_str(lock_text).unwrap()
+    }
+
+    #[test]
+    fn seed_unfollow_set_empty_graph_returns_empty() {
+        let graph = FollowsGraph::default();
+        let result = seed_unfollow_set(&graph, 2);
+        assert_eq!(result, Vec::<AttrPath>::new());
+    }
+
+    #[test]
+    fn seed_unfollow_set_collects_stale_declared_edge() {
+        // `home-manager.nixpkgs` is declared with a target but no
+        // lockfile is supplied, so resolved_universe is empty and
+        // [`FollowsGraph::stale_edges`] flags the source.
+        let inputs = make_input_map(vec![input_with_follows(
+            "home-manager",
+            vec![(ap("nixpkgs"), Some(ap("nixpkgs")))],
+        )]);
+        let graph = FollowsGraph::from_declared(&inputs);
+        let result = seed_unfollow_set(&graph, 2);
+        assert_eq!(result, vec![ap("home-manager.nixpkgs")]);
+    }
+
+    #[test]
+    fn seed_unfollow_set_collects_stale_nulled_source() {
+        // `follows = ""` records the source on
+        // [`FollowsGraph::declared_nulled`], not on
+        // [`FollowsGraph::declared_edges`]. Without a lockfile entry the
+        // helper must still surface it via
+        // [`FollowsGraph::stale_nulled_sources`].
+        let inputs = make_input_map(vec![input_with_follows(
+            "home-manager",
+            vec![(ap("nixpkgs"), None)],
+        )]);
+        let graph = FollowsGraph::from_declared(&inputs);
+        let result = seed_unfollow_set(&graph, 2);
+        assert_eq!(result, vec![ap("home-manager.nixpkgs")]);
+    }
+
+    #[test]
+    fn seed_unfollow_set_marks_redundant_depth_n_edge() {
+        // Ancestor `parent.middle -> top` rewrites
+        // `parent.middle.nixpkgs` to `top.nixpkgs`, so the depth-2
+        // declaration `parent.middle.nixpkgs -> top.nixpkgs` is
+        // already covered by upstream propagation.
+        let inputs = make_input_map(vec![input_with_follows(
+            "parent",
+            vec![
+                (ap("middle"), Some(ap("top"))),
+                (ap("middle.nixpkgs"), Some(ap("top.nixpkgs"))),
+            ],
+        )]);
+        let graph = FollowsGraph::from_flake(&inputs, &parent_middle_lock());
+        let result = seed_unfollow_set(&graph, 2);
+        assert_eq!(result, vec![ap("parent.middle.nixpkgs")]);
+    }
+
+    #[test]
+    fn seed_unfollow_set_mixed_sources_are_sorted_and_deduped() {
+        let inputs = make_input_map(vec![
+            input_with_follows("home-manager", vec![(ap("nixpkgs"), None)]),
+            input_with_follows("nixos-cosmic", vec![(ap("nixpkgs"), Some(ap("nixpkgs")))]),
+            input_with_follows(
+                "parent",
+                vec![
+                    (ap("middle"), Some(ap("top"))),
+                    (ap("middle.nixpkgs"), Some(ap("top.nixpkgs"))),
+                ],
+            ),
+        ]);
+        let graph = FollowsGraph::from_flake(&inputs, &parent_middle_lock());
+        let result = seed_unfollow_set(&graph, 2);
+        assert_eq!(
+            result,
+            vec![
+                ap("home-manager.nixpkgs"),
+                ap("nixos-cosmic.nixpkgs"),
+                ap("parent.middle.nixpkgs"),
+            ],
+        );
     }
 
     #[test]
@@ -1249,5 +1492,380 @@ mod tests {
         let collected: Vec<&std::path::PathBuf> = failures.iter().map(|(p, _)| p).collect();
         assert!(collected.contains(&&missing_a));
         assert!(collected.contains(&&missing_b));
+    }
+
+    fn nested_input(path: &str, follows: Option<&str>, url: Option<&str>) -> NestedInput {
+        NestedInput {
+            path: ap(path),
+            follows: follows.map(ap),
+            url: url.map(ToOwned::to_owned),
+        }
+    }
+
+    struct CtxFixture<'a> {
+        inputs: InputMap,
+        graph: FollowsGraph,
+        existing_follows: HashSet<AttrPath>,
+        follow_config: FollowConfig,
+        nested_inputs: &'a [NestedInput],
+        top_level_inputs: HashSet<String>,
+        max_depth: usize,
+        transitive_min: usize,
+    }
+
+    impl<'a> CtxFixture<'a> {
+        fn new(nested_inputs: &'a [NestedInput], top_level: &[&str]) -> Self {
+            Self {
+                inputs: InputMap::new(),
+                graph: FollowsGraph::default(),
+                existing_follows: HashSet::new(),
+                follow_config: FollowConfig::default(),
+                nested_inputs,
+                top_level_inputs: top_level.iter().map(|s| (*s).to_string()).collect(),
+                max_depth: 1,
+                transitive_min: 2,
+            }
+        }
+
+        fn ctx(&self) -> AnalysisCtx<'_> {
+            AnalysisCtx {
+                nested_inputs: self.nested_inputs,
+                top_level_inputs: self.top_level_inputs.clone(),
+                inputs: &self.inputs,
+                graph: &self.graph,
+                existing_follows: &self.existing_follows,
+                follow_config: &self.follow_config,
+                max_depth: self.max_depth,
+                transitive_min: self.transitive_min,
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_direct_candidate_returns_target_when_eligible() {
+        let nested = vec![nested_input("home-manager.nixpkgs", None, None)];
+        let mut fx = CtxFixture::new(&nested, &["nixpkgs", "home-manager"]);
+        fx.inputs = make_input_map(vec![Input::new(seg("nixpkgs"))]);
+
+        let result = resolve_direct_candidate(&fx.ctx(), &nested[0], &[]);
+
+        assert_eq!(result, Some(ap("nixpkgs")));
+    }
+
+    #[test]
+    fn resolve_direct_candidate_skips_when_no_top_level_match() {
+        let nested = vec![nested_input("home-manager.nixpkgs", None, None)];
+        let fx = CtxFixture::new(&nested, &["home-manager"]);
+
+        let result = resolve_direct_candidate(&fx.ctx(), &nested[0], &[]);
+
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn resolve_transitive_candidate_returns_target_when_eligible() {
+        // The self-follow guard compares the target's trailing
+        // segment to the nested input's leaf name, so the fixture
+        // chooses `top.bar` against `parent.foo` to keep them
+        // distinct.
+        let nested = vec![nested_input("parent.foo", Some("top.bar"), None)];
+        let fx = CtxFixture::new(&nested, &["parent", "top"]);
+        let plan = FollowPlan::default();
+
+        let result = resolve_transitive_candidate(&fx.ctx(), &plan, &nested[0]);
+
+        assert_eq!(result, Some(("foo".to_string(), ap("top.bar"))));
+    }
+
+    #[test]
+    fn resolve_transitive_candidate_skips_self_follow() {
+        // Promoting `parent.nixpkgs -> other.nixpkgs` into a group
+        // would amount to a no-op rename of the trailing segment, so
+        // the helper rejects it even though the parents differ.
+        let nested = vec![nested_input("parent.nixpkgs", Some("other.nixpkgs"), None)];
+        let fx = CtxFixture::new(&nested, &["parent", "other"]);
+        let plan = FollowPlan::default();
+
+        let result = resolve_transitive_candidate(&fx.ctx(), &plan, &nested[0]);
+
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn resolve_transitive_candidate_skips_when_already_seen() {
+        // The grouping pass shares `seen_nested` with the direct
+        // promotion pass; a path another phase already claimed must
+        // not produce a second group entry here.
+        let nested = vec![nested_input(
+            "parent.flake-utils",
+            Some("top.flake-utils"),
+            None,
+        )];
+        let fx = CtxFixture::new(&nested, &["parent", "top"]);
+        let plan = FollowPlan {
+            seen_nested: std::iter::once(ap("parent.flake-utils")).collect(),
+            ..FollowPlan::default()
+        };
+
+        let result = resolve_transitive_candidate(&fx.ctx(), &plan, &nested[0]);
+
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn record_direct_promotion_entries_pushes_orphan_paths() {
+        let entries: Vec<(AttrPath, Option<String>)> = vec![
+            (ap("crane.flake-utils"), None),
+            (ap("treefmt.flake-utils"), None),
+        ];
+        let target = ap("flake-utils");
+        let mut plan = FollowPlan::default();
+
+        record_direct_promotion_entries(&mut plan, &target, "flake-utils", &entries);
+
+        assert_eq!(
+            plan.to_follow,
+            vec![
+                (ap("crane.flake-utils"), ap("flake-utils")),
+                (ap("treefmt.flake-utils"), ap("flake-utils")),
+            ],
+        );
+        assert!(plan.seen_nested.contains(&ap("crane.flake-utils")));
+        assert!(plan.seen_nested.contains(&ap("treefmt.flake-utils")));
+    }
+
+    #[test]
+    fn record_direct_promotion_entries_skips_descendants_covered_by_ancestor() {
+        let entries: Vec<(AttrPath, Option<String>)> = vec![
+            (ap("crane.flake-utils"), None),
+            (ap("crane.flake-utils.nested"), None),
+        ];
+        let target = ap("flake-utils");
+        let mut plan = FollowPlan::default();
+
+        record_direct_promotion_entries(&mut plan, &target, "flake-utils", &entries);
+
+        assert_eq!(
+            plan.to_follow,
+            vec![(ap("crane.flake-utils"), ap("flake-utils"))],
+        );
+        assert!(
+            plan.seen_nested.contains(&ap("crane.flake-utils.nested")),
+            "ancestor-covered descendant must still claim seen_nested",
+        );
+    }
+
+    #[test]
+    fn resolve_direct_candidate_skips_existing_follow() {
+        let nested = vec![nested_input("home-manager.nixpkgs", None, None)];
+        let mut fx = CtxFixture::new(&nested, &["nixpkgs", "home-manager"]);
+        fx.inputs = make_input_map(vec![Input::new(seg("nixpkgs"))]);
+        fx.existing_follows = std::iter::once(ap("home-manager.nixpkgs")).collect();
+
+        let result = resolve_direct_candidate(&fx.ctx(), &nested[0], &[]);
+
+        assert_eq!(result, None);
+    }
+
+    fn fresh_state(text: &str) -> PlanState {
+        let parsed = validate::ParsedSource::new(text);
+        assert!(
+            parsed.parse_errors.is_empty(),
+            "test fixture must parse cleanly, got: {:?}",
+            parsed.parse_errors,
+        );
+        PlanState {
+            current_text: text.to_owned(),
+            current_parsed: parsed,
+            warnings: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn apply_toplevel_adds_inserts_new_input() {
+        let original = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs";
+  };
+  outputs = _: { };
+}
+"#;
+        let plan = FollowPlan {
+            toplevel_adds: vec![(
+                "flake-utils".to_string(),
+                "github:numtide/flake-utils".to_string(),
+            )],
+            ..FollowPlan::default()
+        };
+        let mut state = fresh_state(original);
+
+        apply_toplevel_adds(&plan, &mut state, None);
+
+        assert!(
+            state
+                .current_text
+                .contains(r#"flake-utils.url = "github:numtide/flake-utils""#),
+            "added input declaration must appear verbatim, got:\n{}",
+            state.current_text,
+        );
+    }
+
+    #[test]
+    fn apply_follow_changes_records_accepted() {
+        let original = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs";
+    home-manager.url = "github:nix-community/home-manager";
+  };
+  outputs = _: { };
+}
+"#;
+        let plan = FollowPlan {
+            to_follow: vec![(ap("home-manager.nixpkgs"), ap("nixpkgs"))],
+            ..FollowPlan::default()
+        };
+        let mut state = fresh_state(original);
+
+        let applied = apply_follow_changes(&plan, &mut state, None);
+
+        assert_eq!(
+            applied,
+            vec![(ap("home-manager.nixpkgs"), ap("nixpkgs"))],
+            "happy-path follow must be recorded as applied",
+        );
+        assert!(
+            state
+                .current_text
+                .contains("home-manager.inputs.nixpkgs.follows = \"nixpkgs\""),
+            "follows declaration must be written, got:\n{}",
+            state.current_text,
+        );
+    }
+
+    #[test]
+    fn apply_follow_changes_skips_no_op_text() {
+        // Source already contains the exact declaration the plan asks
+        // for. The phase must distinguish "applied a fresh follows"
+        // from "the follows was already in place" so the success
+        // summary does not double-count.
+        let original = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs";
+    home-manager.url = "github:nix-community/home-manager";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
+  };
+  outputs = _: { };
+}
+"#;
+        let plan = FollowPlan {
+            to_follow: vec![(ap("home-manager.nixpkgs"), ap("nixpkgs"))],
+            ..FollowPlan::default()
+        };
+        let mut state = fresh_state(original);
+
+        let applied = apply_follow_changes(&plan, &mut state, None);
+
+        assert!(
+            applied.is_empty(),
+            "no-op follow must not be recorded, got: {applied:?}",
+        );
+        assert_eq!(
+            state.current_text, original,
+            "current_text must be byte-equal to original on no-op",
+        );
+    }
+
+    #[test]
+    fn apply_unfollow_changes_removes_stale() {
+        let original = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs";
+    home-manager.url = "github:nix-community/home-manager";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
+  };
+  outputs = _: { };
+}
+"#;
+        let plan = FollowPlan {
+            to_unfollow: vec![ap("home-manager.nixpkgs")],
+            ..FollowPlan::default()
+        };
+        let mut state = fresh_state(original);
+
+        let unfollowed = apply_unfollow_changes(&plan, &mut state, None);
+
+        assert_eq!(
+            unfollowed,
+            vec![ap("home-manager.nixpkgs")],
+            "removed path must be reported",
+        );
+        assert!(
+            !state
+                .current_text
+                .contains("home-manager.inputs.nixpkgs.follows"),
+            "stale follows line must be gone, got:\n{}",
+            state.current_text,
+        );
+    }
+
+    #[test]
+    fn apply_unfollow_changes_skips_missing_path() {
+        // `to_unfollow` is seeded from a graph view that may disagree
+        // with the on-disk text after earlier phases mutate it. The
+        // phase must drop entries whose source no longer resolves, so
+        // the success summary cannot grow phantom "removed" lines.
+        let original = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs";
+  };
+  outputs = _: { };
+}
+"#;
+        let plan = FollowPlan {
+            to_unfollow: vec![ap("does-not-exist")],
+            ..FollowPlan::default()
+        };
+        let mut state = fresh_state(original);
+
+        let unfollowed = apply_unfollow_changes(&plan, &mut state, None);
+
+        assert!(
+            unfollowed.is_empty(),
+            "missing path must not be reported as removed, got: {unfollowed:?}",
+        );
+        assert_eq!(
+            state.current_text, original,
+            "current_text must be byte-equal when no path was removed",
+        );
+    }
+
+    #[test]
+    fn try_apply_one_leaves_state_on_no_text() {
+        // The helper updates `current_text` and `current_parsed`
+        // together, so a non-Accepted outcome must touch neither.
+        // Otherwise the next phase would walk a parse that no longer
+        // describes the text it sees.
+        let original = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs";
+  };
+  outputs = _: { };
+}
+"#;
+        let mut state = fresh_state(original);
+        let change = Change::Remove {
+            ids: vec![ChangeId::new(ap("does-not-exist"))],
+        };
+
+        let outcome = state.try_apply_one(change, None);
+
+        assert!(
+            matches!(outcome, StepOutcome::NoText),
+            "expected NoText for a remove against an absent source",
+        );
+        assert_eq!(
+            state.current_text, original,
+            "state must be untouched on a non-Accepted outcome",
+        );
     }
 }

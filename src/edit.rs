@@ -102,124 +102,142 @@ impl FlakeEdit {
     fn apply_change_text(&mut self, change: Change) -> Result<Option<String>, Error> {
         match change {
             Change::None => Ok(None),
-            Change::Add { .. } => {
-                // Check for duplicate input before adding
-                if let Some(input_id) = change.id() {
-                    self.ensure_inputs_populated()?;
+            Change::Add { .. } => self.apply_add(change),
+            Change::Remove { .. } => self.apply_remove(change),
+            Change::Follows { .. } => self.apply_follows(change),
+            Change::Change { .. } => self.apply_change_uri(change),
+        }
+    }
 
-                    let input_id_string = input_id.input().as_str().to_string();
-                    if self.walker.inputs.contains_key(&input_id_string) {
-                        return Err(Error::DuplicateInput(input_id_string));
-                    }
-                }
+    /// The `Change::Add` path is two-shot: a first walk attempts to insert
+    /// inside an existing `inputs = { ... }` block, and only if that returns
+    /// `None` (no such block) does the walker re-run with `add_toplevel`
+    /// flipped on to synthesize one. Outputs-lambda extension piggy-backs on
+    /// the first walk because it must observe the post-insert syntax tree.
+    fn apply_add(&mut self, change: Change) -> Result<Option<String>, Error> {
+        if let Some(input_id) = change.id() {
+            self.ensure_inputs_populated()?;
 
-                if let Some(maybe_changed_node) = self.walker.walk(&change.clone())? {
-                    let outputs = self.walker.list_outputs()?;
-                    match outputs {
-                        Outputs::Multiple(out) => {
-                            let id = change.id().unwrap().input().as_str().to_string();
-                            if !out.contains(&id) {
-                                self.walker.root = maybe_changed_node.clone();
-                                if let Some(maybe_changed_node) =
-                                    self.walker.change_outputs(OutputChange::Add(id))?
-                                {
-                                    return Ok(Some(maybe_changed_node.to_string()));
-                                }
-                            }
-                        }
-                        Outputs::None | Outputs::Any(_) => {}
-                    }
-                    Ok(Some(maybe_changed_node.to_string()))
-                } else {
-                    self.walker.add_toplevel = true;
-                    let maybe_changed_node = self.walker.walk(&change)?;
-                    Ok(maybe_changed_node.map(|n| n.to_string()))
-                }
+            let input_id_string = input_id.input().as_str().to_string();
+            if self.walker.inputs.contains_key(&input_id_string) {
+                return Err(Error::DuplicateInput(input_id_string));
             }
-            Change::Remove { .. } => {
-                self.ensure_inputs_populated()?;
+        }
 
-                let id = change.id().unwrap();
-                // Outputs-lambda strip and orphan-follows scrubbing only
-                // run for a top-level input remove. A depth-N follows id
-                // shares its first segment with a still-present input;
-                // running the cleanup there would strip that input from
-                // the outputs lambda.
-                let is_toplevel_remove = id.follows().is_none();
-                let removed_id = id.input().as_str().to_string();
+        if let Some(maybe_changed_node) = self.walker.walk(&change.clone())? {
+            let outputs = self.walker.list_outputs()?;
+            match outputs {
+                Outputs::Multiple(out) => {
+                    let id = change.id().unwrap().input().as_str().to_string();
+                    if !out.contains(&id) {
+                        self.walker.root = maybe_changed_node.clone();
+                        if let Some(maybe_changed_node) =
+                            self.walker.change_outputs(OutputChange::Add(id))?
+                        {
+                            return Ok(Some(maybe_changed_node.to_string()));
+                        }
+                    }
+                }
+                Outputs::None | Outputs::Any(_) => {}
+            }
+            Ok(Some(maybe_changed_node.to_string()))
+        } else {
+            self.walker.add_toplevel = true;
+            let maybe_changed_node = self.walker.walk(&change)?;
+            Ok(maybe_changed_node.map(|n| n.to_string()))
+        }
+    }
 
-                // If we remove a node, it could be a flat structure,
-                // we want to remove all of the references to its toplevel.
-                let mut res = None;
-                while let Some(changed_node) = self.walker.walk(&change)? {
+    /// `Change::Remove` runs the walker in a fixed-point loop because a single
+    /// input can be spelled across multiple flat declarations
+    /// (`inputs.foo.url = ...; inputs.foo.flake = false;`); each walk strips
+    /// one occurrence. The post-loop outputs-lambda strip and orphan-follows
+    /// scrub only run for a top-level remove, since a depth-N follows id
+    /// shares its first segment with a still-present input and running the
+    /// cleanup there would strip that input from the outputs lambda.
+    fn apply_remove(&mut self, change: Change) -> Result<Option<String>, Error> {
+        self.ensure_inputs_populated()?;
+
+        let id = change.id().unwrap();
+        let is_toplevel_remove = id.follows().is_none();
+        let removed_id = id.input().as_str().to_string();
+
+        let mut res = None;
+        while let Some(changed_node) = self.walker.walk(&change)? {
+            if res == Some(changed_node.clone()) {
+                break;
+            }
+            res = Some(changed_node.clone());
+            self.walker.root = changed_node.clone();
+        }
+
+        if is_toplevel_remove {
+            let outputs = self.walker.list_outputs()?;
+            match outputs {
+                Outputs::Multiple(out) | Outputs::Any(out) => {
+                    if out.contains(&removed_id)
+                        && let Some(changed_node) = self
+                            .walker
+                            .change_outputs(OutputChange::Remove(removed_id.clone()))?
+                    {
+                        res = Some(changed_node.clone());
+                        self.walker.root = changed_node.clone();
+                    }
+                }
+                Outputs::None => {}
+            }
+
+            let orphaned_follows = self.collect_orphaned_follows(&removed_id);
+            for orphan_change in orphaned_follows {
+                while let Some(changed_node) = self.walker.walk(&orphan_change)? {
                     if res == Some(changed_node.clone()) {
                         break;
                     }
                     res = Some(changed_node.clone());
                     self.walker.root = changed_node.clone();
                 }
-
-                if is_toplevel_remove {
-                    let outputs = self.walker.list_outputs()?;
-                    match outputs {
-                        Outputs::Multiple(out) | Outputs::Any(out) => {
-                            if out.contains(&removed_id)
-                                && let Some(changed_node) = self
-                                    .walker
-                                    .change_outputs(OutputChange::Remove(removed_id.clone()))?
-                            {
-                                res = Some(changed_node.clone());
-                                self.walker.root = changed_node.clone();
-                            }
-                        }
-                        Outputs::None => {}
-                    }
-
-                    let orphaned_follows = self.collect_orphaned_follows(&removed_id);
-                    for orphan_change in orphaned_follows {
-                        while let Some(changed_node) = self.walker.walk(&orphan_change)? {
-                            if res == Some(changed_node.clone()) {
-                                break;
-                            }
-                            res = Some(changed_node.clone());
-                            self.walker.root = changed_node.clone();
-                        }
-                    }
-                }
-
-                Ok(res.map(|n| n.to_string()))
-            }
-            Change::Follows { ref input, .. } => {
-                self.ensure_inputs_populated()?;
-
-                let parent_id = input.input().as_str();
-                if !self.walker.inputs.contains_key(parent_id) {
-                    return Err(Error::InputNotFound(parent_id.to_string()));
-                }
-
-                if let Some(maybe_changed_node) = self.walker.walk(&change)? {
-                    Ok(Some(maybe_changed_node.to_string()))
-                } else {
-                    Ok(None)
-                }
-            }
-            Change::Change { .. } => {
-                if let Some(input_id) = change.id() {
-                    self.ensure_inputs_populated()?;
-
-                    let input_id_string = input_id.input().as_str().to_string();
-                    if !self.walker.inputs.contains_key(&input_id_string) {
-                        return Err(Error::InputNotFound(input_id_string));
-                    }
-                }
-
-                if let Some(maybe_changed_node) = self.walker.walk(&change)? {
-                    Ok(Some(maybe_changed_node.to_string()))
-                } else {
-                    Ok(None)
-                }
             }
         }
+
+        Ok(res.map(|n| n.to_string()))
+    }
+
+    /// A `Change::Follows` whose parent input is missing is a hard error
+    /// rather than a no-op so the caller learns about the typo; the parent
+    /// check runs before the walk because the walker would silently produce
+    /// no edit otherwise.
+    fn apply_follows(&mut self, change: Change) -> Result<Option<String>, Error> {
+        let Change::Follows { ref input, .. } = change else {
+            unreachable!("apply_follows dispatched only for Change::Follows");
+        };
+
+        self.ensure_inputs_populated()?;
+
+        let parent_id = input.input().as_str();
+        if !self.walker.inputs.contains_key(parent_id) {
+            return Err(Error::InputNotFound(parent_id.to_string()));
+        }
+
+        Ok(self.walker.walk(&change)?.map(|n| n.to_string()))
+    }
+
+    /// The presence check exists because `walker.walk` produces no edit at
+    /// all when its `Change::Change` target is missing, so without surfacing
+    /// `InputNotFound` here a typo would silently report success. The
+    /// `Option<ChangeId>` is honored rather than asserted: a `Change::Change`
+    /// with `id == None` is a no-op the walker handles without consulting
+    /// the input map.
+    fn apply_change_uri(&mut self, change: Change) -> Result<Option<String>, Error> {
+        if let Some(input_id) = change.id() {
+            self.ensure_inputs_populated()?;
+
+            let input_id_string = input_id.input().as_str().to_string();
+            if !self.walker.inputs.contains_key(&input_id_string) {
+                return Err(Error::InputNotFound(input_id_string));
+            }
+        }
+
+        Ok(self.walker.walk(&change)?.map(|n| n.to_string()))
     }
 
     pub fn walker(&self) -> &Walker {
@@ -268,6 +286,190 @@ impl FlakeEdit {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn flake_with_nixpkgs_and_crane() -> &'static str {
+        r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    crane = {
+      url = "github:ipetkov/crane";
+    };
+  };
+  outputs = { ... }: { };
+}"#
+    }
+
+    #[test]
+    fn none_is_noop() {
+        let mut fe = FlakeEdit::from_text(flake_with_nixpkgs_and_crane()).unwrap();
+        let outcome = fe.apply_change(Change::None).unwrap();
+        assert!(outcome.text.is_none(), "Change::None must not produce text");
+    }
+
+    #[test]
+    fn add_inserts_into_existing_inputs_block() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+  };
+  outputs = { ... }: { };
+}"#;
+        let mut fe = FlakeEdit::from_text(flake).unwrap();
+        let change = Change::Add {
+            id: Some("crane".into()),
+            uri: Some("github:ipetkov/crane".into()),
+            flake: true,
+        };
+        let text = fe
+            .apply_change(change)
+            .expect("Add must succeed")
+            .text
+            .expect("Add must produce text");
+        assert!(
+            text.contains("crane.url = \"github:ipetkov/crane\""),
+            "new input must render as a flat url assignment; got:\n{text}",
+        );
+    }
+
+    #[test]
+    fn add_synthesizes_inputs_block_when_absent() {
+        // The first walk returns None when the source has no
+        // `inputs = { ... }` block to insert into. apply_add then flips
+        // `add_toplevel` and re-runs to synthesize one.
+        let flake = r#"{
+  outputs = { self, ... }: { };
+}"#;
+        let mut fe = FlakeEdit::from_text(flake).unwrap();
+        let change = Change::Add {
+            id: Some("nixpkgs".into()),
+            uri: Some("github:nixos/nixpkgs".into()),
+            flake: true,
+        };
+        let text = fe
+            .apply_change(change)
+            .expect("Add must succeed")
+            .text
+            .expect("Add must produce text");
+        assert!(
+            text.contains("inputs.nixpkgs.url = \"github:nixos/nixpkgs\""),
+            "synthesized toplevel form must use flat url assignment; got:\n{text}",
+        );
+    }
+
+    #[test]
+    fn add_duplicate_returns_duplicate_input_error() {
+        let mut fe = FlakeEdit::from_text(flake_with_nixpkgs_and_crane()).unwrap();
+        let change = Change::Add {
+            id: Some("crane".into()),
+            uri: Some("github:ipetkov/crane".into()),
+            flake: true,
+        };
+        let err = fe.apply_change(change).expect_err("duplicate must error");
+        assert!(
+            matches!(err, Error::DuplicateInput(ref id) if id == "crane"),
+            "expected DuplicateInput(\"crane\"), got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn remove_strips_existing_input() {
+        let mut fe = FlakeEdit::from_text(flake_with_nixpkgs_and_crane()).unwrap();
+        let change = Change::Remove {
+            ids: vec![crate::change::ChangeId::parse("crane").unwrap()],
+        };
+        let text = fe
+            .apply_change(change)
+            .expect("Remove must succeed")
+            .text
+            .expect("Remove must produce text");
+        assert!(
+            !text.contains("crane"),
+            "removed id must not appear; got:\n{text}"
+        );
+        assert!(text.contains("nixpkgs"), "untouched id must remain");
+    }
+
+    #[test]
+    fn remove_scrubs_orphaned_follows_pointing_at_removed_input() {
+        // Removing a top-level input must also strip any sibling input's
+        // `follows = "<removed>"` declaration; apply_remove gates this
+        // scrub on `is_toplevel_remove`, so a depth-N remove must NOT
+        // trigger it.
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+  outputs = { ... }: { };
+}"#;
+        let mut fe = FlakeEdit::from_text(flake).unwrap();
+        let change = Change::Remove {
+            ids: vec![crate::change::ChangeId::parse("nixpkgs").unwrap()],
+        };
+        let text = fe
+            .apply_change(change)
+            .expect("Remove must succeed")
+            .text
+            .expect("Remove must produce text");
+        assert!(
+            !text.contains("follows = \"nixpkgs\""),
+            "orphaned follows must be scrubbed; got:\n{text}",
+        );
+        assert!(text.contains("crane"), "sibling input must remain");
+    }
+
+    #[test]
+    fn change_uri_rewrites_existing_input() {
+        let mut fe = FlakeEdit::from_text(flake_with_nixpkgs_and_crane()).unwrap();
+        let change = Change::Change {
+            id: Some("crane".into()),
+            uri: Some("github:ipetkov/crane/v0.20.0".into()),
+        };
+        let text = fe
+            .apply_change(change)
+            .expect("Change must succeed")
+            .text
+            .expect("Change must produce text");
+        assert!(
+            text.contains("github:ipetkov/crane/v0.20.0"),
+            "new uri must be present; got:\n{text}",
+        );
+    }
+
+    #[test]
+    fn change_uri_missing_input_returns_input_not_found() {
+        let mut fe = FlakeEdit::from_text(flake_with_nixpkgs_and_crane()).unwrap();
+        let change = Change::Change {
+            id: Some("does-not-exist".into()),
+            uri: Some("github:owner/repo".into()),
+        };
+        let err = fe
+            .apply_change(change)
+            .expect_err("missing input must error");
+        assert!(
+            matches!(err, Error::InputNotFound(ref id) if id == "does-not-exist"),
+            "expected InputNotFound(\"does-not-exist\"), got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn follows_missing_parent_returns_input_not_found() {
+        let mut fe = FlakeEdit::from_text(flake_with_nixpkgs_and_crane()).unwrap();
+        let change = Change::Follows {
+            input: crate::change::ChangeId::parse("ghost.nixpkgs").unwrap(),
+            target: crate::follows::AttrPath::parse("nixpkgs").unwrap(),
+        };
+        let err = fe
+            .apply_change(change)
+            .expect_err("missing parent must error");
+        assert!(
+            matches!(err, Error::InputNotFound(ref id) if id == "ghost"),
+            "expected InputNotFound(\"ghost\"), got: {err:?}",
+        );
+    }
 
     #[test]
     fn already_follows_is_noop() {
