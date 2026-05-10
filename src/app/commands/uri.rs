@@ -1,4 +1,4 @@
-use nix_uri::{FlakeRef, NixUriError};
+use nix_uri::FlakeRef;
 
 use crate::change::Change;
 
@@ -46,25 +46,22 @@ pub(super) fn build_uri_change(
 }
 
 /// Applies `ref_or_rev` and `shallow` to `flake_ref`, leaving every
-/// other field untouched.
-///
-/// # Errors
-///
-/// Returns the typed `nix_uri` error when the underlying URI type does
-/// not accept the requested option. The renderer attaches an actionable
-/// hint at the binary boundary; the library error stays clean.
+/// other field untouched. Kinds that have no ref slot (`Path`) ignore
+/// the `ref_or_rev` value silently.
 pub(super) fn apply_uri_options(
-    mut flake_ref: FlakeRef,
+    flake_ref: FlakeRef,
     ref_or_rev: Option<&str>,
     shallow: bool,
-) -> std::result::Result<FlakeRef, NixUriError> {
-    if let Some(ror) = ref_or_rev {
-        flake_ref.r#type.ref_or_rev(Some(ror.to_string()))?;
-    }
+) -> FlakeRef {
+    let mut flake_ref = if let Some(ror) = ref_or_rev {
+        flake_ref.with_ref(Some(ror.to_string()))
+    } else {
+        flake_ref
+    };
     if shallow {
-        flake_ref.params.set_shallow(Some("1".to_string()));
+        flake_ref.set_shallow(true);
     }
-    Ok(flake_ref)
+    flake_ref
 }
 
 /// Applies `ref_or_rev` and `shallow` to a URI string, returning the
@@ -88,10 +85,5 @@ pub(super) fn transform_uri(
         return Ok(uri);
     }
 
-    apply_uri_options(flake_ref, ref_or_rev, shallow)
-        .map(|f| f.to_string())
-        .map_err(|source| Error::ApplyUriOptions {
-            uri: uri.clone(),
-            source,
-        })
+    Ok(apply_uri_options(flake_ref, ref_or_rev, shallow).into_uri())
 }

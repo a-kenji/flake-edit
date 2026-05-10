@@ -6,7 +6,7 @@ fn flake_with_pins() -> String {
     r#"{
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils?rev=abcdef";
+    flake-utils.url = "github:numtide/flake-utils?rev=0123456789abcdef0123456789abcdef01234567";
   };
 
   outputs = { self, nixpkgs, flake-utils }: { };
@@ -121,7 +121,7 @@ fn pin_quoted_input_by_bare_name() {
 fn unpin_quoted_input_by_bare_name() {
     let flake = r#"{
   inputs = {
-    "nixpkgs-24.11".url = "github:nixos/nixpkgs/nixos-24.11?rev=deadbeef";
+    "nixpkgs-24.11".url = "github:nixos/nixpkgs?rev=50ab793786d9de88ee30ec4e4c24fb4236fc2674";
   };
 
   outputs = { self, ... }: { };
@@ -160,7 +160,7 @@ fn pin_with_multibyte_chars_before_url() {
     let mut updater = Updater::new(Rope::from_str(&flake), inputs);
 
     updater
-        .pin_input_to_ref("nixpkgs", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+        .pin_input_to_ref("nixpkgs", "50ab793786d9de88ee30ec4e4c24fb4236fc2674")
         .expect("pin should succeed");
 
     let result = updater.get_changes();
@@ -168,9 +168,9 @@ fn pin_with_multibyte_chars_before_url() {
     // valid flake-ref syntax. What matters is that the edit landed on the URL
     // and not three characters to the side of it.
     let pinned_path =
-        r#"nixpkgs.url = "github:nixos/nixpkgs/deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";"#;
+        r#"nixpkgs.url = "github:nixos/nixpkgs/50ab793786d9de88ee30ec4e4c24fb4236fc2674";"#;
     let pinned_query =
-        r#"nixpkgs.url = "github:nixos/nixpkgs?rev=deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";"#;
+        r#"nixpkgs.url = "github:nixos/nixpkgs?rev=50ab793786d9de88ee30ec4e4c24fb4236fc2674";"#;
     assert!(
         result.contains(pinned_path) || result.contains(pinned_query),
         "URL was corrupted by byte/char offset mismatch:\n{result}"

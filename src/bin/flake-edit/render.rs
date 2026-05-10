@@ -118,20 +118,12 @@ fn hint_for(err: &app::Error) -> Option<String> {
             "check that '{id}' is declared in flake.nix; run `flake-edit list` to verify input names; \
              use dot notation `flake-edit follow <input>.<nested-input> <target>` for deeper paths"
         )),
-        Error::ApplyUriOptions { .. } => Some(
-            "the --ref-or-rev option only works with git forge types (github:, gitlab:, sourcehut:) \
-             and indirect types (flake:); for other URI types use ?ref= or ?rev= query parameters \
-             in the URI itself"
-                .into(),
-        ),
         Error::FlakeNotFound { .. } | Error::FlakeDirEmpty { .. } => Some(
             "run `nix flake init` here, or pass `--flake <path>` pointing at a directory \
              containing flake.nix"
                 .into(),
         ),
-        Error::LockFile { .. } => {
-            Some("run `nix flake lock` to (re)generate flake.lock".into())
-        }
+        Error::LockFile { .. } => Some("run `nix flake lock` to (re)generate flake.lock".into()),
         Error::Batch { .. } => {
             Some("run `flake-edit list` against each failing file to verify input names".into())
         }

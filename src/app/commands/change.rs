@@ -5,8 +5,7 @@
 //! infer-id (uri only). All route the resulting URI through
 //! [`super::uri::transform_uri`].
 
-use nix_uri::urls::UrlWrapper;
-use nix_uri::{FlakeRef, NixUriResult};
+use nix_uri::FlakeRef;
 
 use crate::change::Change;
 use crate::edit::{FlakeEdit, InputMap, sorted_input_ids};
@@ -123,29 +122,17 @@ fn change_uri_interactive(
 /// Builds a `Change::Change` when only the URI is supplied, inferring
 /// the ID from the parsed flake reference.
 fn change_infer_id(uri: String, opts: &UriOptions<'_>) -> Result<Change> {
-    let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(&uri);
-
-    let flake_ref = flake_ref.map_err(|source| Error::InvalidUri {
+    let flake_ref: FlakeRef = uri.parse().map_err(|source| Error::InvalidUri {
         uri: uri.clone(),
         source,
     })?;
-    let flake_ref =
-        apply_uri_options(flake_ref, opts.ref_or_rev, opts.shallow).map_err(|source| {
-            Error::ApplyUriOptions {
-                uri: uri.clone(),
-                source,
-            }
-        })?;
-
-    let final_uri = if flake_ref.to_string().is_empty() {
-        uri.clone()
-    } else {
-        flake_ref.to_string()
-    };
+    let flake_ref = apply_uri_options(flake_ref, opts.ref_or_rev, opts.shallow);
 
     let id = flake_ref
         .id()
+        .map(str::to_owned)
         .ok_or_else(|| Error::CouldNotInferId { uri: uri.clone() })?;
+    let final_uri = flake_ref.into_uri();
 
     Ok(Change::Change {
         id: Some(id),

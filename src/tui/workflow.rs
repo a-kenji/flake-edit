@@ -8,7 +8,6 @@
 use std::collections::HashMap;
 
 use nix_uri::FlakeRef;
-use nix_uri::urls::UrlWrapper;
 
 use crate::change::Change;
 use crate::diff::Diff;
@@ -182,17 +181,12 @@ impl WorkflowData {
 /// Returns (inferred_id, normalized_uri) where normalized_uri is the parsed
 /// string representation if valid, or the original URI if parsing failed.
 pub fn parse_uri_and_infer_id(uri: &str) -> (Option<String>, String) {
-    let flake_ref: Result<FlakeRef, _> = UrlWrapper::convert_or_parse(uri);
-    if let Ok(flake_ref) = flake_ref {
-        let parsed_uri = flake_ref.to_string();
-        let final_uri = if parsed_uri.is_empty() || parsed_uri == "none" {
-            uri.to_string()
-        } else {
-            parsed_uri
-        };
-        (flake_ref.id(), final_uri)
-    } else {
-        (None, uri.to_string())
+    match uri.parse::<FlakeRef>() {
+        Ok(flake_ref) => {
+            let id = flake_ref.id().map(str::to_owned);
+            (id, flake_ref.into_uri())
+        }
+        Err(_) => (None, uri.to_string()),
     }
 }
 

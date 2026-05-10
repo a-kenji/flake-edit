@@ -1225,23 +1225,15 @@ dependencies = [
 
 [[package]]
 name = "nix-uri"
-version = "0.1.10"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "023785d753a0c581d156ad935d0bee1fc6daa14b69d5453bffe0521ea13fdbdb"
+checksum = "0dff253c530e7d5e360aed6a62f3d415bcac8a79eed184c3c896979a4fd8f9e9"
 dependencies = [
- "nom",
+ "percent-encoding",
  "serde",
  "thiserror",
  "url",
-]
-
-[[package]]
-name = "nom"
-version = "8.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df9761775871bdef83bee530e60050f7e54b1105350d6884eb0fb4f46c2f9405"
-dependencies = [
- "memchr",
+ "winnow",
 ]
 
 [[package]]

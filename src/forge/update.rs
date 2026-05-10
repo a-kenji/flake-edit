@@ -1,4 +1,4 @@
-use nix_uri::{FlakeRef, RefLocation};
+use nix_uri::{FlakeRef, RefKind};
 use ropey::Rope;
 use std::cmp::Ordering;
 
@@ -20,14 +20,14 @@ pub struct Updater {
 
 enum UpdateTarget {
     GitUrl {
-        parsed: Box<FlakeRef>,
+        parsed: FlakeRef,
         owner: String,
         repo: String,
         domain: String,
         parsed_ref: super::version::ParsedRef,
     },
     ForgeRef {
-        parsed: Box<FlakeRef>,
+        parsed: FlakeRef,
         owner: String,
         repo: String,
         parsed_ref: super::version::ParsedRef,
@@ -67,24 +67,24 @@ impl Updater {
             }
         };
 
-        let maybe_version = parsed.get_ref_or_rev().unwrap_or_default();
-        let parsed_ref = parse_ref(&maybe_version, init);
+        let maybe_version = parsed.ref_or_rev().unwrap_or_default();
+        let parsed_ref = parse_ref(maybe_version, init);
 
         if !init && let Err(e) = semver::Version::parse(&parsed_ref.normalized_for_semver) {
             tracing::debug!("Skip non semver version: {}: {}", maybe_version, e);
             return None;
         }
 
-        let owner = match parsed.r#type.get_owner() {
-            Some(o) => o,
+        let owner = match parsed.owner() {
+            Some(o) => o.to_owned(),
             None => {
                 tracing::debug!("Skipping input without owner");
                 return None;
             }
         };
 
-        let repo = match parsed.r#type.get_repo() {
-            Some(r) => r,
+        let repo = match parsed.repo() {
+            Some(r) => r.to_owned(),
             None => {
                 tracing::debug!("Skipping input without repo");
                 return None;
@@ -92,9 +92,9 @@ impl Updater {
         };
 
         if is_git_url {
-            let domain = parsed.r#type.get_domain()?;
+            let domain = parsed.domain()?.to_owned();
             return Some(UpdateTarget::GitUrl {
-                parsed: Box::new(parsed),
+                parsed,
                 owner,
                 repo,
                 domain,
@@ -103,7 +103,7 @@ impl Updater {
         }
 
         Some(UpdateTarget::ForgeRef {
-            parsed: Box::new(parsed),
+            parsed,
             owner,
             repo,
             parsed_ref,
@@ -160,11 +160,10 @@ impl Updater {
                 change.clone()
             };
 
-            // `set_ref` preserves whether the ref lives in the URL path or a
-            // query parameter.
-            let mut parsed = parsed.clone();
-            let _ = parsed.set_ref(Some(final_change.clone()));
-            let updated_uri = parsed.to_string();
+            let updated_uri = parsed
+                .clone()
+                .with_ref(Some(final_change.clone()))
+                .into_uri();
 
             if !Self::print_update_status(
                 input.input.id.as_str(),
@@ -281,11 +280,9 @@ impl Updater {
     pub(crate) fn change_input_to_rev(&mut self, input: &UpdateInput, rev: &str) {
         let uri = self.get_input_text(input);
         match uri.parse::<FlakeRef>() {
-            Ok(mut parsed) => {
-                // `set_rev` preserves whether the rev lives in the URL path
-                // or a query parameter.
-                let _ = parsed.set_rev(Some(rev.into()));
-                self.update_input(input.clone(), &parsed.to_string());
+            Ok(parsed) => {
+                let updated = parsed.pin_to_rev(rev.into()).into_uri();
+                self.update_input(input.clone(), &updated);
             }
             Err(e) => {
                 tracing::error!("Error while changing input: {}", e);
@@ -296,14 +293,12 @@ impl Updater {
         let uri = self.get_input_text(input);
         match uri.parse::<FlakeRef>() {
             Ok(mut parsed) => {
-                if parsed.ref_source_location() == RefLocation::None {
+                if parsed.ref_kind() == RefKind::None {
                     return;
                 }
-                // `set_ref`/`set_rev` handle both path-based and
-                // query-parameter storage.
-                let _ = parsed.set_ref(None);
-                let _ = parsed.set_rev(None);
-                self.update_input(input.clone(), &parsed.to_string());
+                parsed.set_ref(None);
+                parsed.set_rev(None);
+                self.update_input(input.clone(), &parsed.into_uri());
             }
             Err(e) => {
                 tracing::error!("Error while changing input: {}", e);
@@ -323,16 +318,16 @@ impl Updater {
             }
         };
 
-        let owner = match parsed.r#type.get_owner() {
-            Some(o) => o,
+        let owner = match parsed.owner() {
+            Some(o) => o.to_owned(),
             None => {
                 tracing::debug!("Skipping input without owner");
                 return;
             }
         };
 
-        let repo = match parsed.r#type.get_repo() {
-            Some(r) => r,
+        let repo = match parsed.repo() {
+            Some(r) => r.to_owned(),
             None => {
                 tracing::debug!("Skipping input without repo");
                 return;
@@ -357,11 +352,11 @@ impl Updater {
     /// Update `input` using channel-based versioning (nixpkgs, home-manager,
     /// nix-darwin).
     fn update_channel_input(&mut self, input: &UpdateInput, parsed: &FlakeRef) {
-        let owner = parsed.r#type.get_owner().unwrap();
-        let repo = parsed.r#type.get_repo().unwrap();
-        let domain = parsed.r#type.get_domain();
+        let owner = parsed.owner().unwrap();
+        let repo = parsed.repo().unwrap();
+        let domain = parsed.domain();
 
-        let current_ref = parsed.get_ref_or_rev().unwrap_or_default();
+        let current_ref = parsed.ref_or_rev().unwrap_or_default().to_owned();
 
         if current_ref.is_empty() {
             tracing::debug!(
@@ -373,7 +368,7 @@ impl Updater {
 
         let has_refs_heads_prefix = current_ref.starts_with("refs/heads/");
 
-        let latest = match find_latest_channel(&current_ref, &owner, &repo, domain.as_deref()) {
+        let latest = match find_latest_channel(&current_ref, owner, repo, domain) {
             Ok(Some(latest)) => latest,
             // Either already on latest, unstable, or not a recognized channel
             Ok(None) => return,
@@ -394,9 +389,7 @@ impl Updater {
             latest.clone()
         };
 
-        let mut parsed = parsed.clone();
-        let _ = parsed.set_ref(Some(final_ref.clone()));
-        let updated_uri = parsed.to_string();
+        let updated_uri = parsed.clone().with_ref(Some(final_ref.clone())).into_uri();
 
         if Self::print_update_status(input.input.id.as_str(), &current_ref, &final_ref) {
             self.update_input(input.clone(), &updated_uri);

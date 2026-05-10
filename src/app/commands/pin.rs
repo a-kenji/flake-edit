@@ -123,9 +123,7 @@ pub fn unpin(
                     .url()
                     .trim_matches('"')
                     .parse::<FlakeRef>()
-                    .ok()
-                    .and_then(|f| f.get_ref_or_rev())
-                    .is_some_and(|v| !v.is_empty())
+                    .is_ok_and(|f| f.ref_kind() != nix_uri::RefKind::None)
             })
             .collect();
 

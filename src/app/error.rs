@@ -81,14 +81,6 @@ pub enum Error {
     #[error("could not infer id from flake reference '{uri}'")]
     CouldNotInferId { uri: String },
 
-    /// `nix_uri` failed to apply uri options to a parsed flake reference.
-    #[error("could not apply uri options to '{uri}'")]
-    ApplyUriOptions {
-        uri: String,
-        #[source]
-        source: nix_uri::NixUriError,
-    },
-
     /// The named input has no concrete URL to pin against (e.g. a
     /// `follows`-only input or a non-standard reference shape).
     #[error("input '{id}' has no pinnable URL (it may use follows or a non-standard format)")]
