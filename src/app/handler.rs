@@ -275,9 +275,6 @@ fn dispatch_completion(args: &CliArgs, flake_edit: &mut FlakeEdit, no_cache: boo
                 }
             }
         }
-        CompletionMode::None => {
-            crate::cache::populate_cache_from_input_map(flake_edit.curr_list(), no_cache);
-        }
     }
     Ok(())
 }

@@ -115,9 +115,7 @@ pub(super) fn list_inputs(inputs: &InputMap, format: &ListFormat) {
         ListFormat::Simple => list_simple(inputs),
         ListFormat::Json => list_json(inputs),
         ListFormat::Detailed => list_detailed(inputs),
-        ListFormat::Raw => list_raw(inputs),
         ListFormat::Toplevel => list_toplevel(inputs),
-        ListFormat::None => unreachable!("Should not be possible"),
     }
 }
 
@@ -156,11 +154,6 @@ fn list_toplevel(inputs: &InputMap) {
         buf.push_str(&key.to_string());
     }
     println!("{buf}");
-}
-
-fn list_raw(inputs: &InputMap) {
-    let sorted: BTreeMap<_, _> = inputs.iter().collect();
-    println!("{:#?}", sorted);
 }
 
 /// Returns `true` when `url` is a top-level follows reference (for

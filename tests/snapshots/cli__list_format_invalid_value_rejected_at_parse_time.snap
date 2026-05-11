@@ -1,0 +1,25 @@
+---
+source: tests/cli.rs
+assertion_line: 103
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/root.flake.nix"
+    - list
+    - "--format"
+    - toml
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 2
+----- stdout -----
+
+----- stderr -----
+error: invalid value 'toml' for '--format <FORMAT>'
+  [possible values: simple, toplevel, detailed, json]
+
+  tip: a similar value exists: 'toplevel'
+
+For more information, try '--help'.
