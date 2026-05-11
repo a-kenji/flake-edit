@@ -1306,6 +1306,106 @@ fn handle_inputs_leaf(
     None
 }
 
+fn find_inputs_block_attr(parent: &SyntaxNode) -> Option<SyntaxNode> {
+    parent.children().find(|c| {
+        if c.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
+            return false;
+        }
+        let is_inputs = c
+            .first_child()
+            .map(|attrpath| attrpath.to_string() == "inputs")
+            .unwrap_or(false);
+        is_inputs && c.children().any(|v| v.kind() == SyntaxKind::NODE_ATTR_SET)
+    })
+}
+
+fn merge_follow_into_inputs_block(
+    node: &SyntaxNode,
+    child: &SyntaxNode,
+    rest: &[Segment],
+    target: &str,
+) -> Option<SyntaxNode> {
+    let inputs_attr = find_inputs_block_attr(child)?;
+    let inputs_block = inputs_attr
+        .children()
+        .find(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)?;
+
+    if let Some(maybe_node) = find_existing_flat_follows(&inputs_block, rest, target) {
+        let new_block = maybe_node?;
+        let new_attr = substitute_child(&inputs_attr, inputs_block.index(), &new_block);
+        let new_child = substitute_child(child, inputs_attr.index(), &new_attr);
+        return Some(substitute_child(node, child.index(), &new_child));
+    }
+
+    let mut path = AttrPath::new(rest[0].clone());
+    for seg in &rest[1..] {
+        path.push(seg.clone());
+    }
+    let follows_node = FollowsKind::InputsBlockNested {
+        path: &path,
+        target,
+    }
+    .emit();
+
+    let new_block = if let Some(last_attr) = inputs_block
+        .children()
+        .filter(|c| c.kind() == SyntaxKind::NODE_ATTRPATH_VALUE)
+        .last()
+    {
+        let insert_index = insertion_index_after(&last_attr);
+        let mut green = inputs_block
+            .green()
+            .insert_child(insert_index, follows_node.green().into());
+        if let Some(whitespace) = get_sibling_whitespace(&last_attr) {
+            let ws_str = whitespace.to_string();
+            let ws_node = parse_node(last_line_with_newline(&ws_str));
+            green = green.insert_child(insert_index, ws_node.green().into());
+        }
+        SyntaxNode::new_root(green)
+    } else {
+        fill_empty_inputs_block(&inputs_attr, &inputs_block, &follows_node)
+    };
+
+    let new_attr = substitute_child(&inputs_attr, inputs_block.index(), &new_block);
+    let new_child = substitute_child(child, inputs_attr.index(), &new_attr);
+    Some(substitute_child(node, child.index(), &new_child))
+}
+
+fn fill_empty_inputs_block(
+    inputs_attr: &SyntaxNode,
+    inputs_block: &SyntaxNode,
+    follows_node: &SyntaxNode,
+) -> SyntaxNode {
+    let parent_attr_indent = inputs_attr
+        .prev_sibling_or_token()
+        .filter(|t| t.kind() == SyntaxKind::TOKEN_WHITESPACE)
+        .map(|t| extract_indent(&t.to_string()).to_string())
+        .unwrap_or_else(|| "    ".to_string());
+    let entry_indent = format!("\n{parent_attr_indent}  ");
+    let closing_indent = format!("\n{parent_attr_indent}");
+
+    let ws_index = inputs_block
+        .children_with_tokens()
+        .find(|t| t.kind() == SyntaxKind::TOKEN_WHITESPACE)
+        .map(|t| t.index());
+    let mut green = if let Some(idx) = ws_index {
+        inputs_block.green().remove_child(idx)
+    } else {
+        inputs_block.green().into_owned()
+    };
+
+    let brace_index = green
+        .children()
+        .position(|c| c.as_token().map(|t| t.text() == "}").unwrap_or(false))
+        .unwrap_or(green.children().count());
+
+    green = green.insert_child(brace_index, parse_node(&closing_indent).green().into());
+    green = green.insert_child(brace_index, follows_node.green().into());
+    green = green.insert_child(brace_index, parse_node(&entry_indent).green().into());
+
+    SyntaxNode::new_root(green)
+}
+
 fn handle_input_attr_set(
     inputs: &mut HashMap<String, Input>,
     node: &SyntaxNode,
@@ -1344,6 +1444,12 @@ fn handle_input_attr_set(
             // to the parent (everything below it).
             let rest: Vec<Segment> = full_path.segments()[1..].to_vec();
             if !rest.is_empty() {
+                if let Some(result) =
+                    merge_follow_into_inputs_block(node, child, &rest, &target_str)
+                {
+                    return Some(result);
+                }
+
                 if let Some(result) = find_existing_nested_follows(node, child, &rest, &target_str)
                 {
                     return result;
