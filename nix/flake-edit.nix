@@ -27,6 +27,7 @@ let
       ../benches
       ../tests
       ../assets
+      ../docs
     ];
   };
   commonArgs = {

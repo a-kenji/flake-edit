@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser, Debug)]
-#[command(author, version = CliArgs::unstable_version(), about, long_about = None)]
+#[command(author, version = CliArgs::unstable_version(), about, long_about)]
 #[command(name = "flake-edit")]
 #[command(next_line_help = true)]
 /// Edit your flake inputs with ease

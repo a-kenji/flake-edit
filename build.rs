@@ -18,6 +18,7 @@ pub mod asset_build {
 
     pub fn run() {
         println!("cargo:rerun-if-env-changed=ASSET_DIR");
+        println!("cargo:rerun-if-changed=docs/man/flake-edit.md");
 
         const NAME: &str = "flake-edit";
         const COMPLETIONS_DIR: &str = "assets/completions";
@@ -58,8 +59,9 @@ pub mod asset_build {
     }
 
     fn gen_man(name: &str, dir: PathBuf) {
-        use roff::Roff;
         use std::fs::write;
+
+        const PROSE_MD: &str = include_str!("docs/man/flake-edit.md");
 
         let path = dir.join(format!("{name}.1"));
         let mut buf: Vec<u8> = Vec::new();
@@ -72,108 +74,21 @@ pub mod asset_build {
             .expect("Not able to render name section.");
         man.render_synopsis_section(&mut buf)
             .expect("Not able to render synopsis section.");
-        let mut roff = Roff::new();
-        roff.control("SH", ["DESCRIPTION"]);
-        roff.text(vec!["Edit your flake inputs with ease.".into()]);
-        roff.to_writer(&mut buf)
-            .expect("Not able to write description.");
+        man.render_description_section(&mut buf)
+            .expect("Not able to render description section.");
         man.render_options_section(&mut buf)
             .expect("Not able to render options section.");
         man.render_subcommands_section(&mut buf)
             .expect("Not able to render subcommands section.");
 
-        // Examples
-        let mut roff = Roff::new();
-        roff.control("SH", ["EXAMPLES"]);
+        let prose =
+            manners::to_roff(PROSE_MD).expect("Not able to render docs/man/flake-edit.md to roff");
+        prose
+            .write_to(&mut buf)
+            .expect("Not able to write prose roff fragment");
 
-        // Add a new flake input
-        roff.text(vec!["Add a new flake input:".to_string().into()]);
-        roff.control("EX", []);
-        roff.text(vec![
-            format!("{} add nixpkgs github:NixOS/nixpkgs", name).into(),
-        ]);
-        roff.control("EE", []);
-        roff.text(vec!["".into()]);
-
-        // Add with auto-inference
-        roff.text(vec![
-            "Add an input with automatic ID inference:"
-                .to_string()
-                .into(),
-        ]);
-        roff.control("EX", []);
-        roff.text(vec![
-            format!("{} add github:nix-community/home-manager", name).into(),
-        ]);
-        roff.control("EE", []);
-        roff.text(vec!["".into()]);
-
-        // Remove an input
-        roff.text(vec!["Remove a flake input:".to_string().into()]);
-        roff.control("EX", []);
-        roff.text(vec![format!("{} remove nixpkgs", name).into()]);
-        roff.control("EE", []);
-        roff.text(vec!["".into()]);
-
-        // List inputs
-        roff.text(vec!["List all current inputs:".to_string().into()]);
-        roff.control("EX", []);
-        roff.text(vec![format!("{} list", name).into()]);
-        roff.control("EE", []);
-        roff.text(vec!["".into()]);
-
-        // Update inputs
-        roff.text(vec![
-            "Update all inputs to latest versions:".to_string().into(),
-        ]);
-        roff.control("EX", []);
-        roff.text(vec![format!("{} update", name).into()]);
-        roff.control("EE", []);
-        roff.text(vec!["".into()]);
-
-        // Pin an input
-        roff.text(vec![
-            "Pin an input to its current revision:".to_string().into(),
-        ]);
-        roff.control("EX", []);
-        roff.text(vec![format!("{} pin nixpkgs", name).into()]);
-        roff.control("EE", []);
-        roff.text(vec!["".into()]);
-
-        // Show diff without applying changes
-        roff.text(vec![
-            "Preview changes without applying them:".to_string().into(),
-        ]);
-        roff.control("EX", []);
-        roff.text(vec![
-            format!(
-                "{} --diff add home-manager github:nix-community/home-manager",
-                name
-            )
-            .into(),
-        ]);
-        roff.control("EE", []);
-        roff.text(vec!["".into()]);
-
-        // Skip lockfile update
-        roff.text(vec![
-            "Add input without updating lockfile:".to_string().into(),
-        ]);
-        roff.control("EX", []);
-        roff.text(vec![
-            format!(
-                "{} --no-lock add nixos-hardware github:NixOS/nixos-hardware",
-                name
-            )
-            .into(),
-        ]);
-        roff.control("EE", []);
-
-        roff.to_writer(&mut buf).expect("Not able to write roff.");
-
-        // Footer
         man.render_authors_section(&mut buf)
-            .expect("Not able to render subcommands section.");
+            .expect("Not able to render authors section.");
 
         write(path, buf).expect("Not able to write manpage");
     }

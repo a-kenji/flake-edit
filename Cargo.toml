@@ -13,7 +13,7 @@ license = "MIT"
 repository = "https://github.com/a-kenji/flake-edit"
 documentation = "https://github.com/a-kenji/flake-edit"
 homepage = "https://github.com/a-kenji/flake-edit"
-include = ["src/**/*", "LICENSE", "README.md", "build.rs"]
+include = ["src/**/*", "docs/man/**/*", "LICENSE", "README.md", "build.rs"]
 
 [[bin]]
 name = "flake-edit"
@@ -37,7 +37,13 @@ application = [
   "nucleo-matcher",
 ]
 write = []
-assets = ["clap_complete", "clap_complete_nushell", "roff", "clap_mangen"]
+assets = [
+  "clap_complete",
+  "clap_complete_nushell",
+  "clap_mangen",
+  "manners",
+  "roff",
+]
 
 [dependencies]
 anyhow = { version = "1.0.102", optional = true }
@@ -79,6 +85,7 @@ clap = { version = "4.6.1", features = ["derive"], optional = true }
 clap_complete = { version = "4.6.5", features = [], optional = true }
 clap_complete_nushell = { version = "4.6.0", optional = true }
 clap_mangen = { version = "0.3.0", features = [], optional = true }
+manners = { version = "0.1", optional = true }
 roff = { version = "1.1.1", optional = true }
 
 [[bench]]
