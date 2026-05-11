@@ -335,3 +335,143 @@ fn test_remove_nonexistent_input_panics() {
     };
     flake_edit.apply_change(change).unwrap().text.unwrap();
 }
+
+#[test]
+fn follows_fills_multiline_empty_inputs_block() {
+    let content = load_flake("wrapper_with_empty_inputs_block");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let change = Change::Follows {
+        input: flake_edit::change::ChangeId::parse("stylix.systems").unwrap(),
+        target: flake_edit::follows::AttrPath::parse("systems").unwrap(),
+    };
+    let text = flake_edit
+        .apply_change(change)
+        .expect("apply Change::Follows must succeed")
+        .text
+        .expect("walker must produce changed text");
+
+    let expected_block = r#"    stylix = {
+      url = "github:danth/stylix/release-25.11";
+      inputs = {
+        systems.follows = "systems";
+      };
+    };
+"#;
+    assert!(
+        text.contains(expected_block),
+        "stylix block should carry the new follow inside the previously empty multiline inputs block, got:\n{text}"
+    );
+}
+
+#[test]
+fn follows_fills_compact_empty_inputs_block() {
+    let content = load_flake("wrapper_with_empty_inputs_block");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let change = Change::Follows {
+        input: flake_edit::change::ChangeId::parse("disko.systems").unwrap(),
+        target: flake_edit::follows::AttrPath::parse("systems").unwrap(),
+    };
+    let text = flake_edit
+        .apply_change(change)
+        .expect("apply Change::Follows must succeed")
+        .text
+        .expect("walker must produce changed text");
+
+    let expected_block = r#"    disko = {
+      url = "github:nix-community/disko";
+      inputs = {
+        systems.follows = "systems";
+      };
+    };
+"#;
+    assert!(
+        text.contains(expected_block),
+        "disko block should carry the new follow inside the previously single-line empty inputs block, got:\n{text}"
+    );
+}
+
+#[test]
+fn follows_fills_empty_block_when_dotted_sibling_present() {
+    // The empty block is filled and the pre-existing dotted sibling is
+    // left in place. Promoting it would be a structural rewrite outside
+    // the scope of an insertion-point decision.
+    let content = load_flake("wrapper_with_empty_inputs_block");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let change = Change::Follows {
+        input: flake_edit::change::ChangeId::parse("mixed.systems").unwrap(),
+        target: flake_edit::follows::AttrPath::parse("systems").unwrap(),
+    };
+    let text = flake_edit
+        .apply_change(change)
+        .expect("apply Change::Follows must succeed")
+        .text
+        .expect("walker must produce changed text");
+
+    let expected_block = r#"    mixed = {
+      url = "github:owner/mixed";
+      inputs = {
+        systems.follows = "systems";
+      };
+      inputs.flake-parts.follows = "flake-parts";
+    };
+"#;
+    assert!(
+        text.contains(expected_block),
+        "mixed block should fill the empty inputs block while leaving the dotted sibling in place, got:\n{text}"
+    );
+}
+
+#[test]
+fn follows_fill_empty_block_is_idempotent() {
+    let content = load_flake("wrapper_with_empty_inputs_block");
+    let mut first = FlakeEdit::from_text(&content).unwrap();
+    let change = Change::Follows {
+        input: flake_edit::change::ChangeId::parse("stylix.systems").unwrap(),
+        target: flake_edit::follows::AttrPath::parse("systems").unwrap(),
+    };
+    let after_first = first
+        .apply_change(change.clone())
+        .expect("apply Change::Follows must succeed")
+        .text
+        .expect("walker must produce changed text");
+
+    let mut second = FlakeEdit::from_text(&after_first).unwrap();
+    let outcome = second
+        .apply_change(change)
+        .expect("apply Change::Follows must succeed");
+    let after_second = outcome.text.unwrap_or_else(|| after_first.clone());
+
+    assert_eq!(
+        after_first, after_second,
+        "second apply of the same follow on a filled block must be a no-op"
+    );
+}
+
+#[test]
+fn follows_merges_into_existing_inputs_block() {
+    let content = load_flake("inputs_block_with_follows");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let change = Change::Follows {
+        input: flake_edit::change::ChangeId::parse("stylix.systems").unwrap(),
+        target: flake_edit::follows::AttrPath::parse("systems").unwrap(),
+    };
+    let text = flake_edit
+        .apply_change(change)
+        .expect("apply Change::Follows must succeed")
+        .text
+        .expect("walker must produce changed text");
+
+    let expected_block = r#"    stylix = {
+      url = "github:danth/stylix/release-25.11";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        flake-parts.follows = "flake-parts";
+        systems.follows = "systems";
+      };
+    };
+"#;
+    assert!(
+        text.contains(expected_block),
+        "stylix block should carry the merged `systems.follows` inside the existing inputs block, got:\n{text}"
+    );
+}
