@@ -4,8 +4,7 @@
 //! optional prefill), and infer-id (uri only, ID derived from the
 //! parsed [`FlakeRef`]).
 
-use nix_uri::urls::UrlWrapper;
-use nix_uri::{FlakeRef, NixUriResult};
+use nix_uri::FlakeRef;
 
 use crate::change::Change;
 use crate::edit::FlakeEdit;
@@ -75,25 +74,13 @@ fn add_interactive(
 /// Builds a `Change::Add` when only the URI is supplied, inferring
 /// the ID from the parsed flake reference.
 fn add_infer_id(uri: String, no_flake: bool, opts: &UriOptions<'_>) -> Result<Change> {
-    let flake_ref: NixUriResult<FlakeRef> = UrlWrapper::convert_or_parse(&uri);
-
-    let (inferred_id, final_uri) = if let Ok(flake_ref) = flake_ref {
-        let flake_ref =
-            apply_uri_options(flake_ref, opts.ref_or_rev, opts.shallow).map_err(|source| {
-                Error::ApplyUriOptions {
-                    uri: uri.clone(),
-                    source,
-                }
-            })?;
-        let parsed_uri = flake_ref.to_string();
-        let final_uri = if parsed_uri.is_empty() || parsed_uri == "none" {
-            uri.clone()
-        } else {
-            parsed_uri
-        };
-        (flake_ref.id(), final_uri)
-    } else {
-        (None, uri.clone())
+    let (inferred_id, final_uri) = match uri.parse::<FlakeRef>() {
+        Ok(flake_ref) => {
+            let flake_ref = apply_uri_options(flake_ref, opts.ref_or_rev, opts.shallow);
+            let id = flake_ref.id().map(str::to_owned);
+            (id, flake_ref.into_uri())
+        }
+        Err(_) => (None, uri.clone()),
     };
 
     let final_id = inferred_id.ok_or_else(|| Error::CouldNotInferId { uri: uri.clone() })?;

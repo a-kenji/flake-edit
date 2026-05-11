@@ -1,6 +1,5 @@
 ---
 source: tests/update.rs
-assertion_line: 133
 expression: updater.get_changes()
 ---
 {
