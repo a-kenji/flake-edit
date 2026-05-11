@@ -78,7 +78,6 @@ fn test_list(#[case] fixture: &str) {
 #[case("root", "simple")]
 #[case("root", "toplevel")]
 #[case("root", "json")]
-#[case("root", "raw")]
 fn test_list_format(#[case] fixture: &str, #[case] format: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -92,6 +91,22 @@ fn test_list_format(#[case] fixture: &str, #[case] format: &str) {
                 .arg("list")
                 .arg("--format")
                 .arg(format)
+        );
+    });
+}
+
+#[test]
+fn list_format_invalid_value_rejected_at_parse_time() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("root"))
+                .arg("list")
+                .arg("--format")
+                .arg("toml")
         );
     });
 }

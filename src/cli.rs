@@ -1,6 +1,4 @@
-use std::fmt::Display;
-
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser, Debug)]
 #[command(author, version = CliArgs::unstable_version(), about, long_about = None)]
@@ -125,7 +123,7 @@ pub enum Command {
     /// List flake inputs
     #[clap(alias = "l")]
     List {
-        #[arg(long, default_value_t = ListFormat::default())]
+        #[arg(long, value_enum, default_value_t = ListFormat::default())]
         format: ListFormat,
     },
     /// Update inputs to their latest specified release.
@@ -200,6 +198,7 @@ pub enum Command {
     Completion {
         #[arg(long)]
         inputs: bool,
+        #[arg(value_enum)]
         mode: CompletionMode,
     },
     /// Manage flake-edit configuration.
@@ -215,62 +214,19 @@ pub enum Command {
 }
 
 /// Which subcommand to complete.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, ValueEnum)]
 pub enum CompletionMode {
-    #[default]
-    None,
     Add,
     Change,
     Follow,
 }
 
-impl From<String> for CompletionMode {
-    fn from(value: String) -> Self {
-        use CompletionMode::*;
-        match value.to_lowercase().as_str() {
-            "add" => Add,
-            "change" => Change,
-            "follow" => Follow,
-            _ => None,
-        }
-    }
-}
-
 /// Output format for the `list` subcommand.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, ValueEnum)]
 pub enum ListFormat {
-    None,
     Simple,
     Toplevel,
     #[default]
     Detailed,
-    Raw,
     Json,
-}
-
-impl From<String> for ListFormat {
-    fn from(value: String) -> Self {
-        use ListFormat::*;
-        match value.to_lowercase().as_str() {
-            "detailed" => Detailed,
-            "simple" => Simple,
-            "toplevel" => Toplevel,
-            "raw" => Raw,
-            "json" => Json,
-            _ => None,
-        }
-    }
-}
-
-impl Display for ListFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ListFormat::None => write!(f, ""),
-            ListFormat::Simple => write!(f, "simple"),
-            ListFormat::Toplevel => write!(f, "toplevel"),
-            ListFormat::Detailed => write!(f, "detailed"),
-            ListFormat::Raw => write!(f, "raw"),
-            ListFormat::Json => write!(f, "json"),
-        }
-    }
 }
