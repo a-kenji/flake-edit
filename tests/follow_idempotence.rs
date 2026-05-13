@@ -76,7 +76,7 @@ fn run_follow(flake: &Path, lock: &Path, config: Option<&str>, label: &str) {
     "transitive_promote_unlocks_deeper",
     Some("transitive_promote_unlocks_deeper")
 )] // top-level promotion plus a deeper follow that depends on it
-#[case("transitive_grandchild", Some("deep_follows_2"))] // depth-2 emission
+#[case("transitive_grandchild", None)] // depth-2 emission under the default unlimited depth
 #[case("stale_edge_unblocks_follow", Some("stale_edge_unblocks_follow"))] // stale-edge removal that simultaneously unblocks a follow candidate
 #[case("follows_empty_target", None)] // empty `follows = ""` must not oscillate
 #[case("follow_respects_nulled", None)] // nulled `follows = ""` must be respected

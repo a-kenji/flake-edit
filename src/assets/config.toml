@@ -19,6 +19,8 @@
 # aliases = { nixpkgs = ["nixpkgs-lib"] }
 
 # Maximum depth of follows declarations to write.
-#   1: depth-1 only, e.g. `parent.nested.follows = "target"`
-#   2: also depth-2, e.g. `parent.middle.grandchild.follows = "target"`
+# Unset (the default) writes follows at every depth the lockfile graph
+# supports. Set an explicit number to cap the depth: 1 writes only
+# `parent.nested.follows = "target"`, 2 also writes
+# `parent.middle.grandchild.follows = "target"`, and so on.
 # max_depth = 1

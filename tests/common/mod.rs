@@ -107,6 +107,9 @@ pub(crate) const FIXTURES: &[&str] = &[
     // nested URL override on a transitive input must not be parsed as a
     // follows declaration
     "nested_url_override",
+    // multi-depth dedup with a stale top-level follow declaration; pins
+    // the default-unlimited contract for `flake-edit follow`
+    "nested_depths_with_stale",
 ];
 
 /// Create a Walker from a fixture name.

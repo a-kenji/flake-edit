@@ -1,0 +1,33 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/nested_depths_with_stale.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/nested_depths_with_stale.flake.lock"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -7,7 +7,9 @@
+     big.url = "github:example/big";
+     # Stale: `big` no longer pulls a nested input named `gone`, so this
+     # declaration has no source in the lockfile.
+-    big.inputs.gone.follows = "nixpkgs";
++    big.inputs.middle.inputs.flake-parts.follows = "flake-parts";
++    big.inputs.side.inputs.nixpkgs.follows = "nixpkgs";
++    big.inputs.middle.inputs.deep.inputs.nixpkgs.follows = "nixpkgs";
+   };
+
+   outputs =
+
+----- stderr -----
+warning: stale follows at line 7, column 15: big.gone -> nixpkgs (source no longer present in flake.lock)

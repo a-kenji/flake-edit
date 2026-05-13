@@ -1,15 +1,15 @@
 ---
 source: tests/cli.rs
-assertion_line: 643
+assertion_line: 680
 info:
   program: flake-edit
   args:
     - "--flake"
-    - "[FIXTURES]/transitive_grandchild_existing.flake.nix"
+    - "[FIXTURES]/transitive_grandchild.flake.nix"
     - "--lock-file"
-    - "[FIXTURES]/transitive_grandchild_existing.flake.lock"
+    - "[FIXTURES]/transitive_grandchild.flake.lock"
     - "--config"
-    - "[FIXTURES]/deep_follows_2.config.toml"
+    - "[FIXTURES]/shallow_follows_1.config.toml"
     - "--diff"
     - follow
   env:

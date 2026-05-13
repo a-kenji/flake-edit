@@ -64,7 +64,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         // Construct the planner config once so only the planner is timed.
         let follow_config = FollowConfig {
             transitive_min: 2,
-            max_depth: 8,
+            max_depth: Some(8),
             ..FollowConfig::default()
         };
         b.iter(|| {

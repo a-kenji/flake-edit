@@ -1,5 +1,5 @@
 {
-  description = "deep-follows fixture: candidate would create a cycle (top-level flake-parts follows neovim/flake-parts)";
+  description = "top-level flake-parts follows neovim/flake-parts, so neovim cannot follow back";
 
   inputs = {
     flake-parts.follows = "neovim/flake-parts";
