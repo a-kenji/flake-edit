@@ -3,7 +3,7 @@
 //! These repos use branches (e.g., `nixos-24.11`, `nixpkgs-unstable`) instead of
 //! semver tags for versioning.
 
-use super::api::{ApiError, Branches, branch_exists, get_branches};
+use super::api::{ApiError, Branches, ForgeClient};
 
 /// Update strategy for a given input.
 #[derive(Debug, Clone, PartialEq)]
@@ -117,7 +117,6 @@ pub(crate) fn parse_channel_ref(ref_str: &str) -> ChannelType {
         return ChannelType::NixDarwinStable { year, month };
     }
 
-    // Try bare version YY.MM
     if let Some((year, month)) = parse_version(ref_str) {
         return ChannelType::BareVersion { year, month };
     }
@@ -151,7 +150,8 @@ fn parse_version(version: &str) -> Option<(u32, u32)> {
 /// set. Without this, a flaky network looked exactly like "no
 /// newer channel exists" and silently kept the user pinned to a
 /// stale release.
-pub fn find_latest_channel(
+pub(crate) fn find_latest_channel(
+    client: &ForgeClient,
     current_ref: &str,
     owner: &str,
     repo: &str,
@@ -159,21 +159,22 @@ pub fn find_latest_channel(
 ) -> Result<Option<String>, ApiError> {
     let current_channel = parse_channel_ref(current_ref);
 
-    // Don't update unstable channels
     if current_channel.is_unstable() {
         tracing::debug!("Skipping update for unstable channel: {}", current_ref);
         return Ok(None);
     }
 
-    // Only update recognized channel patterns
     let (prefix, current_version) = match (current_channel.prefix(), current_channel.version()) {
         (Some(p), Some(v)) => (p, v),
         _ => return Ok(None),
     };
 
-    // Try targeted approach first (much faster for repos with many branches like nixpkgs)
+    // Targeted candidate probing is cheap on repos with many
+    // branches (nixpkgs has thousands); the all-branches list is the
+    // fallback for forges or transient conditions where targeted
+    // returned `Ok(None)`.
     if let Some(latest) =
-        find_latest_channel_targeted(prefix, current_version, owner, repo, domain)?
+        find_latest_channel_targeted(client, prefix, current_version, owner, repo, domain)?
     {
         if latest != current_ref {
             return Ok(Some(latest));
@@ -183,11 +184,8 @@ pub fn find_latest_channel(
         }
     }
 
-    // Fallback: fetch all branches (for Gitea/Forgejo or if targeted fails)
     tracing::debug!("Targeted lookup failed, falling back to listing all branches");
-    let branches = get_branches(owner, repo, domain)?;
-
-    // Find all channels matching the same prefix and pick the latest
+    let branches = client.list_branches(owner, repo, domain)?;
     let latest = find_latest_matching_branch(&branches, prefix, current_version);
 
     if let Some(ref latest_branch) = latest
@@ -200,19 +198,34 @@ pub fn find_latest_channel(
     Ok(latest)
 }
 
+/// Every branch name [`find_latest_channel_targeted`] may probe for
+/// a given `(prefix, current_version)` start: the future candidates
+/// plus the current branch itself. Used by the GraphQL batch warmer
+/// in `api.rs` to pre-populate `branch_exists_cache` so the targeted
+/// loop later short-circuits to cache hits.
+pub(crate) fn channel_probe_candidates(prefix: &str, current_version: (u32, u32)) -> Vec<String> {
+    let mut all = generate_candidate_channels(prefix, current_version);
+    all.push(format!(
+        "{}{}.{:02}",
+        prefix, current_version.0, current_version.1
+    ));
+    all
+}
+
 /// Generate candidate channel versions from current to ~5 years in the future.
 /// Returns candidates from NEWEST to OLDEST for early exit optimization.
 fn generate_candidate_channels(prefix: &str, current_version: (u32, u32)) -> Vec<String> {
     let (current_year, current_month) = current_version;
     let mut candidates = Vec::new();
 
-    // Generate candidates for the next ~5 years (10 releases)
-    // NixOS releases in May (05) and November (11)
+    // NixOS cuts a release in May (.05) and November (.11). Ten
+    // iterations covers about five years of future cuts; far enough
+    // ahead that we never need a refresh, close enough that the
+    // candidate set stays small.
     let mut year = current_year;
     let mut month = current_month;
 
     for _ in 0..10 {
-        // Move to next release
         if month == 5 {
             month = 11;
         } else {
@@ -223,16 +236,18 @@ fn generate_candidate_channels(prefix: &str, current_version: (u32, u32)) -> Vec
         candidates.push(format!("{}{}.{:02}", prefix, year, month));
     }
 
-    // Reverse so we check newest first (for early exit)
+    // Newest first so [`find_latest_channel_targeted`] can early-exit
+    // on the first hit and avoid probing older candidates.
     candidates.reverse();
     candidates
 }
 
 /// Find the latest channel by probing candidate branches one by
 /// one. Cheaper than listing all branches; falls back to that on
-/// `Ok(None)`. `Err` always propagates; see `find_latest_channel`
-/// for the contract.
+/// `Ok(None)`. `Err` always propagates. See [`find_latest_channel`]
+/// for the full contract.
 fn find_latest_channel_targeted(
+    client: &ForgeClient,
     prefix: &str,
     current_version: (u32, u32),
     owner: &str,
@@ -246,19 +261,17 @@ fn find_latest_channel_targeted(
         candidates
     );
 
-    // Check from newest to oldest, return first match (will be the newest)
     for candidate in &candidates {
         tracing::debug!("Checking if branch exists: {}", candidate);
-        if branch_exists(owner, repo, candidate, domain)? {
+        if client.branch_exists(owner, repo, candidate, domain)? {
             tracing::debug!("Found existing channel: {}", candidate);
             return Ok(Some(candidate.clone()));
         }
     }
 
-    // No newer channel found, check if current version exists
     let current_branch = format!("{}{}.{:02}", prefix, current_version.0, current_version.1);
     tracing::debug!("No newer channel, checking current: {}", current_branch);
-    if branch_exists(owner, repo, &current_branch, domain)? {
+    if client.branch_exists(owner, repo, &current_branch, domain)? {
         return Ok(Some(current_branch));
     }
 
@@ -274,24 +287,24 @@ fn find_latest_matching_branch(
     let mut best: Option<(u32, u32, String)> = None;
 
     for branch_name in &branches.names {
-        // Check if this branch matches our prefix
         if let Some(version_str) = branch_name.strip_prefix(prefix) {
-            // Skip unstable variants
+            // `nixos-unstable` / `nixpkgs-unstable` share the prefix but
+            // are rolling branches; updating to one of them would point
+            // a release pin at a moving target.
             if version_str == "unstable" {
                 continue;
             }
 
-            if let Some((year, month)) = parse_version(version_str) {
-                // Only consider versions >= current
-                if (year, month) >= current_version {
-                    match &best {
-                        None => {
+            if let Some((year, month)) = parse_version(version_str)
+                && (year, month) >= current_version
+            {
+                match &best {
+                    None => {
+                        best = Some((year, month, branch_name.clone()));
+                    }
+                    Some((best_year, best_month, _)) => {
+                        if (year, month) > (*best_year, *best_month) {
                             best = Some((year, month, branch_name.clone()));
-                        }
-                        Some((best_year, best_month, _)) => {
-                            if (year, month) > (*best_year, *best_month) {
-                                best = Some((year, month, branch_name.clone()));
-                            }
                         }
                     }
                 }
