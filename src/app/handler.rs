@@ -225,7 +225,7 @@ fn dispatch_follow(
         state.config.follow.transitive_min = *min;
     }
     if let Some(max) = depth {
-        state.config.follow.max_depth = *max;
+        state.config.follow.max_depth = Some(*max);
     }
     state.lock_offline = true;
     follow::auto::run(editor, flake_edit, state)

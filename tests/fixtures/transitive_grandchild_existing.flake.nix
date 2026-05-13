@@ -1,5 +1,5 @@
 {
-  description = "deep-follows fixture: depth-2 follows already declared by hand";
+  description = "neovim/nixvim's flake-parts already follows the top-level flake-parts";
 
   inputs = {
     flake-parts.url = "github:hercules-ci/flake-parts";

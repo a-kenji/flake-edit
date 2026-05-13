@@ -133,7 +133,7 @@ pub fn run_batch(
             state.config.follow.transitive_min = min;
         }
         if let Some(max) = depth {
-            state.config.follow.max_depth = max;
+            state.config.follow.max_depth = Some(max);
         }
 
         if let Err(e) = run_impl(&editor, &mut flake_edit, &state, true) {
@@ -173,9 +173,10 @@ struct AnalysisCtx<'a> {
     /// `flake.nix`.
     existing_follows: &'a HashSet<AttrPath>,
     follow_config: &'a FollowConfig,
-    /// Maximum depth of follows declarations to write. `1` (default) writes
-    /// depth-1 only. `2` or higher also writes grandchild and deeper.
-    max_depth: usize,
+    /// Maximum depth of follows declarations to write. `None` (the default)
+    /// writes follows at every depth the lockfile graph supports. `Some(n)`
+    /// caps emission at depth `n`.
+    max_depth: Option<usize>,
     transitive_min: usize,
 }
 
@@ -285,7 +286,7 @@ fn build_plan(
     let existing_follows: HashSet<AttrPath> = graph.declared_sources();
 
     let transitive_min = follow_config.transitive_min();
-    let max_depth = follow_config.max_depth.max(1);
+    let max_depth = follow_config.max_depth;
 
     // Seeding runs against the original `graph`: the post-removal clone
     // built below would chicken-and-egg this loop.
@@ -358,7 +359,7 @@ fn build_plan(
 /// qualify.
 ///
 /// Result is lex-sorted and deduplicated.
-fn seed_unfollow_set(graph: &FollowsGraph, max_depth: usize) -> Vec<AttrPath> {
+fn seed_unfollow_set(graph: &FollowsGraph, max_depth: Option<usize>) -> Vec<AttrPath> {
     let mut to_unfollow: Vec<AttrPath> = graph
         .stale_edges()
         .into_iter()
@@ -374,7 +375,9 @@ fn seed_unfollow_set(graph: &FollowsGraph, max_depth: usize) -> Vec<AttrPath> {
         if edge.source.len() < 3 {
             continue;
         }
-        if edge.source.len() > max_depth + 1 {
+        if let Some(max) = max_depth
+            && edge.source.len() > max + 1
+        {
             continue;
         }
         if graph.lock_routes_to(&edge.source, &edge.follows, Some(edge), &[]) {
@@ -394,10 +397,14 @@ fn seed_unfollow_set(graph: &FollowsGraph, max_depth: usize) -> Vec<AttrPath> {
 /// Depth-bounded path-shape filter shared by every collection function.
 ///
 /// Path length encodes depth: `parent.nested` is depth 1 (length 2),
-/// `parent.middle.grandchild` is depth 2 (length 3). The bound
-/// `len() <= max_depth + 1` admits exactly the configured depth.
-fn within_depth(path: &AttrPath, max_depth: usize) -> bool {
-    path.len() >= 2 && path.len() <= max_depth + 1
+/// `parent.middle.grandchild` is depth 2 (length 3). When `max_depth` is
+/// `Some(n)`, the bound `len() <= n + 1` admits exactly that depth. When
+/// `max_depth` is `None`, every path of length `>= 2` is admitted.
+fn within_depth(path: &AttrPath, max_depth: Option<usize>) -> bool {
+    if path.len() < 2 {
+        return false;
+    }
+    max_depth.is_none_or(|m| path.len() <= m + 1)
 }
 
 /// True when an ancestor of `nested_path` already declares a follows
@@ -1348,7 +1355,7 @@ mod tests {
     #[test]
     fn seed_unfollow_set_empty_graph_returns_empty() {
         let graph = FollowsGraph::default();
-        let result = seed_unfollow_set(&graph, 2);
+        let result = seed_unfollow_set(&graph, Some(2));
         assert_eq!(result, Vec::<AttrPath>::new());
     }
 
@@ -1362,7 +1369,7 @@ mod tests {
             vec![(ap("nixpkgs"), Some(ap("nixpkgs")))],
         )]);
         let graph = FollowsGraph::from_declared(&inputs);
-        let result = seed_unfollow_set(&graph, 2);
+        let result = seed_unfollow_set(&graph, Some(2));
         assert_eq!(result, vec![ap("home-manager.nixpkgs")]);
     }
 
@@ -1378,7 +1385,7 @@ mod tests {
             vec![(ap("nixpkgs"), None)],
         )]);
         let graph = FollowsGraph::from_declared(&inputs);
-        let result = seed_unfollow_set(&graph, 2);
+        let result = seed_unfollow_set(&graph, Some(2));
         assert_eq!(result, vec![ap("home-manager.nixpkgs")]);
     }
 
@@ -1396,7 +1403,7 @@ mod tests {
             ],
         )]);
         let graph = FollowsGraph::from_flake(&inputs, &parent_middle_lock());
-        let result = seed_unfollow_set(&graph, 2);
+        let result = seed_unfollow_set(&graph, Some(2));
         assert_eq!(result, vec![ap("parent.middle.nixpkgs")]);
     }
 
@@ -1414,7 +1421,7 @@ mod tests {
             ),
         ]);
         let graph = FollowsGraph::from_flake(&inputs, &parent_middle_lock());
-        let result = seed_unfollow_set(&graph, 2);
+        let result = seed_unfollow_set(&graph, Some(2));
         assert_eq!(
             result,
             vec![
@@ -1509,7 +1516,7 @@ mod tests {
         follow_config: FollowConfig,
         nested_inputs: &'a [NestedInput],
         top_level_inputs: HashSet<String>,
-        max_depth: usize,
+        max_depth: Option<usize>,
         transitive_min: usize,
     }
 
@@ -1522,7 +1529,7 @@ mod tests {
                 follow_config: FollowConfig::default(),
                 nested_inputs,
                 top_level_inputs: top_level.iter().map(|s| (*s).to_string()).collect(),
-                max_depth: 1,
+                max_depth: Some(1),
                 transitive_min: 2,
             }
         }

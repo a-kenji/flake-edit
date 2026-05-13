@@ -38,10 +38,10 @@ pub enum Error {
     #[error("input '{0}' not found in the flake")]
     InputNotFound(String),
     /// The `add-follow` subcommand received a path deeper than `parent.child`.
-    /// `flake-edit follow` accepts deeper paths up to
-    /// [`crate::config::FollowConfig::max_depth`]; this guard catches typos
-    /// in the explicit-path command before they produce nested
-    /// `inputs.*.inputs.*.follows` chains.
+    /// `flake-edit follow` accepts deeper paths, bounded by
+    /// [`crate::config::FollowConfig::max_depth`] when that is set; this
+    /// guard catches typos in the explicit-path command before they produce
+    /// nested `inputs.*.inputs.*.follows` chains.
     #[error(
         "`add-follow` accepts only depth-1 paths of the form `parent.child`; got '{path}' ({segments} segments)"
     )]
@@ -68,7 +68,7 @@ impl Error {
                  see declared inputs with `flake-edit list`"
             )),
             Self::AddFollowDepthLimit { .. } => Some(
-                "use `flake-edit follow` for deeper paths (depth bounded by `follow.max_depth` in your config)"
+                "use `flake-edit follow` for deeper paths (depth bounded by `follow.max_depth` in your config, if set)"
                     .into(),
             ),
             _ => None,

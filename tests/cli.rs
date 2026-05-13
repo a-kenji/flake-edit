@@ -622,11 +622,12 @@ fn add_follow_accepts_two_segment_dot_path_unchanged() {
 #[case("stale_lockfile_only")] // stale-edge detection alongside the resolver
 #[case("split_inputs_block_and_flat")] // some inputs in a block, neovim flat outside
 #[case("stale_lock")] // declared follows the lockfile didn't apply
-#[case("transitive_grandchild")] // baseline: depth-2 candidate, default max_depth=1 ignores it
-#[case("transitive_grandchild_existing")] // baseline: handwritten depth-2 follows, no-op
-#[case("transitive_grandchild_cycle")] // baseline: depth-2 candidate skipped (cycle)
+#[case("transitive_grandchild")] // emits the depth-2 candidate
+#[case("transitive_grandchild_existing")] // handwritten depth-2 follows, no-op
+#[case("transitive_grandchild_cycle")] // depth-2 candidate skipped (cycle)
 #[case("transitive_self_named")] // self-named depth-3 follows must round-trip without removal
 #[case("follow_slash_syntax")] // slash-form `follows = "parent/child"` is the alias of `parent.child`
+#[case("nested_depths_with_stale")] // pins the default-unlimited contract: adds depth-2 and depth-3 follows, removes a stale top-level follow
 fn test_follow(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -648,9 +649,7 @@ fn test_follow(#[case] fixture: &str) {
 #[rstest]
 #[case("centerpiece", "ignore_treefmt")] // Config ignores treefmt-nix.nixpkgs, only home-manager follows
 #[case("treefmt_transitive", "transitive")] // Transitive follows with transitive_min = 2
-#[case("transitive_grandchild", "deep_follows_2")] // max_depth=2 emits depth-2 follows
-#[case("transitive_grandchild_existing", "deep_follows_2")] // handwritten depth-2 already present, no-op
-#[case("transitive_grandchild_cycle", "deep_follows_2")] // depth-2 candidate skipped due to cycle
+#[case("transitive_grandchild", "shallow_follows_1")] // explicit max_depth=1 opts out of writing the depth-2 candidate
 #[case("depth_upstream_redundant", "depth_upstream_redundant")] // upstream propagation makes depth-2 follow redundant; nothing emitted
 #[case("depth_upstream_partial", "depth_upstream_partial")] // partial upstream coverage: nixpkgs skipped, flake-utils emitted
 #[case(

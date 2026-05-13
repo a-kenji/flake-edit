@@ -68,7 +68,7 @@ fn follow_large_fixture(bencher: Bencher) {
     // Construct the planner config once so only the planner is timed.
     let follow_config = FollowConfig {
         transitive_min: 2,
-        max_depth: 8,
+        max_depth: Some(8),
         ..FollowConfig::default()
     };
     bencher.bench_local(|| {

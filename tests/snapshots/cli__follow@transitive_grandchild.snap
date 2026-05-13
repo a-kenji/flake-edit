@@ -1,6 +1,6 @@
 ---
 source: tests/cli.rs
-assertion_line: 618
+assertion_line: 635
 info:
   program: flake-edit
   args:
@@ -16,6 +16,15 @@ info:
 success: true
 exit_code: 0
 ----- stdout -----
-All inputs are already deduplicated.
+--- original
++++ modified
+@@ -4,6 +4,7 @@
+   inputs = {
+     flake-parts.url = "github:hercules-ci/flake-parts";
+     neovim.url = "github:nix-community/neovim-nightly-overlay";
++    neovim.inputs.nixvim.inputs.flake-parts.follows = "flake-parts";
+   };
+
+   outputs =
 
 ----- stderr -----
