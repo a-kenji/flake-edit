@@ -181,6 +181,67 @@ fn pin_with_multibyte_chars_before_url() {
     );
 }
 
+/// Every input here is unpinned, so the per-input fetch step rejects
+/// it at the `Version::parse` step before any HTTP call. Shared by
+/// the regression tests below so the new entry points can be
+/// exercised without touching the network.
+fn unpinned_flake() -> String {
+    r#"{
+  inputs = {
+    foo.url = "github:foo/bar";
+    baz.url = "github:baz/qux";
+  };
+
+  outputs = { self, foo, baz }: { };
+}
+"#
+    .to_string()
+}
+
+#[test]
+fn update_inputs_to_latest_semver_empty_slice_short_circuits() {
+    let flake = unpinned_flake();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let inputs = flake_edit.list().clone();
+    let mut updater = Updater::new(Rope::from_str(&flake), inputs);
+
+    updater.update_inputs_to_latest_semver(&[], false);
+    assert_eq!(updater.get_changes(), flake);
+}
+
+#[test]
+fn update_inputs_to_latest_semver_skips_unknown_id() {
+    let flake = unpinned_flake();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let inputs = flake_edit.list().clone();
+    let mut updater = Updater::new(Rope::from_str(&flake), inputs);
+
+    updater.update_inputs_to_latest_semver(&["does-not-exist"], false);
+    assert_eq!(updater.get_changes(), flake);
+}
+
+#[test]
+fn update_inputs_to_latest_semver_accepts_duplicate_ids() {
+    let flake = unpinned_flake();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let inputs = flake_edit.list().clone();
+    let mut updater = Updater::new(Rope::from_str(&flake), inputs);
+
+    updater.update_inputs_to_latest_semver(&["foo", "foo", "baz"], false);
+    assert_eq!(updater.get_changes(), flake);
+}
+
+#[test]
+fn update_all_to_latest_semver_visits_every_input() {
+    let flake = unpinned_flake();
+    let mut flake_edit = FlakeEdit::from_text(&flake).unwrap();
+    let inputs = flake_edit.list().clone();
+    let mut updater = Updater::new(Rope::from_str(&flake), inputs);
+
+    updater.update_all_to_latest_semver(false);
+    assert_eq!(updater.get_changes(), flake);
+}
+
 #[test]
 fn pin_follows_before_url() {
     let flake = r#"{

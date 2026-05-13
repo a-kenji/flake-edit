@@ -22,17 +22,17 @@ pub fn update(
     init: bool,
 ) -> Result<()> {
     let inputs = flake_edit.list().clone();
-    let input_ids = sorted_input_ids(&inputs)
-        .into_iter()
-        .cloned()
-        .collect::<Vec<_>>();
 
     if let Some(id) = id {
         let mut updater = updater(editor, inputs);
-        updater.update_all_inputs_to_latest_semver(Some(id), init);
+        updater.update_inputs_to_latest_semver(&[id.as_str()], init);
         let change = updater.get_changes();
         editor.apply_or_diff(&change, state)?;
     } else if state.interactive {
+        let input_ids = sorted_input_ids(&inputs)
+            .into_iter()
+            .cloned()
+            .collect::<Vec<_>>();
         if input_ids.is_empty() {
             return Err(Error::NoInputs);
         }
@@ -57,23 +57,18 @@ pub fn update(
             "Space select, U all, ^D diff",
             display_items,
             |selected| {
-                // Strip the trailing version suffix from each display string.
-                let ids: Vec<String> = selected
+                let ids: Vec<&str> = selected
                     .iter()
-                    .map(|s| s.split(" - ").next().unwrap_or(s).to_string())
+                    .map(|s| s.split(" - ").next().unwrap_or(s))
                     .collect();
                 let mut updater = updater(editor, inputs.clone());
-                for id in &ids {
-                    updater.update_all_inputs_to_latest_semver(Some(id.clone()), init);
-                }
+                updater.update_inputs_to_latest_semver(&ids, init);
                 updater.get_changes()
             },
         )?;
     } else {
         let mut updater = updater(editor, inputs);
-        for id in &input_ids {
-            updater.update_all_inputs_to_latest_semver(Some(id.clone()), init);
-        }
+        updater.update_all_to_latest_semver(init);
         let change = updater.get_changes();
         editor.apply_or_diff(&change, state)?;
     }

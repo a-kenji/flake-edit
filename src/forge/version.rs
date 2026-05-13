@@ -1,8 +1,30 @@
+//! Ref-string normalisation shared by the forge tag-listing path
+//! and the update-strategy classifier.
+//!
+//! Tag schemes in the wild are inconsistent (`v1.2.3`,
+//! `refs/tags/v1.2.3`, `release-24.05`, bare `1.0`). [`parse_ref`]
+//! reduces each input to a [`semver::Version`]-parseable string plus
+//! the metadata needed to put any stripped prefix back when the
+//! update writes the new ref into `flake.nix`.
+
+/// Outcome of normalising a ref string for semver comparison.
 #[derive(Debug, Clone)]
 pub struct ParsedRef {
+    /// The input passed to [`parse_ref`], verbatim.
     pub original_ref: String,
+    /// Ref reduced to a shape [`semver::Version::parse`] accepts
+    /// (or an unparseable residue when the input was not a semver
+    /// tag).
     pub normalized_for_semver: String,
+    /// Form of the input after one round of stripping. Surfaces in
+    /// `Updater`'s "from X to Y" status output, where the user
+    /// expects the displayed previous ref to match what they
+    /// originally pinned rather than the fully-normalised core.
     pub previous_ref: String,
+    /// `true` when the input carried a `refs/tags/` prefix (or the
+    /// caller forced it via `default_refs_tags_prefix`). Callers
+    /// reattach the prefix to the newly-resolved tag to preserve
+    /// the user's existing ref style.
     pub has_refs_tags_prefix: bool,
 }
 
@@ -23,6 +45,17 @@ pub(crate) fn normalize_semver(tag: &str) -> String {
     format!("{normalized_core}{suffix}")
 }
 
+/// Normalise `raw` into a [`ParsedRef`] for semver comparison.
+///
+/// One pass strips `refs/tags/`, then a leading `v`, then anything
+/// from the first `-` onward. The order is load-bearing: a tag like
+/// `refs/tags/v1.2.3-rc1` reaches the semver core only after all
+/// three strips run.
+///
+/// `default_refs_tags_prefix` seeds [`ParsedRef::has_refs_tags_prefix`]
+/// when the input does not literally start with `refs/tags/`. Used by
+/// the update path to record that an input which lacks the prefix in
+/// `flake.nix` should nonetheless have its new ref written with one.
 pub fn parse_ref(raw: &str, default_refs_tags_prefix: bool) -> ParsedRef {
     fn strip_until_char(s: &str, c: char) -> Option<String> {
         s.find(c).map(|index| s[index + 1..].to_string())
