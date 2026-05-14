@@ -1,14 +1,14 @@
 { self, ... }:
 {
   imports = [
-    ./forgejo-test.nix
+    ./forge
   ];
 
   perSystem =
     { pkgs, ... }:
     {
       checks = {
-        inherit ((pkgs.callPackage ./flake-edit.nix { inherit self; }))
+        inherit ((pkgs.callPackage ../flake-edit.nix { inherit self; }))
           flake-edit
           cargoArtifacts
           cargoClippy

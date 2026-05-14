@@ -10,7 +10,7 @@ flake-parts.lib.mkFlake { inherit inputs; } {
     ./devshells.nix
     ./formatter.nix
     ./packages.nix
-    ./checks.nix
+    ./checks
   ];
 
 }

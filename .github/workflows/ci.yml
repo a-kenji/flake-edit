@@ -151,7 +151,7 @@ jobs:
         with:
           diagnostic-endpoint: ""
       - name: "nixos-test"
-        run: nix build .#checks.x86_64-linux.forgejo-test -Lvv --no-update-lock-file
+        run: nix build .#checks.x86_64-linux.forge -Lvv --no-update-lock-file
   devshells:
     runs-on: ubuntu-latest
     environment: cachix

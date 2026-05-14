@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forge"
+version = "0"
+
+[tool.setuptools]
+packages = ["forge"]
+
+[tool.setuptools.package-data]
+forge = ["py.typed"]
