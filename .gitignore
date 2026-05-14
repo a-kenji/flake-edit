@@ -1,16 +1,15 @@
-# nix support
 /.direnv
 result
 result-*
 .nixos-test-history
 
-# rust support
 target/
 
-# documentation
+__pycache__/
+*.egg-info/
+
 assets/tape/output/*
 
-# profiling / testing
 flamegraph.svg
 perf.data
 perf.data.*
