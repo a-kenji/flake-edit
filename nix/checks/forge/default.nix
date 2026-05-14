@@ -3,12 +3,19 @@
   perSystem =
     { pkgs, self', ... }:
     let
-      forgeHelpers = pkgs.python3.pkgs.buildPythonPackage {
-        pname = "forge";
-        version = "0";
+      forge = pkgs.python3.pkgs.buildPythonPackage {
+        name = "forge";
         src = ./.;
         pyproject = true;
         build-system = [ pkgs.python3.pkgs.setuptools ];
+        pythonImportsCheck = [
+          "forge"
+          "forge.api"
+          "forge.cli"
+          "forge.client"
+          "forge.runner"
+          "forge.schemas"
+        ];
       };
     in
     {
@@ -16,18 +23,18 @@
         forge = pkgs.testers.nixosTest {
           name = "forge";
 
-          extraPythonPackages = _: [ forgeHelpers ];
+          extraPythonPackages = _: [ forge ];
 
           nodes = {
             forge =
-              { config, pkgs, ... }:
+              { config, ... }:
               {
                 networking.hostName = "forge";
                 networking.firewall.allowedTCPPorts = [ 3000 ];
 
                 environment.systemPackages = [
                   config.services.forgejo.package
-                  pkgs.curl
+                  forge
                 ];
 
                 services.forgejo = {
@@ -53,10 +60,10 @@
               { pkgs, ... }:
               {
                 environment.systemPackages = with pkgs; [
-                  curl
                   nix
                   git
                   self'.packages.flake-edit
+                  forge
                 ];
 
                 environment.variables = {
@@ -77,7 +84,7 @@
             { nodes, ... }:
             ''
               start_all()
-              from forge import run
+              from forge.runner import run
               run(
                   forge=forge,
                   client=client,
