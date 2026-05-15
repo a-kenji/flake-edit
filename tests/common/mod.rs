@@ -110,6 +110,9 @@ pub(crate) const FIXTURES: &[&str] = &[
     // multi-depth dedup with a stale top-level follow declaration; pins
     // the default-unlimited contract for `flake-edit follow`
     "nested_depths_with_stale",
+    // removing X must leave the url of a sibling input alone when that
+    // sibling carries an `inputs = { ... }` block with `X.follows = "X"`
+    "remove_preserves_sibling_url",
 ];
 
 /// Create a Walker from a fixture name.
