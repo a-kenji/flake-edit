@@ -1190,7 +1190,7 @@ mod tests {
     }
 
     #[test]
-    fn tags_parsing_drops_prerelease() {
+    fn tags_parsing_orders_prereleases_by_semver_precedence() {
         let json = r#"[
             {"name": "v1.0.0"},
             {"name": "v2.0.0-beta.1"},
@@ -1200,11 +1200,25 @@ mod tests {
         let intermediary: IntermediaryTags = serde_json::from_str(json).unwrap();
         let tags: Tags = intermediary.into();
 
-        // `parse_ref` strips everything after the first `-`, leaving
-        // a non-numeric "beta.1" which `Version::parse` rejects, so
-        // the prerelease tag is filtered out and the latest stable
-        // wins.
-        assert_eq!(tags.get_latest_tag(), Some("v1.5.0".to_string()));
+        // `v2.0.0-beta.1` beats `v1.5.0` because semver precedence
+        // compares major before flagging prerelease status; a higher
+        // major wins even when the higher tag is a prerelease.
+        assert_eq!(tags.get_latest_tag(), Some("v2.0.0-beta.1".to_string()));
+    }
+
+    #[test]
+    fn tags_parsing_handles_hl_prefixed_scheme_without_downgrade() {
+        let json = r#"[
+            {"name": "hl0.21.0-1"},
+            {"name": "hl0.33.0-1"},
+            {"name": "hl0.46.0-1"},
+            {"name": "hl0.47.0-1"}
+        ]"#;
+
+        let intermediary: IntermediaryTags = serde_json::from_str(json).unwrap();
+        let tags: Tags = intermediary.into();
+
+        assert_eq!(tags.get_latest_tag(), Some("hl0.47.0-1".to_string()));
     }
 
     #[test]
@@ -1279,12 +1293,11 @@ mod tests {
         // tag walk against a window that does not contain it.
         assert!(!parses_as_semver("release-25.05"));
         assert!(!parses_as_semver("release-24.05"));
-        // Prerelease suffix: `parse_ref` strips at the first `-`, so
-        // the residue is non-numeric and rejected. Pinned here so a
-        // future change to the strip rule does not accidentally let
-        // prerelease tags through the cheap-path predicate while the
-        // conversion still drops them.
-        assert!(!parses_as_semver("v1.2.3-rc1"));
+        // Prereleases must satisfy the predicate so that a page-1
+        // listing of prerelease tags still trips the cheap-path
+        // early-stop. Selection downstream picks a stable release
+        // on the same page when one exists.
+        assert!(parses_as_semver("v1.2.3-rc1"));
     }
 
     #[test]

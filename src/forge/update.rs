@@ -9,7 +9,7 @@ use super::channel::{
     UpdateStrategy, channel_probe_candidates, detect_strategy, find_latest_channel,
     parse_channel_ref,
 };
-use super::version::parse_ref;
+use super::version::{is_downgrade, parse_ref};
 use crate::edit::InputMap;
 use crate::input::Input;
 use crate::uri::is_git_url;
@@ -586,6 +586,22 @@ fn compute_semver_change(
             return None;
         }
     };
+
+    if !init && is_downgrade(maybe_version, &change) {
+        tracing::warn!(
+            "Refusing to downgrade {}/{} from {} to {}",
+            owner,
+            repo,
+            maybe_version,
+            change
+        );
+        eprintln!(
+            "Warning: skipping {}/{}: latest tag {} is older than the current pin {}.",
+            owner, repo, change, maybe_version
+        );
+        return None;
+    }
+
     let final_change = if parsed_ref.has_refs_tags_prefix {
         format!("refs/tags/{}", change)
     } else {
