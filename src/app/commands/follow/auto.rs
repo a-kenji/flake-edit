@@ -23,6 +23,8 @@ use super::super::super::state::AppState;
 use super::super::{Error, Result, load_flake_lock};
 use super::load_follow_context;
 
+const SENTINEL_ALREADY_DEDUPLICATED: &str = "All inputs are already deduplicated.";
+
 /// Entry point for `flake-edit follow` on a single in-memory flake.
 pub fn run(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) -> Result<()> {
     run_impl(editor, flake_edit, state, false)
@@ -260,7 +262,7 @@ fn run_impl(
         &state.config.follow,
     ) else {
         if !quiet {
-            println!("All inputs are already deduplicated.");
+            println!("{SENTINEL_ALREADY_DEDUPLICATED}");
         }
         return Ok(());
     };
@@ -1153,7 +1155,11 @@ fn render_summary(
         }
     }
 
-    if applied.applied_follows.is_empty() && applied.unfollowed.is_empty() {
+    // Empty plans short-circuit earlier (see [`build_plan`]).
+    if applied.current_text == editor.text() {
+        if !quiet {
+            println!("{SENTINEL_ALREADY_DEDUPLICATED}");
+        }
         return Ok(());
     }
 

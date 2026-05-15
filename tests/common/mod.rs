@@ -113,6 +113,12 @@ pub(crate) const FIXTURES: &[&str] = &[
     // removing X must leave the url of a sibling input alone when that
     // sibling carries an `inputs = { ... }` block with `X.follows = "X"`
     "remove_preserves_sibling_url",
+    // pre-existing follows declaration references a top-level input the
+    // flake does not declare; transitive promotion plans an Add plus new
+    // follows, but the inherited validation error rejects every apply
+    // step. Guards that the planner prints its "nothing to do" sentinel
+    // when apply leaves the working text untouched.
+    "transitive_with_orphan_follow",
 ];
 
 /// Create a Walker from a fixture name.
