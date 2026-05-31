@@ -1,0 +1,37 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/remove_preserves_sibling_url.flake.nix"
+    - "--diff"
+    - rm
+    - home-manager
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -3,16 +3,11 @@
+
+   inputs = {
+     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+-    home-manager = {
+-      url = "github:nix-community/home-manager";
+-      inputs.nixpkgs.follows = "nixpkgs";
+-    };
+
+     plasma-manager = {
+       url = "github:pjones/plasma-manager";
+       inputs = {
+         nixpkgs.follows = "nixpkgs";
+-        home-manager.follows = "home-manager";
+       };
+     };
+   };
+
+----- stderr -----

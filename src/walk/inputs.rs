@@ -781,7 +781,8 @@ fn handle_url_attr(
     if let Some(result) = apply_flat_url_attr(inputs, node, child, attr, ctx, change) {
         return Some(result);
     }
-    record_url_sibling_nested_follows(inputs, child, ctx, change)
+    record_url_sibling_nested_follows(inputs, child, ctx, change);
+    None
 }
 
 /// `inputs.<id>.url = "..."` at the inputs-block level. With `ctx` set, the
@@ -829,17 +830,23 @@ fn record_url_sibling_nested_follows(
     inputs: &mut HashMap<String, Input>,
     child: &SyntaxNode,
     ctx: &Option<Context>,
-    change: &Change,
-) -> Option<SyntaxNode> {
-    let parent = child.parent()?;
-    let sibling = parent.next_sibling()?;
-    let nested_child = sibling.first_child()?;
+    _change: &Change,
+) {
+    let Some(parent) = child.parent() else { return };
+    let Some(sibling) = parent.next_sibling() else {
+        return;
+    };
+    let Some(nested_child) = sibling.first_child() else {
+        return;
+    };
     if nested_child.to_string() != "inputs" {
-        return None;
+        return;
     }
-    let attr_set = nested_child.next_sibling()?;
+    let Some(attr_set) = nested_child.next_sibling() else {
+        return;
+    };
     if attr_set.kind() != SyntaxKind::NODE_ATTR_SET {
-        return None;
+        return;
     }
 
     for nested_attr in attr_set.children() {
@@ -850,24 +857,17 @@ fn record_url_sibling_nested_follows(
             continue;
         };
 
-        let result = if let Some(follows_ident) = first_ident.next_sibling() {
+        if let Some(follows_ident) = first_ident.next_sibling() {
             if follows_ident.to_string() != "follows" {
                 continue;
             }
-            record_nested_flat_follows(inputs, &attrpath, &first_ident, ctx, change)
+            record_nested_flat_follows(inputs, &attrpath, &first_ident, ctx);
         } else if let Some(value_node) = attrpath.next_sibling()
             && value_node.kind() == SyntaxKind::NODE_ATTR_SET
         {
-            record_nested_attrset_follows(inputs, &first_ident, &value_node, ctx, change)
-        } else {
-            None
-        };
-
-        if result.is_some() {
-            return result;
+            record_nested_attrset_follows(inputs, &first_ident, &value_node, ctx);
         }
     }
-    None
 }
 
 fn record_nested_flat_follows(
@@ -875,17 +875,13 @@ fn record_nested_flat_follows(
     attrpath: &SyntaxNode,
     first_ident: &SyntaxNode,
     ctx: &Option<Context>,
-    change: &Change,
-) -> Option<SyntaxNode> {
+) {
     let id_seg = Segment::from_syntax_or_sentinel(first_ident);
-    let follows = attrpath.next_sibling()?;
+    let Some(follows) = attrpath.next_sibling() else {
+        return;
+    };
     let input = Input::with_url(id_seg.clone(), follows.to_string(), follows.text_range());
     insert_with_ctx(inputs, id_seg, input, ctx);
-    let follows_target_seg = Segment::from_syntax_or_sentinel(&follows);
-    if should_remove_nested_input(change, ctx, &follows_target_seg) {
-        return Some(empty_node());
-    }
-    None
 }
 
 fn record_nested_attrset_follows(
@@ -893,8 +889,7 @@ fn record_nested_attrset_follows(
     first_ident: &SyntaxNode,
     value_node: &SyntaxNode,
     ctx: &Option<Context>,
-    change: &Change,
-) -> Option<SyntaxNode> {
+) {
     let id_seg = Segment::from_syntax_or_sentinel(first_ident);
     for inner_attr in value_node.children() {
         let Some(inner_path) = inner_attr.first_child() else {
@@ -911,12 +906,7 @@ fn record_nested_attrset_follows(
         };
         let input = Input::with_url(id_seg.clone(), follows.to_string(), follows.text_range());
         insert_with_ctx(inputs, id_seg.clone(), input, ctx);
-        let follows_target_seg = Segment::from_syntax_or_sentinel(&follows);
-        if should_remove_nested_input(change, ctx, &follows_target_seg) {
-            return Some(empty_node());
-        }
     }
-    None
 }
 
 /// Handle a `flake = ...` binding inside an input's attrset.
