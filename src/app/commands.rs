@@ -227,7 +227,7 @@ pub(super) fn apply_change(
         } = &change
         {
             let mut cache = crate::cache::Cache::load();
-            cache.add_entry(id.clone(), uri.clone());
+            cache.add_entry(id.to_string(), uri.clone());
             if let Err(e) = cache.commit() {
                 tracing::debug!("Could not write to cache: {}", e);
             }

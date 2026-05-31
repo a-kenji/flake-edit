@@ -46,7 +46,7 @@ fn test_walker_add_input(#[case] fixture: &str, #[case] is_flake: bool) {
         ("not_a_flake", "github:a-kenji/not_a_flake")
     };
     let change = Change::Add {
-        id: Some(id.to_owned()),
+        id: Some(flake_edit::change::ChangeId::parse(id).unwrap()),
         uri: Some(uri.to_owned()),
         flake: is_flake,
     };

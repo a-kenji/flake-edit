@@ -1,6 +1,6 @@
 use nix_uri::FlakeRef;
 
-use crate::change::Change;
+use crate::change::{Change, ChangeId};
 
 use super::{Error, Result};
 
@@ -32,6 +32,7 @@ pub(super) fn build_uri_change(
     opts: &UriOptions<'_>,
 ) -> Result<Change> {
     let final_uri = transform_uri(uri, opts.ref_or_rev, opts.shallow)?;
+    let id = ChangeId::parse(&id).map_err(|source| Error::InvalidInputId { id, source })?;
     Ok(match kind {
         BuildKind::Add { no_flake } => Change::Add {
             id: Some(id),
@@ -86,4 +87,25 @@ pub(super) fn transform_uri(
     }
 
     Ok(apply_uri_options(flake_ref, ref_or_rev, shallow).into_uri())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn malformed_id_surfaces_as_invalid_input_id() {
+        let opts = UriOptions::default();
+        let err = build_uri_change(
+            BuildKind::Change,
+            "a..b".to_string(),
+            "github:owner/repo".to_string(),
+            &opts,
+        )
+        .expect_err("a malformed id must not build a Change");
+        assert!(
+            matches!(&err, Error::InvalidInputId { id, .. } if id == "a..b"),
+            "expected InvalidInputId for 'a..b', got: {err:?}"
+        );
+    }
 }

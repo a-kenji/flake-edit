@@ -316,7 +316,7 @@ mod tests {
 }"#;
         let mut fe = FlakeEdit::from_text(flake).unwrap();
         let change = Change::Add {
-            id: Some("crane".into()),
+            id: Some(crate::change::ChangeId::parse("crane").unwrap()),
             uri: Some("github:ipetkov/crane".into()),
             flake: true,
         };
@@ -341,7 +341,7 @@ mod tests {
 }"#;
         let mut fe = FlakeEdit::from_text(flake).unwrap();
         let change = Change::Add {
-            id: Some("nixpkgs".into()),
+            id: Some(crate::change::ChangeId::parse("nixpkgs").unwrap()),
             uri: Some("github:nixos/nixpkgs".into()),
             flake: true,
         };
@@ -360,7 +360,7 @@ mod tests {
     fn add_duplicate_returns_duplicate_input_error() {
         let mut fe = FlakeEdit::from_text(flake_with_nixpkgs_and_crane()).unwrap();
         let change = Change::Add {
-            id: Some("crane".into()),
+            id: Some(crate::change::ChangeId::parse("crane").unwrap()),
             uri: Some("github:ipetkov/crane".into()),
             flake: true,
         };
@@ -425,7 +425,7 @@ mod tests {
     fn change_uri_rewrites_existing_input() {
         let mut fe = FlakeEdit::from_text(flake_with_nixpkgs_and_crane()).unwrap();
         let change = Change::Change {
-            id: Some("crane".into()),
+            id: Some(crate::change::ChangeId::parse("crane").unwrap()),
             uri: Some("github:ipetkov/crane/v0.20.0".into()),
         };
         let text = fe
@@ -443,7 +443,7 @@ mod tests {
     fn change_uri_missing_input_returns_input_not_found() {
         let mut fe = FlakeEdit::from_text(flake_with_nixpkgs_and_crane()).unwrap();
         let change = Change::Change {
-            id: Some("does-not-exist".into()),
+            id: Some(crate::change::ChangeId::parse("does-not-exist").unwrap()),
             uri: Some("github:owner/repo".into()),
         };
         let err = fe

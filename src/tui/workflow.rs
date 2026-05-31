@@ -121,7 +121,9 @@ impl WorkflowData {
     pub fn build_change(&self) -> Change {
         match self {
             WorkflowData::Add { id, uri, .. } => Change::Add {
-                id: id.clone(),
+                id: id
+                    .as_deref()
+                    .and_then(|s| crate::change::ChangeId::parse(s).ok()),
                 uri: uri.clone(),
                 flake: true,
             },
@@ -130,7 +132,9 @@ impl WorkflowData {
                 uri,
                 ..
             } => Change::Change {
-                id: selected_input.clone(),
+                id: selected_input
+                    .as_deref()
+                    .and_then(|s| crate::change::ChangeId::parse(s).ok()),
                 uri: uri.clone(),
             },
             WorkflowData::Remove {

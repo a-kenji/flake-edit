@@ -6,7 +6,7 @@ pub enum Change {
     #[default]
     None,
     Add {
-        id: Option<String>,
+        id: Option<ChangeId>,
         uri: Option<String>,
         // Add an input as a flake.
         flake: bool,
@@ -15,7 +15,7 @@ pub enum Change {
         ids: Vec<ChangeId>,
     },
     Change {
-        id: Option<String>,
+        id: Option<ChangeId>,
         uri: Option<String>,
     },
     /// Redirect a nested input to follow another input.
@@ -129,9 +129,9 @@ impl Change {
     pub fn id(&self) -> Option<ChangeId> {
         match self {
             Change::None => None,
-            Change::Add { id, .. } => id.clone().and_then(|id| ChangeId::parse(&id).ok()),
+            Change::Add { id, .. } => id.clone(),
             Change::Remove { ids } => ids.first().cloned(),
-            Change::Change { id, .. } => id.clone().and_then(|id| ChangeId::parse(&id).ok()),
+            Change::Change { id, .. } => id.clone(),
             Change::Follows { input, .. } => Some(input.clone()),
         }
     }
@@ -165,6 +165,7 @@ impl Change {
     pub fn success_messages(&self) -> Vec<String> {
         match self {
             Change::Add { id, uri, .. } => {
+                let id = id.as_ref().map(ChangeId::to_string);
                 vec![format!(
                     "Added input: {} = {}",
                     id.as_deref().unwrap_or("?"),
@@ -176,6 +177,7 @@ impl Change {
                 .map(|id| format!("Removed input: {}", id))
                 .collect(),
             Change::Change { id, uri, .. } => {
+                let id = id.as_ref().map(ChangeId::to_string);
                 vec![format!(
                     "Changed input: {} -> {}",
                     id.as_deref().unwrap_or("?"),

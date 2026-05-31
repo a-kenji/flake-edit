@@ -37,7 +37,7 @@ fn collect_inputs() {
 fn add_input() {
     let mut walker = Walker::new(INPUTS);
     let change = Change::Add {
-        id: Some("nixpkgs".to_owned()),
+        id: Some(flake_edit::change::ChangeId::parse("nixpkgs").unwrap()),
         uri: Some("github/nixos/nixpkgs".to_owned()),
         flake: false,
     };

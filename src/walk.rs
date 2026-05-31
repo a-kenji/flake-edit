@@ -455,6 +455,7 @@ impl<'a> Walker {
         else {
             return None;
         };
+        let id = id.input().as_str();
 
         if toplevel.index() == 0 {
             return None;
