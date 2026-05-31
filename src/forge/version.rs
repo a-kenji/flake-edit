@@ -45,40 +45,64 @@ pub(crate) fn normalize_semver(tag: &str) -> String {
     format!("{normalized_core}{suffix}")
 }
 
+/// Returns `true` when `proposed` parses as a strictly lower
+/// version than `current` under semver precedence.
+pub fn is_downgrade(current: &str, proposed: &str) -> bool {
+    let cur = parse_ref(current, false);
+    let prop = parse_ref(proposed, false);
+    match (
+        semver::Version::parse(&cur.normalized_for_semver),
+        semver::Version::parse(&prop.normalized_for_semver),
+    ) {
+        (Ok(c), Ok(p)) => p.cmp_precedence(&c) == std::cmp::Ordering::Less,
+        _ => false,
+    }
+}
+
+/// Pick the highest-precedence tag from `tags` under semver ordering.
+///
+/// Each input is normalised through [`parse_ref`] and parsed as a
+/// [`semver::Version`]; inputs that fail to parse are filtered out.
+/// The original tag string is returned, not the normalised form, so
+/// the caller can write it back to `flake.nix` verbatim.
+///
+/// Returns `None` when `tags` is empty or every entry fails to parse.
+pub fn select_latest_tag<S: AsRef<str>>(tags: &[S]) -> Option<String> {
+    tags.iter()
+        .filter_map(|name| {
+            let raw = name.as_ref();
+            let parsed = parse_ref(raw, false);
+            semver::Version::parse(&parsed.normalized_for_semver)
+                .ok()
+                .map(|v| (v, raw.to_string()))
+        })
+        .max_by(|a, b| a.0.cmp_precedence(&b.0))
+        .map(|(_, original)| original)
+}
+
 /// Normalise `raw` into a [`ParsedRef`] for semver comparison.
 ///
-/// One pass strips `refs/tags/`, then a leading `v`, then anything
-/// from the first `-` onward. The order is load-bearing: a tag like
-/// `refs/tags/v1.2.3-rc1` reaches the semver core only after all
-/// three strips run.
-///
-/// `default_refs_tags_prefix` seeds [`ParsedRef::has_refs_tags_prefix`]
-/// when the input does not literally start with `refs/tags/`. Used by
-/// the update path to record that an input which lacks the prefix in
-/// `flake.nix` should nonetheless have its new ref written with one.
+/// Strips `refs/tags/` and then any non-digit scheme prefix that
+/// precedes the first digit, so `v`, `hl`, `release-`, and
+/// `nix-darwin-` are all reduced to their numeric core in one pass.
+/// The remainder is fed through [`normalize_semver`], which pads
+/// short forms like `1.0` out to three segments.
 pub fn parse_ref(raw: &str, default_refs_tags_prefix: bool) -> ParsedRef {
-    fn strip_until_char(s: &str, c: char) -> Option<String> {
-        s.find(c).map(|index| s[index + 1..].to_string())
-    }
-
     let mut maybe_version = raw.to_string();
     let mut previous_ref = String::new();
     let mut has_refs_tags_prefix = default_refs_tags_prefix;
 
-    if let Some(normalized_version) = maybe_version.strip_prefix("refs/tags/") {
+    if let Some(stripped) = maybe_version.strip_prefix("refs/tags/") {
         has_refs_tags_prefix = true;
         previous_ref = maybe_version.clone();
-        maybe_version = normalized_version.to_string();
+        maybe_version = stripped.to_string();
     }
 
-    if let Some(normalized_version) = maybe_version.strip_prefix('v') {
+    if let Some(digit_idx) = maybe_version.find(|c: char| c.is_ascii_digit())
+        && digit_idx > 0
+    {
         previous_ref = maybe_version.clone();
-        maybe_version = normalized_version.to_string();
-    }
-
-    if let Some(normalized_version) = strip_until_char(&maybe_version, '-') {
-        previous_ref = maybe_version.clone();
-        maybe_version = normalized_version.to_string();
+        maybe_version = maybe_version[digit_idx..].to_string();
     }
 
     if previous_ref.is_empty() {
@@ -136,20 +160,29 @@ mod tests {
     }
 
     #[test]
-    fn v_prefix_with_prerelease_strips_to_suffix_only() {
-        // The dash strip discards the semver core, so the suffix `rc1` is what
-        // gets normalized; the three-segment shape is reached by padding zeros.
-        check("v1.2.3-rc1", false, "rc1.0.0", "1.2.3-rc1", false);
+    fn v_prefix_with_prerelease_keeps_semver_core() {
+        check("v1.2.3-rc1", false, "1.2.3-rc1", "v1.2.3-rc1", false);
     }
 
     #[test]
-    fn bare_prerelease_long_strips_to_suffix_only() {
-        check("1.0.0-alpha.1", false, "alpha.1.0", "1.0.0-alpha.1", false);
+    fn bare_prerelease_long_passes_through_as_semver() {
+        check(
+            "1.0.0-alpha.1",
+            false,
+            "1.0.0-alpha.1",
+            "1.0.0-alpha.1",
+            false,
+        );
     }
 
     #[test]
-    fn bare_prerelease_short_strips_to_suffix_only() {
-        check("2.0.0-beta", false, "beta.0.0", "2.0.0-beta", false);
+    fn bare_prerelease_short_passes_through_as_semver() {
+        check("2.0.0-beta", false, "2.0.0-beta", "2.0.0-beta", false);
+    }
+
+    #[test]
+    fn hl_prefixed_tag_keeps_version_core_as_prerelease() {
+        check("hl0.47.0-1", false, "0.47.0-1", "hl0.47.0-1", false);
     }
 
     #[test]
@@ -168,13 +201,15 @@ mod tests {
     }
 
     #[test]
-    fn nix_darwin_channel_strips_first_dash_only() {
-        // The dash strip is one-shot, so `nix-darwin-24.05` keeps `darwin-24.05`
-        // as the residue and normalizes that, producing a noisy semver string.
+    fn nix_darwin_channel_strips_full_prefix() {
+        // `05` has a leading zero, so `Version::parse` rejects this
+        // core. That rejection is what stops the `forge::api`
+        // cheap-path predicate from treating channel branches as
+        // semver tags.
         check(
             "nix-darwin-24.05",
             false,
-            "darwin.0.0-24.05",
+            "24.05.0",
             "nix-darwin-24.05",
             false,
         );
@@ -187,19 +222,26 @@ mod tests {
 
     #[test]
     fn refs_tags_bare_keeps_full_previous_ref() {
-        // Without any subsequent strip, previous_ref keeps the `refs/tags/`
-        // form set on the first strip.
         check("refs/tags/1.2.3", false, "1.2.3", "refs/tags/1.2.3", true);
     }
 
     #[test]
-    fn refs_tags_v_prerelease_combines_strips() {
-        check("refs/tags/v1.2.3-rc1", false, "rc1.0.0", "1.2.3-rc1", true);
+    fn refs_tags_v_prerelease_keeps_semver_core() {
+        check(
+            "refs/tags/v1.2.3-rc1",
+            false,
+            "1.2.3-rc1",
+            "v1.2.3-rc1",
+            true,
+        );
     }
 
     #[test]
-    fn iso_date_strips_first_dash() {
-        check("2024-05-01", false, "05.0.0-01", "2024-05-01", false);
+    fn iso_date_pads_year_into_semver_with_date_prerelease() {
+        // Inputs that start with a digit skip the prefix strip and
+        // the year becomes the major, so semver ordering still
+        // picks the most recent date out of a date-shaped tag list.
+        check("2024-05-01", false, "2024.0.0-05-01", "2024-05-01", false);
     }
 
     #[test]
@@ -208,12 +250,80 @@ mod tests {
     }
 
     #[test]
-    fn lone_v_dash_strips_to_empty_normalized() {
-        check("v-", false, "", "-", false);
+    fn lone_v_dash_has_no_digit_to_anchor_strip() {
+        // Pathological inputs are intentionally normalised into a
+        // shape `Version::parse` rejects, so they get dropped
+        // downstream rather than masquerading as a valid version.
+        check("v-", false, "v.0.0-", "v-", false);
     }
 
     #[test]
     fn default_refs_tags_prefix_persists_without_refs_tags_string() {
         check("1.2.3", true, "1.2.3", "1.2.3", true);
+    }
+
+    #[test]
+    fn select_latest_picks_highest_hl_prefixed_tag() {
+        let tags = [
+            "hl0.47.0-1",
+            "hl0.46.0-1",
+            "hl0.45.0-1",
+            "hl0.44.0-1",
+            "hl0.43.0-1",
+            "hl0.42.0-1",
+            "hl0.41.0-1",
+            "hl0.40.0-1",
+            "hl0.33.0-1",
+            "hl0.21.0-1",
+        ];
+        assert_eq!(select_latest_tag(&tags), Some("hl0.47.0-1".to_string()));
+    }
+
+    #[test]
+    fn select_latest_handles_standard_v_prefix() {
+        let tags = ["v1.0.0", "v2.0.0", "v1.5.0"];
+        assert_eq!(select_latest_tag(&tags), Some("v2.0.0".to_string()));
+    }
+
+    #[test]
+    fn select_latest_returns_none_for_empty_list() {
+        let tags: [&str; 0] = [];
+        assert_eq!(select_latest_tag(&tags), None);
+    }
+
+    #[test]
+    fn select_latest_handles_release_dash_prefix() {
+        let tags = ["release-1.0.0", "release-2.0.0", "release-1.5.0"];
+        assert_eq!(select_latest_tag(&tags), Some("release-2.0.0".to_string()));
+    }
+
+    #[test]
+    fn is_downgrade_flags_lower_hl_prefixed_proposal() {
+        assert!(is_downgrade("hl0.47.0-1", "hl0.33.0-1"));
+    }
+
+    #[test]
+    fn is_downgrade_allows_strictly_greater_proposal() {
+        assert!(!is_downgrade("hl0.33.0-1", "hl0.47.0-1"));
+        assert!(!is_downgrade("v1.0.0", "v2.0.0"));
+    }
+
+    #[test]
+    fn is_downgrade_allows_equal_versions() {
+        // Equal versions are not a downgrade. The existing "already
+        // on the latest" path handles that case; the guard must not
+        // pre-empt it.
+        assert!(!is_downgrade("v1.2.3", "v1.2.3"));
+        assert!(!is_downgrade("1.0.0", "v1.0.0"));
+    }
+
+    #[test]
+    fn is_downgrade_returns_false_when_either_side_unparseable() {
+        // Non-semver pins (commit hash, branch name) leave the
+        // ordering question undefined; the guard must defer to the
+        // existing flow rather than silently dropping the update.
+        assert!(!is_downgrade("not-a-version", "1.2.3"));
+        assert!(!is_downgrade("1.2.3", "not-a-version"));
+        assert!(!is_downgrade("", "1.2.3"));
     }
 }
