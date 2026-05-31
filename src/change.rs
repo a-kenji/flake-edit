@@ -1,7 +1,7 @@
 use crate::follows::{AttrPath, AttrPathParseError, Segment};
 use crate::walk::Context;
 
-#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Default, Clone, serde::Serialize)]
 pub enum Change {
     #[default]
     None,
@@ -35,7 +35,7 @@ pub enum Change {
 ///
 /// Wraps an [`AttrPath`]: a non-empty sequence of unquoted segments matching
 /// flake-side attribute path grammar.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct ChangeId(AttrPath);
 
 impl ChangeId {
