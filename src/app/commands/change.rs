@@ -58,7 +58,7 @@ fn change_full_interactive(
 ) -> Result<Change> {
     let input_pairs: Vec<(String, String)> = sorted_input_ids(inputs)
         .into_iter()
-        .map(|id| (id.clone(), inputs[id].url().trim_matches('"').to_string()))
+        .map(|id| (id.clone(), inputs[id].url().to_string()))
         .collect();
 
     if input_pairs.is_empty() {
@@ -90,7 +90,7 @@ fn change_uri_interactive(
     id: &str,
     opts: &UriOptions<'_>,
 ) -> Result<Change> {
-    let current_uri = inputs.get(id).map(|i| i.url().trim_matches('"'));
+    let current_uri = inputs.get(id).map(|i| i.url());
     let tui_app = tui::App::change_uri(
         "Change",
         editor.text(),
