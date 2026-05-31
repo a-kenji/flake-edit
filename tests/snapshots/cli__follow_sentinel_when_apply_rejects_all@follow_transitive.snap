@@ -1,0 +1,22 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/transitive_with_orphan_follow.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/transitive_with_orphan_follow.flake.lock"
+    - "--diff"
+    - follow
+    - "--transitive"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+All inputs are already deduplicated.
+
+----- stderr -----
+warning: stale-lock follows at line 5, column 15: foo.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)

@@ -737,6 +737,36 @@ fn test_follow_with_transitive_flag_default(#[case] fixture: &str) {
     });
 }
 
+/// Guards the "nothing to do" sentinel under every transitive variant.
+///
+/// All transitive variants must still print
+/// the planner's sentinel on stdout, matching plain `follow`'s behaviour
+/// on the same flake.
+#[rstest]
+#[case::plain(&["follow"])]
+#[case::transitive(&["follow", "--transitive"])]
+#[case::transitive_depth_3(&["follow", "--transitive", "--depth", "3"])]
+#[case::transitive_depth_10(&["follow", "--transitive", "--depth", "10"])]
+#[case::depth_10(&["follow", "--depth", "10"])]
+fn test_follow_sentinel_when_apply_rejects_all(#[case] follow_args: &[&str]) {
+    let fixture = "transitive_with_orphan_follow";
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    let suffix = follow_args.join("_").replace("--", "");
+    settings.set_snapshot_suffix(suffix.trim_matches('_'));
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--lock-file")
+                .arg(fixture_lock_path(fixture))
+                .arg("--diff")
+                .args(follow_args)
+        );
+    });
+}
+
 /// Test behavior with a malformed config file (returns error with line info)
 #[rstest]
 #[case("centerpiece", "malformed")] // Malformed TOML shows parse error with line number
