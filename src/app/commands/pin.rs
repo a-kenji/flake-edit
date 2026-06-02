@@ -121,7 +121,6 @@ pub fn unpin(
             .filter(|id| {
                 inputs[id]
                     .url()
-                    .trim_matches('"')
                     .parse::<FlakeRef>()
                     .is_ok_and(|f| f.ref_kind() != nix_uri::RefKind::None)
             })

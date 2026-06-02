@@ -7,7 +7,7 @@
 
 use nix_uri::FlakeRef;
 
-use crate::change::Change;
+use crate::change::{Change, ChangeId};
 use crate::edit::{FlakeEdit, InputMap, sorted_input_ids};
 use crate::tui;
 
@@ -58,7 +58,7 @@ fn change_full_interactive(
 ) -> Result<Change> {
     let input_pairs: Vec<(String, String)> = sorted_input_ids(inputs)
         .into_iter()
-        .map(|id| (id.clone(), inputs[id].url().trim_matches('"').to_string()))
+        .map(|id| (id.clone(), inputs[id].url().to_string()))
         .collect();
 
     if input_pairs.is_empty() {
@@ -90,7 +90,7 @@ fn change_uri_interactive(
     id: &str,
     opts: &UriOptions<'_>,
 ) -> Result<Change> {
-    let current_uri = inputs.get(id).map(|i| i.url().trim_matches('"'));
+    let current_uri = inputs.get(id).map(|i| i.url());
     let tui_app = tui::App::change_uri(
         "Change",
         editor.text(),
@@ -110,8 +110,12 @@ fn change_uri_interactive(
     } = tui_change
     {
         let final_uri = transform_uri(new_uri, opts.ref_or_rev, opts.shallow)?;
+        let id = ChangeId::parse(id).map_err(|source| Error::InvalidInputId {
+            id: id.to_string(),
+            source,
+        })?;
         Ok(Change::Change {
-            id: Some(id.to_string()),
+            id: Some(id),
             uri: Some(final_uri),
         })
     } else {
@@ -132,6 +136,7 @@ fn change_infer_id(uri: String, opts: &UriOptions<'_>) -> Result<Change> {
         .id()
         .map(str::to_owned)
         .ok_or_else(|| Error::CouldNotInferId { uri: uri.clone() })?;
+    let id = ChangeId::parse(&id).map_err(|source| Error::InvalidInputId { id, source })?;
     let final_uri = flake_ref.into_uri();
 
     Ok(Change::Change {

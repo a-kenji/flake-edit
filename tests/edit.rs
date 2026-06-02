@@ -72,7 +72,7 @@ fn test_add_input(#[case] fixture: &str, #[case] is_flake: bool, #[case] uri: &s
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let id = if is_flake { "vmsh" } else { "not_a_flake" };
     let change = Change::Add {
-        id: Some(id.to_owned()),
+        id: Some(flake_edit::change::ChangeId::parse(id).unwrap()),
         uri: Some(uri.to_owned()),
         flake: is_flake,
     };
@@ -93,7 +93,7 @@ fn test_add_with_ref_or_rev() {
     let content = load_flake("root");
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Add {
-        id: Some("home-manager".to_owned()),
+        id: Some(flake_edit::change::ChangeId::parse("home-manager").unwrap()),
         uri: Some("github:nix-community/home-manager/release-24.05".to_owned()),
         flake: true,
     };
@@ -115,7 +115,7 @@ fn test_first_nested_node_add_with_list(#[case] is_flake: bool) {
         ("not_a_flake", "github:a-kenji/not_a_flake")
     };
     let change = Change::Add {
-        id: Some(id.to_owned()),
+        id: Some(flake_edit::change::ChangeId::parse(id).unwrap()),
         uri: Some(uri.to_owned()),
         flake: is_flake,
     };
@@ -295,7 +295,7 @@ fn test_change_url(#[case] fixture: &str, #[case] input_id: &str, #[case] new_ur
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Change {
-        id: Some(input_id.to_owned()),
+        id: Some(flake_edit::change::ChangeId::parse(input_id).unwrap()),
         uri: Some(new_url.to_owned()),
     };
     let info = Info::with_change(change.clone());
@@ -317,7 +317,7 @@ fn test_change_nonexistent_input_error(#[case] fixture: &str, #[case] input_id: 
     let content = load_flake(fixture);
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
     let change = Change::Change {
-        id: Some(input_id.to_owned()),
+        id: Some(flake_edit::change::ChangeId::parse(input_id).unwrap()),
         uri: Some("github:foo/bar".to_owned()),
     };
     let result = flake_edit.apply_change(change);

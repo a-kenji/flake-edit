@@ -6,7 +6,7 @@
 
 use nix_uri::FlakeRef;
 
-use crate::change::Change;
+use crate::change::{Change, ChangeId};
 use crate::edit::FlakeEdit;
 use crate::tui;
 
@@ -84,6 +84,10 @@ fn add_infer_id(uri: String, no_flake: bool, opts: &UriOptions<'_>) -> Result<Ch
     };
 
     let final_id = inferred_id.ok_or_else(|| Error::CouldNotInferId { uri: uri.clone() })?;
+    let final_id = ChangeId::parse(&final_id).map_err(|source| Error::InvalidInputId {
+        id: final_id,
+        source,
+    })?;
 
     Ok(Change::Add {
         id: Some(final_id),

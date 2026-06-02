@@ -160,6 +160,7 @@ fn apply_add(
     else {
         return None;
     };
+    let id = id.input().as_str();
 
     if node.kind() != SyntaxKind::NODE_ATTR_SET || ctx.is_some() {
         return None;
@@ -385,7 +386,8 @@ fn handle_flat_url(
         uri: Some(new_uri),
         ..
     } = change
-        && *change_id == id_str
+        && change_id.input().as_str() == id_str
+        && change_id.follows().is_none()
     {
         return Some(make_quoted_string(new_uri));
     }
@@ -549,7 +551,12 @@ fn handle_child_attrpath_value(
         } = change
     {
         return Some(insert_added_input_into_block(
-            parent, child, child_node, id, uri, *flake,
+            parent,
+            child,
+            child_node,
+            id.input().as_str(),
+            uri,
+            *flake,
         ));
     }
 
@@ -812,7 +819,8 @@ fn apply_flat_url_attr(
     }
     if let Change::Change { id, uri, .. } = change
         && let Some(id) = id
-        && *id == prev_str
+        && id.input().as_str() == prev_str
+        && id.follows().is_none()
         && let Some(uri) = uri
         && let Some(url_node) = child.next_sibling()
     {
@@ -1222,7 +1230,8 @@ fn handle_url_leaf(
         uri: Some(new_uri),
         ..
     } = change
-        && *change_id == id_str
+        && change_id.input().as_str() == id_str
+        && change_id.follows().is_none()
     {
         let new_url = make_quoted_string(new_uri);
         let new_attr = substitute_child(attr, leaf.next_sibling().unwrap().index(), &new_url);
@@ -1905,7 +1914,7 @@ mod tests {
         let inputs_block = parse_inputs_block(flake);
         let mut map = HashMap::new();
         let change = Change::Change {
-            id: Some("nixpkgs".to_string()),
+            id: Some(ChangeId::parse("nixpkgs").unwrap()),
             uri: Some("github:NixOS/nixpkgs/nixos-23.11".to_string()),
         };
         let result = apply_change_uri(&mut map, &inputs_block, &None, &change)
@@ -1926,7 +1935,7 @@ mod tests {
         let inputs_block = parse_inputs_block(flake);
         let mut map = HashMap::new();
         let change = Change::Add {
-            id: Some("nixpkgs".to_string()),
+            id: Some(ChangeId::parse("nixpkgs").unwrap()),
             uri: Some("github:NixOS/nixpkgs/nixos-unstable".to_string()),
             flake: true,
         };
@@ -1952,7 +1961,7 @@ mod tests {
         let inputs_block = parse_inputs_block(flake);
         let mut map = HashMap::new();
         let change = Change::Add {
-            id: Some("flake-utils".to_string()),
+            id: Some(ChangeId::parse("flake-utils").unwrap()),
             uri: Some("github:numtide/flake-utils".to_string()),
             flake: true,
         };
@@ -2133,7 +2142,7 @@ mod tests {
         let (node, child, attr, leaf) = find_input_attrset_leaf(flake, "nixpkgs", "url");
         let mut map = HashMap::new();
         let change = Change::Change {
-            id: Some("nixpkgs".to_string()),
+            id: Some(ChangeId::parse("nixpkgs").unwrap()),
             uri: Some("github:NixOS/nixpkgs/nixos-23.11".to_string()),
         };
         let result = handle_url_leaf(&mut map, &node, &child, &attr, &leaf, &None, &change)
@@ -2434,7 +2443,7 @@ mod tests {
 }
 ";
         let change = Change::Change {
-            id: Some("nixpkgs".to_string()),
+            id: Some(ChangeId::parse("nixpkgs").unwrap()),
             uri: Some("github:NixOS/nixpkgs/nixos-23.11".to_string()),
         };
         let result = apply(flake, &change);
@@ -2462,7 +2471,7 @@ mod tests {
 }
 ";
         let change = Change::Change {
-            id: Some("flake-edit".to_string()),
+            id: Some(ChangeId::parse("flake-edit").unwrap()),
             uri: Some("github:a-kenji/flake-edit".to_string()),
         };
         assert!(apply_maybe(flake, &change).is_none());

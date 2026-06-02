@@ -1054,8 +1054,15 @@ fn apply_toplevel_adds(
     lock_graph_ref: Option<&FollowsGraph>,
 ) {
     for (id, url) in &plan.toplevel_adds {
+        let change_id = match ChangeId::parse(id) {
+            Ok(change_id) => change_id,
+            Err(e) => {
+                tracing::error!("could not add top-level input {id}: invalid id: {e}");
+                continue;
+            }
+        };
         let change = Change::Add {
-            id: Some(id.clone()),
+            id: Some(change_id),
             uri: Some(url.clone()),
             flake: true,
         };

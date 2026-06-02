@@ -41,7 +41,7 @@ pub fn update(
             .iter()
             .map(|id| {
                 let input = &inputs[id];
-                let parsed = input.url().trim_matches('"').parse::<FlakeRef>().ok();
+                let parsed = input.url().parse::<FlakeRef>().ok();
                 let version = parsed.as_ref().and_then(|f| f.ref_or_rev());
                 match version {
                     Some(v) if !v.is_empty() => format!("{} - {}", id, v),

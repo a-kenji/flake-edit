@@ -481,13 +481,15 @@ impl App {
                             flake: true,
                         },
                         AddStep::Id => Change::Add {
-                            id: Some(current_text.to_string()),
+                            id: crate::change::ChangeId::parse(current_text).ok(),
                             uri: uri.clone(),
                             flake: true,
                         },
                     },
                     WorkflowData::Change { selected_input, .. } => Change::Change {
-                        id: selected_input.clone(),
+                        id: selected_input
+                            .as_deref()
+                            .and_then(|s| crate::change::ChangeId::parse(s).ok()),
                         uri: Some(current_text.to_string()),
                     },
                     _ => self.build_change(),
