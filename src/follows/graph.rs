@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use crate::edit::InputMap;
 use crate::follows::{AttrPath, Segment};
 use crate::input::{Follows, Input, Range};
-use crate::lock::FlakeLock;
+use crate::lock::{FlakeLock, NestedInput};
 
 /// Default upper bound on graph traversal depth. The per-emission cap
 /// (`follow.max_depth` in config) is a separate, smaller knob.
@@ -126,18 +126,28 @@ impl FollowsGraph {
 
     /// Build a graph from the lockfile alone.
     ///
-    /// Walks `flake.lock` from the root, emitting one [`EdgeOrigin::Resolved`]
-    /// edge per `inputs.X = ["a", "b", ...]` follows override, bounded by
-    /// [`DEFAULT_MAX_DEPTH`]. Every nested-input path is recorded in
-    /// `resolved_universe`, with or without a follows.
+    /// Walks `flake.lock` from the root once via [`FlakeLock::nested_inputs`]
+    /// and defers to [`Self::from_nested_inputs`].
     pub fn from_lock(lock: &FlakeLock) -> Self {
+        Self::from_nested_inputs(&lock.nested_inputs())
+    }
+
+    /// Build the lock graph from an already-computed nested-input set.
+    ///
+    /// Emits one [`EdgeOrigin::Resolved`] edge per `inputs.X = ["a", "b", ...]`
+    /// follows override, bounded by [`DEFAULT_MAX_DEPTH`]. Every nested-input
+    /// path is recorded in `resolved_universe`, with or without a follows.
+    ///
+    /// Takes the precomputed slice so a single [`FlakeLock::nested_inputs`]
+    /// walk can feed every consumer in one invocation.
+    pub fn from_nested_inputs(nested_inputs: &[NestedInput]) -> Self {
         let mut graph = FollowsGraph {
             max_depth: DEFAULT_MAX_DEPTH,
             ..FollowsGraph::default()
         };
-        for nested in lock.nested_inputs() {
+        for nested in nested_inputs {
             graph.resolved_universe.insert(nested.path.clone());
-            if let Some(target) = nested.follows {
+            if let Some(target) = nested.follows.clone() {
                 graph.insert_edge(Edge {
                     source: nested.path.clone(),
                     follows: target,
@@ -328,12 +338,11 @@ impl FollowsGraph {
     /// Lex-sorted by source.
     pub fn stale_lock_declarations<'a>(
         &'a self,
-        lock: &FlakeLock,
+        nested_inputs: &[NestedInput],
     ) -> Vec<StaleLockDeclaration<'a>> {
-        let lock_targets: HashMap<AttrPath, Option<AttrPath>> = lock
-            .nested_inputs()
-            .into_iter()
-            .map(|n| (n.path, n.follows))
+        let lock_targets: HashMap<&AttrPath, &Option<AttrPath>> = nested_inputs
+            .iter()
+            .map(|n| (&n.path, &n.follows))
             .collect();
 
         let mut out: Vec<StaleLockDeclaration<'a>> = Vec::new();
@@ -348,7 +357,7 @@ impl FollowsGraph {
             if diverges {
                 out.push(StaleLockDeclaration {
                     declared: edge,
-                    lock_target: lock_target.clone(),
+                    lock_target: (*lock_target).clone(),
                 });
             }
         }
@@ -1248,7 +1257,7 @@ mod tests {
 }"#;
         let lock = FlakeLock::read_from_str(lock_text).unwrap();
         let g = FollowsGraph::from_flake(&inputs, &lock);
-        let overridden = g.stale_lock_declarations(&lock);
+        let overridden = g.stale_lock_declarations(&lock.nested_inputs());
         assert_eq!(overridden.len(), 1);
         assert_eq!(overridden[0].declared.source.to_string(), "crane.nixpkgs");
         assert_eq!(overridden[0].declared.follows.to_string(), "nixpkgs");
@@ -1285,7 +1294,7 @@ mod tests {
 }"#;
         let lock = FlakeLock::read_from_str(lock_text).unwrap();
         let g = FollowsGraph::from_flake(&inputs, &lock);
-        let overridden = g.stale_lock_declarations(&lock);
+        let overridden = g.stale_lock_declarations(&lock.nested_inputs());
         assert_eq!(overridden.len(), 1);
         assert_eq!(overridden[0].declared.source.to_string(), "crane.nixpkgs");
         assert!(overridden[0].lock_target.is_none());
@@ -1314,7 +1323,7 @@ mod tests {
 }"#;
         let lock = FlakeLock::read_from_str(lock_text).unwrap();
         let g = FollowsGraph::from_flake(&inputs, &lock);
-        assert!(g.stale_lock_declarations(&lock).is_empty());
+        assert!(g.stale_lock_declarations(&lock.nested_inputs()).is_empty());
     }
 
     #[test]
@@ -1343,7 +1352,7 @@ mod tests {
         let lock = FlakeLock::read_from_str(lock_text).unwrap();
         let g = FollowsGraph::from_flake(&inputs, &lock);
         assert_eq!(g.stale_edges().len(), 1);
-        assert!(g.stale_lock_declarations(&lock).is_empty());
+        assert!(g.stale_lock_declarations(&lock.nested_inputs()).is_empty());
     }
 
     #[test]

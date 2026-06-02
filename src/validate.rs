@@ -19,7 +19,7 @@ pub(crate) use syntax::ParsedSource;
 
 use crate::edit::InputMap;
 use crate::follows::{DEFAULT_MAX_DEPTH, FollowsGraph};
-use crate::lock::FlakeLock;
+use crate::lock::{FlakeLock, NestedInput};
 
 /// Run the syntax-level lints over `source`: parse errors, duplicate
 /// attributes, and the always-on declared-cycle check.
@@ -49,16 +49,25 @@ pub(crate) fn validate_parsed(parsed: &ParsedSource) -> ValidationResult {
 
 /// Run syntax checks plus every follows-graph lint.
 ///
-/// The follows-graph is built once from `inputs` and the optional `lock`,
-/// then handed to each lint. One graph build per call is cheap enough that
-/// callers do not need to share a pre-built graph.
+/// Walks `flake.lock` once via [`FlakeLock::nested_inputs`], builds the lock
+/// graph from that single walk, and hands both to
+/// [`validate_full_with_lock_graph`].
 pub fn validate_full(
     source: &str,
     inputs: &InputMap,
     lock: Option<&FlakeLock>,
 ) -> ValidationResult {
     let parsed = ParsedSource::new(source);
-    validate_full_inner_parsed(&parsed, inputs, lock)
+    let nested_inputs = lock.map(FlakeLock::nested_inputs);
+    let lock_graph = nested_inputs
+        .as_deref()
+        .map(FollowsGraph::from_nested_inputs);
+    validate_full_with_lock_graph(
+        &parsed,
+        inputs,
+        lock_graph.as_ref(),
+        nested_inputs.as_deref().unwrap_or(&[]),
+    )
 }
 
 /// Like [`validate_full`] but skips the lock-drift lints (`lint_follows_stale`
@@ -101,27 +110,37 @@ pub(crate) fn validate_speculative_parsed(
     ValidationResult { errors, warnings }
 }
 
-fn validate_full_inner_parsed(
+/// [`validate_full`] for callers that already hold a [`ParsedSource`], a
+/// lockfile-derived [`FollowsGraph`] (from [`FollowsGraph::from_lock`] or
+/// [`FollowsGraph::from_nested_inputs`]), and the lockfile's nested-input
+/// set. Reuses all three instead of re-walking `flake.lock`.
+///
+/// `lock_graph = Some(..)` enables the lock-drift lints (`lint_follows_stale`
+/// and `lint_follows_stale_lock`), which read `nested_inputs`. `None` skips
+/// them and `nested_inputs` is ignored.
+pub(crate) fn validate_full_with_lock_graph(
     parsed: &ParsedSource,
     inputs: &InputMap,
-    lock: Option<&FlakeLock>,
+    lock_graph: Option<&FollowsGraph>,
+    nested_inputs: &[NestedInput],
 ) -> ValidationResult {
     let mut errors: Vec<ValidationError> = Vec::new();
     let mut warnings: Vec<ValidationError> = Vec::new();
     syntax::collect_with_parsed(parsed, &mut errors);
-    let graph = follows::build_graph(inputs, lock, DEFAULT_MAX_DEPTH);
-    run_follows_lints(parsed, inputs, &graph, lock, &mut errors, &mut warnings);
+    let graph = follows::build_graph_with_lock_graph(inputs, lock_graph, DEFAULT_MAX_DEPTH);
+    let nested = lock_graph.is_some().then_some(nested_inputs);
+    run_follows_lints(parsed, inputs, &graph, nested, &mut errors, &mut warnings);
     ValidationResult { errors, warnings }
 }
 
 /// Run every follows-graph lint and route results into `errors`/`warnings` by
-/// severity. `flake_lock` enables the lock-drift lints (stale and stale-lock);
-/// pass `None` to skip them.
+/// severity. `nested_inputs` enables the lock-drift lints (stale and
+/// stale-lock); pass `None` to skip them.
 fn run_follows_lints(
     parsed: &ParsedSource,
     inputs: &InputMap,
     graph: &FollowsGraph,
-    flake_lock: Option<&FlakeLock>,
+    nested_inputs: Option<&[NestedInput]>,
     errors: &mut Vec<ValidationError>,
     warnings: &mut Vec<ValidationError>,
 ) {
@@ -129,11 +148,11 @@ fn run_follows_lints(
 
     let mut candidates: Vec<ValidationError> = Vec::new();
     candidates.extend(follows::lint_follows_cycle(graph, &offset_to_location));
-    if let Some(lock) = flake_lock {
+    if let Some(nested) = nested_inputs {
         candidates.extend(follows::lint_follows_stale(graph, &offset_to_location));
         candidates.extend(follows::lint_follows_stale_lock(
             graph,
-            lock,
+            nested,
             &offset_to_location,
         ));
     }

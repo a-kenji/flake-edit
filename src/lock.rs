@@ -427,6 +427,16 @@ fn indirect_flake_url(id: &str, ref_field: Option<&str>) -> String {
     }
 }
 
+// Per-thread `nested_inputs` call counter. A `follow` invocation must walk
+// the immutable lockfile once and thread the result through every consumer;
+// tests reset this and assert the walk count. Thread-local so parallel test
+// threads do not contend.
+#[cfg(test)]
+thread_local! {
+    pub(crate) static NESTED_INPUTS_CALLS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
 impl FlakeLock {
     const LOCK: &'static str = "flake.lock";
 
@@ -568,6 +578,9 @@ impl FlakeLock {
     ///
     /// Output is sorted by path for stable emission order.
     pub fn nested_inputs(&self) -> Vec<NestedInput> {
+        #[cfg(test)]
+        NESTED_INPUTS_CALLS.with(|c| c.set(c.get() + 1));
+
         let mut inputs = Vec::new();
         let Some(root_node) = self.nodes.get(&self.root) else {
             return inputs;

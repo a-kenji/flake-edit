@@ -20,7 +20,7 @@ use crate::validate;
 
 use super::super::super::editor::Editor;
 use super::super::super::state::AppState;
-use super::super::{Error, Result, load_flake_lock};
+use super::super::{Error, Result};
 use super::load_follow_context;
 
 const SENTINEL_ALREADY_DEDUPLICATED: &str = "All inputs are already deduplicated.";
@@ -53,7 +53,10 @@ pub fn run_in_memory(
     }
 
     let top_level_inputs: HashSet<String> = inputs.keys().cloned().collect();
-    let graph = FollowsGraph::from_flake(&inputs, &lock);
+    // One [`FlakeLock::nested_inputs`] walk (above) feeds the lock graph and
+    // every downstream consumer.
+    let lock_graph = FollowsGraph::from_nested_inputs(&nested_inputs);
+    let graph = FollowsGraph::from_declared_and_lock_graph(&inputs, &lock_graph);
     let Some(plan) = build_plan(
         flake_text,
         &nested_inputs,
@@ -65,7 +68,7 @@ pub fn run_in_memory(
         return Ok(None);
     };
 
-    let applied = apply_plan_text(flake_text, Some(&lock), &inputs, &plan)?;
+    let applied = apply_plan_text(flake_text, &inputs, &nested_inputs, &lock_graph, &plan)?;
     Ok((applied.current_text != flake_text).then_some(applied.current_text))
 }
 
@@ -242,16 +245,11 @@ fn run_impl(
         return Ok(());
     };
 
-    // Two graphs serve two questions. `graph` (lock-augmented) answers
-    // "would proposing edge X create a cycle, and which existing edges are
-    // stale?". That needs the full resolved view. `existing_follows`
-    // (declared-only) answers "is this nested input already followed in
-    // flake.nix?". Emission must not be suppressed for an edge that the
+    let lock_graph = FollowsGraph::from_nested_inputs(&ctx.nested_inputs);
+
+    // Emission must not be suppressed for an edge that the
     // lock resolved but the source never declared.
-    let graph = match load_flake_lock(state) {
-        Ok(lock) => FollowsGraph::from_flake(&ctx.inputs, &lock),
-        Err(_) => FollowsGraph::from_declared(&ctx.inputs),
-    };
+    let graph = FollowsGraph::from_declared_and_lock_graph(&ctx.inputs, &lock_graph);
 
     let Some(plan) = build_plan(
         &editor.text(),
@@ -267,7 +265,7 @@ fn run_impl(
         return Ok(());
     };
 
-    let applied = apply_plan(editor, state, &ctx.inputs, &plan)?;
+    let applied = apply_plan(editor, &ctx.inputs, &ctx.nested_inputs, &lock_graph, &plan)?;
     render_summary(editor, state, &applied, quiet)
 }
 
@@ -931,12 +929,12 @@ fn scrub_redundant(graph: &FollowsGraph, plan: &mut FollowPlan) {
 /// offending change.
 fn apply_plan(
     editor: &Editor,
-    state: &AppState,
     inputs: &crate::edit::InputMap,
+    nested_inputs: &[NestedInput],
+    lock_graph: &FollowsGraph,
     plan: &FollowPlan,
 ) -> Result<AppliedPlan> {
-    let batch_lock: Option<FlakeLock> = load_flake_lock(state).ok();
-    apply_plan_text(&editor.text(), batch_lock.as_ref(), inputs, plan)
+    apply_plan_text(&editor.text(), inputs, nested_inputs, lock_graph, plan)
 }
 
 /// Pairing `current_text` with its `ParsedSource` lets each iteration
@@ -1003,20 +1001,15 @@ impl PlanState {
 
 fn apply_plan_text(
     original_text: &str,
-    batch_lock: Option<&FlakeLock>,
     inputs: &crate::edit::InputMap,
+    nested_inputs: &[NestedInput],
+    lock_graph: &FollowsGraph,
     plan: &FollowPlan,
 ) -> Result<AppliedPlan> {
-    let mut warnings: Vec<validate::ValidationError> = Vec::new();
-
-    // Lock-drift lints fire only on the pre-batch text. Mid-batch they would
-    // flag every in-progress edit as drift against the on-disk lockfile.
-    let pre_validation = validate::validate_full(original_text, inputs, batch_lock);
-    warnings.extend(pre_validation.warnings);
-
     // Each accepted change replaces `current_parsed` with the post-edit
     // [`validate::ParsedSource`], so the next iteration's walker and
-    // validation share a single rnix parse of the new text.
+    // validation share a single rnix parse of the new text. The pre-batch
+    // validation below reuses this same parse.
     let current_parsed = validate::ParsedSource::new(original_text);
     if !current_parsed.parse_errors.is_empty() {
         return Err(Error::Flake(crate::error::Error::Validation(
@@ -1024,10 +1017,22 @@ fn apply_plan_text(
         )));
     }
 
-    // The lockfile is fixed for the batch, so build its graph once and let
-    // each [`validate::validate_speculative_parsed`] call clone-and-merge.
-    let lock_graph: Option<FollowsGraph> = batch_lock.map(FollowsGraph::from_lock);
-    let lock_graph_ref = lock_graph.as_ref();
+    let mut warnings: Vec<validate::ValidationError> = Vec::new();
+
+    // Lock-drift lints fire only on the pre-batch text. Mid-batch they would
+    // flag every in-progress edit as drift against the on-disk lockfile. The
+    // prebuilt `lock_graph` and `nested_inputs` avoid re-walking `flake.lock`.
+    let pre_validation = validate::validate_full_with_lock_graph(
+        &current_parsed,
+        inputs,
+        Some(lock_graph),
+        nested_inputs,
+    );
+    warnings.extend(pre_validation.warnings);
+
+    // Each [`validate::validate_speculative_parsed`] call clone-and-merges the
+    // shared `lock_graph`.
+    let lock_graph_ref = Some(lock_graph);
 
     let mut state = PlanState {
         current_text: original_text.to_owned(),
@@ -1512,6 +1517,58 @@ mod tests {
         let collected: Vec<&std::path::PathBuf> = failures.iter().map(|(p, _)| p).collect();
         assert!(collected.contains(&&missing_a));
         assert!(collected.contains(&&missing_b));
+    }
+
+    /// A single `follow` invocation walks the immutable `flake.lock` exactly
+    /// once. `crane.nixpkgs` is a separate `nixpkgs` copy, so the planner
+    /// emits `crane.nixpkgs -> nixpkgs` and the full apply path runs,
+    /// exercising discovery, lock-drift validation, and the per-step
+    /// speculative checks from one shared lock walk.
+    #[test]
+    fn follow_walks_lockfile_once_per_invocation() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    crane.url = "github:ipetkov/crane";
+  };
+  outputs = { ... }: { };
+}
+"#;
+        let lock = r#"{
+  "nodes": {
+    "nixpkgs": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "nixos", "repo": "nixpkgs", "rev": "aaa", "type": "github" },
+      "original": { "owner": "nixos", "repo": "nixpkgs", "type": "github" }
+    },
+    "nixpkgs_2": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "nixos", "repo": "nixpkgs", "rev": "bbb", "type": "github" },
+      "original": { "owner": "nixos", "repo": "nixpkgs", "type": "github" }
+    },
+    "crane": {
+      "inputs": { "nixpkgs": "nixpkgs_2" },
+      "locked": { "lastModified": 1, "narHash": "", "owner": "ipetkov", "repo": "crane", "rev": "ccc", "type": "github" },
+      "original": { "owner": "ipetkov", "repo": "crane", "type": "github" }
+    },
+    "root": {
+      "inputs": { "nixpkgs": "nixpkgs", "crane": "crane" }
+    }
+  },
+  "root": "root",
+  "version": 7
+}"#;
+
+        crate::lock::NESTED_INPUTS_CALLS.with(|c| c.set(0));
+        let out = run_in_memory(flake, lock, &FollowConfig::default()).expect("run_in_memory");
+        let walks = crate::lock::NESTED_INPUTS_CALLS.with(|c| c.get());
+
+        assert!(
+            out.is_some(),
+            "fixture must produce a dedup so the apply path runs; got no change",
+        );
+        assert_eq!(
+            walks, 1,
+            "nested_inputs must be walked exactly once per follow invocation, got {walks}",
+        );
     }
 
     fn nested_input(path: &str, follows: Option<&str>, url: Option<&str>) -> NestedInput {
