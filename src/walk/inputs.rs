@@ -13,7 +13,7 @@ use super::node::{
     insertion_index_after, is_attrset_content_empty, last_line_with_newline, make_attrset_url_attr,
     make_attrset_url_flake_false_attr, make_flake_false_attr, make_quoted_string, make_url_attr,
     parse_node, remove_child_with_whitespace, should_remove_input, should_remove_nested_input,
-    substitute_child, uses_attrset_style,
+    substitute_child, trailing_inline_comment_indices, uses_attrset_style,
 };
 
 /// Insert or update `inputs[id]` from a parsed `Input`.
@@ -533,11 +533,15 @@ fn handle_child_attrpath_value(
             .green()
             .replace_child(child.index(), replacement.green().into());
 
-        // Strip adjacent whitespace when the child was removed outright.
-        if replacement.text().is_empty()
-            && let Some(ws_index) = adjacent_whitespace_index(child)
-        {
-            green = green.remove_child(ws_index);
+        if replacement.text().is_empty() {
+            let mut to_remove = trailing_inline_comment_indices(child);
+            if let Some(ws_index) = adjacent_whitespace_index(child) {
+                to_remove.push(ws_index);
+            }
+            to_remove.sort_unstable();
+            for idx in to_remove.into_iter().rev() {
+                green = green.remove_child(idx);
+            }
         }
         return Some(SyntaxNode::new_root(green));
     }
@@ -1462,7 +1466,7 @@ fn handle_input_attr_set(
 
                 let children: Vec<_> = child.children().collect();
                 if let Some(last_child) = children.last() {
-                    let insert_index = last_child.index() + 1;
+                    let insert_index = insertion_index_after(last_child);
 
                     let mut green = child
                         .green()

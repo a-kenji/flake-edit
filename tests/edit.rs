@@ -310,6 +310,54 @@ fn test_change_url(#[case] fixture: &str, #[case] input_id: &str, #[case] new_ur
     });
 }
 
+/// A trailing `# comment` after the removed statement's semicolon belongs to
+/// that line. Removing the input must drop the comment too, not move it onto
+/// the surviving sibling above.
+#[test]
+fn remove_drops_trailing_comment_with_its_statement() {
+    let content = load_flake("trailing_comment_on_removed_input");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let change = Change::Remove {
+        ids: vec![flake_edit::change::ChangeId::parse("drop").unwrap()],
+    };
+    let result = flake_edit.apply_change(change).unwrap().text.unwrap();
+    let expected = r#"{
+  inputs = {
+    keep.url = "github:owner/keep"; # keep me here
+    after.url = "github:owner/after";
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+    assert_eq!(result, expected);
+}
+
+/// Inserting a follows after the last attribute of a block must land after a
+/// trailing `# comment` on that attribute, leaving the comment on its original
+/// statement rather than reattaching to the new follows line.
+#[test]
+fn add_follow_keeps_trailing_comment_on_sibling_attr() {
+    let content = load_flake("trailing_comment_on_sibling_attr");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let change = Change::Follows {
+        input: flake_edit::change::ChangeId::parse("dep.nixpkgs").unwrap(),
+        target: flake_edit::follows::AttrPath::parse("nixpkgs").unwrap(),
+    };
+    let result = flake_edit.apply_change(change).unwrap().text.unwrap();
+    let expected = r#"{
+  inputs = {
+    dep = {
+      url = "github:owner/dep";
+      flake = false; # just data, not a flake
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+    assert_eq!(result, expected);
+}
+
 #[rstest]
 #[case("root", "nonexistent")]
 #[case("completely_flat_toplevel", "nonexistent")]
