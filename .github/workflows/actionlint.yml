@@ -12,6 +12,10 @@ on:
       - '**.md'
   merge_group:
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   actionlint:
     runs-on: ubuntu-latest
@@ -26,8 +30,8 @@ jobs:
         name: kenji
         # If you chose API tokens for write access OR if you have a private cache
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-    - uses: DeterminateSystems/magic-nix-cache-action@v14
+    - uses: Mic92/hestia/action@main
       with:
-        diagnostic-endpoint: ""
+        version: v0.1.0-alpha.8
     - name: "actionlint"
       run: nix run -Lv --refresh --inputs-from .# nixpkgs#actionlint -- --ignore SC2002

@@ -6,6 +6,9 @@ on:
   push:
     branches: [main]
   merge_group:
+permissions:
+  contents: read
+  actions: write
 jobs:
   dependencies:
     runs-on: ubuntu-latest
@@ -22,9 +25,9 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - uses: DeterminateSystems/magic-nix-cache-action@v14
+      - uses: Mic92/hestia/action@main
         with:
-          diagnostic-endpoint: ""
+          version: v0.1.0-alpha.8
       - name: "build dependencies"
         run: nix build .#checks.x86_64-linux.cargoArtifacts -Lvv --no-update-lock-file
   formatting:
@@ -42,9 +45,9 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - uses: DeterminateSystems/magic-nix-cache-action@v14
+      - uses: Mic92/hestia/action@main
         with:
-          diagnostic-endpoint: ""
+          version: v0.1.0-alpha.8
       - name: "check formatting"
         run: nix build .#checks.x86_64-linux.treefmt -Lvv --no-update-lock-file
   tests:
@@ -63,9 +66,9 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - uses: DeterminateSystems/magic-nix-cache-action@v14
+      - uses: Mic92/hestia/action@main
         with:
-          diagnostic-endpoint: ""
+          version: v0.1.0-alpha.8
       - name: "run tests"
         run: nix build .#checks.x86_64-linux.cargoTest -Lvv --no-update-lock-file
   docs:
@@ -84,9 +87,9 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - uses: DeterminateSystems/magic-nix-cache-action@v14
+      - uses: Mic92/hestia/action@main
         with:
-          diagnostic-endpoint: ""
+          version: v0.1.0-alpha.8
       - name: "build cargo documentation"
         run: nix build .#checks.x86_64-linux.cargoDoc -Lvv --no-update-lock-file
   clippy:
@@ -105,9 +108,9 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - uses: DeterminateSystems/magic-nix-cache-action@v14
+      - uses: Mic92/hestia/action@main
         with:
-          diagnostic-endpoint: ""
+          version: v0.1.0-alpha.8
       - name: "run cargo clippy"
         run: nix build .#checks.x86_64-linux.cargoClippy -Lvv --no-update-lock-file
   flake-edit:
@@ -126,9 +129,9 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - uses: DeterminateSystems/magic-nix-cache-action@v14
+      - uses: Mic92/hestia/action@main
         with:
-          diagnostic-endpoint: ""
+          version: v0.1.0-alpha.8
       - name: "build flake-edit"
         run: nix build .#default -Lvv --no-update-lock-file
   nixos-test:
@@ -147,9 +150,9 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - uses: DeterminateSystems/magic-nix-cache-action@v14
+      - uses: Mic92/hestia/action@main
         with:
-          diagnostic-endpoint: ""
+          version: v0.1.0-alpha.8
       - name: "nixos-test"
         run: nix build .#checks.x86_64-linux.forge -Lvv --no-update-lock-file
   devshells:
@@ -168,9 +171,9 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - uses: DeterminateSystems/magic-nix-cache-action@v14
+      - uses: Mic92/hestia/action@main
         with:
-          diagnostic-endpoint: ""
+          version: v0.1.0-alpha.8
       - name: "build devshells"
         run: nix develop .#full -Lvv --no-update-lock-file
   all:
