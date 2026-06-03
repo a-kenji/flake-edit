@@ -1,0 +1,19 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/let_wrapped.flake.nix"
+    - list
+    - "--format"
+    - json
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+{"inputs":{"nixpkgs":{"id":"nixpkgs","url":"github:nixos/nixpkgs","flake":true}},"follows":[]}
+
+----- stderr -----

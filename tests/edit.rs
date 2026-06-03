@@ -448,6 +448,47 @@ fn follows_fill_empty_block_is_idempotent() {
 }
 
 #[test]
+fn list_reports_inputs_in_let_wrapped_flake() {
+    // A flake whose root expression is `let ... in { ... }` keeps its
+    // inputs in the `in` body. The walker must descend past the let
+    // bindings to find them, otherwise it reports zero inputs.
+    let content = load_flake("let_wrapped");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let inputs = flake_edit.list();
+    assert!(
+        inputs.contains_key("nixpkgs"),
+        "let-wrapped flake should report its `nixpkgs` input, got: {:?}",
+        inputs.keys().collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn add_reaches_body_of_let_wrapped_flake() {
+    // `add` on a let-wrapped flake must reach the body attrset rather
+    // than erroring on the `let` bindings at the top level.
+    let content = load_flake("let_wrapped");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let change = Change::Add {
+        id: Some(flake_edit::change::ChangeId::parse("vmsh").unwrap()),
+        uri: Some("github:mic92/vmsh".to_owned()),
+        flake: true,
+    };
+    let text = flake_edit
+        .apply_change(change)
+        .expect("add on a let-wrapped flake must not error at the top level")
+        .text
+        .expect("add must produce changed text");
+    assert!(
+        text.contains("vmsh"),
+        "added input should appear in the body, got:\n{text}"
+    );
+    assert!(
+        text.contains("system = \"x86_64-linux\""),
+        "the `let` binding must be preserved, got:\n{text}"
+    );
+}
+
+#[test]
 fn follows_merges_into_existing_inputs_block() {
     let content = load_flake("inputs_block_with_follows");
     let mut flake_edit = FlakeEdit::from_text(&content).unwrap();

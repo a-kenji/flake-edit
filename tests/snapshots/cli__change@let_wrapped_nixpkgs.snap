@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/let_wrapped.flake.nix"
+    - "--diff"
+    - change
+    - nixpkgs
+    - "github:nixos/nixpkgs/nixos-24.05"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -1,6 +1,6 @@
+ let
+   system = "x86_64-linux";
+ in {
+-  inputs.nixpkgs.url = "github:nixos/nixpkgs";
++  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+   outputs = { self, nixpkgs }: { };
+ }
+
+----- stderr -----

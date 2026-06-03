@@ -65,6 +65,7 @@ fn stderr_path_filters(settings: &mut insta::Settings) {
 #[case("first_nested_node")]
 #[case("deeply_nested_inputs")]
 #[case("follows_cycle")]
+#[case("let_wrapped")]
 fn test_list(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -78,6 +79,9 @@ fn test_list(#[case] fixture: &str) {
 #[case("root", "simple")]
 #[case("root", "toplevel")]
 #[case("root", "json")]
+#[case("let_wrapped", "simple")]
+#[case("let_wrapped", "toplevel")]
+#[case("let_wrapped", "json")]
 fn test_list_format(#[case] fixture: &str, #[case] format: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -123,6 +127,7 @@ fn list_format_invalid_value_rejected_at_parse_time() {
 #[case("comments_before_brace", "vmsh", "github:mic92/vmsh")]
 #[case("all_blanks", "vmsh", "github:mic92/vmsh")]
 #[case("deeply_nested_inputs", "vmsh", "github:mic92/vmsh")]
+#[case("let_wrapped", "vmsh", "github:mic92/vmsh")]
 fn test_add(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -244,6 +249,7 @@ fn test_add_infer_id(#[case] fixture: &str) {
 #[case("root", "rust-overlay")]
 #[case("outputs_leading_comma_remove_first", "nixpkgs-unstable")]
 #[case("remove_preserves_sibling_url", "home-manager")]
+#[case("let_wrapped", "nixpkgs")]
 fn test_remove(#[case] fixture: &str, #[case] id: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -283,6 +289,7 @@ fn test_remove(#[case] fixture: &str, #[case] id: &str) {
 #[case("flat_nested_flat", "nixpkgs", "github:nixos/nixpkgs/nixos-24.05")]
 #[case("first_nested_node", "nixpkgs", "github:nixos/nixpkgs/nixos-24.05")]
 #[case("deeply_nested_inputs", "nixpkgs", "github:nixos/nixpkgs/nixos-24.05")]
+#[case("let_wrapped", "nixpkgs", "github:nixos/nixpkgs/nixos-24.05")]
 fn test_change(#[case] fixture: &str, #[case] id: &str, #[case] uri: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -628,7 +635,9 @@ fn add_follow_accepts_two_segment_dot_path_unchanged() {
 #[case("transitive_grandchild_cycle")] // depth-2 candidate skipped (cycle)
 #[case("transitive_self_named")] // self-named depth-3 follows must round-trip without removal
 #[case("follow_slash_syntax")] // slash-form `follows = "parent/child"` is the alias of `parent.child`
-#[case("nested_depths_with_stale")] // pins the default-unlimited contract: adds depth-2 and depth-3 follows, removes a stale top-level follow
+#[case("nested_depths_with_stale")]
+// pins the default-unlimited contract: adds depth-2 and depth-3 follows, removes a stale top-level follow
+#[case("let_wrapped")] // single input inside a `let ... in` body: follow must descend into the wrapper and report a clean no-op
 fn test_follow(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -1201,6 +1210,7 @@ fn test_follow_current_directory() {
 /// Test that `pin` respects `--lock-file` flag instead of reading `./flake.lock` from CWD.
 #[rstest]
 #[case("root")]
+#[case("let_wrapped")]
 fn test_pin_with_lock_file(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
