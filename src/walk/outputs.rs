@@ -250,10 +250,7 @@ fn remove_output_arg(
         // before us, the comma and whitespace that separated us from
         // the next entry are still ahead and have to be cleared.
         let idx = child.index();
-        loop {
-            let Some(at_idx) = green.children().nth(idx) else {
-                break;
-            };
+        while let Some(at_idx) = green.children().nth(idx) {
             let raw = at_idx.kind().0;
             if raw == SyntaxKind::TOKEN_COMMA as u16 || raw == SyntaxKind::TOKEN_WHITESPACE as u16 {
                 green = green.remove_child(idx);
@@ -296,10 +293,7 @@ fn remove_output_arg(
         // Leading-comma style: the next entry's separator is multi-char
         // (`\n  ,`). Strip the run and put a single space back, otherwise
         // the result starts with `{\n  , next` which is broken syntax.
-        loop {
-            let Some(at_idx) = green.children().nth(idx) else {
-                break;
-            };
+        while let Some(at_idx) = green.children().nth(idx) {
             let raw = at_idx.kind().0;
             if raw == SyntaxKind::TOKEN_WHITESPACE as u16 || raw == SyntaxKind::TOKEN_COMMA as u16 {
                 green = green.remove_child(idx);
