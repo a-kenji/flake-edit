@@ -1383,6 +1383,35 @@ fn fill_empty_inputs_block(
     let entry_indent = format!("\n{parent_attr_indent}  ");
     let closing_indent = format!("\n{parent_attr_indent}");
 
+    // In a comment-only body the leading whitespace is the indent before the
+    // first comment, not the filler between an empty `{ }`. The truly-empty
+    // path below strips that whitespace, which here would fuse the opening
+    // brace onto the comment line. Keep every token and insert just before
+    // the closing brace instead.
+    if inputs_block
+        .children_with_tokens()
+        .any(|t| t.kind() == SyntaxKind::TOKEN_COMMENT)
+    {
+        let mut green = inputs_block.green().into_owned();
+        let brace_index = green
+            .children()
+            .position(|c| c.as_token().map(|t| t.text() == "}").unwrap_or(false))
+            .unwrap_or(green.children().count());
+        let trailing_ws = brace_index > 0
+            && green.children().nth(brace_index - 1).is_some_and(|c| {
+                c.as_token()
+                    .is_some_and(|t| !t.text().is_empty() && t.text().trim().is_empty())
+            });
+        let insert_index = if trailing_ws {
+            brace_index - 1
+        } else {
+            brace_index
+        };
+        green = green.insert_child(insert_index, follows_node.green().into());
+        green = green.insert_child(insert_index, parse_node(&entry_indent).green().into());
+        return SyntaxNode::new_root(green);
+    }
+
     let ws_index = inputs_block
         .children_with_tokens()
         .find(|t| t.kind() == SyntaxKind::TOKEN_WHITESPACE)
@@ -2004,6 +2033,42 @@ mod tests {
             text.contains("flake-edit.inputs.nixpkgs.follows = \"nixpkgs\""),
             "got:\n{text}"
         );
+    }
+
+    #[test]
+    fn apply_follows_into_comment_only_inputs_block_keeps_brace_on_own_line() {
+        let flake = r#"{
+  inputs = {
+    foo = {
+      url = "github:owner/foo";
+      inputs = {
+        # nixpkgs.follows = "nixpkgs";
+      };
+    };
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let change = Change::Follows {
+            input: ChangeId::parse("foo.nixpkgs").unwrap(),
+            target: AttrPath::parse("nixpkgs").unwrap(),
+        };
+        let expected = r#"{
+  inputs = {
+    foo = {
+      url = "github:owner/foo";
+      inputs = {
+        # nixpkgs.follows = "nixpkgs";
+        nixpkgs.follows = "nixpkgs";
+      };
+    };
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        assert_eq!(apply(flake, &change), expected);
     }
 
     #[test]
