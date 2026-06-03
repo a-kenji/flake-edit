@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 use super::error::{Location, ValidationError};
 use crate::edit::InputMap;
 use crate::follows::{AttrPath, Edge, EdgeOrigin, FollowsGraph};
-use crate::lock::FlakeLock;
+use crate::lock::NestedInput;
 
 /// Translate `edge`'s declared range into a 1-indexed [`Location`] via
 /// `offset_to_location`. Resolved (lockfile-only) edges fall back to
@@ -71,11 +71,11 @@ pub(crate) fn lint_follows_stale<F: Fn(usize) -> Location>(
 /// Always [`super::Severity::Warning`]. The remediation is `nix flake lock`.
 pub(crate) fn lint_follows_stale_lock<F: Fn(usize) -> Location>(
     graph: &FollowsGraph,
-    lock: &FlakeLock,
+    nested_inputs: &[NestedInput],
     offset_to_location: &F,
 ) -> Vec<ValidationError> {
     graph
-        .stale_lock_declarations(lock)
+        .stale_lock_declarations(nested_inputs)
         .into_iter()
         .map(|item| ValidationError::FollowsStaleLock {
             source_path: item.declared.source.clone(),
@@ -187,24 +187,11 @@ pub(crate) fn top_level_names(inputs: &InputMap) -> HashSet<String> {
     inputs.keys().cloned().collect()
 }
 
-/// Build the follows graph from declared `flake.nix` edges, plus resolved
-/// edges from `lock` when supplied. With `lock = None` only declared edges
-/// are present and [`FollowsGraph::stale_edges`] reports nothing.
-pub(crate) fn build_graph(
-    inputs: &InputMap,
-    lock: Option<&FlakeLock>,
-    max_depth: usize,
-) -> FollowsGraph {
-    let graph = match lock {
-        Some(lock) => FollowsGraph::from_flake(inputs, lock),
-        None => FollowsGraph::from_declared(inputs),
-    };
-    graph.with_max_depth(max_depth)
-}
-
-/// [`build_graph`] for callers that already hold a lockfile-derived
-/// [`FollowsGraph`] (from [`FollowsGraph::from_lock`]). Skips the recursive
-/// `flake.lock` walk that [`build_graph`] performs each call.
+/// Build the merged follows graph: declared `flake.nix` edges plus the
+/// resolved edges carried by `lock_graph` (from [`FollowsGraph::from_lock`]
+/// or [`FollowsGraph::from_nested_inputs`]) when supplied. With
+/// `lock_graph = None` only declared edges are present and
+/// [`FollowsGraph::stale_edges`] reports nothing.
 pub(crate) fn build_graph_with_lock_graph(
     inputs: &InputMap,
     lock_graph: Option<&FollowsGraph>,
@@ -275,7 +262,7 @@ mod tests {
             "home-manager",
             &[("nixpkgs", "nixpkgs")],
         )]);
-        let graph = build_graph(&inputs, None, 64);
+        let graph = FollowsGraph::from_declared(&inputs).with_max_depth(64);
         let stale = lint_follows_stale(&graph, &loc_id());
         assert_eq!(stale.len(), 1);
     }
@@ -304,7 +291,7 @@ mod tests {
   "version": 7
 }"#;
         let lock = crate::lock::FlakeLock::read_from_str(lock_text).unwrap();
-        let graph = build_graph(&inputs, Some(&lock), 64);
+        let graph = FollowsGraph::from_flake(&inputs, &lock).with_max_depth(64);
         let stale = lint_follows_stale(&graph, &loc_id());
         assert_eq!(stale.len(), 1);
         assert!(matches!(stale[0], ValidationError::FollowsStale { .. }));
@@ -340,8 +327,8 @@ mod tests {
   "version": 7
 }"#;
         let lock = crate::lock::FlakeLock::read_from_str(lock_text).unwrap();
-        let graph = build_graph(&inputs, Some(&lock), 64);
-        let errs = lint_follows_stale_lock(&graph, &lock, &loc_id());
+        let graph = FollowsGraph::from_flake(&inputs, &lock).with_max_depth(64);
+        let errs = lint_follows_stale_lock(&graph, &lock.nested_inputs(), &loc_id());
         assert_eq!(errs.len(), 1);
         match &errs[0] {
             ValidationError::FollowsStaleLock {
