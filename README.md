@@ -433,7 +433,7 @@ Though we are already happy to get feedback.
 
 ## Contributing
 We welcome contributions from the community!
-Check out the [Contributing Guidelines](./doc/CONTRIBUTING.md) on how to get started.
+Check out the [Contributing Guidelines](./docs/CONTRIBUTING.md) on how to get started.
 
 ## Release Notes
 Stay updated with the latest changes by viewing the [Changelog](./CHANGELOG.md).
