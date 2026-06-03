@@ -461,8 +461,12 @@ fn handle_child_ident(
     if child.to_string() == "inputs"
         && let Some(next_sibling) = child_node.next_sibling()
     {
+        // `NODE_STRING` covers quoted key segments like `inputs."master".url`
+        // and `inputs."nixos-24.11".url`, where a dot inside the quotes belongs
+        // to the name rather than separating a path.
+        // `Segment::from_syntax_or_sentinel` unquotes it downstream.
         match next_sibling.kind() {
-            SyntaxKind::NODE_IDENT => {
+            SyntaxKind::NODE_IDENT | SyntaxKind::NODE_STRING => {
                 if let Some(url_id) = next_sibling.next_sibling() {
                     if url_id.kind() == SyntaxKind::NODE_IDENT
                         && let Some(value) = &parent_sibling
