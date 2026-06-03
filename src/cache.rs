@@ -96,7 +96,7 @@ impl Cache {
     /// All cached URIs sorted by descending hit count.
     pub fn list_uris(&self) -> Vec<String> {
         let mut entries: Vec<_> = self.entries.values().collect();
-        entries.sort_by(|a, b| b.hit.cmp(&a.hit));
+        entries.sort_by_key(|b| std::cmp::Reverse(b.hit));
         entries.iter().map(|e| e.uri.clone()).collect()
     }
 
@@ -107,7 +107,7 @@ impl Cache {
     /// `path:` URI for testing).
     pub fn list_uris_for_id(&self, id: &str) -> Vec<String> {
         let mut entries: Vec<_> = self.entries.values().filter(|e| e.id == id).collect();
-        entries.sort_by(|a, b| b.hit.cmp(&a.hit));
+        entries.sort_by_key(|b| std::cmp::Reverse(b.hit));
         entries.iter().map(|e| e.uri.clone()).collect()
     }
 
