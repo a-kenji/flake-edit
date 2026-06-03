@@ -7,6 +7,10 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   editor-config:
     runs-on: ubuntu-latest
@@ -16,9 +20,9 @@ jobs:
       with:
         extra-conf: |
           access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-    - uses: DeterminateSystems/magic-nix-cache-action@v14
+    - uses: Mic92/hestia/action@main
       with:
-        diagnostic-endpoint: ""
+        version: v0.1.0-alpha.8
     - name: "install editorconfig-checker"
       run: nix shell --refresh --inputs-from .# nixpkgs#editorconfig-checker
     - name: Checking EditorConfig
