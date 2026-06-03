@@ -98,21 +98,56 @@ pub(crate) fn insertion_index_after(node: &SyntaxNode) -> usize {
     last_index
 }
 
-/// Remove `node` from `parent` along with any adjacent whitespace token.
+/// Indices of the trailing same-line tokens after `child` (the inline
+/// whitespace and a `# ...` comment that sit on the statement's own line).
+///
+/// Returns an empty vec unless a `TOKEN_COMMENT` trails the statement before
+/// the next newline. A comment on its own line is preceded by a newline-bearing
+/// whitespace token, so the walk stops before reaching it and the comment is
+/// left untouched. The returned indices, together with the removed statement,
+/// keep a trailing comment from moving onto a neighbouring line.
+pub(crate) fn trailing_inline_comment_indices(child: &rnix::SyntaxElement) -> Vec<usize> {
+    let mut pending = Vec::new();
+    let mut cursor = child.next_sibling_or_token();
+    while let Some(tok) = cursor {
+        match tok.kind() {
+            SyntaxKind::TOKEN_WHITESPACE => {
+                if tok.to_string().contains('\n') {
+                    break;
+                }
+                pending.push(tok.index());
+            }
+            SyntaxKind::TOKEN_COMMENT => {
+                pending.push(tok.index());
+                return pending;
+            }
+            _ => break,
+        }
+        cursor = tok.next_sibling_or_token();
+    }
+    Vec::new()
+}
+
+/// Remove `node` from `parent` along with any adjacent whitespace token and a
+/// trailing same-line comment (so the comment does not move onto a neighbour).
 pub(crate) fn remove_child_with_whitespace(
     parent: &SyntaxNode,
     node: &SyntaxNode,
     index: usize,
 ) -> SyntaxNode {
-    let mut green = parent.green().remove_child(index);
     let element: rnix::SyntaxElement = node.clone().into();
+    let mut to_remove = vec![index];
+    to_remove.extend(trailing_inline_comment_indices(&element));
     if let Some(ws_index) = adjacent_whitespace_index(&element) {
-        let adjusted = if ws_index > index {
-            ws_index - 1
-        } else {
-            ws_index
-        };
-        green = green.remove_child(adjusted);
+        to_remove.push(ws_index);
+    }
+    to_remove.sort_unstable();
+
+    // Remove highest index first so earlier indices stay valid against the
+    // original child list.
+    let mut green = parent.green().into_owned();
+    for idx in to_remove.into_iter().rev() {
+        green = green.remove_child(idx);
     }
     SyntaxNode::new_root(green)
 }

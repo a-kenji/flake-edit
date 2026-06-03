@@ -119,6 +119,11 @@ pub(crate) const FIXTURES: &[&str] = &[
     // step. Guards that the planner prints its "nothing to do" sentinel
     // when apply leaves the working text untouched.
     "transitive_with_orphan_follow",
+    // trailing inline `# comment` on a removed input, and on a sibling
+    // attribute that an add-follow inserts after. Both must keep the
+    // comment on its original statement.
+    "trailing_comment_on_removed_input",
+    "trailing_comment_on_sibling_attr",
 ];
 
 /// Create a Walker from a fixture name.
