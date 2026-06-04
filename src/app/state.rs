@@ -5,11 +5,9 @@ use crate::config::{Config, ConfigError};
 
 /// Application state for a flake-edit session.
 ///
-/// Holds the flake content, file paths, and configuration options.
+/// Holds file paths and configuration options.
 #[derive(Debug, Clone)]
 pub struct AppState {
-    /// Content of the flake.nix file
-    pub flake_text: String,
     /// Path to the flake.nix file
     pub flake_path: PathBuf,
     /// Path to the flake.lock file (if specified)
@@ -32,13 +30,8 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(
-        flake_text: String,
-        flake_path: PathBuf,
-        config_path: Option<PathBuf>,
-    ) -> Result<Self, ConfigError> {
+    pub fn new(flake_path: PathBuf, config_path: Option<PathBuf>) -> Result<Self, ConfigError> {
         Ok(Self {
-            flake_text,
             flake_path,
             lock_file: None,
             diff: false,

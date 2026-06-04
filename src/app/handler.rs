@@ -83,7 +83,7 @@ fn setup(args: &CliArgs) -> Result<(Editor, FlakeEdit, AppState)> {
     let flake_edit = editor.create_flake_edit()?;
     let interactive = tui::is_interactive(args.non_interactive());
 
-    let state = AppState::new(editor.text(), flake_path, args.config().map(PathBuf::from))?
+    let state = AppState::new(flake_path, args.config().map(PathBuf::from))?
         .with_diff(args.diff())
         .with_no_lock(args.no_lock())
         .with_interactive(interactive)

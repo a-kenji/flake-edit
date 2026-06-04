@@ -258,21 +258,11 @@ impl AttrPath {
 
     /// Whether `self` is a structural prefix of `other`. A path is its own
     /// prefix.
-    pub fn is_prefix_of(&self, other: &AttrPath) -> bool {
+    pub(crate) fn is_prefix_of(&self, other: &AttrPath) -> bool {
         if self.0.len() > other.0.len() {
             return false;
         }
         self.0.iter().zip(other.0.iter()).all(|(a, b)| a == b)
-    }
-
-    /// If `base` is a strict prefix of `self`, returns the suffix. Returns
-    /// `None` otherwise, including when the paths are equal.
-    pub fn relative_to(&self, base: &AttrPath) -> Option<AttrPath> {
-        if !base.is_prefix_of(self) || base.0.len() == self.0.len() {
-            return None;
-        }
-        let suffix: SmallVec<[Segment; 2]> = self.0[base.0.len()..].iter().cloned().collect();
-        Some(AttrPath(suffix))
     }
 
     /// Parse the right-hand side of a `follows = "..."` binding into a typed
@@ -615,27 +605,6 @@ mod tests {
         let a = AttrPath::parse("a.x").unwrap();
         let b = AttrPath::parse("a.y").unwrap();
         assert!(!a.is_prefix_of(&b));
-    }
-
-    #[test]
-    fn attr_path_relative_to_strict_prefix() {
-        let base = AttrPath::parse("a").unwrap();
-        let path = AttrPath::parse("a.b.c").unwrap();
-        let rel = path.relative_to(&base).unwrap();
-        assert_eq!(format!("{rel}"), "b.c");
-    }
-
-    #[test]
-    fn attr_path_relative_to_equal_returns_none() {
-        let p = AttrPath::parse("a.b").unwrap();
-        assert!(p.relative_to(&p).is_none());
-    }
-
-    #[test]
-    fn attr_path_relative_to_non_prefix_returns_none() {
-        let base = AttrPath::parse("c").unwrap();
-        let path = AttrPath::parse("a.b").unwrap();
-        assert!(path.relative_to(&base).is_none());
     }
 
     #[test]

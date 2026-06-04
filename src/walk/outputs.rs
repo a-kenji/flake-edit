@@ -236,11 +236,7 @@ fn find_pat_entry_by_name(pattern: &SyntaxNode, name: &str) -> Option<SyntaxNode
 /// Remove the `NODE_PAT_ENTRY` whose text equals `name` from `pattern`,
 /// stripping the surrounding comma and whitespace so the result stays
 /// syntactically clean. Returns `None` if no matching entry exists.
-fn remove_output_arg(
-    pattern: &SyntaxNode,
-    name: &str,
-    _style: &PatternStyle,
-) -> Option<SyntaxNode> {
+fn remove_output_arg(pattern: &SyntaxNode, name: &str) -> Option<SyntaxNode> {
     let child = find_pat_entry_by_name(pattern, name)?;
     let mut green = pattern.green().remove_child(child.index());
 
@@ -362,7 +358,7 @@ pub(crate) fn change_outputs(
         let style = PatternStyle::detect(&pattern);
         let new_pattern = match &change {
             OutputChange::Add(name) => Some(add_output_arg(&pattern, name, &style)),
-            OutputChange::Remove(name) => remove_output_arg(&pattern, name, &style),
+            OutputChange::Remove(name) => remove_output_arg(&pattern, name),
             OutputChange::None => None,
         };
         let Some(new_pattern) = new_pattern else {
@@ -572,39 +568,34 @@ mod tests {
     #[test]
     fn remove_output_arg_removes_from_single_line_pattern() {
         let p = pattern_from("{ self, nixpkgs, flake-utils }: {}");
-        let style = PatternStyle::detect(&p);
-        let new_p = remove_output_arg(&p, "flake-utils", &style).expect("entry must be found");
+        let new_p = remove_output_arg(&p, "flake-utils").expect("entry must be found");
         assert_eq!(new_p.to_string(), "{ self, nixpkgs }");
     }
 
     #[test]
     fn remove_output_arg_returns_none_for_missing_entry() {
         let p = pattern_from("{ self, nixpkgs }: {}");
-        let style = PatternStyle::detect(&p);
-        assert!(remove_output_arg(&p, "flake-utils", &style).is_none());
+        assert!(remove_output_arg(&p, "flake-utils").is_none());
     }
 
     #[test]
     fn remove_output_arg_removes_from_multiline_trailing_comma_style() {
         let p = pattern_from("{\n  self,\n  nixpkgs,\n  flake-utils,\n}: {}");
-        let style = PatternStyle::detect(&p);
-        let new_p = remove_output_arg(&p, "flake-utils", &style).expect("entry must be found");
+        let new_p = remove_output_arg(&p, "flake-utils").expect("entry must be found");
         assert_eq!(new_p.to_string(), "{\n  self,\n  nixpkgs,\n}");
     }
 
     #[test]
     fn remove_output_arg_removes_from_multiline_no_trailing_comma_style() {
         let p = pattern_from("{\n  self,\n  nixpkgs,\n  flake-utils\n}: {}");
-        let style = PatternStyle::detect(&p);
-        let new_p = remove_output_arg(&p, "flake-utils", &style).expect("entry must be found");
+        let new_p = remove_output_arg(&p, "flake-utils").expect("entry must be found");
         assert_eq!(new_p.to_string(), "{\n  self,\n  nixpkgs\n}");
     }
 
     #[test]
     fn remove_output_arg_removes_from_leading_comma_style() {
         let p = pattern_from("{ self\n, nixpkgs\n, flake-utils\n}: {}");
-        let style = PatternStyle::detect(&p);
-        let new_p = remove_output_arg(&p, "flake-utils", &style).expect("entry must be found");
+        let new_p = remove_output_arg(&p, "flake-utils").expect("entry must be found");
         assert_eq!(new_p.to_string(), "{ self\n, nixpkgs\n}");
     }
 
@@ -614,8 +605,7 @@ mod tests {
         // the `!prev_is_ws` branch where the comma+whitespace sit
         // forward of the removed entry.
         let p = pattern_from("{self, nixpkgs}: {}");
-        let style = PatternStyle::detect(&p);
-        let new_p = remove_output_arg(&p, "self", &style).expect("entry must be found");
+        let new_p = remove_output_arg(&p, "self").expect("entry must be found");
         assert_eq!(new_p.to_string(), "{nixpkgs}");
     }
 
@@ -625,8 +615,7 @@ mod tests {
         // first-entry branch where `next_is_ws` is false and only the
         // lone trailing comma needs to go.
         let p = pattern_from("{ self, nixpkgs }: {}");
-        let style = PatternStyle::detect(&p);
-        let new_p = remove_output_arg(&p, "self", &style).expect("entry must be found");
+        let new_p = remove_output_arg(&p, "self").expect("entry must be found");
         assert_eq!(new_p.to_string(), "{ nixpkgs }");
     }
 
@@ -636,8 +625,7 @@ mod tests {
         // strips the next entry's `\n  ,` separator and re-inserts a
         // single space so the result still parses.
         let p = pattern_from("{ self\n, nixpkgs\n, flake-utils\n}: {}");
-        let style = PatternStyle::detect(&p);
-        let new_p = remove_output_arg(&p, "self", &style).expect("entry must be found");
+        let new_p = remove_output_arg(&p, "self").expect("entry must be found");
         assert_eq!(new_p.to_string(), "{ nixpkgs\n, flake-utils\n}");
     }
 }

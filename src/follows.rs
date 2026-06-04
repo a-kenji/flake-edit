@@ -9,6 +9,6 @@ pub mod path;
 
 pub use graph::{
     Cycle, DEFAULT_MAX_DEPTH, Edge, EdgeOrigin, FollowsGraph, StaleLockDeclaration,
-    TransitiveGroup, is_follows_reference_to_parent,
+    is_follows_reference_to_parent,
 };
 pub use path::{AttrPath, AttrPathParseError, Segment, SegmentError, strip_outer_quotes};

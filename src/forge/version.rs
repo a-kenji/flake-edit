@@ -59,27 +59,6 @@ pub fn is_downgrade(current: &str, proposed: &str) -> bool {
     }
 }
 
-/// Pick the highest-precedence tag from `tags` under semver ordering.
-///
-/// Each input is normalised through [`parse_ref`] and parsed as a
-/// [`semver::Version`]; inputs that fail to parse are filtered out.
-/// The original tag string is returned, not the normalised form, so
-/// the caller can write it back to `flake.nix` verbatim.
-///
-/// Returns `None` when `tags` is empty or every entry fails to parse.
-pub fn select_latest_tag<S: AsRef<str>>(tags: &[S]) -> Option<String> {
-    tags.iter()
-        .filter_map(|name| {
-            let raw = name.as_ref();
-            let parsed = parse_ref(raw, false);
-            semver::Version::parse(&parsed.normalized_for_semver)
-                .ok()
-                .map(|v| (v, raw.to_string()))
-        })
-        .max_by(|a, b| a.0.cmp_precedence(&b.0))
-        .map(|(_, original)| original)
-}
-
 /// Normalise `raw` into a [`ParsedRef`] for semver comparison.
 ///
 /// Strips `refs/tags/` and then any non-digit scheme prefix that
@@ -260,41 +239,6 @@ mod tests {
     #[test]
     fn default_refs_tags_prefix_persists_without_refs_tags_string() {
         check("1.2.3", true, "1.2.3", "1.2.3", true);
-    }
-
-    #[test]
-    fn select_latest_picks_highest_hl_prefixed_tag() {
-        let tags = [
-            "hl0.47.0-1",
-            "hl0.46.0-1",
-            "hl0.45.0-1",
-            "hl0.44.0-1",
-            "hl0.43.0-1",
-            "hl0.42.0-1",
-            "hl0.41.0-1",
-            "hl0.40.0-1",
-            "hl0.33.0-1",
-            "hl0.21.0-1",
-        ];
-        assert_eq!(select_latest_tag(&tags), Some("hl0.47.0-1".to_string()));
-    }
-
-    #[test]
-    fn select_latest_handles_standard_v_prefix() {
-        let tags = ["v1.0.0", "v2.0.0", "v1.5.0"];
-        assert_eq!(select_latest_tag(&tags), Some("v2.0.0".to_string()));
-    }
-
-    #[test]
-    fn select_latest_returns_none_for_empty_list() {
-        let tags: [&str; 0] = [];
-        assert_eq!(select_latest_tag(&tags), None);
-    }
-
-    #[test]
-    fn select_latest_handles_release_dash_prefix() {
-        let tags = ["release-1.0.0", "release-2.0.0", "release-1.5.0"];
-        assert_eq!(select_latest_tag(&tags), Some("release-2.0.0".to_string()));
     }
 
     #[test]

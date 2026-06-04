@@ -18,7 +18,7 @@ use crate::lock::NestedInput;
 fn edge_location<F: Fn(usize) -> Location>(edge: &Edge, offset_to_location: &F) -> Location {
     match &edge.origin {
         EdgeOrigin::Declared { range } => offset_to_location(range.start),
-        EdgeOrigin::Resolved { .. } => Location { line: 1, column: 1 },
+        EdgeOrigin::Resolved => Location { line: 1, column: 1 },
     }
 }
 
