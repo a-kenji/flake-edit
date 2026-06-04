@@ -26,8 +26,6 @@ jobs:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia/action@main
-        with:
-          version: v0.1.0-alpha.8
       - name: "build dependencies"
         run: nix build .#checks.x86_64-linux.cargoArtifacts -Lvv --no-update-lock-file
   formatting:
@@ -46,8 +44,6 @@ jobs:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia/action@main
-        with:
-          version: v0.1.0-alpha.8
       - name: "check formatting"
         run: nix build .#checks.x86_64-linux.treefmt -Lvv --no-update-lock-file
   tests:
@@ -67,8 +63,6 @@ jobs:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia/action@main
-        with:
-          version: v0.1.0-alpha.8
       - name: "run tests"
         run: nix build .#checks.x86_64-linux.cargoTest -Lvv --no-update-lock-file
   docs:
@@ -88,8 +82,6 @@ jobs:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia/action@main
-        with:
-          version: v0.1.0-alpha.8
       - name: "build cargo documentation"
         run: nix build .#checks.x86_64-linux.cargoDoc -Lvv --no-update-lock-file
   clippy:
@@ -109,8 +101,6 @@ jobs:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia/action@main
-        with:
-          version: v0.1.0-alpha.8
       - name: "run cargo clippy"
         run: nix build .#checks.x86_64-linux.cargoClippy -Lvv --no-update-lock-file
   flake-edit:
@@ -130,8 +120,6 @@ jobs:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia/action@main
-        with:
-          version: v0.1.0-alpha.8
       - name: "build flake-edit"
         run: nix build .#default -Lvv --no-update-lock-file
   nixos-test:
@@ -151,8 +139,6 @@ jobs:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia/action@main
-        with:
-          version: v0.1.0-alpha.8
       - name: "nixos-test"
         run: nix build .#checks.x86_64-linux.forge -Lvv --no-update-lock-file
   devshells:
@@ -172,8 +158,6 @@ jobs:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia/action@main
-        with:
-          version: v0.1.0-alpha.8
       - name: "build devshells"
         run: nix develop .#full -Lvv --no-update-lock-file
   all:

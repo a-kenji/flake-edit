@@ -21,8 +21,6 @@ jobs:
         extra-conf: |
           access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
     - uses: Mic92/hestia/action@main
-      with:
-        version: v0.1.0-alpha.8
     - name: "install editorconfig-checker"
       run: nix shell --refresh --inputs-from .# nixpkgs#editorconfig-checker
     - name: Checking EditorConfig
