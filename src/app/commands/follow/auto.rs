@@ -23,11 +23,54 @@ use super::super::super::state::AppState;
 use super::super::{Error, Result};
 use super::load_follow_context;
 
+mod stats;
+
 const SENTINEL_ALREADY_DEDUPLICATED: &str = "All inputs are already deduplicated.";
 
+/// How `flake-edit follow` should report its work.
+///
+/// `Plain` keeps the historical behavior. `Stats` augments the success
+/// summary with size estimates and an extra "already deduplicated"
+/// section sourced from `flake.lock`. `DryRun` is `Stats` plus a
+/// guarantee that `flake.nix` is not written, with "Would deduplicate"
+/// framing instead of past tense.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReportMode {
+    Plain,
+    Stats,
+    DryRun,
+}
+
+impl ReportMode {
+    /// Resolve the CLI flag pair to a single mode. `--dry-run` implies
+    /// `--stats`, so the precedence is `DryRun > Stats > Plain`.
+    pub fn from_flags(stats: bool, dry_run: bool) -> Self {
+        if dry_run {
+            Self::DryRun
+        } else if stats {
+            Self::Stats
+        } else {
+            Self::Plain
+        }
+    }
+
+    fn includes_stats(self) -> bool {
+        matches!(self, Self::Stats | Self::DryRun)
+    }
+
+    fn is_dry_run(self) -> bool {
+        matches!(self, Self::DryRun)
+    }
+}
+
 /// Entry point for `flake-edit follow` on a single in-memory flake.
-pub fn run(editor: &Editor, flake_edit: &mut FlakeEdit, state: &AppState) -> Result<()> {
-    run_impl(editor, flake_edit, state, false)
+pub fn run(
+    editor: &Editor,
+    flake_edit: &mut FlakeEdit,
+    state: &AppState,
+    report: ReportMode,
+) -> Result<()> {
+    run_impl(editor, flake_edit, state, false, report)
 }
 
 /// Run auto-follow against in-memory text.
@@ -81,6 +124,7 @@ pub fn run_batch(
     paths: &[std::path::PathBuf],
     transitive: Option<usize>,
     depth: Option<usize>,
+    report: ReportMode,
     args: &crate::cli::CliArgs,
 ) -> Result<()> {
     use std::path::PathBuf;
@@ -141,7 +185,15 @@ pub fn run_batch(
             state.config.follow.max_depth = Some(max);
         }
 
-        if let Err(e) = run_impl(&editor, &mut flake_edit, &state, true) {
+        // Batch mode normally runs quiet so per-file headers don't
+        // drown the user. With `--stats` or `--dry-run` the summary
+        // is the output the user asked for, so suppress quietness and
+        // prefix each block with the flake path for orientation.
+        let quiet = !report.includes_stats();
+        if !quiet && paths.len() > 1 {
+            println!("# {}", flake_path.display());
+        }
+        if let Err(e) = run_impl(&editor, &mut flake_edit, &state, quiet, report) {
             errors.push((flake_path.clone(), Box::new(e)));
         }
     }
@@ -237,6 +289,7 @@ fn run_impl(
     flake_edit: &mut FlakeEdit,
     state: &AppState,
     quiet: bool,
+    report: ReportMode,
 ) -> Result<()> {
     let Some(ctx) = load_follow_context(flake_edit, state)? else {
         if !quiet {
@@ -251,6 +304,16 @@ fn run_impl(
     // lock resolved but the source never declared.
     let graph = FollowsGraph::from_declared_and_lock_graph(&ctx.inputs, &lock_graph);
 
+    // Two `nix` calls per command map the input tree to NAR sizes;
+    // tests bypass this via FE_FOLLOW_SIZE_FIXTURE. Plain mode never
+    // looks at sizes, so skip the query entirely.
+    let input_sizes = if report.includes_stats() {
+        crate::lock::sizes::InputSizes::for_flake(&state.flake_path)
+            .unwrap_or_else(crate::lock::sizes::InputSizes::empty)
+    } else {
+        crate::lock::sizes::InputSizes::empty()
+    };
+
     let Some(plan) = build_plan(
         &editor.text(),
         &ctx.nested_inputs,
@@ -261,12 +324,27 @@ fn run_impl(
     ) else {
         if !quiet {
             println!("{SENTINEL_ALREADY_DEDUPLICATED}");
+            if report.includes_stats() {
+                stats::render_already_deduplicated(&ctx.nested_inputs, &input_sizes);
+            }
         }
         return Ok(());
     };
 
     let applied = apply_plan(editor, &ctx.inputs, &ctx.nested_inputs, &lock_graph, &plan)?;
-    render_summary(editor, state, &applied, quiet)
+    render_summary(
+        editor,
+        state,
+        &applied,
+        quiet,
+        report,
+        &ctx.nested_inputs,
+        &input_sizes,
+    )?;
+    if !quiet && report.includes_stats() {
+        stats::render_already_deduplicated(&ctx.nested_inputs, &input_sizes);
+    }
+    Ok(())
 }
 
 fn build_plan(
@@ -1157,6 +1235,9 @@ fn render_summary(
     state: &AppState,
     applied: &AppliedPlan,
     quiet: bool,
+    report: ReportMode,
+    nested_inputs: &[NestedInput],
+    sizes: &crate::lock::sizes::InputSizes,
 ) -> Result<()> {
     if !applied.warnings.is_empty() && !quiet {
         let mut seen: HashSet<String> = HashSet::new();
@@ -1175,48 +1256,29 @@ fn render_summary(
         return Ok(());
     }
 
-    if state.diff {
+    let dry_run = report.is_dry_run();
+    let stats = report.includes_stats();
+
+    if state.diff && !dry_run {
         let original = editor.text();
         let diff = crate::diff::Diff::new(&original, &applied.current_text);
         diff.compare();
-        return Ok(());
+        // In plain `--diff` mode the diff is the whole story: callers
+        // (including the existing snapshot tests) expect no further
+        // summary text. Stats and dry-run callers want both, so they
+        // keep flowing through.
+        if !stats {
+            return Ok(());
+        }
+    } else if !dry_run {
+        editor.apply_or_diff(&applied.current_text, state)?;
     }
-
-    editor.apply_or_diff(&applied.current_text, state)?;
 
     if quiet {
         return Ok(());
     }
 
-    if !applied.applied_follows.is_empty() {
-        println!(
-            "Deduplicated {} {}.",
-            applied.applied_follows.len(),
-            if applied.applied_follows.len() == 1 {
-                "input"
-            } else {
-                "inputs"
-            }
-        );
-        for (input_path, target) in &applied.applied_follows {
-            println!("  {} -> {}", input_path, target);
-        }
-    }
-
-    if !applied.unfollowed.is_empty() {
-        println!(
-            "Removed {} stale follows {}.",
-            applied.unfollowed.len(),
-            if applied.unfollowed.len() == 1 {
-                "declaration"
-            } else {
-                "declarations"
-            }
-        );
-        for path in &applied.unfollowed {
-            println!("  {} (input no longer exists)", path);
-        }
-    }
+    stats::render_realized_summary(applied, dry_run, stats, nested_inputs, sizes);
 
     Ok(())
 }
@@ -1497,7 +1559,8 @@ mod tests {
         let paths = vec![missing_a.clone(), missing_b.clone()];
         let args = crate::cli::CliArgs::parse_from(["flake-edit", "follow"]);
 
-        let err = run_batch(&paths, None, None, &args).expect_err("expected batch failure");
+        let err = run_batch(&paths, None, None, ReportMode::Plain, &args)
+            .expect_err("expected batch failure");
         let Error::Batch { failures } = err else {
             panic!("expected Error::Batch, got: {err:?}");
         };

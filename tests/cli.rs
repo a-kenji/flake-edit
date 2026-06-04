@@ -1069,6 +1069,428 @@ fn copy_fixture_to_dir(fixture_name: &str, target_dir: &std::path::Path) {
     fs::copy(&lock_src, target_dir.join("flake.lock")).expect("Failed to copy flake.lock");
 }
 
+/// Write a JSON fixture mapping dotted attribute paths to NAR sizes
+/// in bytes. The size lookup honours `FE_FOLLOW_SIZE_FIXTURE`: when
+/// set, it reads sizes from this file instead of invoking `nix`.
+/// Attribute paths not in the fixture report as `None`, which the
+/// rendering path treats as "size unknown". Each attribute path
+/// becomes its own group in the renderer; for tests that want to
+/// exercise grouping, use [`write_size_fixture_grouped`].
+fn write_size_fixture(dir: &std::path::Path, entries: &[(&str, u64)]) -> std::path::PathBuf {
+    let path = dir.join("sizes.json");
+    let mut map = serde_json::Map::new();
+    for (k, v) in entries {
+        map.insert((*k).to_string(), serde_json::json!(v));
+    }
+    fs::write(&path, serde_json::to_string(&map).unwrap()).expect("write size fixture");
+    path
+}
+
+/// Like [`write_size_fixture`] but every entry carries an explicit
+/// `store_path`. Attribute paths sharing a store path collapse into
+/// one group in the renderer, mirroring what real Nix would
+/// produce for followers that route to the same terminal node.
+fn write_size_fixture_grouped(
+    dir: &std::path::Path,
+    entries: &[(&str, u64, &str)],
+) -> std::path::PathBuf {
+    let path = dir.join("sizes.json");
+    let mut map = serde_json::Map::new();
+    for (attr, size, store_path) in entries {
+        map.insert(
+            (*attr).to_string(),
+            serde_json::json!({
+                "size": size,
+                "store_path": store_path,
+            }),
+        );
+    }
+    fs::write(&path, serde_json::to_string(&map).unwrap()).expect("write size fixture");
+    path
+}
+
+/// centerpiece has two nested inputs that gain a fresh follows
+/// declaration: home-manager.nixpkgs and treefmt-nix.nixpkgs. With
+/// fixture sizes 100 and 150 MiB, the realized-savings header reports
+/// 250 MiB saved with no leading tilde (per the load-bearing rule that
+/// realized savings are concrete, not hypothetical).
+#[test]
+fn test_follow_stats_realized_sizes() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let fixture = write_size_fixture(
+        tmp.path(),
+        &[
+            // Sizes keyed by attribute path. Realized follows look up
+            // their own path (the input the pass is freshly redirecting).
+            ("home-manager.nixpkgs", 100 * 1024 * 1024),
+            ("treefmt-nix.nixpkgs", 150 * 1024 * 1024),
+        ],
+    );
+
+    let output = cli()
+        .env("FE_FOLLOW_SIZE_FIXTURE", &fixture)
+        .arg("--flake")
+        .arg(fixture_path("centerpiece"))
+        .arg("--lock-file")
+        .arg(fixture_lock_path("centerpiece"))
+        .arg("--diff")
+        .arg("follow")
+        .arg("--stats")
+        .output()
+        .expect("run flake-edit");
+
+    assert!(
+        output.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    assert!(
+        stdout.contains("Deduplicated 2 inputs"),
+        "missing realized header: {stdout}"
+    );
+    assert!(
+        stdout.contains("250 MiB saved"),
+        "missing realized total 250 MiB: {stdout}"
+    );
+    assert!(
+        stdout.contains("100 MiB"),
+        "missing home-manager size 100 MiB: {stdout}"
+    );
+    assert!(
+        stdout.contains("150 MiB"),
+        "missing treefmt-nix size 150 MiB: {stdout}"
+    );
+    let realized_section = stdout
+        .split_once("Estimated savings")
+        .map(|(realized, _)| realized.to_string())
+        .unwrap_or_else(|| stdout.clone());
+    assert!(
+        !realized_section.contains("(~"),
+        "realized section must not use ~: {realized_section}"
+    );
+}
+
+/// flat_nested_flat has no fresh candidates but already-followed
+/// nested inputs. `--stats` reports the hypothetical group with a
+/// leading tilde on every size line (per the load-bearing rule that
+/// hypothetical savings are marked).
+///
+/// Three of those entries target nixpkgs via different paths and must
+/// collapse onto one row. Fixing the per-input sizes to a distinctive
+/// 200 MiB makes any misresolution obvious.
+#[test]
+fn test_follow_stats_hypothetical_only() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    // Three nixpkgs followers share a store path; the grouped
+    // renderer must collapse them onto one row.
+    let fixture = write_size_fixture_grouped(
+        tmp.path(),
+        &[
+            ("poetry2nix.nixpkgs", 200 * 1024 * 1024, "/store/nixpkgs"),
+            (
+                "poetry2nix.flake-utils",
+                10 * 1024 * 1024,
+                "/store/flake-utils",
+            ),
+            (
+                "poetry2nix.nix-github-actions.nixpkgs",
+                200 * 1024 * 1024,
+                "/store/nixpkgs",
+            ),
+            (
+                "poetry2nix.treefmt-nix.nixpkgs",
+                200 * 1024 * 1024,
+                "/store/nixpkgs",
+            ),
+        ],
+    );
+
+    let output = cli()
+        .env("FE_FOLLOW_SIZE_FIXTURE", &fixture)
+        .arg("--flake")
+        .arg(fixture_path("flat_nested_flat"))
+        .arg("--lock-file")
+        .arg(fixture_lock_path("flat_nested_flat"))
+        .arg("--diff")
+        .arg("follow")
+        .arg("--stats")
+        .output()
+        .expect("run flake-edit");
+
+    assert!(
+        output.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    assert!(
+        stdout.contains("Estimated savings:"),
+        "missing savings header: {stdout}"
+    );
+    // 3 nixpkgs followers (200 MiB each) + 1 flake-utils follower
+    // (10 MiB) -> 610 MiB total.
+    assert!(
+        stdout.contains("~610 MiB saved"),
+        "expected total of 610 MiB across all followers: {stdout}"
+    );
+    // Grouping must collapse the three nixpkgs followers into one
+    // row labelled with the shared store path's shortest attr.
+    let nixpkgs_rows: Vec<&str> = stdout
+        .lines()
+        .filter(|l| l.contains("nixpkgs") && l.contains("x 3"))
+        .collect();
+    assert_eq!(
+        nixpkgs_rows.len(),
+        1,
+        "expected exactly one nixpkgs row with `x 3`: {stdout}"
+    );
+    assert!(
+        nixpkgs_rows[0].contains("~600 MiB"),
+        "nixpkgs row must show grouped total of 600 MiB: {}",
+        nixpkgs_rows[0]
+    );
+}
+
+/// `--dry-run` must not modify `flake.nix` on disk. Copy a fixture
+/// into a tempdir so we can write the file without polluting the
+/// checked-in fixtures, then assert the file is byte-for-byte
+/// unchanged after the run.
+#[test]
+fn test_follow_dry_run_preserves_flake_nix() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    copy_fixture_to_dir("centerpiece", tmp.path());
+    // Point at an empty size fixture so the test stays offline; we
+    // care about the file-preservation property, not concrete sizes.
+    let sizes = write_size_fixture(tmp.path(), &[]);
+
+    let original = fs::read_to_string(tmp.path().join("flake.nix")).expect("read flake.nix");
+
+    let output = cli()
+        .env("FE_FOLLOW_SIZE_FIXTURE", &sizes)
+        .arg("--flake")
+        .arg(tmp.path().join("flake.nix"))
+        .arg("--lock-file")
+        .arg(tmp.path().join("flake.lock"))
+        .arg("--no-lock")
+        .arg("follow")
+        .arg("--dry-run")
+        .output()
+        .expect("run flake-edit");
+
+    assert!(
+        output.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let after = fs::read_to_string(tmp.path().join("flake.nix")).expect("read flake.nix");
+    assert_eq!(after, original, "--dry-run must not modify flake.nix");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Would deduplicate"),
+        "dry-run summary must use 'Would deduplicate' framing: {stdout}"
+    );
+}
+
+/// `--dry-run` implies `--stats`; specifying both must produce the
+/// same output as specifying just `--dry-run`. Confirmed by running
+/// both variants with identical fixtures and comparing stdout
+/// byte-for-byte.
+#[test]
+fn test_follow_dry_run_equals_dry_run_stats() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let fixture = write_size_fixture(
+        tmp.path(),
+        &[
+            ("home-manager.nixpkgs", 100 * 1024 * 1024),
+            ("treefmt-nix.nixpkgs", 150 * 1024 * 1024),
+        ],
+    );
+
+    let just_dry = cli()
+        .env("FE_FOLLOW_SIZE_FIXTURE", &fixture)
+        .arg("--flake")
+        .arg(fixture_path("centerpiece"))
+        .arg("--lock-file")
+        .arg(fixture_lock_path("centerpiece"))
+        .arg("--no-lock")
+        .arg("follow")
+        .arg("--dry-run")
+        .output()
+        .expect("run flake-edit");
+
+    let dry_and_stats = cli()
+        .env("FE_FOLLOW_SIZE_FIXTURE", &fixture)
+        .arg("--flake")
+        .arg(fixture_path("centerpiece"))
+        .arg("--lock-file")
+        .arg(fixture_lock_path("centerpiece"))
+        .arg("--no-lock")
+        .arg("follow")
+        .arg("--dry-run")
+        .arg("--stats")
+        .output()
+        .expect("run flake-edit");
+
+    assert!(just_dry.status.success());
+    assert!(dry_and_stats.status.success());
+    assert_eq!(
+        just_dry.stdout, dry_and_stats.stdout,
+        "--dry-run alone must equal --dry-run --stats"
+    );
+}
+
+/// An inputless flake exits 0 with the existing no-op message even
+/// when `--stats` is set. The size-query path must not crash on a
+/// flake that has no inputs to size.
+#[test]
+fn test_follow_no_inputs_with_stats() {
+    let output = cli()
+        .arg("--flake")
+        .arg(fixture_path("follow_no_inputs"))
+        .arg("--lock-file")
+        .arg(fixture_lock_path("first_nested_node"))
+        .arg("--no-lock")
+        .arg("--diff")
+        .arg("follow")
+        .arg("--stats")
+        .output()
+        .expect("run flake-edit");
+
+    assert!(
+        output.status.success(),
+        "inputless + --stats must exit 0: stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Nothing to deduplicate"),
+        "expected inputless message: {stdout}"
+    );
+}
+
+/// When every size query fails (here: an empty fixture, equivalent to
+/// `nix` being unavailable), `--stats` must still print a useful
+/// summary explicitly noting that sizes are unknown rather than
+/// silently omitting them.
+#[test]
+fn test_follow_stats_size_unknown_when_queries_fail() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let empty_fixture = write_size_fixture(tmp.path(), &[]);
+
+    let output = cli()
+        .env("FE_FOLLOW_SIZE_FIXTURE", &empty_fixture)
+        .arg("--flake")
+        .arg(fixture_path("centerpiece"))
+        .arg("--lock-file")
+        .arg(fixture_lock_path("centerpiece"))
+        .arg("--diff")
+        .arg("follow")
+        .arg("--stats")
+        .output()
+        .expect("run flake-edit");
+
+    assert!(
+        output.status.success(),
+        "stats with no sizes must still succeed: stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Deduplicated 2 inputs"),
+        "header still expected: {stdout}"
+    );
+    assert!(
+        stdout.contains("size unknown"),
+        "expected explicit 'size unknown' marker: {stdout}"
+    );
+}
+
+/// When `flake.lock` already routes a follow via upstream
+/// propagation, the pass still adds a source-side declaration, but
+/// the disk saving is already realized. Those entries must move to
+/// the savings group instead of inflating the "Would deduplicate"
+/// total. `flat_nested_flat` has poetry2nix and friends in that exact
+/// shape: lock routes them, source does not.
+#[test]
+fn test_follow_stats_lock_routed_moved_to_hypothetical() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let fixture = write_size_fixture(
+        tmp.path(),
+        &[
+            ("github:NixOS/nixpkgs/nixos-unstable", 200 * 1024 * 1024),
+            ("github:numtide/flake-utils/master", 10 * 1024 * 1024),
+            ("github:nix-community/poetry2nix/master", 80 * 1024 * 1024),
+        ],
+    );
+
+    let output = cli()
+        .env("FE_FOLLOW_SIZE_FIXTURE", &fixture)
+        .arg("--flake")
+        .arg(fixture_path("flat_nested_flat"))
+        .arg("--lock-file")
+        .arg(fixture_lock_path("flat_nested_flat"))
+        .arg("--diff")
+        .arg("follow")
+        .arg("--stats")
+        .output()
+        .expect("run flake-edit");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    assert!(
+        stdout.contains("Estimated savings:"),
+        "expected savings section: {stdout}"
+    );
+    // Realized header must not claim wins for entries the lock
+    // already routes. `flat_nested_flat` has zero truly fresh
+    // candidates, so there must be no realized header at all.
+    assert!(
+        !stdout.contains("Would deduplicate"),
+        "no fresh dedup candidates should print 'Would deduplicate': {stdout}"
+    );
+    assert!(
+        !stdout.contains("Deduplicated 4 inputs") && !stdout.contains("Deduplicated 3 inputs"),
+        "lock-routed entries must not inflate the realized count: {stdout}"
+    );
+}
+
+/// Batch mode (`follow [PATHS...]`) used to suppress all per-file
+/// output behind an unconditional `quiet=true`. `--dry-run` against a
+/// path argument was therefore silent. This test wires up a
+/// single-path batch invocation and asserts the summary appears.
+#[test]
+fn test_follow_dry_run_with_paths_prints_summary() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    copy_fixture_to_dir("centerpiece", tmp.path());
+    let sizes = write_size_fixture(tmp.path(), &[]);
+
+    let output = Command::new(get_cargo_bin("flake-edit"))
+        .env("NO_COLOR", "1")
+        .env("FE_FOLLOW_SIZE_FIXTURE", &sizes)
+        .arg("follow")
+        .arg("--dry-run")
+        .arg(tmp.path().join("flake.nix"))
+        .output()
+        .expect("run flake-edit");
+
+    assert!(
+        output.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Would deduplicate"),
+        "batch --dry-run must still print the summary: stdout={stdout:?}",
+    );
+}
+
 /// Integration test for follow with real directory structure.
 ///
 /// Creates a tmpdir with multiple flake directories:

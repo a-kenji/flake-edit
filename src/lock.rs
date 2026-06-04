@@ -6,6 +6,8 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+pub mod sizes;
+
 /// Errors that arise from parsing or walking `flake.lock`.
 ///
 /// Each variant pinpoints a distinct shape failure: a missing field, a
@@ -548,6 +550,41 @@ impl FlakeLock {
         }
 
         Ok(current_key)
+    }
+
+    /// Resolve `path` to the terminal node key in [`Self::nodes`],
+    /// chasing `follows` chains and `Indirect` redirects.
+    ///
+    /// Returns `None` for nulled (`Indirect(None)`) or missing paths.
+    /// Used by the `--stats` size estimator to map an attribute path to
+    /// the canonical node whose store path holds the actual content.
+    pub fn node_key_for(&self, path: &AttrPath) -> Option<String> {
+        self.resolve_input_path(path).ok()
+    }
+
+    /// Top-level inputs as `(name, node_key)` pairs, with `Indirect`
+    /// references resolved through their follows target so the returned
+    /// node key always points at a real node in [`Self::nodes`].
+    pub fn top_level_input_node_keys(&self) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        let Some(root) = self.nodes.get(&self.root) else {
+            return out;
+        };
+        let Some(inputs) = &root.inputs else {
+            return out;
+        };
+        for (name, input) in inputs {
+            match input {
+                Input::Direct(key) => out.push((name.clone(), key.clone())),
+                Input::Indirect(Some(target)) => {
+                    if let Ok(key) = self.resolve_input_path(target) {
+                        out.push((name.clone(), key));
+                    }
+                }
+                Input::Indirect(None) => {}
+            }
+        }
+        out
     }
 
     /// Resolve `path` to its locked revision.

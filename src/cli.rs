@@ -175,6 +175,15 @@ pub enum Command {
         /// config file's `follow.max_depth`.
         #[arg(long)]
         depth: Option<usize>,
+        /// Print a deduplication summary with estimated disk savings,
+        /// covering both freshly-applied follows and pre-existing
+        /// (hypothetical) ones.
+        #[arg(long, short = 's', default_value_t = false)]
+        stats: bool,
+        /// Show what would be deduplicated without modifying any files.
+        /// Implies `--stats`.
+        #[arg(long, default_value_t = false)]
+        dry_run: bool,
         /// Flake.nix paths to process. If empty, runs on current directory.
         #[arg(trailing_var_arg = true, num_args = 0..)]
         paths: Vec<std::path::PathBuf>,
