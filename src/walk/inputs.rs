@@ -76,24 +76,16 @@ pub(crate) fn walk_inputs(
     }
 
     match change {
-        Change::None => apply_none(inputs, &node, ctx, change),
         Change::Add { .. } => apply_add(inputs, node, ctx, change),
-        Change::Remove { .. } => apply_remove(inputs, &node, ctx, change),
-        Change::Change { .. } => apply_change_uri(inputs, &node, ctx, change),
         Change::Follows { .. } => apply_follows(inputs, node, ctx, change),
+        // `Change::None` drives `FlakeEdit::list`'s walk purely for the side
+        // effect of populating the `inputs` map via the per-attr handlers, and
+        // `Remove`/`Change` rewrite a single matched child in place. All three
+        // only need to traverse children, never rebuilding the block.
+        Change::None | Change::Remove { .. } | Change::Change { .. } => {
+            walk_children(inputs, &node, ctx, change)
+        }
     }
-}
-
-/// `FlakeEdit::list` drives a `Change::None` walk purely for the side effect
-/// of populating the `inputs` map via the per-attr handlers, so this branch
-/// must traverse children even though it never rewrites.
-fn apply_none(
-    inputs: &mut HashMap<String, Input>,
-    node: &SyntaxNode,
-    ctx: &Option<Context>,
-    change: &Change,
-) -> Option<SyntaxNode> {
-    walk_children(inputs, node, ctx, change)
 }
 
 fn walk_children(
@@ -119,24 +111,6 @@ fn walk_children(
         }
     }
     None
-}
-
-fn apply_remove(
-    inputs: &mut HashMap<String, Input>,
-    node: &SyntaxNode,
-    ctx: &Option<Context>,
-    change: &Change,
-) -> Option<SyntaxNode> {
-    walk_children(inputs, node, ctx, change)
-}
-
-fn apply_change_uri(
-    inputs: &mut HashMap<String, Input>,
-    node: &SyntaxNode,
-    ctx: &Option<Context>,
-    change: &Change,
-) -> Option<SyntaxNode> {
-    walk_children(inputs, node, ctx, change)
 }
 
 /// An empty `inputs = { }` block has no `NODE_ATTRPATH_VALUE` children for
@@ -399,7 +373,6 @@ fn handle_flat_url(
 /// the replacement node when `change` removes the input.
 fn handle_flat_flake(
     input_id: &SyntaxNode,
-    _is_flake: &SyntaxNode,
     ctx: &Option<Context>,
     change: &Change,
 ) -> Option<SyntaxNode> {
@@ -478,8 +451,7 @@ fn handle_child_ident(
                                 return Some(result);
                             }
                         } else if url_id.to_string() == "flake"
-                            && let Some(result) =
-                                handle_flat_flake(&next_sibling, value, ctx, change)
+                            && let Some(result) = handle_flat_flake(&next_sibling, ctx, change)
                         {
                             return Some(result);
                         }
@@ -796,7 +768,7 @@ fn handle_url_attr(
     if let Some(result) = apply_flat_url_attr(inputs, node, child, attr, ctx, change) {
         return Some(result);
     }
-    record_url_sibling_nested_follows(inputs, child, ctx, change);
+    record_url_sibling_nested_follows(inputs, child, ctx);
     None
 }
 
@@ -846,7 +818,6 @@ fn record_url_sibling_nested_follows(
     inputs: &mut HashMap<String, Input>,
     child: &SyntaxNode,
     ctx: &Option<Context>,
-    _change: &Change,
 ) {
     let Some(parent) = child.parent() else { return };
     let Some(sibling) = parent.next_sibling() else {
@@ -1591,8 +1562,8 @@ mod tests {
     use rnix::{Root, SyntaxKind, SyntaxNode};
 
     use super::{
-        apply_add, apply_change_uri, apply_follows, apply_remove, handle_inputs_leaf,
-        handle_url_leaf, insert_added_input_into_block, resolve_follows_owner_and_nested,
+        apply_add, apply_follows, handle_inputs_leaf, handle_url_leaf,
+        insert_added_input_into_block, resolve_follows_owner_and_nested, walk_children,
     };
     use crate::change::{Change, ChangeId};
     use crate::follows::{AttrPath, Segment};
@@ -1931,8 +1902,8 @@ mod tests {
         let change = Change::Remove {
             ids: vec![ChangeId::parse("other").unwrap()],
         };
-        let result = apply_remove(&mut map, &inputs_block, &None, &change)
-            .expect("apply_remove must rewrite the tree");
+        let result = walk_children(&mut map, &inputs_block, &None, &change)
+            .expect("Remove must rewrite the tree");
         let text = result.to_string();
         assert!(!text.contains("other.url"), "got:\n{text}");
         assert!(text.contains("nixpkgs.url"), "got:\n{text}");
@@ -1954,8 +1925,8 @@ mod tests {
             id: Some(ChangeId::parse("nixpkgs").unwrap()),
             uri: Some("github:NixOS/nixpkgs/nixos-23.11".to_string()),
         };
-        let result = apply_change_uri(&mut map, &inputs_block, &None, &change)
-            .expect("apply_change_uri must rewrite the tree");
+        let result = walk_children(&mut map, &inputs_block, &None, &change)
+            .expect("Change must rewrite the tree");
         let text = result.to_string();
         assert!(text.contains("nixos-23.11"), "got:\n{text}");
         assert!(!text.contains("nixos-unstable"), "got:\n{text}");

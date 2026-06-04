@@ -115,11 +115,7 @@ pub fn run_batch(
             }
         };
 
-        let mut state = match AppState::new(
-            editor.text(),
-            flake_path.clone(),
-            args.config().map(PathBuf::from),
-        ) {
+        let mut state = match AppState::new(flake_path.clone(), args.config().map(PathBuf::from)) {
             Ok(s) => s
                 .with_diff(args.diff())
                 .with_no_lock(args.no_lock())
@@ -188,7 +184,7 @@ struct AnalysisCtx<'a> {
 /// Mutable plan accumulated across the collection functions.
 ///
 /// The four output buckets (`to_follow`, `to_unfollow`, `toplevel_follows`,
-/// `toplevel_adds`) feed [`apply_plan`]. `seen_nested` is a dedup guard
+/// `toplevel_adds`) feed [`apply_plan_text`]. `seen_nested` is a dedup guard
 /// threaded through [`collect_direct_candidates`],
 /// [`collect_transitive_groups`], [`collect_direct_groups`],
 /// [`emit_direct_promotions`], and [`emit_transitive_promotions`] to prevent
@@ -216,7 +212,7 @@ impl FollowPlan {
     }
 }
 
-/// What [`apply_plan`] committed to the working text.
+/// What [`apply_plan_text`] committed to the working text.
 #[derive(Default)]
 struct AppliedPlan {
     /// Working text after every successful change. Equal to the original
@@ -265,7 +261,13 @@ fn run_impl(
         return Ok(());
     };
 
-    let applied = apply_plan(editor, &ctx.inputs, &ctx.nested_inputs, &lock_graph, &plan)?;
+    let applied = apply_plan_text(
+        &editor.text(),
+        &ctx.inputs,
+        &ctx.nested_inputs,
+        &lock_graph,
+        &plan,
+    )?;
     render_summary(editor, state, &applied, quiet)
 }
 
@@ -914,29 +916,6 @@ fn scrub_redundant(graph: &FollowsGraph, plan: &mut FollowPlan) {
     plan.to_follow.retain(|_| keep_iter.next().unwrap_or(true));
 }
 
-/// Apply each scheduled change against a working text buffer, validating
-/// between steps.
-///
-/// Lock-drift lints run once on the pre-batch text via
-/// [`validate::validate_full`]. Per-step validation uses
-/// [`validate::validate_speculative`], which skips them: mid-batch the
-/// in-memory text contains follows the on-disk lockfile has not seen yet,
-/// and re-running the lock-drift lints would flag every in-progress edit
-/// as drift.
-///
-/// The cycle lint runs every step against the post-change `temp.curr_list()`
-/// and catches any cycle introduced by the in-progress batch, skipping the
-/// offending change.
-fn apply_plan(
-    editor: &Editor,
-    inputs: &crate::edit::InputMap,
-    nested_inputs: &[NestedInput],
-    lock_graph: &FollowsGraph,
-    plan: &FollowPlan,
-) -> Result<AppliedPlan> {
-    apply_plan_text(&editor.text(), inputs, nested_inputs, lock_graph, plan)
-}
-
 /// Pairing `current_text` with its `ParsedSource` lets each iteration
 /// share a single rnix parse: each accepted change replaces both fields
 /// in lockstep, sparing the next phase a re-parse of identical text.
@@ -999,6 +978,19 @@ impl PlanState {
     }
 }
 
+/// Apply each scheduled change against a working text buffer, validating
+/// between steps.
+///
+/// Lock-drift lints run once on the pre-batch text via
+/// [`validate::validate_full`]. Per-step validation uses
+/// [`validate::validate_speculative`], which skips them: mid-batch the
+/// in-memory text contains follows the on-disk lockfile has not seen yet,
+/// and re-running the lock-drift lints would flag every in-progress edit
+/// as drift.
+///
+/// The cycle lint runs every step against the post-change `temp.curr_list()`
+/// and catches any cycle introduced by the in-progress batch, skipping the
+/// offending change.
 fn apply_plan_text(
     original_text: &str,
     inputs: &crate::edit::InputMap,

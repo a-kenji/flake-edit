@@ -24,13 +24,10 @@ pub enum EdgeOrigin {
         /// location is available (typical in tests and [`FollowsGraph::from_lock`]).
         range: Range,
     },
-    /// Edge discovered by walking `flake.lock`.
-    Resolved {
-        /// Lockfile node owning the parent (left) side of the edge.
-        parent_node: Segment,
-        /// Lockfile node the edge resolves to.
-        target_node: Segment,
-    },
+    /// Edge discovered by walking `flake.lock`. The parent and target node
+    /// names are recoverable from [`Edge::source`], so the variant carries
+    /// no payload.
+    Resolved,
 }
 
 /// One follows edge in the graph.
@@ -42,7 +39,7 @@ pub struct Edge {
     /// Right-hand side of the `follows`.
     pub follows: AttrPath,
     /// Origin metadata: declared edges carry source ranges, resolved edges
-    /// carry lockfile node names.
+    /// carry no payload.
     pub origin: EdgeOrigin,
 }
 
@@ -63,19 +60,6 @@ pub struct Cycle {
     /// Edges in traversal order. The last edge's `follows` equals the first
     /// edge's `source`, or is a structural prefix of it.
     pub edges: Vec<Edge>,
-}
-
-/// A group of nested inputs sharing a transitive follows target. Keyed by
-/// the canonical (alias-resolved) name of the nested input. The value is the
-/// shared `target` plus every contributing nested path.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TransitiveGroup {
-    /// Canonical (post-alias) name the group shares.
-    pub canonical_name: String,
-    /// Lockfile-side follows target every member resolves to.
-    pub target: AttrPath,
-    /// All declared or resolved sources that share this target.
-    pub members: Vec<AttrPath>,
 }
 
 /// Index of follows [`Edge`]s keyed by their `source` path. Construct with
@@ -151,10 +135,7 @@ impl FollowsGraph {
                 graph.insert_edge(Edge {
                     source: nested.path.clone(),
                     follows: target,
-                    origin: EdgeOrigin::Resolved {
-                        parent_node: nested.path.first().clone(),
-                        target_node: nested.path.last().clone(),
-                    },
+                    origin: EdgeOrigin::Resolved,
                 });
             }
         }
@@ -188,10 +169,7 @@ impl FollowsGraph {
                 graph.insert_edge(Edge {
                     source: nested.path.clone(),
                     follows: target,
-                    origin: EdgeOrigin::Resolved {
-                        parent_node: nested.path.first().clone(),
-                        target_node: nested.path.last().clone(),
-                    },
+                    origin: EdgeOrigin::Resolved,
                 });
             }
         }
@@ -466,49 +444,6 @@ impl FollowsGraph {
             }
         }
         out
-    }
-
-    /// Group nested inputs by canonical name, in deterministic order.
-    ///
-    /// `top` is the set of top-level input names already in `flake.nix`.
-    /// Sources whose first segment is in `top` are skipped because no
-    /// promotion is possible.
-    pub fn transitive_groups(&self, top: &HashSet<AttrPath>) -> Vec<TransitiveGroup> {
-        let mut by_canonical: HashMap<String, HashMap<AttrPath, Vec<AttrPath>>> = HashMap::new();
-        for edge in self.edges() {
-            let nested_name = edge.source.last().as_str().to_string();
-            let toplevel_only = AttrPath::parse(&nested_name).ok();
-            if let Some(p) = &toplevel_only
-                && top.contains(p)
-            {
-                continue;
-            }
-            by_canonical
-                .entry(nested_name)
-                .or_default()
-                .entry(edge.follows.clone())
-                .or_default()
-                .push(edge.source.clone());
-        }
-
-        let mut groups: Vec<TransitiveGroup> = Vec::new();
-        let mut canonical_names: Vec<String> = by_canonical.keys().cloned().collect();
-        canonical_names.sort();
-        for name in canonical_names {
-            let buckets = by_canonical.remove(&name).unwrap();
-            let mut bucket_keys: Vec<AttrPath> = buckets.keys().cloned().collect();
-            bucket_keys.sort();
-            for target in bucket_keys {
-                let mut members = buckets.get(&target).cloned().unwrap_or_default();
-                members.sort();
-                groups.push(TransitiveGroup {
-                    canonical_name: name.clone(),
-                    target,
-                    members,
-                });
-            }
-        }
-        groups
     }
 
     fn insert_edge(&mut self, edge: Edge) {
@@ -813,7 +748,7 @@ mod tests {
         assert_eq!(edges.len(), 1);
         assert_eq!(edges[0].source.to_string(), "treefmt-nix.nixpkgs");
         assert_eq!(edges[0].follows.to_string(), "nixpkgs");
-        assert!(matches!(edges[0].origin, EdgeOrigin::Resolved { .. }));
+        assert!(matches!(edges[0].origin, EdgeOrigin::Resolved));
     }
 
     #[test]
@@ -992,52 +927,6 @@ mod tests {
     }
 
     #[test]
-    fn transitive_groups_skips_when_canonical_already_top_level() {
-        let inputs = make_inputs(vec![
-            declared_input("crane", &[("nixpkgs", "nixpkgs")]),
-            declared_input("flake-utils", &[("nixpkgs", "nixpkgs")]),
-        ]);
-        let g = FollowsGraph::from_declared(&inputs);
-        let mut top: HashSet<AttrPath> = HashSet::new();
-        top.insert(path("nixpkgs"));
-        let groups = g.transitive_groups(&top);
-        assert!(groups.is_empty());
-    }
-
-    #[test]
-    fn transitive_groups_groups_shared_target() {
-        let inputs = make_inputs(vec![
-            declared_input("crane", &[("flake-parts", "flake-parts")]),
-            declared_input("treefmt-nix", &[("flake-parts", "flake-parts")]),
-        ]);
-        let g = FollowsGraph::from_declared(&inputs);
-        let top: HashSet<AttrPath> = HashSet::new();
-        let groups = g.transitive_groups(&top);
-        assert_eq!(groups.len(), 1);
-        assert_eq!(groups[0].canonical_name, "flake-parts");
-        assert_eq!(groups[0].target.to_string(), "flake-parts");
-        let members: Vec<String> = groups[0].members.iter().map(|p| p.to_string()).collect();
-        assert_eq!(
-            members,
-            vec!["crane.flake-parts", "treefmt-nix.flake-parts"]
-        );
-    }
-
-    #[test]
-    fn transitive_groups_sorted_by_canonical_then_target() {
-        let inputs = make_inputs(vec![
-            declared_input("a", &[("z", "z")]),
-            declared_input("b", &[("z", "z")]),
-            declared_input("c", &[("y", "y")]),
-        ]);
-        let g = FollowsGraph::from_declared(&inputs);
-        let top: HashSet<AttrPath> = HashSet::new();
-        let groups = g.transitive_groups(&top);
-        let names: Vec<&str> = groups.iter().map(|g| g.canonical_name.as_str()).collect();
-        assert_eq!(names, vec!["y", "z"]);
-    }
-
-    #[test]
     fn would_create_cycle_self_edge() {
         let g = FollowsGraph::default();
         let e = declared_edge("nixpkgs", "nixpkgs");
@@ -1104,18 +993,12 @@ mod tests {
         g.insert_edge(Edge {
             source: AttrPath::parse("treefmt-nix.nixpkgs").unwrap(),
             follows: AttrPath::parse("harmonia.treefmt-nix").unwrap(),
-            origin: EdgeOrigin::Resolved {
-                parent_node: seg("treefmt-nix"),
-                target_node: seg("harmonia"),
-            },
+            origin: EdgeOrigin::Resolved,
         });
         g.insert_edge(Edge {
             source: AttrPath::parse("harmonia.treefmt-nix").unwrap(),
             follows: AttrPath::parse("treefmt-nix").unwrap(),
-            origin: EdgeOrigin::Resolved {
-                parent_node: seg("harmonia"),
-                target_node: seg("treefmt-nix"),
-            },
+            origin: EdgeOrigin::Resolved,
         });
         let proposed = Edge {
             source: AttrPath::parse("treefmt-nix").unwrap(),
@@ -1392,10 +1275,7 @@ mod tests {
         g.insert_edge(Edge {
             source: path("hyprland.aquamarine.nixpkgs"),
             follows: path("hyprland.nixpkgs"),
-            origin: EdgeOrigin::Resolved {
-                parent_node: seg("aquamarine"),
-                target_node: seg("nixpkgs"),
-            },
+            origin: EdgeOrigin::Resolved,
         });
         g.insert_edge(declared_edge("hyprland.nixpkgs", "nixpkgs"));
         assert!(g.lock_routes_to(
@@ -1412,10 +1292,7 @@ mod tests {
         g.insert_edge(Edge {
             source: path("hyprland.aquamarine.nixpkgs"),
             follows: path("hyprland.nixpkgs"),
-            origin: EdgeOrigin::Resolved {
-                parent_node: seg("aquamarine"),
-                target_node: seg("nixpkgs"),
-            },
+            origin: EdgeOrigin::Resolved,
         });
         g.insert_edge(declared_edge("hyprland.nixpkgs", "nixpkgs"));
         let candidate = declared_edge("hyprland.aquamarine.nixpkgs", "nixpkgs");
@@ -1446,10 +1323,7 @@ mod tests {
             g.insert_edge(Edge {
                 source: path(src),
                 follows: path(dst),
-                origin: EdgeOrigin::Resolved {
-                    parent_node: Segment::from_unquoted(src).unwrap(),
-                    target_node: Segment::from_unquoted(dst).unwrap(),
-                },
+                origin: EdgeOrigin::Resolved,
             });
         }
         assert!(g.lock_routes_to(&path("a.b.c.d"), &path("a"), None, &[]));
@@ -1471,10 +1345,7 @@ mod tests {
             g.insert_edge(Edge {
                 source: path(src),
                 follows: path(dst),
-                origin: EdgeOrigin::Resolved {
-                    parent_node: Segment::from_unquoted(src).unwrap(),
-                    target_node: Segment::from_unquoted(dst).unwrap(),
-                },
+                origin: EdgeOrigin::Resolved,
             });
         }
         let candidate = declared_edge("omnibus.flops.POP.nixpkgs", "nixpkgs");

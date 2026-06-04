@@ -447,12 +447,6 @@ impl App {
         &self.context
     }
 
-    /// Get the Change that would be applied based on current workflow state.
-    /// Useful for testing to verify what modification the TUI would produce.
-    pub fn pending_change(&self) -> Change {
-        self.build_change()
-    }
-
     /// Compute the diff string for the current change against the flake text.
     /// Returns the unified diff showing what would change.
     ///
