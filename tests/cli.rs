@@ -95,6 +95,41 @@ fn test_list_format(#[case] fixture: &str, #[case] format: &str) {
     });
 }
 
+/// Flat inputs declared with a quoted key segment (`inputs."master".url`,
+/// `inputs."nixos-24.11".url`) must be visible to `list`. The dotted quoted
+/// key is a single name (`nixos-24.11`), not a nested `nixos-24`/`11` path.
+#[test]
+fn list_sees_quoted_flat_key_inputs() {
+    let output = cli()
+        .arg("--flake")
+        .arg(fixture_path("quoted_flat_keys"))
+        .arg("list")
+        .arg("--format")
+        .arg("json")
+        .output()
+        .expect("flake-edit list runs");
+
+    assert!(output.status.success(), "list should exit cleanly");
+
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("list emits valid json");
+    let inputs = parsed["inputs"].as_object().expect("inputs object");
+
+    assert_eq!(
+        inputs["master"]["url"], "github:nixos/nixpkgs/master",
+        "quoted flat key input is reported with its unquoted name and url"
+    );
+    assert_eq!(
+        inputs["nixos-24.11"]["url"], "github:nixos/nixpkgs/nixos-24.11",
+        "dotted quoted key lands as one input named nixos-24.11"
+    );
+    assert_eq!(
+        inputs.len(),
+        2,
+        "exactly the two declared inputs are listed"
+    );
+}
+
 #[test]
 fn list_format_invalid_value_rejected_at_parse_time() {
     let mut settings = insta::Settings::clone_current();
