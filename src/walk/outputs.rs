@@ -27,7 +27,11 @@ pub(crate) fn list_outputs(root: &SyntaxNode) -> Result<Outputs, WalkerError> {
         return Err(WalkerError::NotARoot);
     }
 
-    for toplevel in root.first_child().unwrap().children() {
+    let Some(attr_set) = super::flake_attr_set(root) else {
+        return Ok(Outputs::None);
+    };
+
+    for toplevel in attr_set.children() {
         if toplevel.kind() == SyntaxKind::NODE_ATTRPATH_VALUE
             && let Some(outputs_node) = toplevel
                 .children()
@@ -325,7 +329,9 @@ pub(crate) fn change_outputs(
         return Err(WalkerError::NotARoot);
     }
 
-    let attr_set = root.first_child().unwrap();
+    let Some(attr_set) = super::flake_attr_set(root) else {
+        return Ok(None);
+    };
 
     for toplevel in attr_set.children() {
         if toplevel.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {

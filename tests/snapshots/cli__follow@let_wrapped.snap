@@ -1,0 +1,20 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/let_wrapped.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/let_wrapped.flake.lock"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+Nothing to deduplicate.
+
+----- stderr -----

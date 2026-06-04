@@ -26,6 +26,27 @@ use node::{
     make_toplevel_url_attr, parse_node, substitute_child,
 };
 
+/// The flake's top-level attribute set.
+///
+/// A flake's root expression is normally a bare attribute set, but it may be
+/// wrapped in `let <bindings> in { ... }`. In that case the inputs and outputs
+/// live in the `in` body, not in the let bindings, so we descend through the
+/// `NODE_LET_IN` to reach the body attrset and walk it exactly as a bare one.
+///
+/// Returns `None` when the root has no expression, or when a `let ... in` body
+/// is not an attribute set (for example a function): such a flake exposes no
+/// inputs or outputs to walk.
+pub(crate) fn flake_attr_set(root: &SyntaxNode) -> Option<SyntaxNode> {
+    let first = root.first_child()?;
+    if first.kind() != SyntaxKind::NODE_LET_IN {
+        return Some(first);
+    }
+    // `let <bindings> in <body>`: the body expression is the last child node,
+    // after the bindings. Only an attrset body carries flake attributes.
+    let body = first.last_child()?;
+    (body.kind() == SyntaxKind::NODE_ATTR_SET).then_some(body)
+}
+
 /// Whether a CST attrpath (idents may carry surrounding `"..."`) matches `expected`
 /// pairwise after unquoting.
 fn idents_match(have: &[String], expected: &[&str]) -> bool {
@@ -72,7 +93,7 @@ fn retarget_existing_flat_follows(
         .unwrap_or_default();
 
     if current_target == target {
-        return Some(attr_set.parent().unwrap().clone());
+        return attr_set.ancestors().last();
     }
 
     let value = value_node?;
@@ -165,7 +186,7 @@ impl<'a> Walker {
         ctx: Option<Context>,
         change: &Change,
     ) -> Result<Option<SyntaxNode>, WalkerError> {
-        let Some(attr_set) = node.first_child() else {
+        let Some(attr_set) = flake_attr_set(&node) else {
             return Ok(None);
         };
 
@@ -338,7 +359,7 @@ impl<'a> Walker {
                     .unwrap_or_default();
 
                 if current_target == target {
-                    return Ok(Some(attr_set.parent().unwrap().clone()));
+                    return Ok(attr_set.ancestors().last());
                 }
 
                 if let Some(value) = value_node {
