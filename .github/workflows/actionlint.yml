@@ -31,7 +31,5 @@ jobs:
         # If you chose API tokens for write access OR if you have a private cache
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     - uses: Mic92/hestia/action@main
-      with:
-        version: v0.1.0-alpha.8
     - name: "actionlint"
       run: nix run -Lv --refresh --inputs-from .# nixpkgs#actionlint -- --ignore SC2002
