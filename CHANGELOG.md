@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.6] - 2026-06-09
+
+### 🚀 Features
+
+- *(follow)* Default to unlimited follows depth
+
+### 🐛 Bug Fixes
+
+- *(lock)* Preserve `flakeref` scheme when reconstructing original URL
+- *(walk/inputs)* Preserve sibling url when removing
+- *(walk)* Keep trailing inline comments on their statement
+- *(walk)* List quoted-key flat inputs
+- *(walk)* Descend into `let...in`
+
+### 💼 Other
+
+- Support auto follows of more than one level
+- Convert rnix byte offsets to ropey char indices
+- Relock follow edits with `offline`
+- Compute `nested_inputs` once per invocation
+- Render manpage prose from docs/man/flake-edit.md via `manners`
+
+### 🚜 Refactor
+
+- *(forge)* Init a forge `Trait`
+- *(nixos-test)* Extract testScript into a real Python package
+
+### ⚡ Performance
+
+- *(edit)* Share a single `rnix` parse across from_text validation
+
+### ⚙️ Miscellaneous Tasks
+
+- *(clippy)* Deny `unsafe_code`
+- *(clippy)* Add rustdoc lints
+- *(clippy)* Add `unreachable_pub`
+- *(refactor)* Simplify the walker
+
 ## [0.3.5] - 2026-04-15
 
 ### 🐛 Bug Fixes
