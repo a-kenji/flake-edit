@@ -20,6 +20,7 @@ pub fn run(mut app: App) -> io::Result<Option<AppResult>> {
         // Resize terminal if needed (e.g., when transitioning to Confirm screen)
         let new_height = app.terminal_height();
         if new_height != term.height() {
+            tracing::trace!(old_height = term.height(), new_height, "resize viewport");
             term.resize(new_height)?;
         }
 
@@ -33,9 +34,12 @@ pub fn run(mut app: App) -> io::Result<Option<AppResult>> {
 
         if let Event::Key(key) = event::read()? {
             if key.kind != KeyEventKind::Press {
+                tracing::trace!(?key, "ignored non-press key event");
                 continue;
             }
-            match app.update(key) {
+            let result = app.update(key);
+            tracing::trace!(?key, ?result, "handled key event");
+            match result {
                 UpdateResult::Continue => {}
                 UpdateResult::Done => return Ok(app.extract_result()),
                 UpdateResult::Cancelled => return Ok(None),

@@ -39,21 +39,14 @@ fn styled_item_line(item: &str) -> Line<'_> {
 /// Unified list widget for single and multi-select
 pub struct List<'a> {
     state: &'a SelectionState,
-    items: &'a [String],
     prompt: &'a str,
     context: &'a str,
 }
 
 impl<'a> List<'a> {
-    pub fn new(
-        state: &'a SelectionState,
-        items: &'a [String],
-        prompt: &'a str,
-        context: &'a str,
-    ) -> Self {
+    pub fn new(state: &'a SelectionState, prompt: &'a str, context: &'a str) -> Self {
         Self {
             state,
-            items,
             prompt,
             context,
         }
@@ -68,15 +61,14 @@ impl Widget for List<'_> {
         list_state.select(Some(self.state.cursor()));
 
         let list_items: Vec<ListItem> = if self.state.multi_select() {
-            self.items
-                .iter()
-                .enumerate()
+            self.state
+                .visible_items()
                 .map(|(i, item)| ListItem::new(checkbox_line(item, self.state.is_selected(i))))
                 .collect()
         } else {
-            self.items
-                .iter()
-                .map(|item| ListItem::new(styled_item_line(item)))
+            self.state
+                .visible_items()
+                .map(|(_, item)| ListItem::new(styled_item_line(item)))
                 .collect()
         };
 
@@ -102,12 +94,14 @@ impl Widget for List<'_> {
             String::new()
         };
 
+        let mode_span = match self.state.search_query() {
+            Some(query) => Span::styled(format!(" /{query}"), HIGHLIGHT_STYLE),
+            None => Span::raw(format!(" {}", self.prompt)),
+        };
+
         let (diff_label, diff_style) = diff_toggle_style(self.state.show_diff());
         Footer::new(
-            vec![
-                context_span(self.context),
-                Span::raw(format!(" {}{}", self.prompt, count_info)),
-            ],
+            vec![context_span(self.context), mode_span, Span::raw(count_info)],
             vec![Span::styled(format!(" {} ", diff_label), diff_style)],
         )
         .render(footer_area, buf);
@@ -149,11 +143,11 @@ mod tests {
             "home-manager".to_string(),
             "flake-utils".to_string(),
         ];
-        let state = SelectionState::new(items.len(), false, false);
+        let state = SelectionState::new(items, false, false);
 
         terminal
             .draw(|frame| {
-                List::new(&state, &items, "Select input", "Change")
+                List::new(&state, "Select input", "Change")
                     .render(frame.area(), frame.buffer_mut());
             })
             .unwrap();
@@ -166,12 +160,12 @@ mod tests {
     fn test_render_single_select_with_diff_on() {
         let mut terminal = create_test_terminal(80, 8);
         let items = vec!["nixpkgs".to_string(), "home-manager".to_string()];
-        let mut state = SelectionState::new(items.len(), false, true);
+        let mut state = SelectionState::new(items, false, true);
         state.handle(ListAction::Down);
 
         terminal
             .draw(|frame| {
-                List::new(&state, &items, "Select input", "Change")
+                List::new(&state, "Select input", "Change")
                     .render(frame.area(), frame.buffer_mut());
             })
             .unwrap();
@@ -188,12 +182,90 @@ mod tests {
             "home-manager".to_string(),
             "flake-utils".to_string(),
         ];
-        let mut state = SelectionState::new(items.len(), true, false);
+        let mut state = SelectionState::new(items, true, false);
         state.handle(ListAction::Toggle);
 
         terminal
             .draw(|frame| {
-                List::new(&state, &items, "Select inputs", "Update")
+                List::new(&state, "Select inputs", "Update")
+                    .render(frame.area(), frame.buffer_mut());
+            })
+            .unwrap();
+
+        let output = buffer_to_plain_text(&terminal);
+        insta::assert_snapshot!(output);
+    }
+
+    fn search_items() -> Vec<String> {
+        [
+            "bookah",
+            "centerpiece",
+            "clan",
+            "crane",
+            "depot",
+            "direnv-instant",
+            "disko",
+            "distro",
+            "flake-fmt",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
+    }
+
+    #[test]
+    fn test_render_single_select_search_filtered() {
+        let mut terminal = create_test_terminal(80, 8);
+        let mut state = SelectionState::new(search_items(), false, false);
+        state.handle(ListAction::SearchStart);
+        state.handle(ListAction::SearchInput('f'));
+        state.handle(ListAction::SearchInput('l'));
+
+        terminal
+            .draw(|frame| {
+                List::new(&state, "Select input", "Change")
+                    .render(frame.area(), frame.buffer_mut());
+            })
+            .unwrap();
+
+        let output = buffer_to_plain_text(&terminal);
+        insta::assert_snapshot!(output);
+    }
+
+    #[test]
+    fn test_render_single_select_search_no_match() {
+        let mut terminal = create_test_terminal(80, 8);
+        let mut state = SelectionState::new(search_items(), false, false);
+        state.handle(ListAction::SearchStart);
+        for c in "zzz".chars() {
+            state.handle(ListAction::SearchInput(c));
+        }
+
+        terminal
+            .draw(|frame| {
+                List::new(&state, "Select input", "Change")
+                    .render(frame.area(), frame.buffer_mut());
+            })
+            .unwrap();
+
+        let output = buffer_to_plain_text(&terminal);
+        insta::assert_snapshot!(output);
+    }
+
+    #[test]
+    fn test_render_multi_select_search_keeps_selection() {
+        let mut terminal = create_test_terminal(80, 8);
+        let mut state = SelectionState::new(search_items(), true, false);
+        // Select "bookah", then filter down to "flake-fmt" and select it too
+        state.handle(ListAction::Toggle);
+        state.handle(ListAction::SearchStart);
+        state.handle(ListAction::SearchInput('f'));
+        state.handle(ListAction::SearchInput('l'));
+        state.handle(ListAction::Toggle);
+
+        terminal
+            .draw(|frame| {
+                List::new(&state, "Select inputs", "Update")
                     .render(frame.area(), frame.buffer_mut());
             })
             .unwrap();
