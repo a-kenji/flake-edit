@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/toggle_toplevel_flat.flake.nix"
+    - "--diff"
+    - toggle
+    - "--remove"
+    - "github:ipetkov/crane"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -1,6 +1,5 @@
+ {
+-  # inputs.crane.url = "github:a-kenji/crane";
+-  inputs.crane.url = "github:ipetkov/crane"; # build tool
++  inputs.crane.url = "github:a-kenji/crane";
+   inputs.nixpkgs.url = "github:nixos/nixpkgs";
+
+   outputs = { self, ... }: { };
+
+----- stderr -----

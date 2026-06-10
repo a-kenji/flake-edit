@@ -1,0 +1,22 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/toggle_block.flake.nix"
+    - "--diff"
+    - toggle
+    - "--remove"
+    - "github:oxalica/rust-overlay"
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+error: 'github:oxalica/rust-overlay' is the active url of 'rust-overlay' and no alternate is stored to replace it
+
+hint: set a new url with `flake-edit change rust-overlay <uri>`, or drop the input with `flake-edit remove rust-overlay`

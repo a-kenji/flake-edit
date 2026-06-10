@@ -151,6 +151,25 @@ pub enum Command {
         /// The id of an input attribute.
         id: Option<String>,
     },
+    /// Toggle an input between its active url and a stored alternate.
+    ///
+    /// Alternates live as commented copies of the url line next to the
+    /// active one. Flipping moves only the comment marker.
+    #[clap(alias = "t")]
+    Toggle {
+        /// An input id, or a flake reference to activate.
+        #[arg(value_name = "INPUT")]
+        input: Option<String>,
+        /// The variant to activate, stored as a new alternate when not
+        /// yet present.
+        #[arg(value_name = "REF")]
+        reference: Option<String>,
+        /// Remove a url instead of activating it. A bare input id removes the
+        /// active url and activates the stored alternate in its place. An
+        /// alternate's ref deletes that alternate and keeps the active url.
+        #[arg(short, long)]
+        remove: bool,
+    },
     /// Automatically add and remove follows declarations.
     ///
     /// Analyzes the flake.lock to find nested inputs that match top-level inputs,
@@ -221,6 +240,7 @@ pub enum CompletionMode {
     Add,
     Change,
     Follow,
+    Toggle,
 }
 
 /// Output format for the `list` subcommand.

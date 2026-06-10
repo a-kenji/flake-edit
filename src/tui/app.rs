@@ -426,6 +426,7 @@ impl App {
             | Command::Completion { .. }
             | Command::Follow { .. }
             | Command::AddFollow { .. }
+            | Command::Toggle { .. }
             | Command::Config { .. } => None,
         }
     }

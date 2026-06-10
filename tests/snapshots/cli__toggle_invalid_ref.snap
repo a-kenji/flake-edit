@@ -1,0 +1,20 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/toggle_flat.flake.nix"
+    - "--diff"
+    - toggle
+    - "github:"
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+error: invalid URI 'github:'
+  caused by: parse error at byte 7: expected label `TakeTill1`

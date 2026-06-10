@@ -124,6 +124,26 @@ pub(crate) const FIXTURES: &[&str] = &[
     // comment on its original statement.
     "trailing_comment_on_removed_input",
     "trailing_comment_on_sibling_attr",
+    // flat input with one commented url alternate above the active line,
+    // plus a follows declaration on the same input
+    "toggle_flat",
+    // flat input with one commented url alternate below the active line,
+    // plus a follows declaration on the same input
+    "toggle_flat_flipped",
+    // attrset-form input with no stored alternate
+    "toggle_block",
+    // flat input with two commented url alternates above the active line
+    "toggle_multi",
+    // two inputs, each with one commented url alternate
+    "toggle_many_inputs",
+    // toplevel flat input with an `inputs.`-prefixed commented alternate
+    // and a trailing same-line comment on the active line
+    "toggle_toplevel_flat",
+    // two inputs whose urls point at different branches of the same repo,
+    // each with a commented alternate
+    "toggle_shared_repo",
+    // a follows-only input next to a url input with a commented alternate
+    "toggle_follows_only",
 ];
 
 /// Create a Walker from a fixture name.

@@ -1,0 +1,24 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/toggle_flat.flake.nix"
+    - "--diff"
+    - toggle
+    - "--remove"
+    - "git+https://example.org/forks/rust-overlay"
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+error: 'git+https://example.org/forks/rust-overlay' is not a stored variant of 'rust-overlay'
+  - github:oxalica/rust-overlay (active)
+  - github:a-kenji/rust-overlay
+
+hint: name one of the stored variants: `flake-edit toggle --remove rust-overlay <ref>`

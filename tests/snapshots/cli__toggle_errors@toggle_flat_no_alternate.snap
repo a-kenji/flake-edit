@@ -1,0 +1,21 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/toggle_flat.flake.nix"
+    - "--diff"
+    - toggle
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+error: input 'nixpkgs' has no stored alternate
+
+hint: store one and switch to it with `flake-edit toggle nixpkgs <ref>`

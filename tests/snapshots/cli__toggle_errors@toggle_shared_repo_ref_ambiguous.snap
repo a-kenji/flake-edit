@@ -1,0 +1,23 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/toggle_shared_repo.flake.nix"
+    - "--diff"
+    - toggle
+    - "github:nixos/nixpkgs"
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+error: 'github:nixos/nixpkgs' matches multiple inputs
+  - nixpkgs (github:nixos/nixpkgs/nixos-unstable matches the repository)
+  - nixpkgs-stable (github:nixos/nixpkgs/nixos-25.05 matches the repository)
+
+hint: name the input explicitly: `flake-edit toggle <id> github:nixos/nixpkgs`

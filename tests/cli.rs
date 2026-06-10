@@ -1263,3 +1263,327 @@ fn test_pin_with_lock_file(#[case] fixture: &str) {
         );
     });
 }
+
+/// `toggle` previews with `--diff` like every other subcommand. Covers the
+/// zero-argument inference, the id form, ref forms naming the inactive and
+/// the active variant (flip-back), the `t` alias, and the two-arg form
+/// that stores a new alternate.
+#[rstest]
+#[case("toggle_flat", &["toggle"], "no_args")]
+#[case("toggle_flat_flipped", &["toggle"], "no_args")]
+#[case("toggle_flat", &["toggle", "rust-overlay"], "id")]
+#[case("toggle_flat", &["t", "rust-overlay"], "alias")]
+#[case("toggle_flat", &["toggle", "github:a-kenji/rust-overlay"], "ref_inactive")]
+#[case("toggle_flat", &["toggle", "github:oxalica/rust-overlay"], "ref_active_flips_back")]
+#[case("toggle_toplevel_flat", &["toggle", "crane"], "toplevel_trailing_comment")]
+#[case("toggle_block", &["toggle", "rust-overlay", "github:a-kenji/rust-overlay"], "synthesize_block")]
+#[case("toggle_flat", &["toggle", "rust-overlay", "git+https://example.org/forks/rust-overlay"], "synthesize_flat")]
+fn test_toggle_diff(#[case] fixture: &str, #[case] args: &[&str], #[case] suffix: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    settings.set_snapshot_suffix(format!("{fixture}_{suffix}"));
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .args(args)
+        );
+    });
+}
+
+/// The non-interactive error catalogue of `toggle`: every inference
+/// failure names the candidates and points at the explicit two-arg form.
+#[rstest]
+#[case("root", &["toggle"], "nothing_toggleable")]
+#[case("toggle_many_inputs", &["toggle"], "multiple_toggleable")]
+#[case("toggle_flat", &["toggle", "rust-overlai"], "unknown_input")]
+#[case("toggle_follows_only", &["toggle", "nixpkgs-lib"], "follows_only")]
+#[case("toggle_flat", &["toggle", "nixpkgs"], "no_alternate")]
+#[case("toggle_multi", &["toggle", "rust-overlay"], "ambiguous_variant")]
+#[case("toggle_flat", &["toggle", "github:nobody/nothing"], "ref_unmatched")]
+#[case("toggle_shared_repo", &["toggle", "github:nixos/nixpkgs"], "ref_ambiguous")]
+#[case("toggle_flat", &["toggle", "./does-not-exist-here"], "path_missing")]
+#[case("toggle_block", &["toggle", "github:oxalica/rust-overlay"], "already_active")]
+fn test_toggle_errors(#[case] fixture: &str, #[case] args: &[&str], #[case] suffix: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    error_filters(&mut settings);
+    settings.set_snapshot_suffix(format!("{fixture}_{suffix}"));
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .args(args)
+        );
+    });
+}
+
+/// `toggle --remove` deletes the resolved variant's line instead of
+/// activating it. Removing the active url flips to the stored alternate
+/// first, so the input always keeps exactly one active url.
+#[rstest]
+#[case("toggle_flat", &["toggle", "--remove"], "no_args")]
+#[case("toggle_flat", &["toggle", "--remove", "rust-overlay"], "id")]
+#[case("toggle_flat", &["toggle", "-r", "github:a-kenji/rust-overlay"], "ref_alternate")]
+#[case("toggle_flat", &["toggle", "--remove", "github:oxalica/rust-overlay"], "ref_active_flips_first")]
+#[case("toggle_toplevel_flat", &["toggle", "--remove", "github:ipetkov/crane"], "active_trailing_comment")]
+fn test_toggle_remove_diff(#[case] fixture: &str, #[case] args: &[&str], #[case] suffix: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    settings.set_snapshot_suffix(format!("{fixture}_{suffix}"));
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .args(args)
+        );
+    });
+}
+
+/// The non-interactive error catalogue of `toggle --remove`: an unstored
+/// ref has nothing to remove, the active url cannot be removed without a
+/// replacement, and ambiguity needs an explicit variant.
+#[rstest]
+#[case("toggle_flat", &["toggle", "--remove", "git+https://example.org/forks/rust-overlay"], "unstored")]
+#[case("toggle_block", &["toggle", "--remove", "github:oxalica/rust-overlay"], "active_no_alternate")]
+#[case("toggle_multi", &["toggle", "--remove", "rust-overlay"], "ambiguous_target")]
+#[case("toggle_multi", &["toggle", "--remove", "github:oxalica/rust-overlay"], "ambiguous_replacement")]
+fn test_toggle_remove_errors(#[case] fixture: &str, #[case] args: &[&str], #[case] suffix: &str) {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    error_filters(&mut settings);
+    settings.set_snapshot_suffix(format!("{fixture}_{suffix}"));
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path(fixture))
+                .arg("--diff")
+                .args(args)
+        );
+    });
+}
+
+/// `--remove` must accept a path-shaped ref whose directory no longer
+/// exists: cleaning up an alternate that points at a deleted checkout is
+/// precisely the removal use case, so the path-existence typo guard is
+/// relaxed here.
+#[test]
+fn toggle_remove_accepts_missing_path_ref() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let flake = tmp.path().join("flake.nix");
+    let content = r#"{
+  inputs = {
+    # rust-overlay.url = "path:../gone";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+  };
+  outputs = _: { };
+}
+"#;
+    fs::write(&flake, content).expect("write flake.nix");
+
+    let output = cli()
+        .arg("--flake")
+        .arg(&flake)
+        .arg("--no-lock")
+        .arg("toggle")
+        .arg("--remove")
+        .arg("../gone")
+        .current_dir(tmp.path())
+        .output()
+        .expect("run toggle --remove");
+    assert!(
+        output.status.success(),
+        "toggle --remove must accept a dead path: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let result = fs::read_to_string(&flake).expect("read flake.nix");
+    assert!(
+        !result.contains("path:../gone"),
+        "the stale alternate must be gone, got:\n{result}",
+    );
+    assert!(
+        result.contains(r#"rust-overlay.url = "github:oxalica/rust-overlay";"#),
+        "the active url must be untouched, got:\n{result}",
+    );
+}
+
+/// A malformed ref-shaped argument reuses the invalid-URI error with the
+/// parse failure in the `caused by:` chain, as `add` and `change` do.
+#[test]
+fn test_toggle_invalid_ref() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    error_filters(&mut settings);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("toggle_flat"))
+                .arg("--diff")
+                .arg("toggle")
+                .arg("github:")
+        );
+    });
+}
+
+/// `completion toggle` lists only inputs that have a stored alternate.
+#[test]
+fn test_completion_toggle() {
+    let mut settings = insta::Settings::clone_current();
+    path_redactions(&mut settings);
+    settings.bind(|| {
+        assert_cmd_snapshot!(
+            cli()
+                .arg("--flake")
+                .arg(fixture_path("toggle_flat"))
+                .arg("completion")
+                .arg("toggle")
+        );
+    });
+}
+
+#[test]
+fn toggle_resolves_path_ref_via_git_remote() {
+    if std::process::Command::new("git")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        eprintln!("skipping: git is not available in this environment");
+        return;
+    }
+
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let flake = tmp.path().join("flake.nix");
+    fs::copy(fixture_path("toggle_block"), &flake).expect("copy flake.nix");
+
+    // The basename deliberately matches no input id so only the remote
+    // identity can resolve it.
+    let checkout = tmp.path().join("my-fork");
+    fs::create_dir(&checkout).expect("create checkout");
+    for args in [
+        vec!["init", "--quiet"],
+        vec![
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/oxalica/rust-overlay.git",
+        ],
+    ] {
+        let status = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&checkout)
+            .args(&args)
+            .status()
+            .expect("run git");
+        assert!(status.success(), "git {args:?} must succeed");
+    }
+
+    let output = cli()
+        .arg("--flake")
+        .arg(&flake)
+        .arg("--no-lock")
+        .arg("toggle")
+        .arg("./my-fork")
+        .current_dir(tmp.path())
+        .output()
+        .expect("run toggle");
+    assert!(
+        output.status.success(),
+        "toggle must resolve the checkout via its git remote: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let result = fs::read_to_string(&flake).expect("read flake.nix");
+    assert!(
+        result.contains(r#"url = "path:./my-fork";"#),
+        "the typed path is stored with only a `path:` prefix added, got:\n{result}",
+    );
+    assert!(
+        result.contains(r#"# url = "github:oxalica/rust-overlay";"#),
+        "the previous url stays stored as an alternate, got:\n{result}",
+    );
+}
+
+#[test]
+fn toggle_resolves_path_ref_via_directory_basename() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let flake = tmp.path().join("flake.nix");
+    fs::copy(fixture_path("toggle_block"), &flake).expect("copy flake.nix");
+
+    let checkout = tmp.path().join("rust-overlay");
+    fs::create_dir(&checkout).expect("create checkout");
+
+    let output = cli()
+        .arg("--flake")
+        .arg(&flake)
+        .arg("--no-lock")
+        .arg("toggle")
+        .arg("./rust-overlay")
+        .current_dir(tmp.path())
+        .output()
+        .expect("run toggle");
+    assert!(
+        output.status.success(),
+        "toggle must resolve the directory via its basename: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let result = fs::read_to_string(&flake).expect("read flake.nix");
+    assert!(
+        result.contains(r#"url = "path:./rust-overlay";"#),
+        "expected the path variant to be active, got:\n{result}",
+    );
+}
+
+#[test]
+fn toggle_path_ref_equal_to_stored_variant_flips_it() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let flake_dir = tmp.path().join("project");
+    fs::create_dir(&flake_dir).expect("create project dir");
+    let flake = flake_dir.join("flake.nix");
+    let checkout = tmp.path().join("rust-overlay");
+    fs::create_dir(&checkout).expect("create checkout");
+
+    let content = r#"{
+  inputs = {
+    # rust-overlay.url = "path:../rust-overlay";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+  };
+  outputs = _: { };
+}
+"#;
+    fs::write(&flake, content).expect("write flake.nix");
+
+    // Typed relative to the cwd (the tempdir root), stored relative to
+    // the flake's directory. Both canonicalize to the same checkout.
+    let output = cli()
+        .arg("--flake")
+        .arg(&flake)
+        .arg("--no-lock")
+        .arg("toggle")
+        .arg("./rust-overlay")
+        .current_dir(tmp.path())
+        .output()
+        .expect("run toggle");
+    assert!(
+        output.status.success(),
+        "toggle must match the stored path variant: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let result = fs::read_to_string(&flake).expect("read flake.nix");
+    assert!(
+        result.contains(r#"rust-overlay.url = "path:../rust-overlay";"#),
+        "the stored alternate must be activated, not duplicated, got:\n{result}",
+    );
+    assert_eq!(
+        result.matches("path:").count(),
+        1,
+        "no duplicate alternate may be synthesized, got:\n{result}",
+    );
+}

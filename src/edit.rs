@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::change::Change;
 use crate::error::Error;
 use crate::input::{Follows, Input};
 use crate::validate;
-use crate::walk::Walker;
+use crate::walk::{Walker, toggle};
 
 pub struct FlakeEdit {
     walker: Walker,
@@ -33,6 +33,16 @@ pub enum OutputChange {
     None,
     Add(String),
     Remove(String),
+}
+
+/// Toggle surface of one input: its active url and the stored alternates
+/// adjacent to it, in file order.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ToggleState {
+    /// The currently active url.
+    pub active: String,
+    /// Urls of the commented alternates next to the active binding.
+    pub alternates: Vec<String>,
 }
 
 /// Result of applying a [`Change`].
@@ -106,6 +116,8 @@ impl FlakeEdit {
             Change::Remove { .. } => self.apply_remove(change),
             Change::Follows { .. } => self.apply_follows(change),
             Change::Change { .. } => self.apply_change_uri(change),
+            Change::Toggle { .. } => self.apply_toggle(change),
+            Change::ToggleRemove { .. } => self.apply_toggle_remove(change),
         }
     }
 
@@ -238,6 +250,108 @@ impl FlakeEdit {
         }
 
         Ok(self.walker.walk(&change)?.map(|n| n.to_string()))
+    }
+
+    /// A `Change::Toggle` edits through [`crate::walk::toggle`] directly
+    /// rather than the traversal in `walk`: the url binding is found via
+    /// the range recorded on the input, and the flip or new-alternate
+    /// write is a local green-tree rewrite around it.
+    fn apply_toggle(&mut self, change: Change) -> Result<Option<String>, Error> {
+        let Change::Toggle { id, uri, .. } = change else {
+            unreachable!("apply_toggle dispatched only for Change::Toggle");
+        };
+
+        self.ensure_inputs_populated()?;
+
+        let id_str = id.input().as_str().to_string();
+        let Some(input) = self.walker.inputs.get(&id_str) else {
+            return Err(Error::InputNotFound(id_str));
+        };
+        let Some(binding) = toggle::url_binding(&self.walker.root, input) else {
+            return Err(Error::NoUrlToToggle(id_str));
+        };
+        let parent = binding
+            .parent()
+            .expect("a url binding always sits inside an enclosing node");
+
+        let alternates = toggle::alternates(&binding);
+        if let Some(alternate) = alternates.iter().find(|a| a.url == uri) {
+            return Ok(Some(toggle::flip(&parent, &binding, alternate).to_string()));
+        }
+        if input.url() == uri {
+            // The url is already active and not stored as an alternate.
+            // Creating one would write a duplicate line below it, so this
+            // is a no-op.
+            return Ok(None);
+        }
+        Ok(Some(
+            toggle::synthesize(&parent, &binding, &uri).to_string(),
+        ))
+    }
+
+    /// A `Change::ToggleRemove` deletes the resolved variant's line through
+    /// [`crate::walk::toggle`]. Removing a stored alternate drops its
+    /// comment and leaves the active url untouched. Removing the active url
+    /// activates `activate` in its place and drops the previously active
+    /// line. A `uri` that is not stored on the input is a no-op.
+    fn apply_toggle_remove(&mut self, change: Change) -> Result<Option<String>, Error> {
+        let Change::ToggleRemove { id, uri, activate } = change else {
+            unreachable!("apply_toggle_remove dispatched only for Change::ToggleRemove");
+        };
+
+        self.ensure_inputs_populated()?;
+
+        let id_str = id.input().as_str().to_string();
+        let Some(input) = self.walker.inputs.get(&id_str) else {
+            return Err(Error::InputNotFound(id_str));
+        };
+        let Some(binding) = toggle::url_binding(&self.walker.root, input) else {
+            return Err(Error::NoUrlToToggle(id_str));
+        };
+        let parent = binding
+            .parent()
+            .expect("a url binding always sits inside an enclosing node");
+
+        let alternates = toggle::alternates(&binding);
+        if let Some(alternate) = alternates.iter().find(|a| a.url == uri) {
+            return Ok(Some(
+                toggle::remove_alternate(&parent, alternate).to_string(),
+            ));
+        }
+        if input.url() == uri {
+            let replacement = activate
+                .and_then(|activate| alternates.into_iter().find(|a| a.url == activate))
+                .ok_or(Error::RemoveActiveWithoutAlternate(id_str))?;
+            return Ok(Some(
+                toggle::flip_remove(&parent, &binding, &replacement).to_string(),
+            ));
+        }
+        Ok(None)
+    }
+
+    /// Toggle states for every input with a url binding, keyed by input
+    /// id. Inputs without one (follows-only inputs) are absent. An input
+    /// is toggleable when its state lists at least one alternate.
+    pub fn toggle_states(&mut self) -> Result<BTreeMap<String, ToggleState>, Error> {
+        self.ensure_inputs_populated()?;
+        let mut states = BTreeMap::new();
+        for (id, input) in &self.walker.inputs {
+            let Some(binding) = toggle::url_binding(&self.walker.root, input) else {
+                continue;
+            };
+            let alternates = toggle::alternates(&binding)
+                .into_iter()
+                .map(|a| a.url)
+                .collect();
+            states.insert(
+                id.clone(),
+                ToggleState {
+                    active: input.url().to_string(),
+                    alternates,
+                },
+            );
+        }
+        Ok(states)
     }
 
     pub fn walker(&self) -> &Walker {

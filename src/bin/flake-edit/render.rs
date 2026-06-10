@@ -42,6 +42,12 @@ pub(crate) fn report(err: &app::Error) {
         }
     }
 
+    if let Some(bullets) = err.candidate_bullets() {
+        for line in bullets {
+            let _ = writeln!(stderr, "  - {line}");
+        }
+    }
+
     write_caused_by_chain(&mut stderr, &style, err);
 
     if let Some(hint) = hint_for(err) {
@@ -112,6 +118,7 @@ fn write_caused_by_chain(out: &mut impl io::Write, style: &Style, err: &app::Err
 /// headline.
 fn hint_for(err: &app::Error) -> Option<String> {
     use app::Error;
+    use app::error::ToggleAction;
     match err {
         Error::Flake(inner) => inner.hint(),
         Error::FollowsCreateFailed { id } => Some(format!(
@@ -127,6 +134,50 @@ fn hint_for(err: &app::Error) -> Option<String> {
         Error::Batch { .. } => {
             Some("run `flake-edit list` against each failing file to verify input names".into())
         }
+        Error::NoToggleableInputs => Some(
+            "an input is toggleable when a commented alternate sits next to its url, e.g.\n        \
+             rust-overlay.url = \"github:oxalica/rust-overlay\";\n        \
+             # rust-overlay.url = \"github:a-kenji/rust-overlay\";\n      \
+             store one with `flake-edit toggle <id> <ref>`"
+                .into(),
+        ),
+        Error::MultipleToggleableInputs { .. } => {
+            Some("pick one with `flake-edit toggle <id>`".into())
+        }
+        Error::ToggleUnknownInput { .. } => {
+            Some("run `flake-edit list` to see the current inputs".into())
+        }
+        Error::ToggleNoAlternate { id } => Some(format!(
+            "store one and switch to it with `flake-edit toggle {id} <ref>`"
+        )),
+        Error::ToggleAmbiguousVariant { id, action, .. } => match action {
+            ToggleAction::Activate => {
+                Some(format!("name the variant: `flake-edit toggle {id} <ref>`"))
+            }
+            ToggleAction::Remove => Some(format!(
+                "name the variant: `flake-edit toggle --remove {id} <ref>`"
+            )),
+        },
+        Error::ToggleRefUnmatched { reference } => Some(format!(
+            "no variant, git remote, or directory name corresponds to an input; name it\n      \
+             explicitly: `flake-edit toggle <id> {reference}`"
+        )),
+        Error::ToggleRefAmbiguous { reference, .. } => Some(format!(
+            "name the input explicitly: `flake-edit toggle <id> {reference}`"
+        )),
+        Error::TogglePathMissing { .. } => {
+            Some("check the path, or pass a remote ref like `github:owner/repo`".into())
+        }
+        Error::ToggleAlreadyActive { id, .. } => Some(format!(
+            "store one with `flake-edit toggle {id} <other-ref>`"
+        )),
+        Error::ToggleRemoveUnstored { id, .. } => Some(format!(
+            "name one of the stored variants: `flake-edit toggle --remove {id} <ref>`"
+        )),
+        Error::ToggleRemoveActive { id, .. } => Some(format!(
+            "set a new url with `flake-edit change {id} <uri>`, or drop the input with \
+             `flake-edit remove {id}`"
+        )),
         _ => None,
     }
 }

@@ -24,6 +24,7 @@ There is a mechanism to deduplicate transitive dependencies: `flake-edit.inputs.
     - [`$ flake-edit change`](#-flake-edit-change)
     - [`$ flake-edit pin`](#-flake-edit-pin)
     - [`$ flake-edit unpin`](#-flake-edit-unpin)
+    - [`$ flake-edit toggle`](#-flake-edit-toggle)
     - [`$ flake-edit list`](#-flake-edit-list)
     - [`$ flake-edit follow`](#-flake-edit-follow)
     - [`$ flake-edit config`](#-flake-edit-config)
@@ -44,7 +45,7 @@ There is a mechanism to deduplicate transitive dependencies: `flake-edit.inputs.
 <!-- `$ flake-edit help` -->
 
 ```
-Edit your flake inputs with ease.
+Edit your flake inputs with ease
 
 Usage: flake-edit [OPTIONS] <COMMAND>
 
@@ -63,6 +64,8 @@ Commands:
           Pin inputs to their current or a specified rev
   unpin
           Unpin an input so it tracks the upstream default again
+  toggle
+          Toggle an input between its active url and a stored alternate
   follow
           Automatically add and remove follows declarations
   add-follow
@@ -74,23 +77,32 @@ Commands:
 
 Options:
       --flake <FLAKE>
-          Location of the `flake.nix` file, that will be used. Defaults to `flake.nix` in the current directory
+          Path to `flake.nix`, or a directory containing `flake.nix`. Defaults to `flake.nix` in the current directory
+
       --lock-file <LOCK_FILE>
           Location of the `flake.lock` file. Defaults to `flake.lock` in the current directory
+
       --diff
-          Print a diff of the changes, will not write the changes to disk
+          Print a diff of the changes instead of writing them to disk
+
       --no-lock
           Skip updating the lockfile after editing flake.nix
+
       --non-interactive
           Disable interactive prompts
+
       --no-cache
           Disable reading from and writing to the completion cache
+
       --cache <CACHE>
           Path to a custom cache file
+
       --config <CONFIG>
           Path to a custom configuration file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
+
   -V, --version
           Print version
 ```
@@ -240,6 +252,47 @@ Options:
 ```
 ![flake-edit unpin example](https://vhs.charm.sh/vhs-G8Eo84Ysjpt5c09Q9VD4u.gif)
 
+### `$ flake-edit toggle`
+<!-- `$ flake-edit help toggle` -->
+
+```
+Toggle an input between its active url and a stored alternate.
+
+Alternates live as commented copies of the url line next to the active one. Flipping moves only the comment marker.
+
+Usage: flake-edit toggle [OPTIONS] [INPUT] [REF]
+
+Arguments:
+  [INPUT]
+          An input id, or a flake reference to activate
+
+  [REF]
+          The variant to activate, stored as a new alternate when not yet present
+
+Options:
+  -r, --remove
+          Remove the resolved variant's line instead of activating it. Removing the active url flips to the stored alternate first
+
+      --config <CONFIG>
+          Path to a custom configuration file
+
+  -h, --help
+          Print help (see a summary with '-h')
+```
+![flake-edit toggle flip example](https://vhs.charm.sh/vhs-7JYfXoaZVtOUqDPmCfFe8.gif)
+
+Switch an input to a new variant, keeping the previous url as a commented alternative.
+When working on flakes you might want to quickly switch between a local checkout, or an alternative branch.
+This allows you to quickly toggle between all the alternative commented inputs that have the same input ID.
+
+![flake-edit toggle example](https://vhs.charm.sh/vhs-1acgBYYAYs8evMb0lkOXXZ.gif)
+
+This toggles the selected input with its matching ID and also adds the new input as its active ID.
+This can quickly be undone through `flake-edit toggle --remove [ID]`, which will activate the commented out
+section that was selected, but will remove the already activated ID again.
+![flake-edit toggle remove example](https://vhs.charm.sh/vhs-5I9lK4p4d5xZwXpR1PyTdt.gif)
+
+
 ### `$ flake-edit list`
 <!-- `$ flake-edit help list` -->
 
@@ -250,7 +303,7 @@ Usage: flake-edit list [OPTIONS]
 
 Options:
       --format <FORMAT>
-          [default: detailed]
+          [default: detailed] [possible values: simple, toplevel, detailed, json]
       --config <CONFIG>
           Path to a custom configuration file
   -h, --help
@@ -280,6 +333,9 @@ Arguments:
 Options:
       --transitive [<TRANSITIVE>]
           Enable transitive follows deduplication, promoting shared nested inputs to top-level when they appear at least N times. Defaults to 2 if no value is given. Overrides the config file's `follow.transitive_min`
+
+      --depth <DEPTH>
+          Maximum depth of follows declarations to write. Omitting the flag writes follows at every depth the lockfile graph supports. `--depth N` caps emission: 1 writes only `parent.child.follows`, 2 also writes `parent.child.grandchild.follows`, and so on. Overrides the config file's `follow.max_depth`
 
       --config <CONFIG>
           Path to a custom configuration file
@@ -410,6 +466,13 @@ Run `flake-edit config --print-default` to create a default configuration:
 # Example: if nested input is "nixpkgs-lib" and top-level "nixpkgs" exists,
 # follow will suggest: poetry2nix.nixpkgs-lib -> nixpkgs
 # aliases = { nixpkgs = ["nixpkgs-lib"] }
+
+# Maximum depth of follows declarations to write.
+# Unset (the default) writes follows at every depth the lockfile graph
+# supports. Set an explicit number to cap the depth: 1 writes only
+# `parent.nested.follows = "target"`, 2 also writes
+# `parent.middle.grandchild.follows = "target"`, and so on.
+# max_depth = 1
 ```
 
 ## As a library
