@@ -55,25 +55,20 @@ pub struct InputScreen {
 #[derive(Debug, Clone)]
 pub struct ListScreen {
     pub state: ListState,
-    pub items: Vec<String>,
     pub prompt: String,
 }
 
 impl ListScreen {
     pub fn single(items: Vec<String>, prompt: impl Into<String>, show_diff: bool) -> Self {
-        let len = items.len();
         Self {
-            state: ListState::new(len, false, show_diff),
-            items,
+            state: ListState::new(items, false, show_diff),
             prompt: prompt.into(),
         }
     }
 
     pub fn multi(items: Vec<String>, prompt: impl Into<String>, show_diff: bool) -> Self {
-        let len = items.len();
         Self {
-            state: ListState::new(len, true, show_diff),
-            items,
+            state: ListState::new(items, true, show_diff),
             prompt: prompt.into(),
         }
     }
@@ -495,7 +490,7 @@ impl App {
                     .state
                     .selected_indices()
                     .iter()
-                    .filter_map(|&i| screen.items.get(i).cloned())
+                    .filter_map(|&i| screen.state.items().get(i).cloned())
                     .collect();
 
                 if !selected_items.is_empty() {
@@ -556,8 +551,7 @@ impl App {
         self.show_diff = show_diff;
         // Also update ListState if we're on a list screen
         if let Screen::List(ref mut screen) = self.screen {
-            screen.state =
-                ListState::new(screen.items.len(), screen.state.multi_select(), show_diff);
+            screen.state.set_show_diff(show_diff);
         }
         self
     }
@@ -623,13 +617,15 @@ impl App {
     }
 
     fn update_list(&mut self, mut screen: ListScreen, key: KeyEvent) -> UpdateResult {
-        let action = ListAction::from_key(key);
+        let action = ListAction::from_key(key, screen.state.search_active());
         if let Some(result) = screen.state.handle(action) {
             match result {
                 ListResult::Select(indices, show_diff) => {
                     self.show_diff = show_diff;
-                    let items: Vec<String> =
-                        indices.iter().map(|&i| screen.items[i].clone()).collect();
+                    let items: Vec<String> = indices
+                        .iter()
+                        .map(|&i| screen.state.items()[i].clone())
+                        .collect();
                     self.handle_list_submit(indices, items)
                 }
                 ListResult::Cancel => {
@@ -913,7 +909,7 @@ impl App {
                 );
                 input.required_height()
             }
-            Screen::List(s) => super::helpers::list_height(s.items.len(), MAX_LIST_HEIGHT),
+            Screen::List(s) => super::helpers::list_height(s.state.len(), MAX_LIST_HEIGHT),
             Screen::Confirm(s) => super::helpers::diff_height(s.diff.lines().count()),
         }
     }

@@ -50,16 +50,14 @@ impl Widget for &App {
                         let diff_lines = diff.lines().count();
                         let (main_area, diff_area) =
                             layouts::content_with_diff_preview(area, diff_lines);
-                        List::new(&screen.state, &screen.items, &screen.prompt, self.context())
+                        List::new(&screen.state, &screen.prompt, self.context())
                             .render(main_area, buf);
                         render_diff_preview(&diff, diff_area, buf);
                     } else {
-                        List::new(&screen.state, &screen.items, &screen.prompt, self.context())
-                            .render(area, buf);
+                        List::new(&screen.state, &screen.prompt, self.context()).render(area, buf);
                     }
                 } else {
-                    List::new(&screen.state, &screen.items, &screen.prompt, self.context())
-                        .render(area, buf);
+                    List::new(&screen.state, &screen.prompt, self.context()).render(area, buf);
                 }
             }
             Screen::Confirm(screen) => {

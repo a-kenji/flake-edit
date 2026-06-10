@@ -691,6 +691,102 @@ fn test_list_wrap_around(#[case] fixture_name: &str) {
 
 #[rstest]
 #[case("root")]
+fn test_list_search_filters_and_selects(#[case] fixture_name: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let height = (fixture.inputs.len() as u16 + 3).min(12);
+    let mut list_terminal = create_test_terminal(80, height);
+    let mut input_terminal = create_test_terminal(80, 4);
+    let app = app_from_args_with_fixture("change", &fixture).unwrap();
+    let mut session = TestSession::new(app, "change");
+
+    // Enter search mode and narrow down to flake-utils
+    session.press('/');
+    session.type_text("fl");
+    insta::with_settings!({
+        snapshot_suffix => format!("{fixture_name}_1_filtered"),
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut list_terminal, session.app()));
+    });
+
+    // Enter selects the filtered match and moves to the URI input
+    let result = session.submit();
+    assert!(matches!(result, UpdateResult::Continue));
+    insta::with_settings!({
+        snapshot_suffix => format!("{fixture_name}_2_selected"),
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut input_terminal, session.app()));
+    });
+}
+
+#[rstest]
+#[case("root")]
+fn test_list_search_escape_restores_full_list(#[case] fixture_name: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let height = (fixture.inputs.len() as u16 + 3).min(12);
+    let mut terminal = create_test_terminal(80, height);
+    let app = app_from_args_with_fixture("change", &fixture).unwrap();
+    let mut session = TestSession::new(app, "change");
+
+    session.press('/');
+    session.type_text("fl");
+    let result = session.escape();
+    // Escape only leaves search mode, it does not cancel the TUI
+    assert!(matches!(result, UpdateResult::Continue));
+
+    insta::with_settings!({
+        snapshot_suffix => fixture_name,
+        description => session.description()
+    }, {
+        insta::assert_snapshot!(snapshot(&mut terminal, session.app()));
+    });
+}
+
+#[rstest]
+#[case("root")]
+fn test_multi_select_search_keeps_selections(#[case] fixture_name: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let app = app_from_args_with_fixture("update", &fixture).unwrap();
+    let mut session = TestSession::new(app, "update");
+
+    // Select "crane" on the full list, then "nixpkgs" through a filter
+    session.toggle_select();
+    session.press('/');
+    session.type_text("nix");
+    session.toggle_select();
+    session.escape();
+    let result = session.submit();
+    assert!(matches!(result, UpdateResult::Done));
+
+    let app_result = session.app().clone().extract_result();
+    match app_result {
+        Some(flake_edit::tui::AppResult::MultiSelect(data)) => {
+            assert_eq!(data.items, vec!["crane".to_string(), "nixpkgs".to_string()]);
+        }
+        other => panic!("expected multi-select result, got {other:?}"),
+    }
+}
+
+#[rstest]
+#[case("root")]
+fn test_input_screen_slash_is_literal(#[case] fixture_name: &str) {
+    let fixture = Fixture::load(fixture_name);
+    let app = app_from_args_with_fixture("add", &fixture).unwrap();
+    let mut session = TestSession::new(app, "add");
+
+    // On free-text screens `/` must insert a slash, not start a search
+    session.type_text("github:a-kenji/flake-edit");
+    match session.app().screen() {
+        flake_edit::tui::app::Screen::Input(screen) => {
+            assert_eq!(screen.state.text(), "github:a-kenji/flake-edit");
+        }
+        other => panic!("expected input screen, got {other:?}"),
+    }
+}
+
+#[rstest]
+#[case("root")]
 fn test_multi_select_toggle(#[case] fixture_name: &str) {
     let fixture = Fixture::load(fixture_name);
     let height = (fixture.inputs.len() as u16 + 3).min(12);
