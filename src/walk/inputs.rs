@@ -13,7 +13,7 @@ use super::node::{
     insertion_index_after, is_attrset_content_empty, last_line_with_newline, make_attrset_url_attr,
     make_attrset_url_flake_false_attr, make_flake_false_attr, make_quoted_string, make_url_attr,
     parse_node, remove_child_with_whitespace, should_remove_input, should_remove_nested_input,
-    substitute_child, trailing_inline_comment_indices, uses_attrset_style,
+    substitute_child, trailing_inline_comments, uses_attrset_style,
 };
 
 /// Insert or update `inputs[id]` from a parsed `Input`.
@@ -82,9 +82,14 @@ pub(crate) fn walk_inputs(
         // effect of populating the `inputs` map via the per-attr handlers, and
         // `Remove`/`Change` rewrite a single matched child in place. All three
         // only need to traverse children, never rebuilding the block.
-        Change::None | Change::Remove { .. } | Change::Change { .. } => {
-            walk_children(inputs, &node, ctx, change)
-        }
+        // The toggle changes never reach the walk because `FlakeEdit`
+        // edits through `walk::toggle` directly. Grouped here for
+        // exhaustiveness.
+        Change::None
+        | Change::Remove { .. }
+        | Change::Change { .. }
+        | Change::Toggle { .. }
+        | Change::ToggleRemove { .. } => walk_children(inputs, &node, ctx, change),
     }
 }
 
@@ -510,7 +515,10 @@ fn handle_child_attrpath_value(
             .replace_child(child.index(), replacement.green().into());
 
         if replacement.text().is_empty() {
-            let mut to_remove = trailing_inline_comment_indices(child);
+            let mut to_remove: Vec<usize> = trailing_inline_comments(child)
+                .iter()
+                .map(|t| t.index())
+                .collect();
             if let Some(ws_index) = adjacent_whitespace_index(child) {
                 to_remove.push(ws_index);
             }

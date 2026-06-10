@@ -1,0 +1,23 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/root.flake.nix"
+    - "--diff"
+    - toggle
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+error: no toggleable inputs in flake.nix
+
+hint: an input is toggleable when a commented alternate sits next to its url, e.g.
+        rust-overlay.url = "github:oxalica/rust-overlay";
+        # rust-overlay.url = "github:a-kenji/rust-overlay";
+      store one with `flake-edit toggle <id> <ref>`

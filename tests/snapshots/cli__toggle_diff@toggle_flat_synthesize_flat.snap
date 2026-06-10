@@ -1,0 +1,31 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/toggle_flat.flake.nix"
+    - "--diff"
+    - toggle
+    - rust-overlay
+    - "git+https://example.org/forks/rust-overlay"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -2,7 +2,8 @@
+   inputs = {
+     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+     # rust-overlay.url = "github:a-kenji/rust-overlay";
+-    rust-overlay.url = "github:oxalica/rust-overlay";
++    # rust-overlay.url = "github:oxalica/rust-overlay";
++    rust-overlay.url = "git+https://example.org/forks/rust-overlay";
+     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+   };
+   outputs = args: import ./nix args;
+
+----- stderr -----

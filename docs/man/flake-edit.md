@@ -36,6 +36,26 @@ Pin an input to its current revision:
 > flake-edit pin nixpkgs
 > ```
 
+Toggle an input between its active url and a stored alternate:
+
+> ```
+> flake-edit toggle rust-overlay
+> ```
+
+Switch an input to a local checkout, storing the previous url as a
+commented alternate:
+
+> ```
+> flake-edit toggle ../rust-overlay
+> ```
+
+Remove a stored variant's line; naming the active url flips to the
+alternate first:
+
+> ```
+> flake-edit toggle --remove ../rust-overlay
+> ```
+
 Preview changes without applying them:
 
 > ```

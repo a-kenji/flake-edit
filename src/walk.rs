@@ -5,6 +5,7 @@ mod error;
 mod inputs;
 mod node;
 mod outputs;
+pub(crate) mod toggle;
 
 use std::collections::HashMap;
 

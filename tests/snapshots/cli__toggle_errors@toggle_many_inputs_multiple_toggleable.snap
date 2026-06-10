@@ -1,0 +1,22 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/toggle_many_inputs.flake.nix"
+    - "--diff"
+    - toggle
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+error: multiple toggleable inputs
+  - nixpkgs: github:nixos/nixpkgs/nixos-unstable <-> github:nixos/nixpkgs/nixos-25.05
+  - rust-overlay: github:oxalica/rust-overlay <-> path:../rust-overlay
+
+hint: pick one with `flake-edit toggle <id>`

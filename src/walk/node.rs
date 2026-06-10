@@ -98,15 +98,15 @@ pub(crate) fn insertion_index_after(node: &SyntaxNode) -> usize {
     last_index
 }
 
-/// Indices of the trailing same-line tokens after `child` (the inline
-/// whitespace and a `# ...` comment that sit on the statement's own line).
+/// Trailing same-line tokens after `child` (the inline whitespace and a
+/// `# ...` comment that sit on the statement's own line).
 ///
 /// Returns an empty vec unless a `TOKEN_COMMENT` trails the statement before
 /// the next newline. A comment on its own line is preceded by a newline-bearing
 /// whitespace token, so the walk stops before reaching it and the comment is
-/// left untouched. The returned indices, together with the removed statement,
-/// keep a trailing comment from moving onto a neighbouring line.
-pub(crate) fn trailing_inline_comment_indices(child: &rnix::SyntaxElement) -> Vec<usize> {
+/// left untouched. The returned tokens, together with the removed or rewritten
+/// statement, keep a trailing comment from moving onto a neighbouring line.
+pub(crate) fn trailing_inline_comments(child: &rnix::SyntaxElement) -> Vec<rnix::SyntaxElement> {
     let mut pending = Vec::new();
     let mut cursor = child.next_sibling_or_token();
     while let Some(tok) = cursor {
@@ -115,10 +115,10 @@ pub(crate) fn trailing_inline_comment_indices(child: &rnix::SyntaxElement) -> Ve
                 if tok.to_string().contains('\n') {
                     break;
                 }
-                pending.push(tok.index());
+                pending.push(tok.clone());
             }
             SyntaxKind::TOKEN_COMMENT => {
-                pending.push(tok.index());
+                pending.push(tok.clone());
                 return pending;
             }
             _ => break,
@@ -137,7 +137,7 @@ pub(crate) fn remove_child_with_whitespace(
 ) -> SyntaxNode {
     let element: rnix::SyntaxElement = node.clone().into();
     let mut to_remove = vec![index];
-    to_remove.extend(trailing_inline_comment_indices(&element));
+    to_remove.extend(trailing_inline_comments(&element).iter().map(|t| t.index()));
     if let Some(ws_index) = adjacent_whitespace_index(&element) {
         to_remove.push(ws_index);
     }

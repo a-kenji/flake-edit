@@ -1,0 +1,22 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/toggle_block.flake.nix"
+    - "--diff"
+    - toggle
+    - "github:oxalica/rust-overlay"
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+error: 'github:oxalica/rust-overlay' is already the active variant of 'rust-overlay'
+       and no alternate is stored
+
+hint: store one with `flake-edit toggle rust-overlay <other-ref>`

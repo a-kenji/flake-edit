@@ -37,6 +37,14 @@ pub enum Error {
     /// Tried to operate on an input id that is not declared in the flake.
     #[error("input '{0}' not found in the flake")]
     InputNotFound(String),
+    /// Tried to toggle an input that has no url binding (e.g. a
+    /// follows-only input).
+    #[error("input '{0}' has no url to toggle (follows-only input)")]
+    NoUrlToToggle(String),
+    /// Tried to remove an input's active url without a stored alternate to
+    /// take its place; honoring it would leave the input url-less.
+    #[error("cannot remove the active url of '{0}' without an alternate to activate")]
+    RemoveActiveWithoutAlternate(String),
     /// The `add-follow` subcommand received a path deeper than `parent.child`.
     /// `flake-edit follow` accepts deeper paths, bounded by
     /// [`crate::config::FollowConfig::max_depth`] when that is set; this

@@ -40,6 +40,7 @@ pub fn run(args: CliArgs) -> Result<()> {
         Command::Update { .. } => dispatch_update(&args, &editor, &mut flake_edit, &state)?,
         Command::Pin { .. } => dispatch_pin(&args, &editor, &mut flake_edit, &state)?,
         Command::Unpin { .. } => dispatch_unpin(&args, &editor, &mut flake_edit, &state)?,
+        Command::Toggle { .. } => dispatch_toggle(&args, &editor, &mut flake_edit, &state)?,
         Command::Follow { .. } => dispatch_follow(&args, &editor, &mut flake_edit, &mut state)?,
         Command::AddFollow { .. } => {
             dispatch_add_follow(&args, &editor, &mut flake_edit, &mut state)?
@@ -207,6 +208,30 @@ fn dispatch_unpin(
     commands::unpin(editor, flake_edit, state, id.clone())
 }
 
+fn dispatch_toggle(
+    args: &CliArgs,
+    editor: &Editor,
+    flake_edit: &mut FlakeEdit,
+    state: &AppState,
+) -> Result<()> {
+    let Command::Toggle {
+        input,
+        reference,
+        remove,
+    } = args.subcommand()
+    else {
+        unreachable!("wrong Command variant");
+    };
+    commands::toggle(
+        editor,
+        flake_edit,
+        state,
+        input.clone(),
+        reference.clone(),
+        *remove,
+    )
+}
+
 fn dispatch_follow(
     args: &CliArgs,
     editor: &Editor,
@@ -272,6 +297,14 @@ fn dispatch_completion(args: &CliArgs, flake_edit: &mut FlakeEdit, no_cache: boo
             if let Ok(lock) = crate::lock::FlakeLock::from_default_path() {
                 for nested in lock.nested_inputs() {
                     println!("{}", nested.path);
+                }
+            }
+        }
+        CompletionMode::Toggle => {
+            let states = flake_edit.toggle_states()?;
+            for (id, state) in states {
+                if !state.alternates.is_empty() {
+                    println!("{}", id);
                 }
             }
         }
