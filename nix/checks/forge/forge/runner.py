@@ -26,6 +26,14 @@ def write_empty_flake(machine: QemuMachine, path: str) -> None:
     machine.succeed(f"mkdir -p $(dirname {path}) && echo '{EMPTY_FLAKE}' > {path}")
 
 
+def write_flake_with_input(
+    machine: QemuMachine, path: str, *, input_id: str, url: str
+) -> None:
+    """Write a flake whose sole input is `input_id`, pinned to `url`."""
+    flake = f'{{ inputs.{input_id}.url = "{url}"; outputs = {{ ... }}: {{ }}; }}'
+    machine.succeed(f"mkdir -p $(dirname {path}) && echo '{flake}' > {path}")
+
+
 def run(
     *,
     forge: QemuMachine,
@@ -213,3 +221,69 @@ def run(
         flake_content = client.succeed("cat /tmp/channel-test/flake.nix")
         logger.info("flake.nix after nixpkgs- update: %s", flake_content)
         assert "nixpkgs-24.11" in flake_content, "Should be updated to nixpkgs-24.11"
+
+    # Tarball-archive inputs (`.../archive/<ref>.tar.gz`) expose no
+    # owner/repo to `nix_uri::FlakeRef`, so `update` resolves them on a
+    # dedicated path. These subtests cover it end to end.
+
+    with subtest("Create kenji/flake-edit repo with bare YY.MM date-channel branches"):
+        forge_fc.create_org(username="kenji", full_name="Kenji")
+        forge_fc.create_org_repo(
+            org="kenji",
+            name="flake-edit",
+            auto_init=True,
+            default_branch="25.11",
+        )
+        sha = forge_fc.branch_sha(repo="kenji/flake-edit", branch="25.11")
+        forge_fc.create_branch(repo="kenji/flake-edit", new="26.05", base_sha=sha)
+        branches = client_fc.list_branches(repo="kenji/flake-edit")
+        names = sorted(b["name"] for b in branches)
+        logger.info("kenji/flake-edit branches: %s", names)
+        assert "25.11" in names and "26.05" in names, "both date branches should exist"
+
+    with subtest("Archive bare YY.MM channel updates 25.11 -> 26.05"):
+        write_flake_with_input(
+            client,
+            "/tmp/archive-channel/flake.nix",
+            input_id="flake-edit",
+            url="http://forge:3000/kenji/flake-edit/archive/25.11.tar.gz",
+        )
+        client.succeed("cd /tmp/archive-channel && flake-edit update flake-edit 2>&1")
+        flake_content = client.succeed("cat /tmp/archive-channel/flake.nix")
+        logger.info("flake.nix after archive channel update: %s", flake_content)
+        assert "26.05.tar.gz" in flake_content, "archive ref should be bumped to 26.05"
+        assert "25.11" not in flake_content, "should no longer reference 25.11"
+
+    with subtest("Archive semver updates v1.0.0 -> v2.0.0"):
+        # Reuse test/project1, which by now carries tags v1.0.0/v1.5.0/v2.0.0.
+        write_flake_with_input(
+            client,
+            "/tmp/archive-semver/flake.nix",
+            input_id="project1",
+            url="http://forge:3000/test/project1/archive/v1.0.0.tar.gz",
+        )
+        client.succeed("cd /tmp/archive-semver && flake-edit update project1 2>&1")
+        flake_content = client.succeed("cat /tmp/archive-semver/flake.nix")
+        logger.info("flake.nix after archive semver update: %s", flake_content)
+        assert "v2.0.0.tar.gz" in flake_content, (
+            "archive ref should be bumped to v2.0.0"
+        )
+        assert "v1.0.0" not in flake_content, "should no longer reference v1.0.0"
+
+    with subtest("Archive nixos- channel updates nixos-24.05 -> nixos-24.11"):
+        # Reuse nixos/nixpkgs (branches nixos-24.05 / nixos-24.11).
+        write_flake_with_input(
+            client,
+            "/tmp/archive-nixos/flake.nix",
+            input_id="nixpkgs",
+            url="http://forge:3000/nixos/nixpkgs/archive/nixos-24.05.tar.gz",
+        )
+        client.succeed("cd /tmp/archive-nixos && flake-edit update nixpkgs 2>&1")
+        flake_content = client.succeed("cat /tmp/archive-nixos/flake.nix")
+        logger.info("flake.nix after archive nixos channel update: %s", flake_content)
+        assert "nixos-24.11.tar.gz" in flake_content, (
+            "archive ref should be bumped to nixos-24.11"
+        )
+        assert "nixos-24.05" not in flake_content, (
+            "should no longer reference nixos-24.05"
+        )
