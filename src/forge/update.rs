@@ -5,8 +5,9 @@ use std::collections::HashSet;
 use std::sync::Mutex;
 
 use super::api::{BatchLookup, ForgeClient};
+use super::archive::ArchiveUrl;
 use super::channel::{
-    UpdateStrategy, channel_probe_candidates, detect_strategy, find_latest_channel,
+    ChannelType, UpdateStrategy, channel_probe_candidates, detect_strategy, find_latest_channel,
     parse_channel_ref,
 };
 use super::version::{is_downgrade, parse_ref};
@@ -450,6 +451,12 @@ fn build_github_batch_lookups(pending: &[(UpdateInput, String)]) -> Vec<BatchLoo
 /// `tracing` and returned as `None`, so one flaky input never
 /// aborts the rest of the update run.
 fn compute_change(client: &ForgeClient, uri: &str, init: bool) -> Option<UpdatePlan> {
+    // `FlakeRef` exposes no owner/repo for tarball-archive URLs, so
+    // recover the parts from the URL string and resolve them here.
+    if let Some(archive) = ArchiveUrl::parse(uri) {
+        return compute_archive_change(client, &archive, init);
+    }
+
     let parsed = match uri.parse::<FlakeRef>() {
         Ok(p) => p,
         Err(e) => {
@@ -485,6 +492,104 @@ fn compute_change(client: &ForgeClient, uri: &str, init: bool) -> Option<UpdateP
         UpdateStrategy::SemverTags => {
             compute_semver_change(client, uri, &parsed, &owner, &repo, init)
         }
+    }
+}
+
+/// Resolve the new URI for a tarball-archive input
+/// (`<scheme>://<host>/<owner>/<repo>/archive/<ref>.<ext>`).
+///
+/// Routes on the ref token, not [`detect_strategy`]: a channel ref
+/// resolves via [`find_latest_channel`], a semver ref via
+/// [`ForgeClient::list_tags`], anything else returns `None`. The host
+/// is passed through as the forge domain.
+fn compute_archive_change(
+    client: &ForgeClient,
+    archive: &ArchiveUrl,
+    init: bool,
+) -> Option<UpdatePlan> {
+    let owner = archive.owner();
+    let repo = archive.repo();
+    let host = archive.host();
+    let current_ref = archive.ref_token();
+    let prefix = archive.ref_prefix_str();
+
+    if matches!(parse_channel_ref(current_ref), ChannelType::Unknown) {
+        let parsed_ref = parse_ref(current_ref, false);
+        if !init && semver::Version::parse(&parsed_ref.normalized_for_semver).is_err() {
+            tracing::debug!(
+                "Skipping archive input {}/{}: ref {} is neither a channel nor semver",
+                owner,
+                repo,
+                current_ref
+            );
+            return None;
+        }
+
+        let tags = match client.list_tags(owner, repo, Some(host)) {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::error!(
+                    "Failed to fetch tags for archive input {}/{} on {}: {}",
+                    owner,
+                    repo,
+                    host,
+                    e
+                );
+                return None;
+            }
+        };
+        let latest = match tags.get_latest_tag() {
+            Some(c) => c,
+            None => {
+                tracing::error!(
+                    "Could not find latest version for archive input {}/{}",
+                    owner,
+                    repo
+                );
+                return None;
+            }
+        };
+
+        if !init && is_downgrade(current_ref, &latest) {
+            tracing::warn!(
+                "Refusing to downgrade archive input {}/{} from {} to {}",
+                owner,
+                repo,
+                current_ref,
+                latest
+            );
+            eprintln!(
+                "Warning: skipping {}/{}: latest tag {} is older than the current pin {}.",
+                owner, repo, latest, current_ref
+            );
+            return None;
+        }
+
+        Some(UpdatePlan {
+            previous_ref: format!("{prefix}{current_ref}"),
+            final_change: format!("{prefix}{latest}"),
+            updated_uri: archive.with_ref(&latest),
+        })
+    } else {
+        let latest = match find_latest_channel(client, current_ref, owner, repo, Some(host)) {
+            Ok(Some(latest)) => latest,
+            Ok(None) => return None,
+            Err(e) => {
+                tracing::error!(
+                    "Failed to resolve latest channel for archive input {}/{}: {}",
+                    owner,
+                    repo,
+                    e
+                );
+                return None;
+            }
+        };
+
+        Some(UpdatePlan {
+            previous_ref: format!("{prefix}{current_ref}"),
+            final_change: format!("{prefix}{latest}"),
+            updated_uri: archive.with_ref(&latest),
+        })
     }
 }
 
