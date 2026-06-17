@@ -290,7 +290,7 @@ This allows you to quickly toggle between all the alternative commented inputs t
 This toggles the selected input with its matching ID and also adds the new input as its active ID.
 This can quickly be undone through `flake-edit toggle --remove [ID]`, which will activate the commented out
 section that was selected, but will remove the already activated ID again.
-![flake-edit toggle remove example](https://vhs.charm.sh/vhs-5I9lK4p4d5xZwXpR1PyTdt.gif)
+![flake-edit toggle remove example](https://vhs.charm.sh/vhs-7KfVVBNvLtUAk0vbk85yLr.gif)
 
 
 ### `$ flake-edit list`
