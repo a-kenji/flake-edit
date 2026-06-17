@@ -1,0 +1,22 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/toggle_flat.flake.nix"
+    - "--diff"
+    - toggle
+    - "github:nobody/nothing"
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+error: could not match 'github:nobody/nothing' to any input
+
+hint: no variant, git remote, or directory name corresponds to an input; name it
+      explicitly: `flake-edit toggle <id> github:nobody/nothing`

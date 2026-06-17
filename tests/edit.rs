@@ -564,3 +564,454 @@ fn follows_merges_into_existing_inputs_block() {
         "stylix block should carry the merged `systems.follows` inside the existing inputs block, got:\n{text}"
     );
 }
+
+/// Apply a `Change::Toggle` to `content` and return the resulting text.
+fn apply_toggle(content: &str, id: &str, uri: &str, previous: &str) -> String {
+    let mut flake_edit = FlakeEdit::from_text(content).unwrap();
+    let change = Change::Toggle {
+        id: flake_edit::change::ChangeId::parse(id).unwrap(),
+        uri: uri.to_owned(),
+        previous: previous.to_owned(),
+    };
+    flake_edit
+        .apply_change(change)
+        .expect("apply Change::Toggle must succeed")
+        .text
+        .expect("toggle must produce changed text")
+}
+
+#[test]
+fn toggle_states_detects_alternate_above_flat_url() {
+    let content = load_flake("toggle_flat");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let states = flake_edit.toggle_states().unwrap();
+    let state = &states["rust-overlay"];
+    assert_eq!(state.active, "github:oxalica/rust-overlay");
+    assert_eq!(state.alternates, vec!["github:a-kenji/rust-overlay"]);
+    assert!(states["nixpkgs"].alternates.is_empty());
+}
+
+#[test]
+fn toggle_states_orders_alternates_above_then_below() {
+    let content = r#"{
+  inputs = {
+    # crane.url = "github:a-kenji/crane";
+    crane.url = "github:ipetkov/crane";
+    # crane.url = "path:../crane";
+    nixpkgs.url = "github:nixos/nixpkgs";
+  };
+  outputs = _: { };
+}
+"#;
+    let mut flake_edit = FlakeEdit::from_text(content).unwrap();
+    let states = flake_edit.toggle_states().unwrap();
+    assert_eq!(
+        states["crane"].alternates,
+        vec!["github:a-kenji/crane", "path:../crane"],
+    );
+}
+
+#[test]
+fn toggle_states_ignores_prose_blank_line_and_wrong_attr_comments() {
+    let content = r#"{
+  # SPDX-License-Identifier: MIT
+
+  inputs = {
+    # this needs to be rolling so we're testing what most devs are using
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+    # crane.url = "github:a-kenji/crane";
+
+    crane.url = "github:ipetkov/crane";
+    # nixpkgs.url = "github:someone/nixpkgs";
+    fenix.url = "github:nix-community/fenix";
+  };
+  outputs = _: { };
+}
+"#;
+    let mut flake_edit = FlakeEdit::from_text(content).unwrap();
+    let states = flake_edit.toggle_states().unwrap();
+    // The prose comment does not parse as a binding.
+    assert!(
+        states["nixpkgs"].alternates.is_empty(),
+        "prose comment must not count"
+    );
+    // The crane alternate is separated from the binding by a blank line.
+    assert!(
+        states["crane"].alternates.is_empty(),
+        "blank line breaks adjacency"
+    );
+    // The nixpkgs-flavoured comment above fenix binds a different attribute.
+    assert!(
+        states["fenix"].alternates.is_empty(),
+        "wrong attribute must not count"
+    );
+}
+
+#[test]
+fn toggle_states_requires_string_literal_value() {
+    let content = r#"{
+  inputs = {
+    # crane.url = true;
+    crane.url = "github:ipetkov/crane";
+  };
+  outputs = _: { };
+}
+"#;
+    let mut flake_edit = FlakeEdit::from_text(content).unwrap();
+    let states = flake_edit.toggle_states().unwrap();
+    assert!(states["crane"].alternates.is_empty());
+}
+
+#[test]
+fn toggle_states_detects_block_form_and_quoted_ids() {
+    let content = r#"{
+  inputs = {
+    rust-overlay = {
+      # url = "github:a-kenji/rust-overlay";
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    # "hls-1.10".url = "github:haskell/haskell-language-server/1.10.0.0";
+    "hls-1.10".url = "github:haskell/haskell-language-server";
+    nixpkgs.url = "github:nixos/nixpkgs";
+  };
+  outputs = _: { };
+}
+"#;
+    let mut flake_edit = FlakeEdit::from_text(content).unwrap();
+    let states = flake_edit.toggle_states().unwrap();
+    assert_eq!(
+        states["rust-overlay"].alternates,
+        vec!["github:a-kenji/rust-overlay"],
+    );
+    assert_eq!(
+        states["hls-1.10"].alternates,
+        vec!["github:haskell/haskell-language-server/1.10.0.0"],
+    );
+}
+
+#[test]
+fn toggle_states_detects_toplevel_flat_alternate() {
+    let content = load_flake("toggle_toplevel_flat");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let states = flake_edit.toggle_states().unwrap();
+    assert_eq!(states["crane"].alternates, vec!["github:a-kenji/crane"]);
+    // A bare `# crane.url = ...` at top level would bind `crane.url`, not
+    // `inputs.crane.url`. Only the `inputs.`-prefixed spelling counts there.
+    assert!(states["nixpkgs"].alternates.is_empty());
+}
+
+#[test]
+fn toggle_flip_moves_only_the_comment_marker() {
+    let content = load_flake("toggle_flat");
+    let result = apply_toggle(
+        &content,
+        "rust-overlay",
+        "github:a-kenji/rust-overlay",
+        "github:oxalica/rust-overlay",
+    );
+    let expected = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    rust-overlay.url = "github:a-kenji/rust-overlay";
+    # rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+  };
+  outputs = args: import ./nix args;
+}
+"#;
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn toggle_twice_is_byte_identical() {
+    let content = load_flake("toggle_flat");
+    let once = apply_toggle(
+        &content,
+        "rust-overlay",
+        "github:a-kenji/rust-overlay",
+        "github:oxalica/rust-overlay",
+    );
+    let twice = apply_toggle(
+        &once,
+        "rust-overlay",
+        "github:oxalica/rust-overlay",
+        "github:a-kenji/rust-overlay",
+    );
+    assert_eq!(
+        twice, content,
+        "double toggle must restore the file byte for byte"
+    );
+}
+
+#[test]
+fn toggle_synthesizes_new_alternate_below_active_in_block_form() {
+    let content = load_flake("toggle_block");
+    let result = apply_toggle(
+        &content,
+        "rust-overlay",
+        "path:../rust-overlay",
+        "github:oxalica/rust-overlay",
+    );
+    let expected = r#"{
+  description = "A tool built on rust-overlay";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rust-overlay = {
+      # url = "github:oxalica/rust-overlay";
+      url = "path:../rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+
+  outputs = { self, nixpkgs, ... }: { };
+}
+"#;
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn toggle_no_space_comment_normalizes_once_then_stays_stable() {
+    let content = r#"{
+  inputs = {
+    #crane.url = "github:a-kenji/crane";
+    crane.url = "github:ipetkov/crane";
+  };
+  outputs = _: { };
+}
+"#;
+    let once = apply_toggle(
+        content,
+        "crane",
+        "github:a-kenji/crane",
+        "github:ipetkov/crane",
+    );
+    let twice = apply_toggle(
+        &once,
+        "crane",
+        "github:ipetkov/crane",
+        "github:a-kenji/crane",
+    );
+    let normalized = content.replace("#crane.url", "# crane.url");
+    assert_eq!(
+        twice, normalized,
+        "the only permitted change is `#x` -> `# x`"
+    );
+    let third = apply_toggle(
+        &twice,
+        "crane",
+        "github:a-kenji/crane",
+        "github:ipetkov/crane",
+    );
+    assert_eq!(third, once);
+    let fourth = apply_toggle(
+        &third,
+        "crane",
+        "github:ipetkov/crane",
+        "github:a-kenji/crane",
+    );
+    assert_eq!(
+        fourth, twice,
+        "round trips after normalization are byte-stable"
+    );
+}
+
+#[test]
+fn toggle_keeps_trailing_comment_on_its_line_in_both_directions() {
+    let content = load_flake("toggle_toplevel_flat");
+    let once = apply_toggle(
+        &content,
+        "crane",
+        "github:a-kenji/crane",
+        "github:ipetkov/crane",
+    );
+    let expected = r#"{
+  inputs.crane.url = "github:a-kenji/crane";
+  # inputs.crane.url = "github:ipetkov/crane"; # build tool
+  inputs.nixpkgs.url = "github:nixos/nixpkgs";
+
+  outputs = { self, ... }: { };
+}
+"#;
+    assert_eq!(once, expected);
+    let twice = apply_toggle(
+        &once,
+        "crane",
+        "github:ipetkov/crane",
+        "github:a-kenji/crane",
+    );
+    assert_eq!(twice, content);
+}
+
+/// Apply a `Change::ToggleRemove` to `content` and return the outcome text.
+fn apply_toggle_remove(
+    content: &str,
+    id: &str,
+    uri: &str,
+    activate: Option<&str>,
+) -> Option<String> {
+    let mut flake_edit = FlakeEdit::from_text(content).unwrap();
+    let change = Change::ToggleRemove {
+        id: flake_edit::change::ChangeId::parse(id).unwrap(),
+        uri: uri.to_owned(),
+        activate: activate.map(str::to_owned),
+    };
+    flake_edit
+        .apply_change(change)
+        .expect("apply Change::ToggleRemove must succeed")
+        .text
+}
+
+#[test]
+fn toggle_remove_deletes_alternate_above_active() {
+    let content = load_flake("toggle_flat");
+    let result = apply_toggle_remove(
+        &content,
+        "rust-overlay",
+        "github:a-kenji/rust-overlay",
+        None,
+    )
+    .expect("removing a stored alternate must change the text");
+    let expected = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+  };
+  outputs = args: import ./nix args;
+}
+"#;
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn toggle_remove_deletes_alternate_below_active() {
+    let content = load_flake("toggle_flat_flipped");
+    let result = apply_toggle_remove(
+        &content,
+        "rust-overlay",
+        "github:oxalica/rust-overlay",
+        None,
+    )
+    .expect("removing a stored alternate must change the text");
+    let expected = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    rust-overlay.url = "github:a-kenji/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+  };
+  outputs = args: import ./nix args;
+}
+"#;
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn toggle_remove_active_activates_alternate_and_deletes_line() {
+    let content = load_flake("toggle_flat");
+    let result = apply_toggle_remove(
+        &content,
+        "rust-overlay",
+        "github:oxalica/rust-overlay",
+        Some("github:a-kenji/rust-overlay"),
+    )
+    .expect("removing the active url must change the text");
+    let expected = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    rust-overlay.url = "github:a-kenji/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+  };
+  outputs = args: import ./nix args;
+}
+"#;
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn toggle_remove_active_takes_trailing_comment_along() {
+    let content = load_flake("toggle_toplevel_flat");
+    let result = apply_toggle_remove(
+        &content,
+        "crane",
+        "github:ipetkov/crane",
+        Some("github:a-kenji/crane"),
+    )
+    .expect("removing the active url must change the text");
+    let expected = r#"{
+  inputs.crane.url = "github:a-kenji/crane";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs";
+
+  outputs = { self, ... }: { };
+}
+"#;
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn toggle_synthesize_then_remove_restores_original() {
+    let content = load_flake("toggle_block");
+    let synthesized = apply_toggle(
+        &content,
+        "rust-overlay",
+        "github:a-kenji/rust-overlay",
+        "github:oxalica/rust-overlay",
+    );
+    let restored = apply_toggle_remove(
+        &synthesized,
+        "rust-overlay",
+        "github:a-kenji/rust-overlay",
+        Some("github:oxalica/rust-overlay"),
+    )
+    .expect("removing the synthesized variant must change the text");
+    assert_eq!(
+        restored, content,
+        "removing through the active url must invert first-use synthesis byte for byte",
+    );
+}
+
+#[test]
+fn toggle_remove_unstored_uri_is_a_noop() {
+    let content = load_flake("toggle_flat");
+    let result = apply_toggle_remove(&content, "rust-overlay", "github:nobody/nothing", None);
+    assert_eq!(result, None, "an unstored uri must be a no-op");
+}
+
+#[test]
+fn toggle_remove_active_without_alternate_errors() {
+    let content = load_flake("toggle_block");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let change = Change::ToggleRemove {
+        id: flake_edit::change::ChangeId::parse("rust-overlay").unwrap(),
+        uri: "github:oxalica/rust-overlay".to_owned(),
+        activate: None,
+    };
+    let err = flake_edit.apply_change(change).expect_err("must refuse");
+    assert!(
+        err.to_string().contains("without an alternate"),
+        "expected the remove-active error, got: {err}",
+    );
+}
+
+#[test]
+fn toggle_follows_only_input_has_no_url_to_toggle() {
+    let content = load_flake("toggle_follows_only");
+    let mut flake_edit = FlakeEdit::from_text(&content).unwrap();
+    let states = flake_edit.toggle_states().unwrap();
+    assert!(
+        !states.contains_key("nixpkgs-lib"),
+        "follows-only inputs have no toggle state",
+    );
+    let change = Change::Toggle {
+        id: flake_edit::change::ChangeId::parse("nixpkgs-lib").unwrap(),
+        uri: "github:nix-community/nixpkgs.lib".to_owned(),
+        previous: String::new(),
+    };
+    let err = flake_edit.apply_change(change).expect_err("must refuse");
+    assert!(
+        err.to_string().contains("no url to toggle"),
+        "expected the no-url error, got: {err}",
+    );
+}

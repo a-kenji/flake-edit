@@ -19,6 +19,7 @@ pub mod follow;
 pub mod list;
 mod pin;
 mod remove;
+mod toggle;
 mod update;
 mod uri;
 
@@ -28,6 +29,7 @@ pub use config::config;
 pub use list::list;
 pub use pin::{pin, unpin};
 pub use remove::remove;
+pub use toggle::toggle;
 pub use update::update;
 pub use uri::UriOptions;
 
@@ -54,6 +56,20 @@ enum ConfirmResult {
     Back,
 }
 
+/// One round of the fuzzy picker. `None` means the user cancelled.
+pub(super) fn pick_one(
+    state: &AppState,
+    title: &str,
+    prompt: &str,
+    items: Vec<String>,
+) -> Result<Option<(String, bool)>> {
+    let select_app = tui::App::select_one(title, prompt, items, state.diff);
+    let Some(tui::AppResult::SingleSelect(result)) = tui::run(select_app)? else {
+        return Ok(None);
+    };
+    Ok(Some((result.item, result.show_diff)))
+}
+
 /// Interactive single-select loop with confirmation.
 ///
 /// 1. Show selection screen
@@ -75,14 +91,9 @@ where
     OnApplied: Fn(&str, ExtraData),
 {
     loop {
-        let select_app = tui::App::select_one(title, prompt, items.clone(), state.diff);
-        let Some(tui::AppResult::SingleSelect(result)) = tui::run(select_app)? else {
+        let Some((id, show_diff)) = pick_one(state, title, prompt, items.clone())? else {
             return Ok(());
         };
-        let tui::SingleSelectResult {
-            item: id,
-            show_diff,
-        } = result;
         let (change, extra_data) = make_change(&id)?;
 
         match confirm_or_apply(editor, state, title, &change, show_diff)? {

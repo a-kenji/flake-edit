@@ -116,6 +116,117 @@ pub enum Error {
     Batch {
         failures: Vec<(PathBuf, Box<Error>)>,
     },
+
+    /// `toggle` was invoked without arguments and no input stores an
+    /// alternate.
+    #[error("no toggleable inputs in flake.nix")]
+    NoToggleableInputs,
+
+    /// `toggle` was invoked without arguments, several inputs store
+    /// alternates, and no interactive picker is available.
+    #[error("multiple toggleable inputs")]
+    MultipleToggleableInputs { candidates: Vec<ToggleCandidate> },
+
+    /// `toggle` named an input id that the flake does not declare.
+    #[error("no input named '{id}' in flake.nix")]
+    ToggleUnknownInput { id: String },
+
+    /// `toggle` named an input that has no stored alternate to flip to.
+    #[error("input '{id}' has no stored alternate")]
+    ToggleNoAlternate { id: String },
+
+    /// The input stores several alternates and no interactive picker is
+    /// available to choose between them.
+    #[error(
+        "input '{id}' has {count} variants, cannot infer which to {action}",
+        count = alternates.len() + 1
+    )]
+    ToggleAmbiguousVariant {
+        id: String,
+        active: String,
+        alternates: Vec<String>,
+        action: ToggleAction,
+    },
+
+    /// The matching ladder found no input for the given reference.
+    #[error("could not match '{reference}' to any input")]
+    ToggleRefUnmatched { reference: String },
+
+    /// One matching-ladder stage yielded several inputs and no interactive
+    /// picker is available.
+    #[error("'{reference}' matches multiple inputs")]
+    ToggleRefAmbiguous {
+        reference: String,
+        candidates: Vec<RefCandidate>,
+    },
+
+    /// A path-shaped reference does not exist on disk.
+    #[error("could not read path '{path}'")]
+    TogglePathMissing {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+
+    /// The named reference is already the input's active variant and no
+    /// alternate is stored to flip back to.
+    #[error(
+        "'{reference}' is already the active variant of '{id}'\n       and no alternate is stored"
+    )]
+    ToggleAlreadyActive { reference: String, id: String },
+
+    /// `toggle --remove` resolved a reference that is not stored on the
+    /// input, so there is nothing to remove.
+    #[error("'{reference}' is not a stored variant of '{id}'")]
+    ToggleRemoveUnstored {
+        reference: String,
+        id: String,
+        active: String,
+        alternates: Vec<String>,
+    },
+
+    /// `toggle --remove` named the input's active url while no alternate
+    /// is stored to take its place. Honoring it would leave the input
+    /// url-less.
+    #[error("'{reference}' is the active url of '{id}' and no alternate is stored to replace it")]
+    ToggleRemoveActive { reference: String, id: String },
+}
+
+/// What `toggle` does with the resolved variant, for error wording.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToggleAction {
+    /// Make the variant the active url.
+    Activate,
+    /// Delete the variant's line.
+    Remove,
+}
+
+impl std::fmt::Display for ToggleAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Activate => write!(f, "activate"),
+            Self::Remove => write!(f, "remove"),
+        }
+    }
+}
+
+/// One toggleable input named in [`Error::MultipleToggleableInputs`].
+#[derive(Debug, Clone)]
+pub struct ToggleCandidate {
+    /// Input id.
+    pub id: String,
+    /// Every variant of the input, the active one first.
+    pub variants: Vec<String>,
+}
+
+/// One input the matching ladder offered for an ambiguous ref, named in
+/// [`Error::ToggleRefAmbiguous`].
+#[derive(Debug, Clone)]
+pub struct RefCandidate {
+    /// Input id.
+    pub id: String,
+    /// The variant that matched and the way it matched.
+    pub reason: String,
 }
 
 impl Error {
@@ -145,6 +256,36 @@ impl Error {
     pub fn validation_bullets(&self) -> Option<Vec<String>> {
         match self {
             Self::ValidationAfterEdit(errs) => Some(errs.iter().map(|e| e.to_string()).collect()),
+            _ => None,
+        }
+    }
+
+    /// Candidate listings for the ambiguous `toggle` errors, one bullet per
+    /// candidate. Returns `None` for other variants.
+    pub fn candidate_bullets(&self) -> Option<Vec<String>> {
+        match self {
+            Self::MultipleToggleableInputs { candidates } => Some(
+                candidates
+                    .iter()
+                    .map(|c| format!("{}: {}", c.id, c.variants.join(" <-> ")))
+                    .collect(),
+            ),
+            Self::ToggleAmbiguousVariant {
+                active, alternates, ..
+            }
+            | Self::ToggleRemoveUnstored {
+                active, alternates, ..
+            } => Some(
+                std::iter::once(format!("{active} (active)"))
+                    .chain(alternates.iter().cloned())
+                    .collect(),
+            ),
+            Self::ToggleRefAmbiguous { candidates, .. } => Some(
+                candidates
+                    .iter()
+                    .map(|c| format!("{} ({})", c.id, c.reason))
+                    .collect(),
+            ),
             _ => None,
         }
     }

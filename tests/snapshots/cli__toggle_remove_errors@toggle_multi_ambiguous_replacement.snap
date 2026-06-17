@@ -1,0 +1,25 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/toggle_multi.flake.nix"
+    - "--diff"
+    - toggle
+    - "--remove"
+    - "github:oxalica/rust-overlay"
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+error: input 'rust-overlay' has 3 variants, cannot infer which to activate
+  - github:oxalica/rust-overlay (active)
+  - github:a-kenji/rust-overlay
+  - path:../rust-overlay
+
+hint: name the variant: `flake-edit toggle rust-overlay <ref>`

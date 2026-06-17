@@ -29,6 +29,32 @@ pub enum Change {
         /// The input to follow.
         target: AttrPath,
     },
+    /// Make `uri` the active url of an input, keeping the previously
+    /// active url as a commented alternate on the adjacent line.
+    ///
+    /// When `uri` matches a stored alternate, that comment is uncommented
+    /// in place. Otherwise the new url is written directly below the
+    /// deactivated one. Lines never move, only the comment marker.
+    Toggle {
+        id: ChangeId,
+        /// The url to activate.
+        uri: String,
+        /// The url active before the toggle, for the success message.
+        previous: String,
+    },
+    /// Delete a stored variant's line from an input.
+    ///
+    /// When `uri` names a commented alternate, its line is deleted and the
+    /// active url stays put. When `uri` names the active url, `activate`
+    /// names the stored alternate that is uncommented in its place and the
+    /// previously active line is deleted rather than kept as a comment.
+    ToggleRemove {
+        id: ChangeId,
+        /// The variant whose line is removed.
+        uri: String,
+        /// The alternate activated when `uri` is the active url.
+        activate: Option<String>,
+    },
 }
 
 /// Identifier for an input or nested-input target of a [`Change`].
@@ -133,6 +159,7 @@ impl Change {
             Change::Remove { ids } => ids.first().cloned(),
             Change::Change { id, .. } => id.clone(),
             Change::Follows { input, .. } => Some(input.clone()),
+            Change::Toggle { id, .. } | Change::ToggleRemove { id, .. } => Some(id.clone()),
         }
     }
 
@@ -152,6 +179,7 @@ impl Change {
     pub fn uri(&self) -> Option<&String> {
         match self {
             Change::Change { uri, .. } | Change::Add { uri, .. } => uri.as_ref(),
+            Change::Toggle { uri, .. } => Some(uri),
             _ => None,
         }
     }
@@ -207,6 +235,18 @@ impl Change {
                     path,
                     target.to_flake_follows_string()
                 )]
+            }
+            Change::Toggle { id, uri, previous } => {
+                vec![format!("Toggled {}: {} -> {}", id, previous, uri)]
+            }
+            Change::ToggleRemove { id, uri, activate } => {
+                let removed = format!("Removed {} alternate: {}", id, uri);
+                match activate {
+                    Some(activate) => {
+                        vec![format!("Toggled {}: {} -> {}", id, uri, activate), removed]
+                    }
+                    None => vec![removed],
+                }
             }
             Change::None => vec![],
         }
