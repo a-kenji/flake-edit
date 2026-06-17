@@ -2,6 +2,7 @@
 {
   imports = [
     ./forge
+    ./inputs.nix
   ];
 
   perSystem =
