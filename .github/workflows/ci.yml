@@ -12,7 +12,6 @@ permissions:
 jobs:
   dependencies:
     runs-on: ubuntu-latest
-    environment: cachix
     steps:
       - uses: actions/checkout@v6
         with:
@@ -21,16 +20,11 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v17
-        with:
-          name: kenji
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia@main
       - name: "build dependencies"
         run: nix build .#checks.x86_64-linux.cargoArtifacts -Lvv --no-update-lock-file
   formatting:
     runs-on: ubuntu-latest
-    environment: cachix
     steps:
       - uses: actions/checkout@v6
         with:
@@ -39,16 +33,11 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v17
-        with:
-          name: kenji
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia@main
       - name: "check formatting"
         run: nix build .#checks.x86_64-linux.treefmt -Lvv --no-update-lock-file
   inputs:
     runs-on: ubuntu-latest
-    environment: cachix
     steps:
       - uses: actions/checkout@v6
         with:
@@ -57,16 +46,11 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v17
-        with:
-          name: kenji
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia@main
       - name: "build flake inputs"
         run: nix build .#checks.x86_64-linux.inputs -Lvv --no-update-lock-file
   tests:
     runs-on: ubuntu-latest
-    environment: cachix
     needs: ['formatting', 'dependencies']
     steps:
       - uses: actions/checkout@v6
@@ -76,16 +60,11 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v17
-        with:
-          name: kenji
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia@main
       - name: "run tests"
         run: nix build .#checks.x86_64-linux.cargoTest -Lvv --no-update-lock-file
   docs:
     runs-on: ubuntu-latest
-    environment: cachix
     needs: ['formatting', 'dependencies']
     steps:
       - uses: actions/checkout@v6
@@ -95,16 +74,11 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v17
-        with:
-          name: kenji
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia@main
       - name: "build cargo documentation"
         run: nix build .#checks.x86_64-linux.cargoDoc -Lvv --no-update-lock-file
   clippy:
     runs-on: ubuntu-latest
-    environment: cachix
     needs: ['formatting', 'dependencies']
     steps:
       - uses: actions/checkout@v6
@@ -114,10 +88,6 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v17
-        with:
-          name: kenji
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia@main
       - name: "run cargo clippy"
         run: nix build .#checks.x86_64-linux.cargoClippy -Lvv --no-update-lock-file
@@ -137,12 +107,14 @@ jobs:
         with:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+          skipPush: true
       - uses: Mic92/hestia@main
       - name: "build flake-edit"
         run: nix build .#default -Lvv --no-update-lock-file
+      - name: "push flake-edit to cachix"
+        run: cachix push kenji ./result
   nixos-test:
     runs-on: ubuntu-latest
-    environment: cachix
     needs: ['flake-edit']
     steps:
       - uses: actions/checkout@v6
@@ -152,16 +124,11 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v17
-        with:
-          name: kenji
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia@main
       - name: "nixos-test"
         run: nix build .#checks.x86_64-linux.forge -Lvv --no-update-lock-file
   devshells:
     runs-on: ubuntu-latest
-    environment: cachix
     needs: ['formatting']
     steps:
       - uses: actions/checkout@v6
@@ -171,10 +138,6 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v17
-        with:
-          name: kenji
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - uses: Mic92/hestia@main
       - name: "build devshells"
         run: nix develop .#full -Lvv --no-update-lock-file
