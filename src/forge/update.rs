@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::sync::Mutex;
 
-use super::api::{BatchLookup, ForgeClient};
+use super::api::{BatchLookup, ForgeClient, is_tangled_owner};
 use super::archive::ArchiveUrl;
 use super::channel::{
     ChannelType, UpdateStrategy, channel_probe_candidates, detect_strategy, find_latest_channel,
@@ -490,7 +490,12 @@ fn compute_change(client: &ForgeClient, uri: &str, init: bool) -> Option<UpdateP
             compute_channel_change(client, &parsed, &owner, &repo)
         }
         UpdateStrategy::SemverTags => {
-            compute_semver_change(client, uri, &parsed, &owner, &repo, init)
+            let current_ref = parsed.ref_or_rev().unwrap_or_default();
+            if is_tangled_owner(&owner) && is_versioned_channel_ref(current_ref) {
+                compute_channel_change(client, &parsed, &owner, &repo)
+            } else {
+                compute_semver_change(client, uri, &parsed, &owner, &repo, init)
+            }
         }
     }
 }
@@ -591,6 +596,18 @@ fn compute_archive_change(
             updated_uri: archive.with_ref(&latest),
         })
     }
+}
+
+/// True when `current_ref` names a versioned channel branch
+/// (`nixos-24.11`, `release-25.05`, bare `24.11`, ...), the shape that
+/// updates by branch selection rather than by tag listing.
+///
+/// Rolling branches (`main`, `master`, `nixos-unstable`) are excluded:
+/// they have no version to select toward, so they stay on the semver
+/// path, where plain `update` skips them and `--init` can still
+/// initialize a release pin.
+fn is_versioned_channel_ref(current_ref: &str) -> bool {
+    parse_channel_ref(current_ref).version().is_some()
 }
 
 /// Resolve the new URI for a channel-strategy input (nixpkgs,
@@ -722,4 +739,28 @@ fn compute_semver_change(
         final_change,
         updated_uri,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn versioned_channel_refs_route_to_branch_selection() {
+        assert!(is_versioned_channel_ref("nixos-24.11"));
+        assert!(is_versioned_channel_ref("release-25.05"));
+        assert!(is_versioned_channel_ref("refs/heads/nixos-24.11"));
+        assert!(is_versioned_channel_ref("24.11"));
+    }
+
+    #[test]
+    fn rolling_and_tag_refs_stay_on_the_semver_path() {
+        assert!(!is_versioned_channel_ref("main"));
+        assert!(!is_versioned_channel_ref("master"));
+        assert!(!is_versioned_channel_ref("nixos-unstable"));
+        assert!(!is_versioned_channel_ref("v1.2.3"));
+        assert!(!is_versioned_channel_ref("refs/tags/v1.2.3"));
+        assert!(!is_versioned_channel_ref("some-feature-branch"));
+        assert!(!is_versioned_channel_ref(""));
+    }
 }

@@ -412,6 +412,10 @@ impl ForgeClient {
         }
         let fresh = if key.0 == "github.com" {
             self.fetch_github_tags(owner, repo)?
+        } else if is_tangled_owner(owner) {
+            // Tangled's AT-Proto `@handle/repo` form has no owner/name
+            // REST tags API to fall through to the Gitea path below.
+            return Ok(self.warm_tangled_refs(&key)?.0);
         } else {
             self.fetch_gitea_tags(&key.0, owner, repo)?
         };
@@ -445,6 +449,8 @@ impl ForgeClient {
         }
         let fresh = if key.0 == "github.com" {
             self.fetch_github_branches(owner, repo)?
+        } else if is_tangled_owner(owner) {
+            return Ok(self.warm_tangled_refs(&key)?.1);
         } else {
             self.fetch_gitea_branches(&key.0, owner, repo)?
         };
@@ -484,6 +490,11 @@ impl ForgeClient {
         }
         let fresh = if key.0 == "github.com" {
             self.fetch_github_branch_exists(owner, repo, branch)?
+        } else if is_tangled_owner(owner) {
+            self.list_branches(owner, repo, domain)?
+                .names
+                .iter()
+                .any(|name| name == branch)
         } else {
             self.fetch_gitea_branch_exists(&key.0, owner, repo, branch)?
         };
@@ -748,6 +759,46 @@ impl ForgeClient {
         }
 
         Err(ApiError::NoBranchesFound)
+    }
+
+    /// Fetch tags and branches for a tangled-hosted repo via git
+    /// smart-HTTP ref discovery.
+    ///
+    /// Tangled serves git over the AT-Proto `@handle/repo` form.
+    fn fetch_tangled_refs(
+        &self,
+        domain: &str,
+        owner: &str,
+        repo: &str,
+    ) -> Result<(Tags, Branches), ApiError> {
+        let headers = Headers::for_domain(domain);
+        let url = format!("https://{domain}/{owner}/{repo}/info/refs?service=git-upload-pack");
+        tracing::debug!("Fetching tangled refs: {}", url);
+        let body = self.http.get(&url, &headers)?;
+        let refs = smart_http_refs(&body);
+        let names = refs
+            .tags
+            .into_iter()
+            .map(|name| IntermediaryTag { name })
+            .collect();
+        let branches = Branches { names: refs.heads };
+        Ok((IntermediaryTags(names).into(), branches))
+    }
+
+    fn warm_tangled_refs(
+        &self,
+        key: &(String, String, String),
+    ) -> Result<(Tags, Branches), ApiError> {
+        let (tags, branches) = self.fetch_tangled_refs(&key.0, &key.1, &key.2)?;
+        self.tags_cache
+            .lock()
+            .expect("forge tags cache poisoned")
+            .insert(key.clone(), tags.clone());
+        self.branches_cache
+            .lock()
+            .expect("forge branches cache poisoned")
+            .insert(key.clone(), branches.clone());
+        Ok((tags, branches))
     }
 
     fn fetch_gitea_branch_exists(
@@ -1045,6 +1096,48 @@ impl From<IntermediaryBranches> for Branches {
     }
 }
 
+/// True for the AT-Proto `@handle` owner form that identifies a
+/// tangled-hosted repo (`git+https://<host>/@<handle>/<repo>`).
+pub(crate) fn is_tangled_owner(owner: &str) -> bool {
+    owner.starts_with('@')
+}
+
+/// Ref names extracted from a git smart-HTTP advertisement, split by
+/// namespace: `refs/tags/` and `refs/heads/`, both prefix-stripped, in
+/// advertisement order.
+struct SmartHttpRefs {
+    tags: Vec<String>,
+    heads: Vec<String>,
+}
+
+/// Extract the bare tag and head names from a git smart-HTTP ref
+/// advertisement.
+fn smart_http_refs(body: &str) -> SmartHttpRefs {
+    let mut refs = SmartHttpRefs {
+        tags: Vec::new(),
+        heads: Vec::new(),
+    };
+    for line in body.lines() {
+        let Some(space) = line.find(' ') else {
+            continue;
+        };
+        let refname = line[space + 1..]
+            .split('\0')
+            .next()
+            .unwrap_or_default()
+            .trim_end();
+        if refname.ends_with("^{}") {
+            continue;
+        }
+        if let Some(tag) = refname.strip_prefix("refs/tags/") {
+            refs.tags.push(tag.to_string());
+        } else if let Some(head) = refname.strip_prefix("refs/heads/") {
+            refs.heads.push(head.to_string());
+        }
+    }
+    refs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1298,6 +1391,114 @@ mod tests {
         // early-stop. Selection downstream picks a stable release
         // on the same page when one exists.
         assert!(parses_as_semver("v1.2.3-rc1"));
+    }
+
+    #[test]
+    fn smart_http_extracts_tag_names_dropping_branches_caps_and_peeled() {
+        let advertisement = concat!(
+            "001e# service=git-upload-pack\n",
+            "0000",
+            "0113a63d05e2dd4776a9d22aba20b40e80fb1b3f1ecd HEAD\0multi_ack \
+             symref=HEAD:refs/heads/master agent=git/2.53.0-Linux\n",
+            "00474a0de78658a52a12568619dc14c64f9556219fa8 refs/heads/add-migrations\n",
+            "004596a52c9e2fdf6ff2f979afd1c5301cf004da33fb refs/tags/v1.14.0-alpha\n",
+            "0045f9c85351f3946f585da9401b29ced88c7726265d refs/tags/v1.14.1-alpha\n",
+            "0045ae484ddc90a337378c31393d9b85b714beaf1277 refs/tags/v1.15.0-alpha\n",
+            "0048a0d381381751c86d4ed4b8ef46b8b7c6e42d8659 refs/tags/v1.15.0-alpha^{}\n",
+            "0000",
+        );
+
+        assert_eq!(
+            smart_http_refs(advertisement).tags,
+            ["v1.14.0-alpha", "v1.14.1-alpha", "v1.15.0-alpha"]
+        );
+    }
+
+    #[test]
+    fn smart_http_extracts_no_names_without_tags() {
+        let advertisement = concat!(
+            "001e# service=git-upload-pack\n",
+            "0000",
+            "0113a63d05e2dd4776a9d22aba20b40e80fb1b3f1ecd HEAD\0multi_ack \
+             symref=HEAD:refs/heads/master agent=git/2.53.0-Linux\n",
+            "003f4a0de78658a52a12568619dc14c64f9556219fa8 refs/heads/master\n",
+            "0000",
+        );
+
+        let refs = smart_http_refs(advertisement);
+        assert_eq!(refs.tags, Vec::<String>::new());
+        assert_eq!(refs.heads, ["master"]);
+    }
+
+    #[test]
+    fn smart_http_extracts_no_names_from_html_error_page() {
+        let body = concat!(
+            "<!doctype html>\n",
+            "<html lang=\"en\">\n",
+            "  <head><title>404 Not Found</title></head>\n",
+            "  <body>repository not found</body>\n",
+            "</html>\n",
+        );
+
+        let refs = smart_http_refs(body);
+        assert_eq!(refs.tags, Vec::<String>::new());
+        assert_eq!(refs.heads, Vec::<String>::new());
+    }
+
+    #[test]
+    fn smart_http_drops_pull_refs_in_real_forgejo_advertisement() {
+        let advertisement = concat!(
+            "001e# service=git-upload-pack\n",
+            "0000",
+            "0149e6bf743c0418b12dbe75f91f9801b04bc5a63259 HEAD\0multi_ack \
+             thin-pack side-band side-band-64k ofs-delta shallow deepen-since \
+             deepen-not deepen-relative no-progress include-tag \
+             multi_ack_detailed allow-tip-sha1-in-want \
+             allow-reachable-sha1-in-want no-done \
+             symref=HEAD:refs/heads/forgejo filter object-format=sha1 \
+             agent=git/2.47.3\n",
+            "00514ed7cdf6cccaacaa29165cda5e9868c22bdf19bf \
+             refs/heads/bp-v11.0/forgejo-b52cec7\n",
+            "003e1b0ec3208db8501acba44a137c009a5a126ebaa9 refs/pull/1/head\n",
+            "003e6aacf4d2f09631359b99df562b4bf31dcef44ea3 refs/tags/v1.0.0\n",
+            "003e155fb93b9b1cee976c852a0ae7540911630c18b8 refs/tags/v1.0.1\n",
+            "003ef893fd9470e364a2032c1da473a1c17cfe4fd5f1 refs/tags/v1.0.2\n",
+            "0041e2c8d6fcb2c4073ed5cf164d88e7b5d44d95943c refs/tags/v1.0.2^{}\n",
+            "0000",
+        );
+
+        let refs = smart_http_refs(advertisement);
+        assert_eq!(refs.tags, ["v1.0.0", "v1.0.1", "v1.0.2"]);
+        assert_eq!(refs.heads, ["bp-v11.0/forgejo-b52cec7"]);
+    }
+
+    #[test]
+    fn smart_http_extracts_head_names_alongside_tags() {
+        let advertisement = concat!(
+            "001e# service=git-upload-pack\n",
+            "0000",
+            "0113a63d05e2dd4776a9d22aba20b40e80fb1b3f1ecd HEAD\0multi_ack \
+             symref=HEAD:refs/heads/master agent=git/2.53.0-Linux\n",
+            "003f4a0de78658a52a12568619dc14c64f9556219fa8 refs/heads/master\n",
+            "004796a52c9e2fdf6ff2f979afd1c5301cf004da33fb refs/heads/release-25.05\n",
+            "00494a0de78658a52a12568619dc14c64f9556219fa8 refs/heads/dwn/alpine-recipe\n",
+            "0045f9c85351f3946f585da9401b29ced88c7726265d refs/tags/v1.14.1-alpha\n",
+            "0045ae484ddc90a337378c31393d9b85b714beaf1277 refs/tags/v1.15.0-alpha\n",
+            "0048a0d381381751c86d4ed4b8ef46b8b7c6e42d8659 refs/tags/v1.15.0-alpha^{}\n",
+            "0000",
+        );
+
+        let refs = smart_http_refs(advertisement);
+        assert_eq!(refs.heads, ["master", "release-25.05", "dwn/alpine-recipe"]);
+        assert_eq!(refs.tags, ["v1.14.1-alpha", "v1.15.0-alpha"]);
+    }
+
+    #[test]
+    fn tangled_owner_is_the_at_handle_form() {
+        assert!(is_tangled_owner("@tangled.org"));
+        assert!(is_tangled_owner("@some-user.bsky.social"));
+        assert!(!is_tangled_owner("nixos"));
+        assert!(!is_tangled_owner(""));
     }
 
     #[test]
