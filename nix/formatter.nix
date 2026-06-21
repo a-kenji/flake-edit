@@ -7,6 +7,7 @@
     {
       treefmt = {
         projectRootFile = "LICENSE";
+        programs.flake-edit.enable = true;
         programs.nixfmt.enable = true;
         programs.nixf-diagnose.enable = true;
         programs.deadnix.enable = true;
