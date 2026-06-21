@@ -11,7 +11,7 @@ Pin management: As a consumer of other sources I might only want to depend on re
 That's what the [`flake-edit update`](#-flake-edit-update) subcommand is for.
 
 Follow management: Flake dependencies are transitive by default - adding an input also adds the inputs of that input. Which can genuinely be useful. But that also means in larger systems and dependency graphs there tends to be an often avoidable duplication of inputs.
-There is a mechanism to deduplicate transitive dependencies: `flake-edit.inputs.nixpkgs.follows = "nixpkgs"`. Here the `nixpkgs` input of `flake-edit` is now the same input as the `nixpkgs` input. This is a common pattern. [`flake-edit follow`](#-flake-edit-follows) will do this automatically.
+There is a mechanism to deduplicate transitive dependencies: `flake-edit.inputs.nixpkgs.follows = "nixpkgs"`. Here the `nixpkgs` input of `flake-edit` is now the same input as the `nixpkgs` input. This is a common pattern. [`flake-edit follow`](#-flake-edit-follow) will do this automatically.
 
 ![flake-edit follow example](https://vhs.charm.sh/vhs-5ZsxM5lx22BY2IuquxCGgk.gif)
 
