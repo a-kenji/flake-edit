@@ -13,7 +13,7 @@ jobs:
   dependencies:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: nixos/nix-installer-action@main
@@ -26,7 +26,7 @@ jobs:
   formatting:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: nixos/nix-installer-action@main
@@ -39,7 +39,7 @@ jobs:
   inputs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: nixos/nix-installer-action@main
@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: ['formatting', 'dependencies']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: nixos/nix-installer-action@main
@@ -67,7 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: ['formatting', 'dependencies']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: nixos/nix-installer-action@main
@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: ['formatting', 'dependencies']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: nixos/nix-installer-action@main
@@ -96,7 +96,7 @@ jobs:
     environment: cachix
     needs: ['formatting', 'dependencies' ]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: nixos/nix-installer-action@main
@@ -117,7 +117,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: ['flake-edit']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: nixos/nix-installer-action@main
@@ -131,7 +131,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: ['formatting']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: nixos/nix-installer-action@main
