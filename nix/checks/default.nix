@@ -1,8 +1,8 @@
-{ self, ... }:
+{ self, inputs, ... }:
 {
   imports = [
     ./forge
-    ./inputs.nix
+    inputs.inputs-cache.flakeModules.default
   ];
 
   perSystem =

@@ -34,6 +34,32 @@
         "type": "github"
       }
     },
+    "inputs-cache": {
+      "inputs": {
+        "flake-parts": [
+          "flake-parts"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "treefmt-nix": [
+          "treefmt-nix"
+        ]
+      },
+      "locked": {
+        "lastModified": 1782300760,
+        "narHash": "sha256-tN50xuceMhEbzkwpgWS+pU/t5AMoeaWCfGjUJZ7o3s0=",
+        "owner": "a-kenji",
+        "repo": "inputs-cache",
+        "rev": "8324d8d96cb2d83ab14e7558159d42c723a4767e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "a-kenji",
+        "repo": "inputs-cache",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1780243769,
@@ -69,6 +95,7 @@
       "inputs": {
         "crane": "crane",
         "flake-parts": "flake-parts",
+        "inputs-cache": "inputs-cache",
         "nixpkgs": "nixpkgs",
         "rust-overlay": "rust-overlay",
         "treefmt-nix": "treefmt-nix"
