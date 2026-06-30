@@ -20,7 +20,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: Mic92/hestia@main
+      - uses: Mic92/hestia@v1
       - name: "build dependencies"
         run: nix build .#checks.x86_64-linux.cargoArtifacts -Lvv --no-update-lock-file
   formatting:
@@ -33,7 +33,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: Mic92/hestia@main
+      - uses: Mic92/hestia@v1
       - name: "check formatting"
         run: nix build .#checks.x86_64-linux.treefmt -Lvv --no-update-lock-file
   inputs:
@@ -46,7 +46,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: Mic92/hestia@main
+      - uses: Mic92/hestia@v1
       - name: "build flake inputs"
         run: nix build .#checks.x86_64-linux.inputs -Lvv --no-update-lock-file
   tests:
@@ -60,7 +60,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: Mic92/hestia@main
+      - uses: Mic92/hestia@v1
       - name: "run tests"
         run: nix build .#checks.x86_64-linux.cargoTest -Lvv --no-update-lock-file
   docs:
@@ -74,7 +74,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: Mic92/hestia@main
+      - uses: Mic92/hestia@v1
       - name: "build cargo documentation"
         run: nix build .#checks.x86_64-linux.cargoDoc -Lvv --no-update-lock-file
   clippy:
@@ -88,7 +88,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: Mic92/hestia@main
+      - uses: Mic92/hestia@v1
       - name: "run cargo clippy"
         run: nix build .#checks.x86_64-linux.cargoClippy -Lvv --no-update-lock-file
   flake-edit:
@@ -108,7 +108,7 @@ jobs:
           name: kenji
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
           skipPush: true
-      - uses: Mic92/hestia@main
+      - uses: Mic92/hestia@v1
       - name: "build flake-edit"
         run: nix build .#default -Lvv --no-update-lock-file
       - name: "push flake-edit to cachix"
@@ -124,7 +124,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: Mic92/hestia@main
+      - uses: Mic92/hestia@v1
       - name: "nixos-test"
         run: nix build .#checks.x86_64-linux.forge -Lvv --no-update-lock-file
   devshells:
@@ -138,7 +138,7 @@ jobs:
         with:
           extra-conf: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: Mic92/hestia@main
+      - uses: Mic92/hestia@v1
       - name: "build devshells"
         run: nix develop .#full -Lvv --no-update-lock-file
   all:
