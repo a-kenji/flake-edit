@@ -1216,6 +1216,150 @@ fn test_follow_paths_batch_with_inputless() {
     );
 }
 
+/// Point `NIX_STORE_DIR` at an empty directory, so we test the unknown path.
+fn unknown_sizes_env(cmd: &mut Command, dir: &std::path::Path) -> std::path::PathBuf {
+    let store = dir.join("store");
+    fs::create_dir_all(&store).expect("create empty store dir");
+    cmd.env("NIX_STORE_DIR", &store);
+    store
+}
+
+#[test]
+fn test_follow_dry_run_leaves_flake_nix_unchanged() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    copy_fixture_to_dir("centerpiece", tmp.path());
+    let original = fs::read_to_string(tmp.path().join("flake.nix")).expect("read flake.nix");
+
+    let mut cmd = cli();
+    unknown_sizes_env(&mut cmd, tmp.path());
+    let output = cmd
+        .arg("--flake")
+        .arg(tmp.path().join("flake.nix"))
+        .arg("--lock-file")
+        .arg(tmp.path().join("flake.lock"))
+        .arg("follow")
+        .arg("--dry-run")
+        .output()
+        .expect("run flake-edit");
+
+    assert!(
+        output.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let after = fs::read_to_string(tmp.path().join("flake.nix")).expect("read flake.nix");
+    assert_eq!(after, original, "--dry-run must not modify flake.nix");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Would deduplicate 2 inputs"),
+        "dry-run summary must use 'Would deduplicate' framing: {stdout}"
+    );
+    assert!(
+        stdout.contains("+++ modified"),
+        "dry-run must render the would-be diff: {stdout}"
+    );
+}
+
+#[test]
+fn test_follow_dry_run_size_unknown() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let mut cmd = cli();
+    unknown_sizes_env(&mut cmd, tmp.path());
+    let output = cmd
+        .arg("--flake")
+        .arg(fixture_path("centerpiece"))
+        .arg("--lock-file")
+        .arg(fixture_lock_path("centerpiece"))
+        .arg("follow")
+        .arg("--dry-run")
+        .output()
+        .expect("run flake-edit");
+
+    assert!(
+        output.status.success(),
+        "stats with no sizes must still succeed: stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    assert!(
+        stdout.contains("Would deduplicate 2 inputs (size unknown)."),
+        "expected explicit 'size unknown' marker: {stdout}"
+    );
+    insta::assert_snapshot!("follow_dry_run_size_unknown", stdout);
+}
+
+#[test]
+fn test_follow_dry_run_implies_stats() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let run = |global: &[&str], sub: &[&str]| {
+        let mut cmd = cli();
+        unknown_sizes_env(&mut cmd, tmp.path());
+        cmd.arg("--flake")
+            .arg(fixture_path("centerpiece"))
+            .arg("--lock-file")
+            .arg(fixture_lock_path("centerpiece"));
+        for arg in global {
+            cmd.arg(arg);
+        }
+        cmd.arg("follow");
+        for arg in sub {
+            cmd.arg(arg);
+        }
+        let output = cmd.output().expect("run flake-edit");
+        assert!(
+            output.status.success(),
+            "stderr={}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        output.stdout
+    };
+
+    let dry = run(&[], &["--dry-run"]);
+    let dry_stats = run(&[], &["--dry-run", "-s"]);
+    let diff_stats = run(&["--diff"], &["--stats"]);
+
+    assert_eq!(dry, dry_stats, "--dry-run alone must equal --dry-run -s");
+    assert_eq!(
+        dry, diff_stats,
+        "--dry-run must equal --diff follow --stats"
+    );
+}
+
+/// Batch mode normally runs quiet. With `--dry-run` the preview is
+/// the point of the invocation, so it must print the summary and
+/// leave the files alone.
+#[test]
+fn test_follow_dry_run_batch_prints_summary() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    copy_fixture_to_dir("centerpiece", tmp.path());
+    let original = fs::read_to_string(tmp.path().join("flake.nix")).expect("read flake.nix");
+
+    let mut cmd = cli();
+    unknown_sizes_env(&mut cmd, tmp.path());
+    let output = cmd
+        .arg("follow")
+        .arg("--dry-run")
+        .arg(tmp.path().join("flake.nix"))
+        .output()
+        .expect("run flake-edit");
+
+    assert!(
+        output.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let after = fs::read_to_string(tmp.path().join("flake.nix")).expect("read flake.nix");
+    assert_eq!(after, original, "batch --dry-run must not modify flake.nix");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Would deduplicate"),
+        "batch --dry-run must print the summary: {stdout}"
+    );
+}
+
 /// Test follow without arguments (runs on current directory).
 ///
 /// Creates a tmpdir with flake.nix + flake.lock, changes to that directory,

@@ -689,6 +689,7 @@ name = "flake-edit"
 version = "0.3.6"
 dependencies = [
  "anyhow",
+ "base64",
  "clap",
  "clap_complete",
  "clap_complete_nushell",
@@ -712,6 +713,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "sha2",
  "smallvec",
  "tempfile",
  "thiserror",

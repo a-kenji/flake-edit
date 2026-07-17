@@ -1,10 +1,13 @@
 use crate::error::Error;
-use crate::follows::{AttrPath, Segment};
+use crate::follows::{AttrPath, Segment, join_raw};
 use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+
+#[cfg(feature = "sizes")]
+pub mod sizes;
 
 /// Errors that arise from parsing or walking `flake.lock`.
 ///
@@ -169,12 +172,16 @@ impl<'de> Deserialize<'de> for Input {
     }
 }
 
-/// Locked metadata for a node. Only [`Self::rev`] is consumed by the
-/// crate; the other JSON coordinates (`owner`, `repo`, `type`, `narHash`,
-/// ...) are ignored on parse.
+/// Locked metadata for a node. Only [`Self::rev`] and, under the
+/// `sizes` feature, the NAR hash (store-size estimation) are kept.
+/// The other JSON coordinates (`owner`, `repo`, `type`, ...) are
+/// ignored on parse.
 #[derive(Debug, Deserialize, Clone)]
 pub(crate) struct Locked {
     rev: Option<String>,
+    #[cfg(feature = "sizes")]
+    #[serde(rename = "narHash")]
+    nar_hash: Option<String>,
 }
 
 impl Locked {
@@ -505,19 +512,18 @@ impl FlakeLock {
                 if i == 0 {
                     LockError::RootHasNoInputs
                 } else {
-                    let prefix: Vec<_> = segments[..i].iter().map(|s| s.as_str()).collect();
                     LockError::InputHasNoSubInputs {
-                        path: prefix.join("."),
+                        path: join_raw(&segments[..i]),
                     }
                 }
             })?;
 
-            let resolved = inputs.get(segment.as_str()).ok_or_else(|| {
-                let prefix: Vec<_> = segments[..=i].iter().map(|s| s.as_str()).collect();
-                LockError::InputNotFound {
-                    path: prefix.join("."),
-                }
-            })?;
+            let resolved =
+                inputs
+                    .get(segment.as_str())
+                    .ok_or_else(|| LockError::InputNotFound {
+                        path: join_raw(&segments[..=i]),
+                    })?;
 
             match resolved {
                 Input::Direct(node_key) => {
@@ -529,21 +535,20 @@ impl FlakeLock {
                     return self.resolve_input_path_inner(&new_path, budget - 1);
                 }
                 Input::Indirect(None) => {
-                    let prefix: Vec<_> = segments[..=i].iter().map(|s| s.as_str()).collect();
                     return Err(LockError::FollowsTargetMissing {
-                        path: prefix.join("."),
+                        path: join_raw(&segments[..=i]),
                     });
                 }
             }
 
             if i + 1 < segments.len() {
-                current_node = self.nodes.get(&current_key).ok_or_else(|| {
-                    let prefix: Vec<_> = segments[..=i].iter().map(|s| s.as_str()).collect();
-                    LockError::NodeMissingForPath {
-                        node: current_key.clone(),
-                        path: prefix.join("."),
-                    }
-                })?;
+                current_node =
+                    self.nodes
+                        .get(&current_key)
+                        .ok_or_else(|| LockError::NodeMissingForPath {
+                            node: current_key.clone(),
+                            path: join_raw(&segments[..=i]),
+                        })?;
             }
         }
 

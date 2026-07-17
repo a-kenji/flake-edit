@@ -194,6 +194,12 @@ pub enum Command {
         /// config file's `follow.max_depth`.
         #[arg(long)]
         depth: Option<usize>,
+        /// Show size gain estimates that follows deduplication brought.
+        #[arg(long, short = 's')]
+        stats: bool,
+        /// Preview what `--stats` would show without applying changes.
+        #[arg(long)]
+        dry_run: bool,
         /// Flake.nix paths to process. If empty, runs on current directory.
         #[arg(trailing_var_arg = true, num_args = 0..)]
         paths: Vec<std::path::PathBuf>,

@@ -1,0 +1,19 @@
+---
+source: tests/cli.rs
+expression: stdout
+---
+--- original
++++ modified
+@@ -4,7 +4,9 @@
+   inputs = {
+     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+     home-manager.url = "github:nix-community/home-manager";
++    home-manager.inputs.nixpkgs.follows = "nixpkgs";
+     treefmt-nix.url = "github:numtide/treefmt-nix";
++    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
+     crane.url = "github:ipetkov/crane";
+   };
+
+Would deduplicate 2 inputs (size unknown).
+  home-manager.nixpkgs -> nixpkgs (size unknown)
+  treefmt-nix.nixpkgs -> nixpkgs (size unknown)

@@ -22,6 +22,7 @@
 //! ([`app`], [`cli`], [`diff`], [`tui`]) and pulls in `clap`, `ratatui`,
 //! `crossterm`, `diffy`, etc. Library-only consumers can disable it with
 //! `--no-default-features` to compile the pure edit / walk / forge surface.
+//! `sizes` (implied by `application`) adds [`lock::sizes`] store-size estimation.
 
 #[cfg(feature = "application")]
 pub mod app;

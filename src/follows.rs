@@ -11,4 +11,5 @@ pub use graph::{
     Cycle, DEFAULT_MAX_DEPTH, Edge, EdgeOrigin, FollowsGraph, StaleLockDeclaration,
     is_follows_reference_to_parent,
 };
+pub(crate) use path::join_raw;
 pub use path::{AttrPath, AttrPathParseError, Segment, SegmentError, strip_outer_quotes};

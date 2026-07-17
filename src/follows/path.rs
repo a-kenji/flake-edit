@@ -308,6 +308,15 @@ impl AttrPath {
     }
 }
 
+/// Raw dot-joined rendering of `segments` (`hls-1.10.nixpkgs`).
+pub(crate) fn join_raw(segments: &[Segment]) -> String {
+    segments
+        .iter()
+        .map(|s| s.as_str())
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
 /// Idents for the `inputs.<S0>.inputs.<S1>...inputs.<SN>.follows` attrpath shape.
 pub(crate) fn follows_idents_prefixed(segments: &[Segment]) -> Vec<&str> {
     let mut out: Vec<&str> = Vec::with_capacity(segments.len() * 2 + 1);
