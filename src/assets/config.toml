@@ -14,9 +14,10 @@
 
 # Alias mappings.
 # Key is the canonical name (must exist at top-level), values are alternatives.
-# Example: if nested input is "nixpkgs-lib" and top-level "nixpkgs" exists,
-# follow will suggest: poetry2nix.nixpkgs-lib -> nixpkgs
-# aliases = { nixpkgs = ["nixpkgs-lib"] }
+# If nested input is "nixpkgs-lib" and top-level "nixpkgs" exists,
+# follow will suggest: poetry2nix.nixpkgs-lib -> nixpkgs.
+# Set aliases = {} to disable built-in aliases.
+aliases = { nixpkgs = ["nixpkgs-lib"] }
 
 # Maximum depth of follows declarations to write.
 # Unset (the default) writes follows at every depth the lockfile graph
