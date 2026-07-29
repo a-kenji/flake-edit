@@ -54,7 +54,7 @@ pub struct FollowConfig {
 
     /// Alias mappings: canonical name to alternative names. For example,
     /// `nixpkgs = ["nixpkgs-lib"]` lets `nixpkgs-lib` follow `nixpkgs`.
-    #[serde(default)]
+    #[serde(default = "default_follow_aliases")]
     pub aliases: HashMap<String, Vec<String>>,
 
     /// Maximum depth of follows declarations to write.
@@ -72,7 +72,7 @@ impl Default for FollowConfig {
         Self {
             ignore: Vec::new(),
             transitive_min: default_transitive_min(),
-            aliases: HashMap::new(),
+            aliases: default_follow_aliases(),
             max_depth: None,
         }
     }
@@ -208,6 +208,10 @@ fn default_transitive_min() -> usize {
     0
 }
 
+fn default_follow_aliases() -> HashMap<String, Vec<String>> {
+    HashMap::from([("nixpkgs".to_string(), vec!["nixpkgs-lib".to_string()])])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,8 +222,41 @@ mod tests {
             toml::from_str(DEFAULT_CONFIG_TOML).expect("default config should parse");
         assert!(config.follow.ignore.is_empty());
         assert_eq!(config.follow.transitive_min, 0);
-        assert!(config.follow.aliases.is_empty());
+        assert_eq!(
+            config.follow.aliases,
+            HashMap::from([("nixpkgs".to_string(), vec!["nixpkgs-lib".to_string()])])
+        );
         assert_eq!(config.follow.max_depth, None);
+    }
+
+    #[test]
+    fn rust_defaults_match_embedded_default_config() {
+        let embedded: Config =
+            toml::from_str(DEFAULT_CONFIG_TOML).expect("default config should parse");
+        let rust_default = Config::default();
+
+        assert_eq!(embedded.follow.ignore, rust_default.follow.ignore);
+        assert_eq!(
+            embedded.follow.transitive_min,
+            rust_default.follow.transitive_min
+        );
+        assert_eq!(embedded.follow.aliases, rust_default.follow.aliases);
+        assert_eq!(embedded.follow.max_depth, rust_default.follow.max_depth);
+    }
+
+    #[test]
+    fn aliases_default_when_omitted() {
+        let cfg: Config = toml::from_str("[follow]\ntransitive_min = 0\n").unwrap();
+        assert_eq!(
+            cfg.follow.aliases,
+            HashMap::from([("nixpkgs".to_string(), vec!["nixpkgs-lib".to_string()])])
+        );
+    }
+
+    #[test]
+    fn aliases_can_be_cleared() {
+        let cfg: Config = toml::from_str("[follow]\naliases = {}\n").unwrap();
+        assert!(cfg.follow.aliases.is_empty());
     }
 
     #[test]
