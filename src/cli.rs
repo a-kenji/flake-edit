@@ -220,15 +220,6 @@ pub enum Command {
         /// The target input to follow (e.g., "nixpkgs").
         target: Option<String>,
     },
-    #[clap(hide = true)]
-    #[command(name = "completion")]
-    /// Meant for shell completions.
-    Completion {
-        #[arg(long)]
-        inputs: bool,
-        #[arg(value_enum)]
-        mode: CompletionMode,
-    },
     /// Manage flake-edit configuration.
     #[clap(alias = "cfg", arg_required_else_help = true)]
     Config {
@@ -239,15 +230,6 @@ pub enum Command {
         #[arg(long)]
         path: bool,
     },
-}
-
-/// Which subcommand to complete.
-#[derive(Debug, Clone, ValueEnum)]
-pub enum CompletionMode {
-    Add,
-    Change,
-    Follow,
-    Toggle,
 }
 
 /// Output format for the `list` subcommand.

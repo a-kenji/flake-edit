@@ -1632,22 +1632,6 @@ fn test_toggle_invalid_ref() {
     });
 }
 
-/// `completion toggle` lists only inputs that have a stored alternate.
-#[test]
-fn test_completion_toggle() {
-    let mut settings = insta::Settings::clone_current();
-    path_redactions(&mut settings);
-    settings.bind(|| {
-        assert_cmd_snapshot!(
-            cli()
-                .arg("--flake")
-                .arg(fixture_path("toggle_flat"))
-                .arg("completion")
-                .arg("toggle")
-        );
-    });
-}
-
 #[test]
 fn toggle_resolves_path_ref_via_git_remote() {
     if std::process::Command::new("git")

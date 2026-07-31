@@ -423,7 +423,6 @@ impl App {
 
             // These commands handle their own interactivity or don't need TUI
             Command::List { .. }
-            | Command::Completion { .. }
             | Command::Follow { .. }
             | Command::AddFollow { .. }
             | Command::Toggle { .. }

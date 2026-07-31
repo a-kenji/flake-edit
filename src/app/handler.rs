@@ -10,7 +10,7 @@ use super::editor::Editor;
 use super::error::{Error, Result};
 use super::state::AppState;
 
-mod root;
+pub(crate) mod root;
 
 /// Application entry point.
 ///
@@ -47,9 +47,6 @@ pub fn run(args: CliArgs) -> Result<()> {
         Command::Follow { .. } => dispatch_follow(&args, &editor, &mut flake_edit, &mut state)?,
         Command::AddFollow { .. } => {
             dispatch_add_follow(&args, &editor, &mut flake_edit, &mut state)?
-        }
-        Command::Completion { .. } => {
-            return dispatch_completion(&args, &mut flake_edit, no_cache);
         }
         Command::Config { .. } => return dispatch_config(&args),
     }
@@ -279,49 +276,6 @@ fn dispatch_add_follow(
     follow::add_follow(editor, flake_edit, state, input.clone(), target.clone())
 }
 
-fn dispatch_completion(args: &CliArgs, flake_edit: &mut FlakeEdit, no_cache: bool) -> Result<()> {
-    use crate::cache::{Cache, DEFAULT_URI_TYPES};
-    use crate::cli::CompletionMode;
-
-    let Command::Completion { inputs: _, mode } = args.subcommand() else {
-        unreachable!("wrong Command variant");
-    };
-    match mode {
-        CompletionMode::Add => {
-            for uri_type in DEFAULT_URI_TYPES {
-                println!("{}", uri_type);
-            }
-            let cache = Cache::load();
-            for uri in cache.list_uris() {
-                println!("{}", uri);
-            }
-        }
-        CompletionMode::Change => {
-            let inputs = flake_edit.list();
-            crate::cache::populate_cache_from_input_map(inputs, no_cache);
-            for id in inputs.keys() {
-                println!("{}", id);
-            }
-        }
-        CompletionMode::Follow => {
-            if let Ok(lock) = crate::lock::FlakeLock::from_default_path() {
-                for nested in lock.nested_inputs() {
-                    println!("{}", nested.path);
-                }
-            }
-        }
-        CompletionMode::Toggle => {
-            let states = flake_edit.toggle_states()?;
-            for (id, state) in states {
-                if !state.alternates.is_empty() {
-                    println!("{}", id);
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
 fn dispatch_config(args: &CliArgs) -> Result<()> {
     let Command::Config {
         print_default,
@@ -416,27 +370,6 @@ mod tests {
             std::fs::read_to_string(&flake).expect("read flake.nix"),
             MINIMAL_FLAKE,
             "config --print-default must not rewrite flake.nix",
-        );
-    }
-
-    #[test]
-    fn completion_change_does_not_touch_flake_nix() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let flake = write_minimal_flake(tmp.path());
-        let args = parse(&[
-            "flake-edit",
-            "--flake",
-            tmp.path().to_str().unwrap(),
-            "--non-interactive",
-            "--no-cache",
-            "completion",
-            "change",
-        ]);
-        run(args).expect("completion change must succeed");
-        assert_eq!(
-            std::fs::read_to_string(&flake).expect("read flake.nix"),
-            MINIMAL_FLAKE,
-            "completion change must not rewrite flake.nix",
         );
     }
 }

@@ -7,6 +7,8 @@ mod log;
 mod render;
 
 fn main() -> ExitCode {
+    flake_edit::app::complete::complete();
+
     let args = CliArgs::parse();
 
     log::init().ok();
