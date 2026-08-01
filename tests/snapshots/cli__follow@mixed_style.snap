@@ -17,9 +17,11 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -3,20 +3,35 @@
+@@ -2,21 +2,37 @@
+   inputs = {
      nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
      flake-parts.url = "github:hercules-ci/flake-parts";
++    flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
      treefmt-nix.url = "github:numtide/treefmt-nix";
 +    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
      crane.url = "github:ipetkov/crane";
