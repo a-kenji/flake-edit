@@ -74,7 +74,8 @@ in
     commonArgs
     // {
       cargoExtraArgs = "-p ${name}";
-      buildInputs = [ installShellFiles ];
+      __structuredAttrs = true;
+      nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ installShellFiles ];
       env = {
         GIT_DATE = gitDate;
         GIT_REV = gitRev;
