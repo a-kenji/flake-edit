@@ -30,6 +30,6 @@ jobs:
         name: kenji
         # If you chose API tokens for write access OR if you have a private cache
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-    - uses: Mic92/hestia@main
+    - uses: Mic92/hestia@v1
     - name: "actionlint"
       run: nix run -Lv --refresh --inputs-from .# nixpkgs#actionlint -- --ignore SC2002
