@@ -112,6 +112,7 @@ jobs:
       - name: "build flake-edit"
         run: nix build .#default -Lvv --no-update-lock-file
       - name: "push flake-edit to cachix"
+        if: github.event_name != 'pull_request'
         run: cachix push kenji ./result
   nixos-test:
     runs-on: ubuntu-latest
