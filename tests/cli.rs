@@ -1360,6 +1360,61 @@ fn test_follow_dry_run_batch_prints_summary() {
     );
 }
 
+#[test]
+fn test_follow_directory_path() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    copy_fixture_to_dir("centerpiece", tmp.path());
+
+    let output = cli()
+        .arg("follow")
+        .arg(tmp.path())
+        .output()
+        .expect("run flake-edit");
+
+    assert!(
+        output.status.success(),
+        "directory path must resolve to its flake.nix: stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let after = fs::read_to_string(tmp.path().join("flake.nix")).expect("read flake.nix");
+    assert!(
+        after.contains("home-manager.inputs.nixpkgs.follows"),
+        "directory argument must process the contained flake: {after}"
+    );
+}
+
+#[test]
+fn test_follow_batch_mixes_directory_and_file() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let as_dir = tmp.path().join("as-dir");
+    let as_file = tmp.path().join("as-file");
+    fs::create_dir_all(&as_dir).expect("create dir");
+    fs::create_dir_all(&as_file).expect("create dir");
+    copy_fixture_to_dir("centerpiece", &as_dir);
+    copy_fixture_to_dir("centerpiece", &as_file);
+
+    let output = cli()
+        .arg("follow")
+        .arg(&as_dir)
+        .arg(as_file.join("flake.nix"))
+        .output()
+        .expect("run flake-edit");
+
+    assert!(
+        output.status.success(),
+        "mixed batch must succeed: stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for root in [&as_dir, &as_file] {
+        let after = fs::read_to_string(root.join("flake.nix")).expect("read flake.nix");
+        assert!(
+            after.contains("home-manager.inputs.nixpkgs.follows"),
+            "batch entry {} must be processed: {after}",
+            root.display()
+        );
+    }
+}
+
 /// Test follow without arguments (runs on current directory).
 ///
 /// Creates a tmpdir with flake.nix + flake.lock, changes to that directory,
