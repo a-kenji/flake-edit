@@ -200,7 +200,8 @@ pub enum Command {
         /// Preview what `--stats` would show without applying changes.
         #[arg(long)]
         dry_run: bool,
-        /// Flake.nix paths to process. If empty, runs on current directory.
+        /// Paths to process: flake.nix files or directories containing
+        /// one. If empty, runs on current directory.
         #[arg(trailing_var_arg = true, num_args = 0..)]
         paths: Vec<std::path::PathBuf>,
     },

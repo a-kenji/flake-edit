@@ -127,7 +127,12 @@ pub fn run_batch(
 
     let mut errors: Vec<(PathBuf, Box<Error>)> = Vec::new();
 
-    for flake_path in paths {
+    for given_path in paths {
+        let flake_path = if given_path.is_dir() {
+            given_path.join("flake.nix")
+        } else {
+            given_path.clone()
+        };
         let lock_path = flake_path
             .parent()
             .map(|p| p.join("flake.lock"))
