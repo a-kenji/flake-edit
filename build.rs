@@ -1,13 +1,11 @@
 #[cfg(feature = "assets")]
 pub mod asset_build {
     use clap::CommandFactory;
-    use clap::ValueEnum;
-    use clap_complete::{Shell, generate_to};
+    use clap_complete::env::{Bash, EnvCompleter, Fish, Zsh};
+    use clap_complete::generate_to;
     use clap_complete_nushell::Nushell;
     use clap_mangen::Man;
     use std::fs;
-    use std::fs::OpenOptions;
-    use std::io::Write;
     use std::path::PathBuf;
     use std::{env, fs::create_dir_all, path::Path};
 
@@ -21,10 +19,6 @@ pub mod asset_build {
         println!("cargo:rerun-if-changed=docs/man/flake-edit.md");
 
         const NAME: &str = "flake-edit";
-        const COMPLETIONS_DIR: &str = "assets/completions";
-        const FISH_COMPLETIONS: &str = "fish/completions.fish";
-        let manifest_dir =
-            env::var_os("CARGO_MANIFEST_DIR").expect("Could not find env CARGO_MANIFEST_DIR");
 
         if let Some(dir) = env::var_os("ASSET_DIR") {
             let out = &Path::new(&dir);
@@ -33,29 +27,25 @@ pub mod asset_build {
 
             gen_man(NAME, out.to_path_buf());
 
-            Shell::value_variants().iter().for_each(|shell| {
-                generate_to(*shell, cmd, NAME.to_string(), out).unwrap();
-                // claps completions generation mechanisms are very immature,
-                // include self adjusted ones
-                if *shell == Shell::Fish {
-                    let mut source = PathBuf::from(manifest_dir.clone());
-                    source.push(COMPLETIONS_DIR);
-                    source.push(FISH_COMPLETIONS);
-                    let source = fs::read_to_string(source).expect("Could not read source file");
-                    let path = out.join(format!("{NAME}.fish"));
-                    let mut file = OpenOptions::new()
-                        .append(true)
-                        .open(path)
-                        .expect("Could not create path.");
-                    let _ = file.write_all(source.as_bytes());
-                }
-            });
+            gen_registration(&Bash, NAME, out, format!("{NAME}.bash"));
+            gen_registration(&Zsh, NAME, out, format!("_{NAME}"));
+            gen_registration(&Fish, NAME, out, format!("{NAME}.fish"));
+
+            // Nushell has no dynamic env adapter in clap_complete
             generate_to(Nushell, cmd, NAME.to_string(), out).unwrap();
         } else {
             eprintln!("ASSET_DIR environment variable not set");
             eprintln!("Not able to generate completion files");
             eprintln!("Not able to generate manpage files");
         }
+    }
+
+    fn gen_registration<C: EnvCompleter>(shell: &C, name: &str, out: &Path, filename: String) {
+        let mut buf: Vec<u8> = Vec::new();
+        shell
+            .write_registration("COMPLETE", name, name, name, &mut buf)
+            .expect("Not able to render completion registration.");
+        fs::write(out.join(filename), buf).expect("Not able to write completion registration");
     }
 
     fn gen_man(name: &str, dir: PathBuf) {
