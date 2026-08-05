@@ -13,7 +13,7 @@ use crate::change::{Change, ChangeId};
 use crate::edit::{FlakeEdit, InputMap};
 use crate::error::Error as FlakeError;
 use crate::follows::AttrPath;
-use crate::lock::NestedInput;
+use crate::lock::{FlakeLock, NestedInput};
 use crate::tui;
 
 use super::super::editor::Editor;
@@ -21,6 +21,7 @@ use super::super::state::AppState;
 use super::{Error, Result, apply_change, load_flake_lock};
 
 pub(super) struct FollowContext {
+    pub(super) lock: FlakeLock,
     pub(super) nested_inputs: Vec<NestedInput>,
     pub(super) top_level_inputs: HashSet<String>,
     /// Full input map. Cycle detection needs URLs.
@@ -34,8 +35,8 @@ pub(super) fn load_follow_context(
     flake_edit: &mut FlakeEdit,
     state: &AppState,
 ) -> Result<Option<FollowContext>> {
-    let nested_inputs: Vec<NestedInput> = match load_flake_lock(state) {
-        Ok(lock) => lock.nested_inputs(),
+    let lock = match load_flake_lock(state) {
+        Ok(lock) => lock,
         Err(e) => {
             let lock_path = state
                 .lock_file
@@ -48,6 +49,7 @@ pub(super) fn load_follow_context(
             });
         }
     };
+    let nested_inputs: Vec<NestedInput> = lock.nested_inputs();
 
     if nested_inputs.is_empty() {
         return Ok(None);
@@ -65,6 +67,7 @@ pub(super) fn load_follow_context(
     }
 
     Ok(Some(FollowContext {
+        lock,
         nested_inputs,
         top_level_inputs,
         inputs,

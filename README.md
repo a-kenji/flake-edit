@@ -271,7 +271,7 @@ Arguments:
 
 Options:
   -r, --remove
-          Remove the resolved variant's line instead of activating it. Removing the active url flips to the stored alternate first
+          Remove a url instead of activating it. A bare input id removes the active url and activates the stored alternate in its place. An alternate's ref deletes that alternate and keeps the active url
 
       --config <CONFIG>
           Path to a custom configuration file
@@ -336,6 +336,12 @@ Options:
 
       --depth <DEPTH>
           Maximum depth of follows declarations to write. Omitting the flag writes follows at every depth the lockfile graph supports. `--depth N` caps emission: 1 writes only `parent.child.follows`, 2 also writes `parent.child.grandchild.follows`, and so on. Overrides the config file's `follow.max_depth`
+
+  -s, --stats
+          Show size gain estimates that follows deduplication brought
+
+      --dry-run
+          Preview what `--stats` would show without applying changes
 
       --config <CONFIG>
           Path to a custom configuration file

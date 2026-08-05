@@ -20,13 +20,16 @@ pub fn run(args: CliArgs) -> Result<()> {
         paths,
         transitive,
         depth,
+        stats,
+        dry_run,
     } = args.subcommand()
         && !paths.is_empty()
     {
         if args.flake().is_some() || args.lock_file().is_some() {
             return Err(Error::IncompatibleFollowOptions);
         }
-        return follow::auto::run_batch(paths, *transitive, *depth, &args);
+        let report = follow::auto::ReportMode::from_flags(*stats, *dry_run);
+        return follow::auto::run_batch(paths, *transitive, *depth, report, &args);
     }
 
     let (editor, mut flake_edit, mut state) = setup(&args)?;
@@ -242,6 +245,8 @@ fn dispatch_follow(
         paths: _,
         transitive,
         depth,
+        stats,
+        dry_run,
     } = args.subcommand()
     else {
         unreachable!("wrong Command variant");
@@ -253,7 +258,12 @@ fn dispatch_follow(
         state.config.follow.max_depth = Some(*max);
     }
     state.lock_offline = true;
-    follow::auto::run(editor, flake_edit, state)
+    follow::auto::run(
+        editor,
+        flake_edit,
+        state,
+        follow::auto::ReportMode::from_flags(*stats, *dry_run),
+    )
 }
 
 fn dispatch_add_follow(
