@@ -10,6 +10,7 @@ use super::channel::{
     ChannelType, UpdateStrategy, channel_probe_candidates, detect_strategy, find_latest_channel,
     parse_channel_ref,
 };
+use super::channel_tarball::{ChannelTarballUrl, find_latest_published_channel};
 use super::version::{is_downgrade, parse_ref};
 use crate::edit::InputMap;
 use crate::input::Input;
@@ -457,6 +458,10 @@ fn compute_change(client: &ForgeClient, uri: &str, init: bool) -> Option<UpdateP
         return compute_archive_change(client, &archive, init);
     }
 
+    if let Some(channel) = ChannelTarballUrl::parse(uri) {
+        return compute_channel_tarball_change(client, &channel);
+    }
+
     let parsed = match uri.parse::<FlakeRef>() {
         Ok(p) => p,
         Err(e) => {
@@ -591,6 +596,34 @@ fn compute_archive_change(
             updated_uri: archive.with_ref(&latest),
         })
     }
+}
+
+/// Resolve the new URI for a nixos.org channel tarball input. No
+/// `init` case: the URL always carries its channel token.
+fn compute_channel_tarball_change(
+    client: &ForgeClient,
+    channel: &ChannelTarballUrl,
+) -> Option<UpdatePlan> {
+    let current = channel.channel();
+
+    let latest = match find_latest_published_channel(channel, |url| client.url_exists(url)) {
+        Ok(Some(latest)) => latest,
+        Ok(None) => return None,
+        Err(e) => {
+            tracing::error!(
+                "Failed to resolve latest published channel for {}: {}",
+                current,
+                e
+            );
+            return None;
+        }
+    };
+
+    Some(UpdatePlan {
+        previous_ref: current.to_string(),
+        final_change: latest.clone(),
+        updated_uri: channel.with_channel(&latest),
+    })
 }
 
 /// Resolve the new URI for a channel-strategy input (nixpkgs,

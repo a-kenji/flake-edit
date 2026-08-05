@@ -214,7 +214,10 @@ pub(crate) fn channel_probe_candidates(prefix: &str, current_version: (u32, u32)
 
 /// Generate candidate channel versions from current to ~5 years in the future.
 /// Returns candidates from NEWEST to OLDEST for early exit optimization.
-fn generate_candidate_channels(prefix: &str, current_version: (u32, u32)) -> Vec<String> {
+pub(crate) fn generate_candidate_channels(
+    prefix: &str,
+    current_version: (u32, u32),
+) -> Vec<String> {
     let (current_year, current_month) = current_version;
     let mut candidates = Vec::new();
 

@@ -120,6 +120,14 @@ pub(crate) struct Headers {
     pub(crate) authorization: Option<String>,
 }
 
+const USER_AGENT: &str = concat!(
+    "flake-edit/",
+    env!("CARGO_PKG_VERSION"),
+    " (+",
+    env!("CARGO_PKG_REPOSITORY"),
+    ")"
+);
+
 impl Headers {
     /// Headers with optional Bearer token authentication for the given domain.
     fn for_domain(domain: &str) -> Self {
@@ -128,8 +136,15 @@ impl Headers {
             format!("Bearer {token}")
         });
         Self {
-            user_agent: Some("flake-edit".to_string()),
+            user_agent: Some(USER_AGENT.to_string()),
             authorization,
+        }
+    }
+
+    fn anonymous() -> Self {
+        Self {
+            user_agent: Some(USER_AGENT.to_string()),
+            authorization: None,
         }
     }
 }
@@ -327,6 +342,7 @@ pub struct ForgeClient {
     tags_cache: Mutex<HashMap<RepoKey, Tags>>,
     branches_cache: Mutex<HashMap<RepoKey, Branches>>,
     branch_exists_cache: Mutex<HashMap<BranchKey, bool>>,
+    url_exists_cache: Mutex<HashMap<String, bool>>,
     /// `false` when no github.com token is available; unauthenticated
     /// runs skip the GraphQL batch because the endpoint rejects them
     /// with HTTP 401, and fall back to anonymous REST.
@@ -381,6 +397,7 @@ impl ForgeClient {
             tags_cache: Mutex::new(HashMap::new()),
             branches_cache: Mutex::new(HashMap::new()),
             branch_exists_cache: Mutex::new(HashMap::new()),
+            url_exists_cache: Mutex::new(HashMap::new()),
             github_graphql_enabled: get_forge_token("github.com").is_some(),
         }
     }
@@ -491,6 +508,25 @@ impl ForgeClient {
             .lock()
             .expect("forge branch_exists cache poisoned")
             .insert(key, fresh);
+        Ok(fresh)
+    }
+
+    /// `Ok(true)` for 2xx (after redirects), `Ok(false)` for 404,
+    /// `Err(_)` for anything transient.
+    pub(crate) fn url_exists(&self, url: &str) -> Result<bool, ApiError> {
+        if let Some(&hit) = self
+            .url_exists_cache
+            .lock()
+            .expect("forge url_exists cache poisoned")
+            .get(url)
+        {
+            return Ok(hit);
+        }
+        let fresh = self.http.head_status(url, &Headers::anonymous())?;
+        self.url_exists_cache
+            .lock()
+            .expect("forge url_exists cache poisoned")
+            .insert(url.to_string(), fresh);
         Ok(fresh)
     }
 
