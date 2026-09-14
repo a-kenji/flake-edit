@@ -134,7 +134,7 @@ criterion = "0.8.2"
 divan = "0.1.21"
 insta = { version = "1.47.2", features = ["yaml", "filters", "redactions"] }
 insta-cmd = "0.7"
-rstest = "0.26"
+rstest = "0.27"
 tempfile = "3"
 
 [lints.rust]
