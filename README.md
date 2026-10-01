@@ -328,7 +328,7 @@ Usage: flake-edit follow [OPTIONS] [PATHS]...
 
 Arguments:
   [PATHS]...
-          Flake.nix paths to process. If empty, runs on current directory
+          `flake.nix` files or directories containing one. If empty, runs on current directory
 
 Options:
       --transitive [<TRANSITIVE>]
@@ -351,6 +351,10 @@ Options:
 ```
 Automatically add follows relationships for all nested inputs matching top-level inputs.
 ![flake-edit follow example](https://vhs.charm.sh/vhs-5ZsxM5lx22BY2IuquxCGgk.gif)
+
+Show stats about how much follow relationships saved, or could save you.
+For performance reasons these numbers are estimations.
+![flake-edit follow stats example](https://vhs.charm.sh/vhs-60zWmKn4VAvr3kC6UXvwnJ.gif)
 
 ### `$ flake-edit add-follow`
 <!-- `$ flake-edit help add-follow` -->
