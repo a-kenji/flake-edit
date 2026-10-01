@@ -90,8 +90,7 @@ struct State {
 pub(crate) struct HttpCache {
     inner: HttpClient,
     state: Mutex<State>,
-    /// `None` when persistence is disabled (env var set, or
-    /// directories-crate could not resolve the XDG cache root).
+    /// If persistence is disabled: `None`
     persist_path: Option<PathBuf>,
 }
 
@@ -205,7 +204,7 @@ impl HttpCache {
             ConditionalResponse::Body {
                 body,
                 etag: Some(new_etag),
-            } if self.persist_path.is_some() => {
+            } if self.persist_path.is_some() && !body.is_empty() => {
                 if let Ok(mut state) = self.state.lock() {
                     state.entries.insert(
                         key,
@@ -325,6 +324,85 @@ mod tests {
             body: format!("BODY-{suffix}"),
             stored_at,
         }
+    }
+
+    #[test]
+    fn revalidated_request_serves_the_cached_body() {
+        // A `304` should not be inferred to be an unchanged upstream version.
+        use crate::forge::testing::{Reply, StubServer};
+
+        let body = r#"[{"name":"v1.2.3"}]"#;
+        let server = StubServer::start(vec![
+            Reply::Ok {
+                body,
+                etag: Some("\"tags-v1\""),
+            },
+            Reply::NotModified {
+                etag: "\"tags-v1\"",
+            },
+        ]);
+        let dir = tempdir();
+        let path = dir.path().join("c.json");
+        let url = server.url("/repos/foo/bar/tags");
+        let headers = Headers {
+            user_agent: None,
+            authorization: None,
+        };
+
+        {
+            let cache = HttpCache::with_path(Some(path.clone()));
+            assert_eq!(cache.get(&url, &headers).expect("first fetch"), body);
+        }
+
+        let cache = HttpCache::with_path(Some(path.clone()));
+        assert_eq!(
+            cache.get(&url, &headers).expect("revalidated fetch"),
+            body,
+            "a 304 must resolve to the cached body"
+        );
+        assert_eq!(
+            server
+                .requests()
+                .get(1)
+                .and_then(|r| r.if_none_match.clone()),
+            Some("\"tags-v1\"".to_string()),
+            "the second request must be conditional"
+        );
+
+        drop(cache);
+        let stored = load_entries(&path);
+        assert_eq!(
+            stored.values().next().map(|e| e.body.as_str()),
+            Some(body),
+            "revalidation must not overwrite the cached body"
+        );
+    }
+
+    #[test]
+    fn empty_body_is_not_cached() {
+        use crate::forge::testing::{Reply, StubServer};
+
+        let server = StubServer::start(vec![Reply::Ok {
+            body: "",
+            etag: Some("\"empty\""),
+        }]);
+        let dir = tempdir();
+        let path = dir.path().join("c.json");
+        let cache = HttpCache::with_path(Some(path.clone()));
+        let headers = Headers {
+            user_agent: None,
+            authorization: None,
+        };
+
+        assert_eq!(
+            cache.get(&server.url("/tags"), &headers).expect("fetch"),
+            ""
+        );
+        drop(cache);
+        assert!(
+            load_entries(&path).is_empty(),
+            "an empty body must not be persisted"
+        );
     }
 
     #[test]

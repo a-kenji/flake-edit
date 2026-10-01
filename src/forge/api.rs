@@ -224,11 +224,7 @@ impl HttpClient {
         }
     }
 
-    /// `ureq` reports a 304 as `Error::StatusCode(304)` because it is
-    /// outside the 2xx range. We intercept that error variant
-    /// specifically so the cache layer sees a clean
-    /// `ConditionalResponse::NotModified` and the body-reading path
-    /// is reached only for real 2xx responses.
+    /// `ureq` turns only 4xx and 5xx into `Error::StatusCode`
     pub(crate) fn get_conditional(
         &self,
         url: &str,
@@ -241,6 +237,9 @@ impl HttpClient {
         }
         match request.call() {
             Ok(mut response) => {
+                if response.status() == ureq::http::StatusCode::NOT_MODIFIED {
+                    return Ok(ConditionalResponse::NotModified);
+                }
                 let new_etag = response
                     .headers()
                     .get("etag")
@@ -255,7 +254,6 @@ impl HttpClient {
                     etag: new_etag,
                 })
             }
-            Err(ureq::Error::StatusCode(304)) => Ok(ConditionalResponse::NotModified),
             Err(e) => Err(classify_ureq(e, url)),
         }
     }
@@ -1297,6 +1295,32 @@ mod tests {
         assert!(
             timeouts.recv_response.is_some(),
             "recv_response timeout must be set on the HTTP agent"
+        );
+    }
+
+    #[test]
+    fn conditional_get_reports_304_as_not_modified() {
+        use crate::forge::testing::{Reply, StubServer};
+
+        let server = StubServer::start(vec![Reply::NotModified { etag: "\"abc\"" }]);
+        let client = HttpClient::default();
+        let url = server.url("/repos/foo/bar/tags");
+
+        let response = client
+            .get_conditional(&url, &Headers::anonymous(), Some("\"abc\""))
+            .expect("conditional GET");
+
+        assert!(
+            matches!(response, ConditionalResponse::NotModified),
+            "304 must be reported as NotModified"
+        );
+        assert_eq!(
+            server
+                .requests()
+                .first()
+                .and_then(|r| r.if_none_match.clone()),
+            Some("\"abc\"".to_string()),
+            "ETag MUST be If-None-Match"
         );
     }
 
