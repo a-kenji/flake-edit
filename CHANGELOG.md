@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-02-10
+
+### 🚀 Features
+
+- *(tui)* Add `/`-triggered search to selection lists
+- *(forge/update)* Support tarball-archive inputs
+- *(cli/toggle)* Init the toggle subcommand
+- *(follow)* Add `--stats` and `--dry-run` flags
+- *(follow)* Accept directory paths in batch mode
+
+### ⚙️ Miscellaneous Tasks
+
+- *(docs)* Update toggle remove recording
+- *(checks)* Init an inputs attribute
+- *(docs)* Fix intra doc link in the readme
+
+### 💼 Other
+
+- Switch inputs check to `inputs-cache` module
+- Add alias `nixpkgs-lib` alias by default
+- Build flake-edit with structured attrs
+- Switch to clap native dynamic completions
+- Check explicitly for the not `NOT_MODIFIED` status code
+
 ## [0.3.6] - 2026-06-09
 
 ### 🚀 Features
