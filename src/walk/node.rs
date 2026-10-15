@@ -242,8 +242,16 @@ pub(crate) fn should_remove_input(
     {
         return true;
     }
+    // The context test alone is identity-blind: it asks whether the enclosing
+    // input's name equals this entry's name, never whether the pending change
+    // targets that input. A self-named nested input (`app.inputs.app`) makes
+    // those two names equal by construction, so without the id check any
+    // unrelated `Remove` elsewhere in the file deletes it.
     if let Some(ctx) = ctx
         && ctx.first_matches(input_id)
+        && change
+            .id()
+            .is_some_and(|id| ctx.first().is_some_and(|f| id.input() == f))
     {
         return true;
     }
