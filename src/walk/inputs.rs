@@ -1691,6 +1691,35 @@ mod tests {
         );
     }
 
+    /// An unrelated removal must not take out a self-named nested follows.
+    #[test]
+    fn unrelated_remove_keeps_self_named_nested_follows() {
+        let flake = r#"{
+  inputs = {
+    themes.url = "github:o/themes";
+    app.inputs.app.follows = "themes";
+    other.inputs.sub.follows = "subtarget";
+    subtarget.url = "github:o/subtarget";
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("other.sub").unwrap()],
+        };
+        let result = apply(flake, &change);
+
+        assert!(
+            !result.contains("other.inputs.sub.follows"),
+            "the targeted follows should be removed, got:\n{result}"
+        );
+        assert!(
+            result.contains("app.inputs.app.follows = \"themes\""),
+            "a self-named follows for a different input must survive, got:\n{result}"
+        );
+    }
+
     #[test]
     fn remove_depth_two_follows_inputs_block_flat() {
         let flake = r#"{
