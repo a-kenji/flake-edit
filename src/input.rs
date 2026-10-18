@@ -1,6 +1,6 @@
 use rnix::TextRange;
 
-use crate::follows::{AttrPath, Segment, strip_outer_quotes};
+use crate::follows::{AttrPath, Segment};
 
 /// A single flake input declaration.
 #[derive(Debug, Clone, PartialEq, Hash, Eq, PartialOrd, Ord)]
@@ -10,6 +10,9 @@ pub struct Input {
     /// Stored unquoted. Quoting is re-applied at write-back time.
     pub(crate) url: String,
     pub(crate) follows: Vec<Follows>,
+    /// Nested inputs, relative to this one, whose source the user overrides
+    /// (`inputs.<n>.url = ...`, `inputs.<n>.flake = false`). Sorted.
+    pub(crate) overrides: Vec<AttrPath>,
     pub range: Range,
 }
 
@@ -68,19 +71,8 @@ impl Input {
             flake: true,
             url: String::new(),
             follows: Vec::new(),
+            overrides: Vec::new(),
             range: Range::default(),
-        }
-    }
-
-    /// Build an [`Input`] with `id`, `url`, and the range derived from
-    /// `text_range`. Surrounding double-quotes on `url` are stripped.
-    pub(crate) fn with_url(id: Segment, url: String, text_range: TextRange) -> Self {
-        Self {
-            id,
-            flake: true,
-            url: strip_outer_quotes(&url).to_string(),
-            follows: Vec::new(),
-            range: Range::from_text_range(text_range),
         }
     }
 
@@ -109,5 +101,13 @@ impl Input {
         self.follows.push(Follows::Indirect { path, target });
         self.follows.sort();
         self.follows.dedup();
+    }
+
+    /// Record a source override of the nested input at `path`, keeping
+    /// `overrides` sorted and deduplicated like `follows`.
+    pub(crate) fn push_override(&mut self, path: AttrPath) {
+        if let Err(index) = self.overrides.binary_search(&path) {
+            self.overrides.insert(index, path);
+        }
     }
 }

@@ -17,11 +17,11 @@ inputs:
   plugin-a:
     id: plugin-a
     url: "github:foo/plugin-a/v2.0"
-    flake: true
+    flake: false
   plugin-b:
     id: plugin-b
     url: "github:foo/plugin-b/v1.8.2"
-    flake: true
+    flake: false
 follows:
   - parent: home-manager
     nested: nixpkgs
