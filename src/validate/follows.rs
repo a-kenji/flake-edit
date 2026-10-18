@@ -189,7 +189,7 @@ pub(crate) fn top_level_names(inputs: &InputMap) -> HashSet<String> {
 
 /// Build the merged follows graph: declared `flake.nix` edges plus the
 /// resolved edges carried by `lock_graph` (from [`FollowsGraph::from_lock`]
-/// or [`FollowsGraph::from_nested_inputs`]) when supplied. With
+/// or [`FollowsGraph::from_lock_walk`]) when supplied. With
 /// `lock_graph = None` only declared edges are present and
 /// [`FollowsGraph::stale_edges`] reports nothing.
 pub(crate) fn build_graph_with_lock_graph(
@@ -254,17 +254,15 @@ mod tests {
 
     #[test]
     fn stale_lint_returns_empty_without_lock() {
-        // Without a lock the resolved universe is empty, so every declared
-        // source registers as stale. The lock-aware lint only runs when the
-        // caller supplies a lock. The surrounding integration filters
-        // accordingly.
+        // Without a lock no owner is known to be locked, so nothing can be
+        // called stale.
         let inputs = make_inputs(vec![declared_input(
             "home-manager",
             &[("nixpkgs", "nixpkgs")],
         )]);
         let graph = FollowsGraph::from_declared(&inputs).with_max_depth(64);
         let stale = lint_follows_stale(&graph, &loc_id());
-        assert_eq!(stale.len(), 1);
+        assert!(stale.is_empty());
     }
 
     #[test]

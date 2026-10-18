@@ -94,7 +94,7 @@ pub fn run_in_memory(
     let top_level_inputs: HashSet<String> = inputs.keys().cloned().collect();
     // One [`FlakeLock::nested_inputs`] walk (above) feeds the lock graph and
     // every downstream consumer.
-    let lock_graph = FollowsGraph::from_nested_inputs(&nested_inputs);
+    let lock_graph = FollowsGraph::from_lock_walk(&lock, &nested_inputs);
     let graph = FollowsGraph::from_declared_and_lock_graph(&inputs, &lock_graph);
     let Some(plan) = build_plan(
         flake_text,
@@ -299,7 +299,7 @@ fn run_impl(
         InputSizes::default()
     };
 
-    let lock_graph = FollowsGraph::from_nested_inputs(&ctx.nested_inputs);
+    let lock_graph = FollowsGraph::from_lock_walk(&ctx.lock, &ctx.nested_inputs);
 
     // Emission must not be suppressed for an edge that the
     // lock resolved but the source never declared.
@@ -1393,7 +1393,8 @@ mod tests {
 
     /// Lockfile that places `parent.middle` and `parent.middle.nixpkgs`
     /// in `resolved_universe` so neither is flagged stale by
-    /// [`seed_unfollow_set`].
+    /// [`seed_unfollow_set`]. `home-manager` and `nixos-cosmic` are locked
+    /// without nested inputs, so their declared follows are stale.
     fn parent_middle_lock() -> FlakeLock {
         let lock_text = r#"{
   "nodes": {
@@ -1415,8 +1416,16 @@ mod tests {
       "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "d", "type": "github" },
       "original": { "owner": "o", "repo": "r", "type": "github" }
     },
+    "home-manager": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "e", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "nixos-cosmic": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "f", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
     "root": {
-      "inputs": { "top": "top", "parent": "parent" }
+      "inputs": { "top": "top", "parent": "parent", "home-manager": "home-manager", "nixos-cosmic": "nixos-cosmic" }
     }
   },
   "root": "root",
@@ -1434,14 +1443,14 @@ mod tests {
 
     #[test]
     fn seed_unfollow_set_collects_stale_declared_edge() {
-        // `home-manager.nixpkgs` is declared with a target but no
-        // lockfile is supplied, so resolved_universe is empty and
+        // `home-manager.nixpkgs` is declared with a target, but the
+        // locked `home-manager` has no such input, so
         // [`FollowsGraph::stale_edges`] flags the source.
         let inputs = make_input_map(vec![input_with_follows(
             "home-manager",
             vec![(ap("nixpkgs"), Some(ap("nixpkgs")))],
         )]);
-        let graph = FollowsGraph::from_declared(&inputs);
+        let graph = FollowsGraph::from_flake(&inputs, &parent_middle_lock());
         let result = seed_unfollow_set(&graph, Some(2));
         assert_eq!(result, vec![ap("home-manager.nixpkgs")]);
     }
@@ -1457,7 +1466,7 @@ mod tests {
             "home-manager",
             vec![(ap("nixpkgs"), None)],
         )]);
-        let graph = FollowsGraph::from_declared(&inputs);
+        let graph = FollowsGraph::from_flake(&inputs, &parent_middle_lock());
         let result = seed_unfollow_set(&graph, Some(2));
         assert_eq!(result, vec![ap("home-manager.nixpkgs")]);
     }

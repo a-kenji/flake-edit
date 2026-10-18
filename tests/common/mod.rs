@@ -144,6 +144,9 @@ pub(crate) const FIXTURES: &[&str] = &[
     "toggle_shared_repo",
     // a follows-only input next to a url input with a commented alternate
     "toggle_follows_only",
+    // follows on an input that has no node in the lock. Such a follows
+    // is not stale.
+    "stale_follows_owner_unlocked",
 ];
 
 /// Create a Walker from a fixture name.

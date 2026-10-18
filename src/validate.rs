@@ -58,16 +58,9 @@ pub fn validate_full(
     lock: Option<&FlakeLock>,
 ) -> ValidationResult {
     let parsed = ParsedSource::new(source);
-    let nested_inputs = lock.map(FlakeLock::nested_inputs);
-    let lock_graph = nested_inputs
-        .as_deref()
-        .map(FollowsGraph::from_nested_inputs);
-    validate_full_with_lock_graph(
-        &parsed,
-        inputs,
-        lock_graph.as_ref(),
-        nested_inputs.as_deref().unwrap_or(&[]),
-    )
+    let nested_inputs = lock.map(FlakeLock::nested_inputs).unwrap_or_default();
+    let lock_graph = lock.map(|lock| FollowsGraph::from_lock_walk(lock, &nested_inputs));
+    validate_full_with_lock_graph(&parsed, inputs, lock_graph.as_ref(), &nested_inputs)
 }
 
 /// Like [`validate_full`] but skips the lock-drift lints (`lint_follows_stale`
@@ -112,7 +105,7 @@ pub(crate) fn validate_speculative_parsed(
 
 /// [`validate_full`] for callers that already hold a [`ParsedSource`], a
 /// lockfile-derived [`FollowsGraph`] (from [`FollowsGraph::from_lock`] or
-/// [`FollowsGraph::from_nested_inputs`]), and the lockfile's nested-input
+/// [`FollowsGraph::from_lock_walk`]), and the lockfile's nested-input
 /// set. Reuses all three instead of re-walking `flake.lock`.
 ///
 /// `lock_graph = Some(..)` enables the lock-drift lints (`lint_follows_stale`
