@@ -816,6 +816,9 @@ fn test_follow_with_transitive_flag(#[case] fixture: &str, #[case] min: usize) {
 #[rstest]
 #[case("treefmt_transitive")]
 #[case("transitive_promote_dotted_name")] // promoted name with a dot stays one quoted segment
+#[case("transitive_promote_non_flake")] // promoted non-flake source keeps flake = false
+#[case("transitive_promote_alias_member")] // promoted nixpkgs takes its url from zed.nixpkgs, not the nixpkgs-lib alias
+#[case("transitive_promote_nested_override")] // nested dedup lands on the promoted flake-parts, not under its followers
 fn test_follow_with_transitive_flag_default(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);

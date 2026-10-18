@@ -66,6 +66,9 @@ pub struct NestedInput {
     /// `github:nixos/nixpkgs/nixos-unstable`). `None` for follows-only
     /// references.
     pub url: Option<String>,
+    /// False when the lock node is a non-flake source (`"flake": false`).
+    /// Always true for follows-only references, which have no node.
+    pub flake: bool,
 }
 
 impl NestedInput {
@@ -94,6 +97,7 @@ pub(crate) struct Node {
     inputs: Option<HashMap<String, Input>>,
     locked: Option<Locked>,
     original: Option<Original>,
+    flake: Option<bool>,
 }
 
 impl Node {
@@ -655,19 +659,19 @@ impl FlakeLock {
             let mut path = parent_path.clone();
             path.push(nested_seg);
 
-            let (follows, url, descend_into) = match nested_ref {
-                Input::Indirect(Some(target)) => (Some(target.clone()), None, None),
+            let (follows, url, flake, descend_into) = match nested_ref {
+                Input::Indirect(Some(target)) => (Some(target.clone()), None, true, None),
                 // Empty `[]` declarations have no follows target. Emit
                 // the input with `follows: None` so the path is still
                 // visible to the UI.
-                Input::Indirect(None) => (None, None, None),
+                Input::Indirect(None) => (None, None, true, None),
                 Input::Direct(child_node_name) => {
-                    let url = self
-                        .nodes
-                        .get(child_node_name.as_str())
+                    let child = self.nodes.get(child_node_name.as_str());
+                    let url = child
                         .and_then(|n| n.original.as_ref())
                         .and_then(|o| o.to_flake_url());
-                    (None, url, Some(child_node_name.clone()))
+                    let flake = child.and_then(|n| n.flake) != Some(false);
+                    (None, url, flake, Some(child_node_name.clone()))
                 }
             };
 
@@ -675,6 +679,7 @@ impl FlakeLock {
                 path: path.clone(),
                 follows,
                 url,
+                flake,
             });
 
             if let Some(child) = descend_into {

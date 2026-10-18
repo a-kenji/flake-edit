@@ -19,7 +19,7 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -4,8 +4,12 @@
+@@ -4,8 +4,13 @@
    inputs = {
      nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
      alpha.url = "github:example/alpha";
@@ -29,10 +29,11 @@ exit_code: 0
      gamma.url = "github:example/gamma";
 +    gamma.inputs.helper.inputs.flake-compat.follows = "flake-compat";
 +    flake-compat.url = "github:edolstra/flake-compat";
++    flake-compat.flake = false;
    };
 
    outputs =
-@@ -15,6 +19,7 @@
+@@ -15,6 +20,7 @@
        alpha,
        beta,
        gamma,

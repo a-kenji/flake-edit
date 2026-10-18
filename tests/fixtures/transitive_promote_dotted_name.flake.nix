@@ -1,9 +1,9 @@
 {
-  description = "Two inputs that share a nested hls-1.10 and a nested zz.";
+  description = "Two inputs whose own haskellNix each pull hls-1.10 and hls-2.0.";
 
   inputs = {
-    a.url = "github:o/a";
-    b.url = "github:o/b";
+    cardano-faucet.url = "github:input-output-hk/cardano-faucet/node-8.3";
+    cardano-node.url = "github:input-output-hk/cardano-node/8.5.0-pre";
   };
 
   outputs = _: { };

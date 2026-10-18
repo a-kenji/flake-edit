@@ -1,0 +1,34 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/transitive_promote_non_flake.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/transitive_promote_non_flake.flake.lock"
+    - "--diff"
+    - follow
+    - "--transitive"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -3,7 +3,11 @@
+
+   inputs = {
+     colmena.url = "github:zhaofengli/colmena/v0.4.0";
++    colmena.inputs.flake-compat.follows = "flake-compat";
+     simple-nixos-mailserver.url = "gitlab:simple-nixos-mailserver/nixos-mailserver/nixos-25.11";
++    simple-nixos-mailserver.inputs.flake-compat.follows = "flake-compat";
++    flake-compat.url = "github:edolstra/flake-compat";
++    flake-compat.flake = false;
+   };
+
+   outputs = _: { };
+
+----- stderr -----

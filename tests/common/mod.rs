@@ -176,6 +176,12 @@ pub(crate) const FIXTURES: &[&str] = &[
     "follow_alias_exact_tie",
     // `follow --transitive` promotes a nested input whose name contains a dot
     "transitive_promote_dotted_name",
+    // `follow --transitive` promotes a nested non-flake source
+    "transitive_promote_non_flake",
+    // `follow --transitive` groups a nixpkgs and a nixpkgs-lib alias member
+    "transitive_promote_alias_member",
+    // `follow --transitive` promotes an input whose own nested input dedupes
+    "transitive_promote_nested_override",
 ];
 
 /// Create a Walker from a fixture name.
