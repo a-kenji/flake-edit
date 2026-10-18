@@ -81,7 +81,7 @@ fn apply_add(node: SyntaxNode, ctx: &Option<Context>, change: &Change) -> Option
     else {
         return None;
     };
-    let id = id.input().as_str();
+    let id = id.input();
 
     if node.kind() != SyntaxKind::NODE_ATTR_SET || ctx.is_some() {
         return None;
@@ -99,7 +99,7 @@ fn apply_add(node: SyntaxNode, ctx: &Option<Context>, change: &Change) -> Option
 /// Indentation copies the whitespace preceding the `inputs` attrpath-value
 /// node so the inserted entry lines up with whatever the user already wrote
 /// elsewhere in the file. Contents indent one level deeper.
-fn insert_into_empty_inputs(node: &SyntaxNode, id: &str, uri: &str, flake: bool) -> SyntaxNode {
+fn insert_into_empty_inputs(node: &SyntaxNode, id: &Segment, uri: &str, flake: bool) -> SyntaxNode {
     let base_indent = node
         .parent()
         .and_then(|p| p.prev_sibling_or_token())
@@ -527,7 +527,7 @@ fn handle_child_attrpath_value(
             parent,
             child,
             child_node,
-            id.input().as_str(),
+            id.input(),
             uri,
             *flake,
         ));
@@ -562,7 +562,7 @@ fn insert_added_input_into_block(
     parent: &SyntaxNode,
     child: &rnix::SyntaxElement,
     child_node: &SyntaxNode,
-    id: &str,
+    id: &Segment,
     uri: &str,
     flake: bool,
 ) -> SyntaxNode {
@@ -2711,7 +2711,7 @@ mod tests {
             &inputs_block,
             &child,
             &child_node,
-            "flake-utils",
+            &Segment::from_unquoted("flake-utils").unwrap(),
             "github:numtide/flake-utils",
             true,
         );
@@ -2739,7 +2739,7 @@ mod tests {
             &inputs_block,
             &child,
             &child_node,
-            "naked",
+            &Segment::from_unquoted("naked").unwrap(),
             "github:owner/naked",
             false,
         );
@@ -2770,7 +2770,7 @@ mod tests {
             &inputs_block,
             &child,
             &child_node,
-            "flake-utils",
+            &Segment::from_unquoted("flake-utils").unwrap(),
             "github:numtide/flake-utils",
             true,
         );

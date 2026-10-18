@@ -419,7 +419,7 @@ impl<'a> Walker {
         else {
             return None;
         };
-        let id = id.input().as_str();
+        let id = id.input();
 
         if toplevel.index() == 0 {
             return None;

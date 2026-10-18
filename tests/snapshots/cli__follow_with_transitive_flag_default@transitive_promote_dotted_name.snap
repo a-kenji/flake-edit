@@ -1,0 +1,36 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/transitive_promote_dotted_name.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/transitive_promote_dotted_name.flake.lock"
+    - "--diff"
+    - follow
+    - "--transitive"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -3,7 +3,13 @@
+
+   inputs = {
+     a.url = "github:o/a";
++    a.inputs."hls-1.10".follows = "hls-1.10";
++    a.inputs.zz.follows = "zz";
+     b.url = "github:o/b";
++    b.inputs."hls-1.10".follows = "hls-1.10";
++    b.inputs.zz.follows = "zz";
++    "hls-1.10".url = "github:haskell/hls/1.10.0.0";
++    zz.url = "github:o/zz";
+   };
+
+   outputs = _: { };
+
+----- stderr -----

@@ -174,6 +174,8 @@ pub(crate) const FIXTURES: &[&str] = &[
     // nested nixpkgs-lib matches top-level nixpkgs-lib exactly and
     // top-level nixpkgs via the default alias. The exact match wins.
     "follow_alias_exact_tie",
+    // `follow --transitive` promotes a nested input whose name contains a dot
+    "transitive_promote_dotted_name",
 ];
 
 /// Create a Walker from a fixture name.
