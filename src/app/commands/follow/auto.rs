@@ -22,11 +22,20 @@ use crate::validate;
 use super::super::super::editor::Editor;
 use super::super::super::state::AppState;
 use super::super::{Error, Result};
-use super::load_follow_context;
+use super::{FollowContext, load_follow_context};
 
 mod stats;
 
+const SENTINEL_NOTHING_TO_DEDUPLICATE: &str = "Nothing to deduplicate.";
 const SENTINEL_ALREADY_DEDUPLICATED: &str = "All inputs are already deduplicated.";
+
+fn idle_message(nested_inputs: &[NestedInput]) -> &'static str {
+    if nested_inputs.is_empty() {
+        SENTINEL_NOTHING_TO_DEDUPLICATE
+    } else {
+        SENTINEL_ALREADY_DEDUPLICATED
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReportMode {
@@ -81,33 +90,20 @@ pub fn run_in_memory(
 ) -> Result<Option<String>> {
     let mut flake_edit = FlakeEdit::from_text(flake_text)?;
     let lock = FlakeLock::read_from_str(lock_text)?;
-    let nested_inputs = lock.nested_inputs();
-    if nested_inputs.is_empty() {
+    let Some(ctx) = FollowContext::new(lock, flake_edit.list().clone()) else {
         return Ok(None);
-    }
-
-    let inputs = flake_edit.list().clone();
-    if inputs.is_empty() {
-        return Ok(None);
-    }
-
-    let top_level_inputs: HashSet<String> = inputs.keys().cloned().collect();
-    // One [`FlakeLock::nested_inputs`] walk (above) feeds the lock graph and
-    // every downstream consumer.
-    let lock_graph = FollowsGraph::from_lock_walk(&lock, &nested_inputs);
-    let graph = FollowsGraph::from_declared_and_lock_graph(&inputs, &lock_graph);
-    let Some(plan) = build_plan(
-        flake_text,
-        &nested_inputs,
-        top_level_inputs,
-        &inputs,
-        &graph,
-        follow_config,
-    ) else {
+    };
+    let (lock_graph, Some(plan)) = plan_follows(&ctx, flake_text, follow_config) else {
         return Ok(None);
     };
 
-    let applied = apply_plan_text(flake_text, &inputs, &nested_inputs, &lock_graph, &plan)?;
+    let applied = apply_plan_text(
+        flake_text,
+        &ctx.inputs,
+        &ctx.nested_inputs,
+        &lock_graph,
+        &plan,
+    )?;
     Ok((applied.current_text != flake_text).then_some(applied.current_text))
 }
 
@@ -286,7 +282,7 @@ fn run_impl(
 ) -> Result<()> {
     let Some(ctx) = load_follow_context(flake_edit, state)? else {
         if !quiet {
-            println!("Nothing to deduplicate.");
+            println!("{SENTINEL_NOTHING_TO_DEDUPLICATE}");
         }
         return Ok(());
     };
@@ -299,22 +295,9 @@ fn run_impl(
         InputSizes::default()
     };
 
-    let lock_graph = FollowsGraph::from_lock_walk(&ctx.lock, &ctx.nested_inputs);
-
-    // Emission must not be suppressed for an edge that the
-    // lock resolved but the source never declared.
-    let graph = FollowsGraph::from_declared_and_lock_graph(&ctx.inputs, &lock_graph);
-
-    let Some(plan) = build_plan(
-        &editor.text(),
-        &ctx.nested_inputs,
-        ctx.top_level_inputs.clone(),
-        &ctx.inputs,
-        &graph,
-        &state.config.follow,
-    ) else {
+    let (lock_graph, Some(plan)) = plan_follows(&ctx, &editor.text(), &state.config.follow) else {
         if !quiet {
-            println!("{SENTINEL_ALREADY_DEDUPLICATED}");
+            println!("{}", idle_message(&ctx.nested_inputs));
             render_existing_section(report, &ctx.nested_inputs, &sizes);
         }
         return Ok(());
@@ -351,6 +334,26 @@ fn render_existing_section(report: ReportMode, nested_inputs: &[NestedInput], si
         println!();
         print!("{section}");
     }
+}
+
+fn plan_follows(
+    ctx: &FollowContext,
+    source_text: &str,
+    follow_config: &FollowConfig,
+) -> (FollowsGraph, Option<FollowPlan>) {
+    let lock_graph = FollowsGraph::from_lock_walk(&ctx.lock, &ctx.nested_inputs);
+
+    let graph = FollowsGraph::from_declared_and_lock_graph(&ctx.inputs, &lock_graph);
+
+    let plan = build_plan(
+        source_text,
+        &ctx.nested_inputs,
+        ctx.top_level_inputs.clone(),
+        &ctx.inputs,
+        &graph,
+        follow_config,
+    );
+    (lock_graph, plan)
 }
 
 fn build_plan(
@@ -1247,7 +1250,7 @@ fn render_summary(
     // Empty plans short-circuit earlier (see [`build_plan`]).
     if applied.current_text == editor.text() {
         if !quiet {
-            println!("{SENTINEL_ALREADY_DEDUPLICATED}");
+            println!("{}", idle_message(nested_inputs));
         }
         return Ok(());
     }
@@ -1634,6 +1637,20 @@ mod tests {
             walks, 1,
             "nested_inputs must be walked exactly once per follow invocation, got {walks}",
         );
+    }
+
+    #[test]
+    fn run_in_memory_prunes_stale_follows_without_nested_inputs() {
+        let flake = include_str!("../../../../tests/fixtures/stale_lockfile_only.flake.nix");
+        let lock = include_str!("../../../../tests/fixtures/stale_lockfile_only.flake.lock");
+
+        let out = run_in_memory(flake, lock, &FollowConfig::default()).expect("run_in_memory");
+
+        let expected = flake.replace(
+            "    foo.inputs.bar.follows = \"nixpkgs\";\n    foo.inputs.baz.follows = \"nixpkgs\";\n",
+            "",
+        );
+        assert_eq!(out, Some(expected));
     }
 
     fn nested_input(path: &str, follows: Option<&str>, url: Option<&str>) -> NestedInput {

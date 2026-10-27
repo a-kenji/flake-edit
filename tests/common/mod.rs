@@ -147,6 +147,9 @@ pub(crate) const FIXTURES: &[&str] = &[
     // follows on an input that has no node in the lock. Such a follows
     // is not stale.
     "stale_follows_owner_unlocked",
+    // follows on an input that has no node in a lock without any nested
+    // inputs. Such a follows is not stale.
+    "follows_owner_unlocked_no_nested",
 ];
 
 /// Create a Walker from a fixture name.

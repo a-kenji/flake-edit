@@ -1,0 +1,20 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/follows_owner_unlocked_no_nested.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/follows_owner_unlocked_no_nested.flake.lock"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+Nothing to deduplicate.
+
+----- stderr -----
