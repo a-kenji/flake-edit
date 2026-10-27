@@ -648,10 +648,6 @@ fn handle_attrpath_follows(
 }
 
 struct FollowsAttrPathParts {
-    /// Kept alongside [`Self::owner_seg`] because the depth-2 remove path
-    /// matches against a segment built from the syntax node, not from the
-    /// already-derived owner segment.
-    owner_node: SyntaxNode,
     owner_seg: Segment,
     rest: Vec<Segment>,
     url_node: SyntaxNode,
@@ -672,12 +668,11 @@ fn parse_follows_attrpath_parts(node: &SyntaxNode) -> Option<FollowsAttrPathPart
         .map(|c| (c.clone(), Segment::from_syntax_or_sentinel(c)))
         .collect();
 
-    let (owner_node, owner_seg) = path_segments.first().cloned()?;
+    let (_, owner_seg) = path_segments.first().cloned()?;
     let rest: Vec<Segment> = path_segments[1..].iter().map(|(_, s)| s.clone()).collect();
     let url_node = node.next_sibling()?;
 
     Some(FollowsAttrPathParts {
-        owner_node,
         owner_seg,
         rest,
         url_node,
@@ -735,34 +730,18 @@ fn record_depth_n_follows_attr(
 
     if change.is_remove()
         && let Some(id) = change.id()
-        && depth_n_follows_attr_matches_remove(parts, &id, &follows_seg)
+        && depth_n_follows_attr_matches_remove(parts, &id)
     {
         return Some(empty_node());
     }
     None
 }
 
-/// Depth-2 uses the two-segment
-/// [`crate::change::ChangeId::matches_with_follows`] matcher because
-/// [`crate::change::ChangeId::input`] /
-/// [`crate::change::ChangeId::follows`] only expose the first two segments
-/// of the id. Depth-N has to compare the full id path against the chain.
 fn depth_n_follows_attr_matches_remove(
     parts: &FollowsAttrPathParts,
     id: &crate::change::ChangeId,
-    follows_seg: &Segment,
 ) -> bool {
-    if parts.rest.len() == 1 {
-        let owner_match_seg = Segment::from_syntax_or_sentinel(&parts.owner_node);
-        return id.matches_with_follows(&owner_match_seg, Some(follows_seg));
-    }
-    let id_segs = id.path().segments();
-    id_segs.len() == parts.rest.len() + 1
-        && id_segs[0] == parts.owner_seg
-        && id_segs[1..]
-            .iter()
-            .zip(parts.rest.iter())
-            .all(|(a, b)| a == b)
+    remove_targets_follows_decl(id, &parts.owner_seg, &parts.rest)
 }
 
 fn handle_url_attr(
@@ -967,7 +946,10 @@ fn handle_follows_attr(
         );
         insert_with_ctx(inputs, leaf_seg.clone(), input.clone(), ctx);
         if should_remove_input(change, ctx, input.id())
-            || should_remove_nested_input(change, ctx, input.id())
+            || (should_remove_nested_input(change, ctx, input.id())
+                && change
+                    .id()
+                    .is_some_and(|id| remove_targets_follows_decl(&id, &owner_seg, &nested_segs)))
         {
             return Some(empty_node());
         }
@@ -1021,6 +1003,33 @@ fn handle_follows_attr(
 /// not by ident equality.
 ///
 /// Precondition: `chain` is non-empty.
+/// Whether a `Remove` actually targets the follows declaration
+/// `owner.nested… .follows`, as opposed to merely sharing its first two
+/// segments.
+///
+/// [`crate::change::ChangeId`] exposes only `input` (first segment) and
+/// `follows` (second), so the ctx-driven predicates answer the same thing for
+/// `owner.mid` and `owner.mid.leaf`. Removing the depth-2 follows
+/// `owner.mid.leaf` therefore also matched the depth-1 declaration
+/// `owner.inputs.mid.follows` and deleted it.
+///
+/// A single-segment id names the whole owner input, where stripping its
+/// nested follows lines is correct; anything longer has to match the
+/// declaration's full path exactly.
+fn remove_targets_follows_decl(
+    id: &crate::change::ChangeId,
+    owner: &Segment,
+    nested: &[Segment],
+) -> bool {
+    let segs = id.path().segments();
+    if segs.len() == 1 {
+        return segs[0] == *owner;
+    }
+    segs.len() == nested.len() + 1
+        && segs[0] == *owner
+        && segs[1..].iter().zip(nested.iter()).all(|(a, b)| a == b)
+}
+
 fn resolve_follows_owner_and_nested(
     attrpath: &SyntaxNode,
     chain: &[SyntaxNode],
@@ -1643,6 +1652,43 @@ mod tests {
             walker.root = changed;
         }
         last.expect("walker did not rewrite the tree")
+    }
+
+    /// Removing a depth-2 follows must not take out a depth-1 follows that
+    /// happens to name the same middle input.
+    ///
+    /// `ChangeId` only models two segments (`input`, `follows`), so the stale
+    /// path `atuin.flake-parts.nixpkgs-lib` and the load-bearing declaration
+    /// `atuin.inputs.flake-parts.follows` collapse to the same
+    /// `(atuin, flake-parts)` pair. The existing depth-2 tests dodge this by
+    /// giving the middle input no follows of its own.
+    #[test]
+    fn remove_depth_two_follows_keeps_depth_one_follows_of_same_name() {
+        let flake = r#"{
+  inputs = {
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
+    atuin.url = "github:atuinsh/atuin";
+    atuin.inputs.flake-parts.follows = "flake-parts";
+    atuin.inputs.flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs-lib";
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("atuin.flake-parts.nixpkgs-lib").unwrap()],
+        };
+        let result = apply(flake, &change);
+
+        assert!(
+            !result.contains("inputs.nixpkgs-lib.follows"),
+            "depth-2 follows should be removed, got:\n{result}"
+        );
+        assert!(
+            result.contains("atuin.inputs.flake-parts.follows = \"flake-parts\""),
+            "depth-1 follows naming the same middle input must remain intact, got:\n{result}"
+        );
     }
 
     #[test]
