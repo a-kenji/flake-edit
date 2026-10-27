@@ -244,6 +244,9 @@ pub(crate) fn should_remove_input(
     }
     if let Some(ctx) = ctx
         && ctx.first_matches(input_id)
+        && change
+            .id()
+            .is_some_and(|id| ctx.first().is_some_and(|f| id.input() == f))
     {
         return true;
     }
