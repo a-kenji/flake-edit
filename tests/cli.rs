@@ -284,6 +284,9 @@ fn test_add_infer_id(#[case] fixture: &str) {
 #[case("root", "rust-overlay")]
 #[case("outputs_leading_comma_remove_first", "nixpkgs-unstable")]
 #[case("remove_preserves_sibling_url", "home-manager")]
+#[case("remove_flat_depth_two_follows", "atuin")]
+#[case("remove_flat_depth_two_follows", "atuin.flake-parts.nixpkgs-lib")]
+#[case("remove_shared_prefix_inputs_attrset", "atuin.flake-parts.nixpkgs-lib")] // depth-2 id must not prune the sibling depth-1 follows
 #[case("let_wrapped", "nixpkgs")]
 fn test_remove(#[case] fixture: &str, #[case] id: &str) {
     let mut settings = insta::Settings::clone_current();
@@ -658,6 +661,7 @@ fn add_follow_accepts_two_segment_dot_path_unchanged() {
 #[case("follows_cycle")] // Cycle detection: treefmt-nix follows harmonia/treefmt-nix
 #[case("stale_follows")] // Stale follows: crane.flake-compat no longer exists in lock
 #[case("stale_follows_invalid_parent")] // Stale follows: nixpkgs.treefmt-nix doesn't exist
+#[case("stale_follows_shared_prefix_flake_false")] // pruning a stale depth-2 follows keeps `flake = false` on the middle input
 #[case("treefmt_transitive")] // treefmt has treefmt-nix as transitive input that matches top-level
 #[case("multi_hop_cycle")] // multi-hop a -> b -> c declared chain
 #[case("dot_ancestor_cycle")] // dot-named participant in a multi-hop chain

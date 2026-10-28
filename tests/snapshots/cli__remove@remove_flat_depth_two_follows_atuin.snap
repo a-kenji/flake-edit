@@ -1,0 +1,30 @@
+---
+source: tests/cli.rs
+assertion_line: 296
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/remove_flat_depth_two_follows.flake.nix"
+    - "--diff"
+    - rm
+    - atuin
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -3,8 +3,6 @@
+
+   inputs = {
+     nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
+-    atuin.url = "github:atuinsh/atuin";
+-    atuin.inputs.flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs-lib";
+     treefmt-nix.url = "github:numtide/treefmt-nix";
+     treefmt-nix.inputs.flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs-lib";
+   };
+
+----- stderr -----

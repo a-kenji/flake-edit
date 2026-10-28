@@ -1,0 +1,30 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/stale_follows_shared_prefix_flake_false.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/stale_follows_shared_prefix_flake_false.flake.lock"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -5,7 +5,6 @@
+       url = "github:zhaofengli/nix-homebrew";
+       inputs.brew-src.url = "github:Homebrew/brew/5.1.10";
+       inputs.brew-src.flake = false;
+-      inputs.brew-src.inputs.nixpkgs.follows = "nixpkgs";
+     };
+   };
+   outputs = { self, ... }: { };
+
+----- stderr -----
+warning: stale follows at line 5, column 13: nix-homebrew.brew-src.nixpkgs -> nixpkgs (source no longer present in flake.lock)
