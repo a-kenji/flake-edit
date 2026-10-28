@@ -337,13 +337,14 @@ fn handle_nested_input(
 /// declarations like `inputs.nixpkgs.url = "..."`.
 fn handle_child_ident(child: &rnix::SyntaxElement, change: &Change) -> Option<SyntaxNode> {
     let child_node = child.as_node()?;
+    if child.to_string() != "inputs" || child_node.prev_sibling().is_some() {
+        return None;
+    }
     let parent_sibling = child_node.parent().and_then(|p| p.next_sibling());
 
     // `inputs` ident with a sibling (e.g. `inputs.foo.url = ...` or
     // `inputs.foo = { ... }`).
-    if child.to_string() == "inputs"
-        && let Some(next_sibling) = child_node.next_sibling()
-    {
+    if let Some(next_sibling) = child_node.next_sibling() {
         // `NODE_STRING` covers quoted key segments like `inputs."master".url`
         // and `inputs."nixos-24.11".url`, where a dot inside the quotes belongs
         // to the name rather than separating a path.
@@ -373,18 +374,17 @@ fn handle_child_ident(child: &rnix::SyntaxElement, change: &Change) -> Option<Sy
         }
     }
 
-    if child.to_string().starts_with("inputs") {
-        let id = child_node.next_sibling()?;
-        let context: Context = Segment::from_syntax_or_sentinel(&id).into();
-        if walk_inputs(child_node.clone(), &Some(context), change).is_some() {
-            tracing::warn!(
-                "Flat tree attribute replacement not yet implemented for: {}",
-                child
-            );
-        }
-    }
-
-    None
+    let id = change.is_remove().then(|| change.id()).flatten()?;
+    let owner = child_node.next_sibling()?;
+    let rest: Vec<SyntaxNode> =
+        std::iter::successors(owner.next_sibling(), |n| n.next_sibling()).collect();
+    remove_targeted_binding(
+        &rest,
+        parent_sibling.as_ref()?,
+        &id,
+        &Segment::from_syntax_or_sentinel(&owner),
+        &[],
+    )
 }
 
 /// Declaration to put in place of `entry` when a removal deletes it.
@@ -483,7 +483,12 @@ fn handle_child_attrpath_value(
         ctx.clone()
     };
 
-    if let Some(mut replacement) = walk_input(child_node, &ctx, change) {
+    let walked = walk_input(child_node, &ctx, change).or_else(|| {
+        in_inputs_block
+            .then(|| remove_targeted_block_entry(child_node, change))
+            .flatten()
+    });
+    if let Some(mut replacement) = walked {
         if in_inputs_block
             && replacement.text().is_empty()
             && let Some(redeclared) = redeclare_removed_owner(child_node, change)
@@ -529,6 +534,21 @@ fn handle_child_attrpath_value(
     }
 
     None
+}
+
+/// [`remove_targeted_binding`] for a whole block entry.
+fn remove_targeted_block_entry(entry: &SyntaxNode, change: &Change) -> Option<SyntaxNode> {
+    let id = change.is_remove().then(|| change.id()).flatten()?;
+    let path = entry.first_child()?;
+    let value = path.next_sibling()?;
+    let idents: Vec<SyntaxNode> = path.children().collect();
+    let (owner, rest) = idents.split_first()?;
+    let owner = Segment::from_syntax_or_sentinel(owner);
+    let new_value = remove_targeted_binding(rest, &value, &id, &owner, &[])?;
+    if new_value.text().is_empty() {
+        return Some(new_value);
+    }
+    Some(substitute_child(entry, value.index(), &new_value))
 }
 
 /// Splice a new `id = ...` entry into a non-empty `inputs = { ... }` block.
@@ -1014,15 +1034,16 @@ fn handle_url_leaf(
 /// Nested input path an entry's attrpath adds to the attrset it lives in:
 /// `mid.inputs.leaf.follows` yields `[mid, leaf]`, `mid.flake` and
 /// `mid = { ... }` yield `[mid]`, `follows` and `inputs = { ... }` yield `[]`.
-fn nested_entry_segments(entry_path: &SyntaxNode, value_is_attrset: bool) -> Vec<Segment> {
-    let mut idents: Vec<SyntaxNode> = entry_path.children().collect();
-    if !value_is_attrset
-        && idents
-            .last()
-            .is_some_and(|l| matches!(l.to_string().as_str(), "follows" | "flake" | "url"))
-    {
-        idents.pop();
-    }
+fn nested_entry_segments(idents: &[SyntaxNode], value_is_attrset: bool) -> Vec<Segment> {
+    let idents = match idents.split_last() {
+        Some((last, init))
+            if !value_is_attrset
+                && matches!(last.to_string().as_str(), "follows" | "flake" | "url") =>
+        {
+            init
+        }
+        _ => idents,
+    };
     idents
         .iter()
         .filter(|c| c.to_string() != "inputs")
@@ -1037,7 +1058,6 @@ fn remove_targeted_entry(
     owner: &Segment,
     prefix: &[Segment],
 ) -> Option<SyntaxNode> {
-    let id_segs = id.path().segments();
     for entry in attrset.children() {
         if entry.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
             continue;
@@ -1045,71 +1065,59 @@ fn remove_targeted_entry(
         let Some(path) = entry.first_child() else {
             continue;
         };
-        let inner = path
-            .next_sibling()
-            .filter(|v| v.kind() == SyntaxKind::NODE_ATTR_SET);
-        let mut nested = prefix.to_vec();
-        nested.extend(nested_entry_segments(&path, inner.is_some()));
-
-        if remove_targets_follows_decl(id, owner, &nested) {
-            return Some(remove_child_with_whitespace(attrset, &entry, entry.index()));
-        }
-
-        let leads_to_id = id_segs.len() > nested.len() + 1
-            && id_segs[0] == *owner
-            && id_segs[1..].starts_with(&nested);
-        if let Some(inner) = inner
-            && leads_to_id
-            && let Some(new_inner) = remove_targeted_entry(&inner, id, owner, &nested)
-        {
-            if is_attrset_content_empty(&new_inner) {
+        let Some(value) = path.next_sibling() else {
+            continue;
+        };
+        let idents: Vec<SyntaxNode> = path.children().collect();
+        if let Some(new_value) = remove_targeted_binding(&idents, &value, id, owner, prefix) {
+            if new_value.text().is_empty() {
                 return Some(remove_child_with_whitespace(attrset, &entry, entry.index()));
             }
-            let new_entry = substitute_child(&entry, inner.index(), &new_inner);
+            let new_entry = substitute_child(&entry, value.index(), &new_value);
             return Some(substitute_child(attrset, entry.index(), &new_entry));
         }
     }
     None
 }
 
-/// The bare `inputs = { ... }` shape needs its own removal-with-pruning
-/// path: recursing through [`walk_inputs`] strips the matching entry
-/// inside the nested attrset, but cannot prune the now-empty `inputs`
-/// binding from the outer input block.
+fn remove_targeted_binding(
+    idents: &[SyntaxNode],
+    value: &SyntaxNode,
+    id: &crate::change::ChangeId,
+    owner: &Segment,
+    prefix: &[Segment],
+) -> Option<SyntaxNode> {
+    let value_is_attrset = value.kind() == SyntaxKind::NODE_ATTR_SET;
+    let mut nested = prefix.to_vec();
+    nested.extend(nested_entry_segments(idents, value_is_attrset));
+    if remove_targets_follows_decl(id, owner, &nested) {
+        return Some(empty_node());
+    }
+
+    let id_segs = id.path().segments();
+    let leads_to_id = value_is_attrset
+        && id_segs.len() > nested.len() + 1
+        && id_segs[0] == *owner
+        && id_segs[1..].starts_with(&nested);
+    if !leads_to_id {
+        return None;
+    }
+    let new_value = remove_targeted_entry(value, id, owner, &nested)?;
+    if is_attrset_content_empty(&new_value) {
+        return Some(empty_node());
+    }
+    Some(new_value)
+}
+
 fn handle_inputs_leaf(
     node: &SyntaxNode,
     child: &SyntaxNode,
-    attr: &SyntaxNode,
-    leaf: &SyntaxNode,
     change: &Change,
 ) -> Option<SyntaxNode> {
     let id_node = child.prev_sibling().unwrap();
-    let id_seg = Segment::from_syntax_or_sentinel(&id_node);
-    let context: Context = id_seg.clone().into();
-    let ctx_some = Some(context);
-    if let Some(replacement) = walk_inputs(child.clone(), &ctx_some, change) {
-        return Some(substitute_child(node, child.index(), &replacement));
-    }
-
-    if leaf.to_string() == "inputs"
-        && change.is_remove()
-        && let Some(id) = change.id()
-        && let Some(inputs_attrset) = attr
-            .children()
-            .find(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
-        && let Some(new_inputs_attrset) = remove_targeted_entry(&inputs_attrset, &id, &id_seg, &[])
-    {
-        let new_child = if is_attrset_content_empty(&new_inputs_attrset) {
-            remove_child_with_whitespace(child, attr, attr.index())
-        } else {
-            let new_attr = substitute_child(attr, inputs_attrset.index(), &new_inputs_attrset);
-            substitute_child(child, attr.index(), &new_attr)
-        };
-
-        return Some(substitute_child(node, child.index(), &new_child));
-    }
-
-    None
+    let context: Context = Segment::from_syntax_or_sentinel(&id_node).into();
+    let replacement = walk_inputs(child.clone(), &Some(context), change)?;
+    Some(substitute_child(node, child.index(), &replacement))
 }
 
 fn find_inputs_block_attr(parent: &SyntaxNode) -> Option<SyntaxNode> {
@@ -1249,7 +1257,7 @@ fn handle_input_attr_set(
             }
 
             if leaf_text.starts_with("inputs")
-                && let Some(result) = handle_inputs_leaf(node, child, &attr, &leaf, change)
+                && let Some(result) = handle_inputs_leaf(node, child, change)
             {
                 return Some(result);
             }
@@ -1853,6 +1861,19 @@ mod tests {
 }
 "#
         );
+
+        let toplevel = r#"{
+  inputs.nixpkgs.url = "github:nixos/nixpkgs";
+  inputs.nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.05";
+  inputs.crane.url = "github:ipetkov/crane";
+  inputs.crane.inputs.nixpkgs = { follows = "nixpkgs-stable"; };
+  outputs = { self, ... }: { };
+}
+"#;
+        assert_eq!(
+            remove(toplevel, "nixpkgs"),
+            toplevel.replace("\n  inputs.nixpkgs.url = \"github:nixos/nixpkgs\";", "")
+        );
     }
 
     #[test]
@@ -1909,6 +1930,70 @@ mod tests {
   outputs = { self, ... }: { };
 }
 "#
+        );
+    }
+
+    #[test]
+    fn toplevel_nested_binding_is_removed_with_owner_or_by_full_path() {
+        let flake = r#"{
+  inputs.nixpkgs.url = "github:nixos/nixpkgs";
+  inputs.app.url = "github:o/app";
+  inputs.app.inputs.foo.url = "github:o/foo";
+  inputs.nix.url = "github:NixOS/nix";
+  inputs.nix.inputs.nixpkgs = { follows = "nixpkgs"; };
+  inputs.e = { url = "github:o/e"; inputs = { nixpkgs = { follows = "nixpkgs"; }; }; };
+  outputs = _: { };
+}
+"#;
+        let without_override =
+            flake.replace("\n  inputs.app.inputs.foo.url = \"github:o/foo\";", "");
+        assert_eq!(remove(flake, "app.foo"), without_override);
+        assert_eq!(
+            remove(flake, "app"),
+            without_override.replace("\n  inputs.app.url = \"github:o/app\";", "")
+        );
+
+        let without_follows = flake.replace(
+            "\n  inputs.nix.inputs.nixpkgs = { follows = \"nixpkgs\"; };",
+            "",
+        );
+        assert_eq!(remove(flake, "nix.nixpkgs"), without_follows);
+        assert_eq!(
+            remove(flake, "nix"),
+            without_follows.replace("\n  inputs.nix.url = \"github:NixOS/nix\";", "")
+        );
+
+        assert_eq!(
+            remove(flake, "e.nixpkgs"),
+            flake.replace(" inputs = { nixpkgs = { follows = \"nixpkgs\"; }; };", "")
+        );
+    }
+
+    #[test]
+    fn block_follows_attrset_is_removed_with_owner_or_by_full_path() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    disko = {
+      url = "github:nix-community/disko";
+      inputs.nixpkgs = { follows = "nixpkgs"; };
+    };
+    hm.url = "github:nix-community/home-manager";
+    hm.inputs.nixpkgs = { follows = "nixpkgs"; };
+  };
+  outputs = _: { };
+}
+"#;
+        assert_eq!(
+            remove(flake, "disko.nixpkgs"),
+            flake.replace("\n      inputs.nixpkgs = { follows = \"nixpkgs\"; };", "")
+        );
+        let without_hm_follows =
+            flake.replace("\n    hm.inputs.nixpkgs = { follows = \"nixpkgs\"; };", "");
+        assert_eq!(remove(flake, "hm.nixpkgs"), without_hm_follows);
+        assert_eq!(
+            remove(flake, "hm"),
+            without_hm_follows.replace("\n    hm.url = \"github:nix-community/home-manager\";", "")
         );
     }
 
@@ -2561,11 +2646,11 @@ mod tests {
   outputs = { self, ... }: { };
 }
 "#;
-        let (node, child, attr, leaf) = find_input_attrset_leaf(flake, "flake-edit", "inputs");
+        let (node, child, _, _) = find_input_attrset_leaf(flake, "flake-edit", "inputs");
         let change = Change::Remove {
             ids: vec![ChangeId::parse("flake-edit.nixpkgs").unwrap()],
         };
-        let result = handle_inputs_leaf(&node, &child, &attr, &leaf, &change)
+        let result = handle_inputs_leaf(&node, &child, &change)
             .expect("nested follows removal must rewrite");
         assert!(
             !result.to_string().contains("inputs.nixpkgs.follows"),
@@ -2590,11 +2675,11 @@ mod tests {
   outputs = { self, ... }: { };
 }
 "#;
-        let (node, child, attr, leaf) = find_input_attrset_leaf(flake, "flake-edit", "inputs");
+        let (node, child, _, _) = find_input_attrset_leaf(flake, "flake-edit", "inputs");
         let change = Change::Remove {
             ids: vec![ChangeId::parse("unrelated").unwrap()],
         };
-        let result = handle_inputs_leaf(&node, &child, &attr, &leaf, &change);
+        let result = handle_inputs_leaf(&node, &child, &change);
         assert!(result.is_none(), "unrelated removal must not rewrite");
     }
 

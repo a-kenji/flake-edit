@@ -128,6 +128,9 @@ pub(crate) const FIXTURES: &[&str] = &[
     // an input declared only through a nested follows must stay declared
     // when that follows is removed
     "remove_follows_only_input",
+    // a top-level flat nested url override belongs to its owner, not to a
+    // top-level input of the same name
+    "remove_toplevel_nested_url_override",
     // a stale depth-2 follows shares its first two segments with a
     // `flake = false` on the middle input
     "stale_follows_shared_prefix_flake_false",

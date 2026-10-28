@@ -1,0 +1,18 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/remove_toplevel_nested_url_override.flake.nix"
+    - list
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+· app - github:o/app
+· nixpkgs - github:nixos/nixpkgs
+
+----- stderr -----

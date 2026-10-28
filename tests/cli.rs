@@ -66,6 +66,7 @@ fn stderr_path_filters(settings: &mut insta::Settings) {
 #[case("deeply_nested_inputs")]
 #[case("follows_cycle")]
 #[case("let_wrapped")]
+#[case("remove_toplevel_nested_url_override")]
 fn test_list(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
@@ -412,6 +413,7 @@ fn test_change_shallow(#[case] fixture: &str, #[case] id: &str, #[case] uri: &st
 
 #[rstest]
 #[case("root", "nonexistent-input")]
+#[case("remove_toplevel_nested_url_override", "foo")] // only a nested input of app
 fn test_remove_nonexistent(#[case] fixture: &str, #[case] id: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
