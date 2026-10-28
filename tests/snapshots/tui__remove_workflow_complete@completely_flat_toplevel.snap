@@ -5,7 +5,11 @@ expression: session.app().pending_diff()
 ---
 --- original
 +++ modified
-@@ -6,10 +6,6 @@
+@@ -2,14 +2,9 @@
+   description = "Edit your flake inputs with ease";
+
+   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+-  inputs.flake-utelinos.url = "github:numtide/flake-utils";
    inputs.rust-overlay.url = "github:oxalica/rust-overlay";
    inputs.rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
    inputs.rust-overlay.inputs.flake-utils.follows = "flake-utils";

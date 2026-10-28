@@ -177,6 +177,87 @@ fn test_remove_input(#[case] fixture: &str, #[case] input_id: &str) {
     });
 }
 
+fn remove_change(ids: &[&str]) -> Change {
+    Change::Remove {
+        ids: ids
+            .iter()
+            .map(|id| flake_edit::change::ChangeId::parse(id).unwrap())
+            .collect(),
+    }
+}
+
+/// An id an earlier removal already took out leaves the text unchanged.
+fn remove_one_by_one(content: &str, ids: &[&str]) -> String {
+    ids.iter().fold(content.to_string(), |text, id| {
+        FlakeEdit::from_text(&text)
+            .unwrap()
+            .apply_change(remove_change(&[id]))
+            .unwrap()
+            .text
+            .unwrap_or(text)
+    })
+}
+
+#[test]
+fn remove_several_ids_strips_each_ids_follows_and_outputs_entry() {
+    let content = load_flake("merged_inputs");
+    let expected = r#"{
+  description = "Flake with multiple inputs blocks (merged attrsets)";
+
+  # Common inputs
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  };
+
+  # Project-specific sources
+  inputs = {
+    plugin-b = {
+      url = "github:foo/plugin-b/v1.8.2";
+      flake = false;
+    };
+  };
+
+  outputs = { self, nixpkgs, plugin-b, ... }: { };
+}
+"#;
+    for ids in [["home-manager", "plugin-a"], ["plugin-a", "home-manager"]] {
+        let result = FlakeEdit::from_text(&content)
+            .unwrap()
+            .apply_change(remove_change(&ids))
+            .unwrap()
+            .text
+            .unwrap();
+        assert_eq!(result, expected, "ids {ids:?}");
+    }
+}
+
+#[rstest]
+#[case("root", &["crane", "flake-utils"])]
+#[case("root", &["nixpkgs", "flake-utils", "crane"])]
+#[case("root", &["rust-overlay.flake-utils", "crane.nixpkgs"])]
+#[case("root", &["rust-overlay.flake-utils", "flake-utils"])]
+#[case("merged_inputs", &["nixpkgs", "home-manager"])]
+#[case("completely_flat_toplevel", &["crane", "rust-overlay"])]
+#[case("remove_flat_depth_two_follows", &["atuin", "nixpkgs-lib"])]
+#[case("remove_nested_url_override", &["app", "nixpkgs"])]
+#[case("remove_nested_url_override", &["app.foo", "nixpkgs"])]
+fn remove_several_ids_matches_removing_them_one_by_one(
+    #[case] fixture: &str,
+    #[case] ids: &[&str],
+) {
+    let content = load_flake(fixture);
+    let reversed: Vec<&str> = ids.iter().rev().copied().collect();
+    for order in [ids, reversed.as_slice()] {
+        let at_once = FlakeEdit::from_text(&content)
+            .unwrap()
+            .apply_change(remove_change(order))
+            .unwrap()
+            .text
+            .unwrap();
+        assert_eq!(at_once, remove_one_by_one(&content, order), "ids {order:?}");
+    }
+}
+
 #[rstest]
 #[case("root", "nixpkgs")]
 #[case("root", "crane")]

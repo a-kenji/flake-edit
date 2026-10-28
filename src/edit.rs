@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use rnix::SyntaxNode;
 
-use crate::change::Change;
+use crate::change::{Change, ChangeId};
 use crate::error::Error;
 use crate::input::{Follows, Input};
 use crate::validate;
@@ -164,46 +164,44 @@ impl FlakeEdit {
         }
     }
 
-    /// `Change::Remove` runs the walker in a fixed-point loop because a single
-    /// input can be spelled across multiple flat declarations
-    /// (`inputs.foo.url = ...; inputs.foo.flake = false;`); each walk strips
-    /// one occurrence. The post-loop outputs-lambda strip and orphan-follows
-    /// scrub only run for a top-level remove, since a depth-N follows id
-    /// shares its first segment with a still-present input and running the
-    /// cleanup there would strip that input from the outputs lambda.
+    /// Remove the ids one after another.
     fn apply_remove(&mut self, change: Change) -> Result<Option<String>, Error> {
+        let mut res = None;
+        for id in change.ids() {
+            self.remove_id(id, &mut res)?;
+        }
+        Ok(res.map(|n| n.to_string()))
+    }
+
+    fn remove_id(&mut self, id: ChangeId, res: &mut Option<SyntaxNode>) -> Result<(), Error> {
+        // Orphan collection reads the input map, so it is rebuilt from the
+        // current tree instead of listing inputs an earlier id removed.
+        self.walker.inputs.clear();
         self.ensure_inputs_populated()?;
 
-        let id = change.id().unwrap();
         let is_toplevel_remove = id.follows().is_none();
         let removed_id = id.input().as_str().to_string();
+        let change = Change::Remove { ids: vec![id] };
 
-        let mut res = None;
-        self.walk_until_fixed(&change, &mut res, MAX_REMOVE_PASSES)?;
-
-        if is_toplevel_remove {
-            let outputs = self.walker.list_outputs()?;
-            match outputs {
-                Outputs::Multiple(out) | Outputs::Any(out) => {
-                    if out.contains(&removed_id)
-                        && let Some(changed_node) = self
-                            .walker
-                            .change_outputs(OutputChange::Remove(removed_id.clone()))?
-                    {
-                        res = Some(changed_node.clone());
-                        self.walker.root = changed_node.clone();
-                    }
-                }
-                Outputs::None => {}
-            }
-
-            let orphaned_follows = self.collect_orphaned_follows(&removed_id);
-            for orphan_change in orphaned_follows {
-                self.walk_until_fixed(&orphan_change, &mut res, MAX_REMOVE_PASSES)?;
-            }
+        self.walk_until_fixed(&change, res, MAX_REMOVE_PASSES)?;
+        if !is_toplevel_remove {
+            return Ok(());
         }
 
-        Ok(res.map(|n| n.to_string()))
+        if let Outputs::Multiple(out) | Outputs::Any(out) = self.walker.list_outputs()?
+            && out.contains(&removed_id)
+            && let Some(changed_node) = self
+                .walker
+                .change_outputs(OutputChange::Remove(removed_id.clone()))?
+        {
+            *res = Some(changed_node.clone());
+            self.walker.root = changed_node;
+        }
+
+        for orphan_change in self.collect_orphaned_follows(&removed_id) {
+            self.walk_until_fixed(&orphan_change, res, MAX_REMOVE_PASSES)?;
+        }
+        Ok(())
     }
 
     /// Walk `change` until convergence and record the latest rewrite in `res`.
@@ -404,7 +402,7 @@ impl FlakeEdit {
                     // dangle.
                     if target.first().as_str() == removed_id {
                         let path_str = format!("{}.{}", input_id, path);
-                        let Ok(change_id) = crate::change::ChangeId::parse(&path_str) else {
+                        let Ok(change_id) = ChangeId::parse(&path_str) else {
                             continue;
                         };
                         orphaned.push(Change::Remove {

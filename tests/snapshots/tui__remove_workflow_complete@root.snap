@@ -5,7 +5,7 @@ expression: session.app().pending_diff()
 ---
 --- original
 +++ modified
-@@ -4,19 +4,11 @@
+@@ -4,18 +4,9 @@
    inputs = {
      nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
@@ -14,14 +14,12 @@ expression: session.app().pending_diff()
      rust-overlay = {
        url = "github:oxalica/rust-overlay";
        inputs.nixpkgs.follows = "nixpkgs";
-       inputs.flake-utils.follows = "flake-utils";
-     };
+-      inputs.flake-utils.follows = "flake-utils";
+-    };
 -    crane = {
 -      url = "github:ipetkov/crane";
 -      inputs.nixpkgs.follows = "nixpkgs";
 -      inputs.rust-overlay.follows = "rust-overlay";
 -      inputs.flake-utils.follows = "flake-utils";
--    };
+     };
    };
-
-   outputs = _: { };
