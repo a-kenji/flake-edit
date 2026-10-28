@@ -413,6 +413,28 @@ fn remove_drops_trailing_comment_with_its_statement() {
     assert_eq!(result, expected);
 }
 
+#[test]
+fn remove_drops_orphaned_follows_of_quoted_owner() {
+    let content = r#"{
+  inputs."telescope.nvim".url = "github:nvim-telescope/telescope.nvim/master";
+  inputs."telescope.nvim".inputs.nixpkgs-lib.follows = "flake-compat";
+  inputs.flake-compat.url = "github:edolstra/flake-compat";
+  outputs = inputs: { };
+}
+"#;
+    let mut flake_edit = FlakeEdit::from_text(content).unwrap();
+    let change = Change::Remove {
+        ids: vec![flake_edit::change::ChangeId::parse("flake-compat").unwrap()],
+    };
+    let result = flake_edit.apply_change(change).unwrap().text.unwrap();
+    let expected = r#"{
+  inputs."telescope.nvim".url = "github:nvim-telescope/telescope.nvim/master";
+  outputs = inputs: { };
+}
+"#;
+    assert_eq!(result, expected);
+}
+
 /// Inserting a follows after the last attribute of a block must land after a
 /// trailing `# comment` on that attribute, leaving the comment on its original
 /// statement rather than reattaching to the new follows line.

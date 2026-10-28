@@ -4,6 +4,7 @@ use rnix::SyntaxNode;
 
 use crate::change::{Change, ChangeId};
 use crate::error::Error;
+use crate::follows::AttrPath;
 use crate::input::{Follows, Input};
 use crate::validate;
 use crate::walk::{Walker, toggle};
@@ -389,7 +390,7 @@ impl FlakeEdit {
     /// top-level segment matches `removed_id`.
     fn collect_orphaned_follows(&self, removed_id: &str) -> Vec<Change> {
         let mut orphaned = Vec::new();
-        for (input_id, input) in &self.walker.inputs {
+        for input in self.walker.inputs.values() {
             for follows in input.follows() {
                 if let Follows::Indirect {
                     path,
@@ -401,12 +402,12 @@ impl FlakeEdit {
                     // (`follows = ""`) have nothing to follow and cannot
                     // dangle.
                     if target.first().as_str() == removed_id {
-                        let path_str = format!("{}.{}", input_id, path);
-                        let Ok(change_id) = ChangeId::parse(&path_str) else {
-                            continue;
-                        };
+                        let mut full = AttrPath::new(input.id().clone());
+                        for seg in path.segments() {
+                            full.push(seg.clone());
+                        }
                         orphaned.push(Change::Remove {
-                            ids: vec![change_id],
+                            ids: vec![ChangeId::new(full)],
                         });
                     }
                 }
