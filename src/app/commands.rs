@@ -6,7 +6,6 @@ use crate::error::Error as FlakeError;
 use crate::forge::update::Updater;
 use crate::lock::FlakeLock;
 use crate::tui;
-use crate::validate;
 
 use super::editor::Editor;
 use super::error::{Error, Result};
@@ -219,15 +218,15 @@ pub(super) fn apply_change(
         return Ok(());
     }
 
-    let validation = validate::validate(&resulting_change);
-    if validation.has_errors() {
-        for e in &validation.errors {
-            tracing::error!("validation error: {e}");
+    match editor.apply_or_diff(&resulting_change, state) {
+        Err(FlakeError::Validation(errors)) => {
+            for e in &errors {
+                tracing::error!("validation error: {e}");
+            }
+            return Err(Error::ValidationAfterEdit(errors));
         }
-        return Err(Error::ValidationAfterEdit(validation.errors));
+        result => result?,
     }
-
-    editor.apply_or_diff(&resulting_change, state)?;
 
     if !state.diff {
         // Cache added entries for future completions.
