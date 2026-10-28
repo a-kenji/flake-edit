@@ -730,18 +730,11 @@ fn record_depth_n_follows_attr(
 
     if change.is_remove()
         && let Some(id) = change.id()
-        && depth_n_follows_attr_matches_remove(parts, &id)
+        && remove_targets_follows_decl(&id, &parts.owner_seg, &parts.rest)
     {
         return Some(empty_node());
     }
     None
-}
-
-fn depth_n_follows_attr_matches_remove(
-    parts: &FollowsAttrPathParts,
-    id: &crate::change::ChangeId,
-) -> bool {
-    remove_targets_follows_decl(id, &parts.owner_seg, &parts.rest)
 }
 
 fn handle_url_attr(
@@ -890,8 +883,9 @@ fn handle_flake_attr(
     ctx: &Option<Context>,
     change: &Change,
 ) -> Option<SyntaxNode> {
+    let attrpath = attr.parent().unwrap();
     if let Some(input_id) = attr.prev_sibling()
-        && let Some(is_flake) = attr.parent().unwrap().next_sibling()
+        && let Some(is_flake) = attrpath.next_sibling()
     {
         let id_seg = Segment::from_syntax_or_sentinel(&input_id);
         let mut input = Input::new(id_seg.clone());
@@ -899,8 +893,19 @@ fn handle_flake_attr(
         let text_range = input_id.text_range();
         input.range = crate::input::Range::from_text_range(text_range);
         insert_with_ctx(inputs, id_seg.clone(), input, ctx);
-        if should_remove_nested_input(change, ctx, &id_seg) {
-            return Some(empty_node());
+
+        let chain: Vec<SyntaxNode> = attrpath
+            .children()
+            .filter(|c| c != attr && c.to_string() != "inputs")
+            .collect();
+        if change.is_remove()
+            && let Some(id) = change.id()
+            && !chain.is_empty()
+        {
+            let (owner_seg, nested_segs) = resolve_follows_owner_and_nested(&attrpath, &chain, ctx);
+            if remove_targets_follows_decl(&id, &owner_seg, &nested_segs) {
+                return Some(empty_node());
+            }
         }
     }
     None
@@ -972,22 +977,11 @@ fn handle_follows_attr(
         .or_insert_with(|| Input::new(owner_seg.clone()));
     entry.push_indirect_follows(nested_path, target);
 
-    // Depth-N removal: same shape as the depth-N branch in
-    // [`handle_attrpath_follows`]. The chain's owner comes from `ctx` when
-    // present.
     if change.is_remove()
         && let Some(id) = change.id()
+        && remove_targets_follows_decl(&id, &owner_seg, &nested_segs)
     {
-        let id_segs = id.path().segments();
-        if id_segs.len() == nested_segs.len() + 1
-            && id_segs[0] == owner_seg
-            && id_segs[1..]
-                .iter()
-                .zip(nested_segs.iter())
-                .all(|(a, b)| a == b)
-        {
-            return Some(empty_node());
-        }
+        return Some(empty_node());
     }
 
     None
@@ -1238,6 +1232,67 @@ fn handle_url_leaf(
     None
 }
 
+/// Nested input path an entry's attrpath adds to the attrset it lives in:
+/// `mid.inputs.leaf.follows` yields `[mid, leaf]`, `mid.flake` and
+/// `mid = { ... }` yield `[mid]`, `follows` and `inputs = { ... }` yield `[]`.
+fn nested_entry_segments(entry_path: &SyntaxNode, value_is_attrset: bool) -> Vec<Segment> {
+    let mut idents: Vec<SyntaxNode> = entry_path.children().collect();
+    if !value_is_attrset
+        && idents
+            .last()
+            .is_some_and(|l| matches!(l.to_string().as_str(), "follows" | "flake" | "url"))
+    {
+        idents.pop();
+    }
+    idents
+        .iter()
+        .filter(|c| c.to_string() != "inputs")
+        .map(Segment::from_syntax_or_sentinel)
+        .collect()
+}
+
+/// Remove the binding of `attrset` that a `Remove` of `id` targets.
+fn remove_targeted_entry(
+    attrset: &SyntaxNode,
+    id: &crate::change::ChangeId,
+    owner: &Segment,
+    prefix: &[Segment],
+) -> Option<SyntaxNode> {
+    let id_segs = id.path().segments();
+    for entry in attrset.children() {
+        if entry.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
+            continue;
+        }
+        let Some(path) = entry.first_child() else {
+            continue;
+        };
+        let inner = path
+            .next_sibling()
+            .filter(|v| v.kind() == SyntaxKind::NODE_ATTR_SET);
+        let mut nested = prefix.to_vec();
+        nested.extend(nested_entry_segments(&path, inner.is_some()));
+
+        if remove_targets_follows_decl(id, owner, &nested) {
+            return Some(remove_child_with_whitespace(attrset, &entry, entry.index()));
+        }
+
+        let leads_to_id = id_segs.len() > nested.len() + 1
+            && id_segs[0] == *owner
+            && id_segs[1..].starts_with(&nested);
+        if let Some(inner) = inner
+            && leads_to_id
+            && let Some(new_inner) = remove_targeted_entry(&inner, id, owner, &nested)
+        {
+            if is_attrset_content_empty(&new_inner) {
+                return Some(remove_child_with_whitespace(attrset, &entry, entry.index()));
+            }
+            let new_entry = substitute_child(&entry, inner.index(), &new_inner);
+            return Some(substitute_child(attrset, entry.index(), &new_entry));
+        }
+    }
+    None
+}
+
 /// The bare `inputs = { ... }` shape needs its own removal-with-pruning
 /// path: recursing through [`walk_inputs`] strips the matching entry
 /// inside the nested attrset, but cannot prune the now-empty `inputs`
@@ -1260,42 +1315,20 @@ fn handle_inputs_leaf(
 
     if leaf.to_string() == "inputs"
         && change.is_remove()
+        && let Some(id) = change.id()
         && let Some(inputs_attrset) = attr
             .children()
             .find(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
+        && let Some(new_inputs_attrset) = remove_targeted_entry(&inputs_attrset, &id, &id_seg, &[])
     {
-        for nested_entry in inputs_attrset.children() {
-            if nested_entry.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
-                continue;
-            }
-            let Some(nested_path) = nested_entry.first_child() else {
-                continue;
-            };
-            let Some(nested_id) = nested_path.first_child() else {
-                continue;
-            };
-            let nested_seg = Segment::from_syntax_or_sentinel(&nested_id);
-            if should_remove_nested_input(change, &ctx_some, &nested_seg) {
-                let new_inputs_attrset = remove_child_with_whitespace(
-                    &inputs_attrset,
-                    &nested_entry,
-                    nested_entry.index(),
-                );
+        let new_child = if is_attrset_content_empty(&new_inputs_attrset) {
+            remove_child_with_whitespace(child, attr, attr.index())
+        } else {
+            let new_attr = substitute_child(attr, inputs_attrset.index(), &new_inputs_attrset);
+            substitute_child(child, attr.index(), &new_attr)
+        };
 
-                // Comments inside the block count as user-authored content
-                // and suppress pruning; only bindings count toward
-                // emptiness.
-                let new_child = if is_attrset_content_empty(&new_inputs_attrset) {
-                    remove_child_with_whitespace(child, attr, attr.index())
-                } else {
-                    let new_attr =
-                        substitute_child(attr, inputs_attrset.index(), &new_inputs_attrset);
-                    substitute_child(child, attr.index(), &new_attr)
-                };
-
-                return Some(substitute_child(node, child.index(), &new_child));
-            }
-        }
+        return Some(substitute_child(node, child.index(), &new_child));
     }
 
     None
@@ -1691,6 +1724,186 @@ mod tests {
         );
     }
 
+    const INPUTS_ATTRSET_SHARED_PREFIX: &str = r#"{
+  inputs = {
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
+    atuin = {
+      url = "github:atuinsh/atuin";
+      inputs = {
+        flake-parts.follows = "flake-parts";
+        flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs-lib";
+      };
+    };
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+
+    const FLAKE_FALSE_SHARED_PREFIX: &str = r#"{
+  inputs = {
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
+    atuin = {
+      url = "github:atuinsh/atuin";
+      inputs.flake-parts.flake = false;
+      inputs.flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs-lib";
+    };
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+
+    const NESTED_ATTRSET_SHARED_PREFIX: &str = r#"{
+  inputs = {
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
+    atuin = {
+      url = "github:atuinsh/atuin";
+      inputs = {
+        flake-parts = {
+          follows = "flake-parts";
+          inputs.nixpkgs-lib.follows = "nixpkgs-lib";
+        };
+      };
+    };
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+
+    fn remove(flake_text: &str, id: &str) -> String {
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse(id).unwrap()],
+        };
+        apply_until_fixed(flake_text, &change)
+    }
+
+    #[test]
+    fn remove_depth_two_follows_keeps_depth_one_follows_in_inputs_attrset() {
+        let expected = r#"{
+  inputs = {
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
+    atuin = {
+      url = "github:atuinsh/atuin";
+      inputs = {
+        flake-parts.follows = "flake-parts";
+      };
+    };
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+        assert_eq!(
+            remove(
+                INPUTS_ATTRSET_SHARED_PREFIX,
+                "atuin.flake-parts.nixpkgs-lib"
+            ),
+            expected
+        );
+    }
+
+    #[test]
+    fn remove_depth_two_follows_keeps_flake_false_of_same_name() {
+        let expected = r#"{
+  inputs = {
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
+    atuin = {
+      url = "github:atuinsh/atuin";
+      inputs.flake-parts.flake = false;
+    };
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+        assert_eq!(
+            remove(FLAKE_FALSE_SHARED_PREFIX, "atuin.flake-parts.nixpkgs-lib"),
+            expected
+        );
+    }
+
+    #[test]
+    fn remove_depth_two_follows_keeps_depth_one_follows_in_nested_attrset() {
+        let expected = r#"{
+  inputs = {
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
+    atuin = {
+      url = "github:atuinsh/atuin";
+      inputs = {
+        flake-parts = {
+          follows = "flake-parts";
+        };
+      };
+    };
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+        assert_eq!(
+            remove(
+                NESTED_ATTRSET_SHARED_PREFIX,
+                "atuin.flake-parts.nixpkgs-lib"
+            ),
+            expected
+        );
+    }
+
+    #[test]
+    fn remove_depth_two_follows_prunes_only_the_nested_attrset_it_empties() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
+    atuin = {
+      url = "github:atuinsh/atuin";
+      inputs = {
+        flake-parts = {
+          inputs.nixpkgs-lib.follows = "nixpkgs-lib";
+        };
+        flake-parts.flake = false;
+      };
+    };
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+        let expected = r#"{
+  inputs = {
+    nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
+    atuin = {
+      url = "github:atuinsh/atuin";
+      inputs = {
+        flake-parts.flake = false;
+      };
+    };
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+        assert_eq!(remove(flake, "atuin.flake-parts.nixpkgs-lib"), expected);
+    }
+
+    #[test]
+    fn remove_input_drops_everything_it_owns_in_every_block_shape() {
+        let expected = r#"{
+  inputs = {
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+        for flake in [
+            INPUTS_ATTRSET_SHARED_PREFIX,
+            FLAKE_FALSE_SHARED_PREFIX,
+            NESTED_ATTRSET_SHARED_PREFIX,
+        ] {
+            assert_eq!(remove(flake, "atuin"), expected);
+        }
+    }
+
     /// An unrelated removal must not take out a self-named nested follows.
     #[test]
     fn unrelated_remove_keeps_self_named_nested_follows() {
@@ -1749,6 +1962,38 @@ mod tests {
         assert!(
             result.contains("flake-edit.inputs.nixpkgs.follows = \"nixpkgs\""),
             "depth-1 follows must remain intact, got:\n{result}"
+        );
+    }
+
+    #[test]
+    fn remove_input_strips_flat_depth_two_follows() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
+    atuin.url = "github:atuinsh/atuin";
+    atuin.inputs.flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs-lib";
+    treefmt-nix.url = "github:numtide/treefmt-nix";
+    treefmt-nix.inputs.flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs-lib";
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("atuin").unwrap()],
+        };
+        let result = apply_until_fixed(flake, &change);
+
+        assert_eq!(
+            result,
+            r#"{
+  inputs = {
+    nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
+    treefmt-nix.url = "github:numtide/treefmt-nix";
+    treefmt-nix.inputs.flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs-lib";
+  };
+  outputs = { self, ... }: { };
+}
+"#
         );
     }
 

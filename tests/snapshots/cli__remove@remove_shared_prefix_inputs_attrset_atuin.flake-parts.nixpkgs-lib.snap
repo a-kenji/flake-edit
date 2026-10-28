@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+assertion_line: 297
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/remove_shared_prefix_inputs_attrset.flake.nix"
+    - "--diff"
+    - rm
+    - atuin.flake-parts.nixpkgs-lib
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -6,7 +6,6 @@
+       url = "github:atuinsh/atuin";
+       inputs = {
+         flake-parts.follows = "flake-parts";
+-        flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs-lib";
+       };
+     };
+   };
+
+----- stderr -----

@@ -113,6 +113,15 @@ pub(crate) const FIXTURES: &[&str] = &[
     // removing X must leave the url of a sibling input alone when that
     // sibling carries an `inputs = { ... }` block with `X.follows = "X"`
     "remove_preserves_sibling_url",
+    // removing X must also remove its flat depth-2+ follows declarations
+    // and leave another input's depth-2 follows alone
+    "remove_flat_depth_two_follows",
+    // a depth-2 follows id shares its first two segments with a depth-1
+    // follows inside an input's own `inputs = { ... }` attrset
+    "remove_shared_prefix_inputs_attrset",
+    // a stale depth-2 follows shares its first two segments with a
+    // `flake = false` on the middle input
+    "stale_follows_shared_prefix_flake_false",
     // pre-existing follows declaration references a top-level input the
     // flake does not declare; transitive promotion plans an Add plus new
     // follows, but the inherited validation error rejects every apply
