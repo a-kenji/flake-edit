@@ -159,6 +159,9 @@ impl<'a> Walker {
     ///
     /// Expects the parsed root to be an attrset with `description`, `inputs`, and
     /// `outputs` keys.
+    ///
+    /// A `Change::Remove` acts on its first id only. Use
+    /// [`crate::edit::FlakeEdit::apply_change`] to remove several.
     pub fn walk(&mut self, change: &Change) -> Result<Option<SyntaxNode>, WalkerError> {
         let cst = self.root.clone();
         if cst.kind() != SyntaxKind::NODE_ROOT {

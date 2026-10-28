@@ -501,11 +501,9 @@ pub(crate) fn redeclare_removed_owner(entry: &SyntaxNode, change: &Change) -> Op
         idents.first()?
     };
     let owner = Segment::from_syntax_or_sentinel(owner_ident);
-    // A `Change::Remove` can carry several ids, and any of them may name the owner.
     if change
-        .ids()
-        .iter()
-        .any(|id| id.path().len() == 1 && *id.input() == owner)
+        .id()
+        .is_some_and(|id| id.path().len() == 1 && *id.input() == owner)
     {
         return None;
     }
@@ -860,10 +858,10 @@ fn apply_flat_url_attr(
     }
     let prev_seg = Segment::from_syntax_or_sentinel(&prev_id);
     let prev_str = prev_seg.as_str().to_string();
-    if let Change::Remove { ids } = change
-        && ids
-            .iter()
-            .any(|id| id.input().as_str() == prev_str && id.follows().is_none())
+    if change.is_remove()
+        && let Some(id) = change.id()
+        && id.input().as_str() == prev_str
+        && id.follows().is_none()
     {
         return Some(empty_node());
     }
@@ -1282,10 +1280,10 @@ fn handle_url_leaf(
     let input = Input::with_url(id_seg.clone(), uri.to_string(), uri.text_range());
     insert_with_ctx(inputs, id_seg.clone(), input, ctx);
 
-    if let Change::Remove { ids } = change
-        && ids
-            .iter()
-            .any(|candidate| candidate.input().as_str() == id_str && candidate.follows().is_none())
+    if change.is_remove()
+        && let Some(id) = change.id()
+        && id.input().as_str() == id_str
+        && id.follows().is_none()
     {
         return Some(empty_node());
     }
@@ -2288,35 +2286,6 @@ mod tests {
     nixpkgs.url = "github:nixos/nixpkgs";
   };
   outputs = inputs: { };
-}
-"#
-        );
-    }
-
-    #[test]
-    fn remove_several_inputs_does_not_redeclare_any_of_them() {
-        let flake = r#"{
-  inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs";
-    crane.url = "github:ipetkov/crane";
-    flake-utils.url = "github:numtide/flake-utils";
-  };
-  outputs = { self, ... }: { };
-}
-"#;
-        let change = Change::Remove {
-            ids: vec![
-                ChangeId::parse("crane").unwrap(),
-                ChangeId::parse("flake-utils").unwrap(),
-            ],
-        };
-        assert_eq!(
-            apply_until_fixed(flake, &change),
-            r#"{
-  inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs";
-  };
-  outputs = { self, ... }: { };
 }
 "#
         );
