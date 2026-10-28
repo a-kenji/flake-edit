@@ -322,6 +322,20 @@ fn handle_nested_input(
         if attr.children().next().is_some() && should_remove_input(change, &id_seg) {
             return Some(empty_node());
         }
+        if let Change::Change {
+            id: Some(change_id),
+            uri: Some(new_uri),
+            ..
+        } = change
+            && *change_id.input() == id_seg
+            && change_id.follows().is_none()
+            && let Some(key) = attr.first_child()
+            && key.to_string() == "url"
+            && let Some(url) = key.next_sibling()
+        {
+            let new_attr = substitute_child(&attr, url.index(), &make_quoted_string(new_uri));
+            return Some(substitute_child(nested_attr, attr.index(), &new_attr));
+        }
 
         let context: Context = id_seg.clone().into();
         if walk_input(&attr, &Some(context), change).is_some() {
