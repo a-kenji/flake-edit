@@ -287,6 +287,11 @@ fn test_add_infer_id(#[case] fixture: &str) {
 #[case("remove_flat_depth_two_follows", "atuin")]
 #[case("remove_flat_depth_two_follows", "atuin.flake-parts.nixpkgs-lib")]
 #[case("remove_shared_prefix_inputs_attrset", "atuin.flake-parts.nixpkgs-lib")] // depth-2 id must not prune the sibling depth-1 follows
+#[case("remove_same_named_nested_follows", "nixpkgs")] // crane.inputs.nixpkgs points elsewhere and stays
+#[case("remove_nested_url_override", "app")]
+#[case("remove_nested_url_override", "app.foo")]
+#[case("remove_follows_only_input", "disko.nixpkgs")] // disko stays declared
+#[case("remove_follows_only_input", "nixpkgs")] // orphaned follows goes, disko stays declared
 #[case("let_wrapped", "nixpkgs")]
 fn test_remove(#[case] fixture: &str, #[case] id: &str) {
     let mut settings = insta::Settings::clone_current();

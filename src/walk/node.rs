@@ -3,8 +3,6 @@ use rnix::{Root, SyntaxKind, SyntaxNode};
 use crate::change::Change;
 use crate::follows::{AttrPath, Segment};
 
-use super::context::Context;
-
 pub(crate) type Node = SyntaxNode;
 
 /// Parse `s` as a Nix expression and return its [`SyntaxNode`].
@@ -227,12 +225,8 @@ pub(crate) fn adjacent_whitespace_index(child: &rnix::SyntaxElement) -> Option<u
     }
 }
 
-/// Whether `input_id` should be removed under `change` and `ctx`.
-pub(crate) fn should_remove_input(
-    change: &Change,
-    ctx: &Option<Context>,
-    input_id: &Segment,
-) -> bool {
+/// Whether `input_id` names the input `change` removes outright.
+pub(crate) fn should_remove_input(change: &Change, input_id: &Segment) -> bool {
     if !change.is_remove() {
         return false;
     }
@@ -241,30 +235,6 @@ pub(crate) fn should_remove_input(
         && id.follows().is_none()
     {
         return true;
-    }
-    if let Some(ctx) = ctx
-        && ctx.first_matches(input_id)
-        && change
-            .id()
-            .is_some_and(|id| ctx.first().is_some_and(|f| id.input() == f))
-    {
-        return true;
-    }
-    false
-}
-
-/// Whether a nested input should be removed, using `ctx` for dotted IDs like
-/// `poetry2nix.nixpkgs`.
-pub(crate) fn should_remove_nested_input(
-    change: &Change,
-    ctx: &Option<Context>,
-    input_id: &Segment,
-) -> bool {
-    if !change.is_remove() {
-        return false;
-    }
-    if let Some(id) = change.id() {
-        return id.matches_with_ctx(input_id, ctx.clone());
     }
     false
 }

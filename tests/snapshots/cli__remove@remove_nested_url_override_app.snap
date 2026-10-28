@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/remove_nested_url_override.flake.nix"
+    - "--diff"
+    - rm
+    - app
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -3,8 +3,6 @@
+
+   inputs = {
+     nixpkgs.url = "github:nixos/nixpkgs";
+-    app.url = "github:o/app";
+-    app.inputs.foo.url = "github:o/foo";
+   };
+
+   outputs = { self, ... }: { };
+
+----- stderr -----

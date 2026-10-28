@@ -1,0 +1,30 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/remove_follows_only_input.flake.nix"
+    - "--diff"
+    - rm
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -2,8 +2,7 @@
+   description = "Input disko is declared only through a nested follows line, so Nix resolves disko itself through the flake registry.";
+
+   inputs = {
+-    nixpkgs.url = "github:nixos/nixpkgs";
+-    disko.inputs.nixpkgs.follows = "nixpkgs";
++    disko.url = "flake:disko";
+   };
+
+   outputs = inputs: { };
+
+----- stderr -----

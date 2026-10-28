@@ -8,12 +8,13 @@ use crate::follows::{AttrPath, Segment, strip_outer_quotes};
 use crate::input::Input;
 
 use super::context::Context;
+use super::flake_attr_set;
 use super::node::{
     FollowsKind, adjacent_whitespace_index, empty_node, extract_indent, get_sibling_whitespace,
     insertion_index_after, is_attrset_content_empty, last_line_with_newline, make_attrset_url_attr,
     make_attrset_url_flake_false_attr, make_flake_false_attr, make_quoted_string, make_url_attr,
-    parse_node, remove_child_with_whitespace, should_remove_input, should_remove_nested_input,
-    substitute_child, trailing_inline_comments, uses_attrset_style,
+    parse_node, remove_child_with_whitespace, should_remove_input, substitute_child,
+    trailing_inline_comments, uses_attrset_style,
 };
 
 /// Insert or update `inputs[id]` from a parsed `Input`.
@@ -356,7 +357,7 @@ fn handle_flat_url(
     let input = Input::with_url(id_seg.clone(), url.to_string(), url.text_range());
     insert_with_ctx(inputs, id_seg.clone(), input, ctx);
 
-    if should_remove_input(change, ctx, &id_seg) {
+    if should_remove_input(change, &id_seg) {
         return Some(empty_node());
     }
 
@@ -376,14 +377,10 @@ fn handle_flat_url(
 
 /// Handle a flat-style flake attribute (`inputs.foo.flake = false`), returning
 /// the replacement node when `change` removes the input.
-fn handle_flat_flake(
-    input_id: &SyntaxNode,
-    ctx: &Option<Context>,
-    change: &Change,
-) -> Option<SyntaxNode> {
+fn handle_flat_flake(input_id: &SyntaxNode, change: &Change) -> Option<SyntaxNode> {
     let id_seg = Segment::from_syntax_or_sentinel(input_id);
 
-    if should_remove_input(change, ctx, &id_seg) {
+    if should_remove_input(change, &id_seg) {
         return Some(empty_node());
     }
 
@@ -408,7 +405,7 @@ fn handle_nested_input(
                 let input = Input::with_url(id_seg.clone(), url.to_string(), url.text_range());
                 insert_with_ctx(inputs, id_seg.clone(), input, ctx);
             }
-            if should_remove_input(change, ctx, &id_seg) {
+            if should_remove_input(change, &id_seg) {
                 return Some(empty_node());
             }
         }
@@ -456,7 +453,7 @@ fn handle_child_ident(
                                 return Some(result);
                             }
                         } else if url_id.to_string() == "flake"
-                            && let Some(result) = handle_flat_flake(&next_sibling, ctx, change)
+                            && let Some(result) = handle_flat_flake(&next_sibling, change)
                         {
                             return Some(result);
                         }
@@ -487,6 +484,82 @@ fn handle_child_ident(
     None
 }
 
+/// Declaration to put in place of `entry` when a removal deletes it.
+///
+/// `entry` is an input-declaring binding, either inside the `inputs = { }`
+/// block or a flat `inputs.<owner>...` binding of the flake attrset.
+pub(crate) fn redeclare_removed_owner(entry: &SyntaxNode, change: &Change) -> Option<SyntaxNode> {
+    if !change.is_remove() {
+        return None;
+    }
+    let attrpath = entry.first_child()?;
+    let idents: Vec<SyntaxNode> = attrpath.children().collect();
+    let flat_toplevel = idents.len() >= 2 && idents[0].to_string() == "inputs";
+    let owner_ident = if flat_toplevel {
+        &idents[1]
+    } else {
+        idents.first()?
+    };
+    let owner = Segment::from_syntax_or_sentinel(owner_ident);
+    // A `Change::Remove` can carry several ids, and any of them may name the owner.
+    if change
+        .ids()
+        .iter()
+        .any(|id| id.path().len() == 1 && *id.input() == owner)
+    {
+        return None;
+    }
+    if declares_input_elsewhere(entry, &owner) {
+        return None;
+    }
+    let path = if flat_toplevel {
+        format!("inputs.{owner_ident}")
+    } else {
+        owner_ident.to_string()
+    };
+    parse_node(&format!("{{ {path}.url = \"flake:{}\"; }}", owner.as_str()))
+        .descendants()
+        .find(|n| n.kind() == SyntaxKind::NODE_ATTRPATH_VALUE)
+}
+
+/// Whether any input-declaring binding other than `entry` names `owner`.
+fn declares_input_elsewhere(entry: &SyntaxNode, owner: &Segment) -> bool {
+    let Some(flake) = entry
+        .ancestors()
+        .last()
+        .and_then(|root| flake_attr_set(&root))
+    else {
+        return false;
+    };
+    let names_owner = |binding: &SyntaxNode, ident: Option<SyntaxNode>| {
+        binding != entry && ident.is_some_and(|i| Segment::from_syntax_or_sentinel(&i) == *owner)
+    };
+    flake
+        .children()
+        .filter(|c| c.kind() == SyntaxKind::NODE_ATTRPATH_VALUE)
+        .any(|toplevel| {
+            let Some(attrpath) = toplevel.first_child() else {
+                return false;
+            };
+            let mut idents = attrpath.children();
+            if idents.next().is_none_or(|i| i.to_string() != "inputs") {
+                return false;
+            }
+            if let Some(ident) = idents.next() {
+                return names_owner(&toplevel, Some(ident));
+            }
+            attrpath.next_sibling().is_some_and(|block| {
+                block
+                    .children()
+                    .filter(|c| c.kind() == SyntaxKind::NODE_ATTRPATH_VALUE)
+                    .any(|binding| {
+                        let ident = binding.first_child().and_then(|p| p.first_child());
+                        names_owner(&binding, ident)
+                    })
+            })
+        })
+}
+
 /// Handle a `NODE_ATTRPATH_VALUE` child during input walking.
 fn handle_child_attrpath_value(
     inputs: &mut HashMap<String, Input>,
@@ -496,6 +569,7 @@ fn handle_child_attrpath_value(
     change: &Change,
 ) -> Option<SyntaxNode> {
     let child_node = child.as_node().unwrap();
+    let in_inputs_block = ctx.is_none();
 
     // Build a single-segment context from the attrpath when missing.
     let ctx = if ctx.is_none() {
@@ -509,7 +583,13 @@ fn handle_child_attrpath_value(
         ctx.clone()
     };
 
-    if let Some(replacement) = walk_input(inputs, child_node, &ctx, change) {
+    if let Some(mut replacement) = walk_input(inputs, child_node, &ctx, change) {
+        if in_inputs_block
+            && replacement.text().is_empty()
+            && let Some(redeclared) = redeclare_removed_owner(child_node, change)
+        {
+            replacement = redeclared;
+        }
         let mut green = parent
             .green()
             .replace_child(child.index(), replacement.green().into());
@@ -697,7 +777,7 @@ fn record_depth_one_follows_attr(
     insert_with_ctx(inputs, owner_seg.clone(), input, &None);
     if change.is_remove()
         && let Some(id) = change.id()
-        && id.matches_with_follows(owner_seg, Some(owner_seg))
+        && remove_targets_follows_decl(&id, owner_seg, &[])
     {
         return Some(empty_node());
     }
@@ -754,8 +834,7 @@ fn handle_url_attr(
 
 /// `inputs.<id>.url = "..."` at the inputs-block level. With `ctx` set, the
 /// same shape inside another input's attrset is a transitive URL override,
-/// not a follows; returning `None` here keeps `insert_with_ctx` from
-/// misreading the URL string as a follows target.
+/// not a follows.
 fn apply_flat_url_attr(
     inputs: &mut HashMap<String, Input>,
     node: &SyntaxNode,
@@ -766,6 +845,17 @@ fn apply_flat_url_attr(
 ) -> Option<SyntaxNode> {
     let prev_id = attr.prev_sibling()?;
     if ctx.is_some() {
+        let chain: Vec<SyntaxNode> = child
+            .children()
+            .filter(|c| c != attr && c.to_string() != "inputs")
+            .collect();
+        let (owner_seg, nested_segs) = resolve_follows_owner_and_nested(child, &chain, ctx);
+        if change.is_remove()
+            && let Some(id) = change.id()
+            && remove_targets_follows_decl(&id, &owner_seg, &nested_segs)
+        {
+            return Some(empty_node());
+        }
         return None;
     }
     let prev_seg = Segment::from_syntax_or_sentinel(&prev_id);
@@ -938,8 +1028,6 @@ fn handle_follows_attr(
     let (owner_seg, nested_segs) = resolve_follows_owner_and_nested(&attrpath, &chain, ctx);
 
     if nested_segs.len() <= 1 {
-        // Depth-1 stores a single-segment leaf and runs the remove-flow.
-        // The depth-N branch below builds a typed multi-segment path.
         let leaf_seg = nested_segs
             .first()
             .cloned()
@@ -949,33 +1037,24 @@ fn handle_follows_attr(
             follows_value.to_string(),
             follows_value.text_range(),
         );
-        insert_with_ctx(inputs, leaf_seg.clone(), input.clone(), ctx);
-        if should_remove_input(change, ctx, input.id())
-            || (should_remove_nested_input(change, ctx, input.id())
-                && change
-                    .id()
-                    .is_some_and(|id| remove_targets_follows_decl(&id, &owner_seg, &nested_segs)))
-        {
-            return Some(empty_node());
+        insert_with_ctx(inputs, leaf_seg, input, ctx);
+    } else {
+        let mut path_iter = nested_segs.iter().cloned();
+        let mut nested_path = AttrPath::new(path_iter.next().expect("len ≥ 2 above"));
+        for seg in path_iter {
+            nested_path.push(seg);
         }
-        return None;
-    }
+        let url_text = follows_value.to_string();
+        let unquoted = strip_outer_quotes(&url_text);
+        let leaf_seg = nested_path.last().clone();
+        let target = AttrPath::parse_follows_target(unquoted, &leaf_seg);
 
-    let mut path_iter = nested_segs.iter().cloned();
-    let mut nested_path = AttrPath::new(path_iter.next().expect("len ≥ 2 above"));
-    for seg in path_iter {
-        nested_path.push(seg);
+        let key = owner_seg.as_str().to_string();
+        let entry = inputs
+            .entry(key)
+            .or_insert_with(|| Input::new(owner_seg.clone()));
+        entry.push_indirect_follows(nested_path, target);
     }
-    let url_text = follows_value.to_string();
-    let unquoted = strip_outer_quotes(&url_text);
-    let leaf_seg = nested_path.last().clone();
-    let target = AttrPath::parse_follows_target(unquoted, &leaf_seg);
-
-    let key = owner_seg.as_str().to_string();
-    let entry = inputs
-        .entry(key)
-        .or_insert_with(|| Input::new(owner_seg.clone()));
-    entry.push_indirect_follows(nested_path, target);
 
     if change.is_remove()
         && let Some(id) = change.id()
@@ -987,16 +1066,6 @@ fn handle_follows_attr(
     None
 }
 
-/// Resolve the `(owner, nested)` pair for a follows attrpath.
-///
-/// Discriminator: the raw attrpath's first ident is `inputs` for the
-/// inside-an-input-block shape (chain is the nested path under the
-/// ctx-supplied owner). Otherwise chain[0] is treated as the owner ident
-/// and stripped from the nested path; a `ctx` that already names the owner
-/// still wins the owner slot, but chain handling matches by structural shape,
-/// not by ident equality.
-///
-/// Precondition: `chain` is non-empty.
 /// Whether a `Remove` actually targets the follows declaration
 /// `owner.nested… .follows`, as opposed to merely sharing its first two
 /// segments.
@@ -1024,6 +1093,12 @@ fn remove_targets_follows_decl(
         && segs[1..].iter().zip(nested.iter()).all(|(a, b)| a == b)
 }
 
+/// Resolve the `(owner, nested)` pair for a follows attrpath.
+///
+/// Discriminator: the raw attrpath's first ident is `inputs` for the
+/// inside-an-input-block shape.
+///
+/// Precondition: `chain` is non-empty.
 fn resolve_follows_owner_and_nested(
     attrpath: &SyntaxNode,
     chain: &[SyntaxNode],
@@ -1930,6 +2005,320 @@ mod tests {
         assert!(
             result.contains("app.inputs.app.follows = \"themes\""),
             "a self-named follows for a different input must survive, got:\n{result}"
+        );
+    }
+
+    #[test]
+    fn sibling_remove_keeps_self_named_nested_follows() {
+        let flake = r#"{
+  inputs = {
+    themes.url = "github:o/themes";
+    app.url = "github:o/app";
+    app.inputs.app.follows = "themes";
+    app.inputs.foo.follows = "themes";
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("app.foo").unwrap()],
+        };
+        let result = apply(flake, &change);
+
+        assert!(
+            !result.contains("app.inputs.foo.follows"),
+            "the targeted follows should be removed, got:\n{result}"
+        );
+        assert!(
+            result.contains("app.inputs.app.follows = \"themes\""),
+            "the self-named sibling follows must survive, got:\n{result}"
+        );
+    }
+
+    #[test]
+    fn sibling_remove_keeps_self_named_nested_follows_attrset() {
+        let flake = r#"{
+  inputs = {
+    themes.url = "github:o/themes";
+    app = {
+      url = "github:o/app";
+      inputs.app.follows = "themes";
+      inputs.foo.follows = "themes";
+    };
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("app.foo").unwrap()],
+        };
+        let result = apply(flake, &change);
+
+        assert!(
+            !result.contains("inputs.foo.follows"),
+            "the targeted follows should be removed, got:\n{result}"
+        );
+        assert!(
+            result.contains("inputs.app.follows = \"themes\""),
+            "the self-named sibling follows must survive, got:\n{result}"
+        );
+    }
+
+    #[test]
+    fn targeted_remove_drops_self_named_nested_follows() {
+        let flake = r#"{
+  inputs = {
+    themes.url = "github:o/themes";
+    app.url = "github:o/app";
+    app.inputs.app.follows = "themes";
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("app.app").unwrap()],
+        };
+        let result = apply(flake, &change);
+
+        assert!(!result.contains("app.inputs.app.follows"), "got:\n{result}");
+        assert!(result.contains("app.url"), "got:\n{result}");
+    }
+
+    #[test]
+    fn whole_remove_drops_self_named_nested_follows() {
+        let flake = r#"{
+  inputs = {
+    themes.url = "github:o/themes";
+    app.url = "github:o/app";
+    app.inputs.app.follows = "themes";
+    app.inputs.nixpkgs.follows = "themes";
+  };
+
+  outputs = { self, ... }: { };
+}
+"#;
+        let change = Change::Remove {
+            ids: vec![ChangeId::parse("app").unwrap()],
+        };
+        let result = apply_until_fixed(flake, &change);
+
+        assert!(!result.contains("app."), "got:\n{result}");
+        assert!(result.contains("themes.url"), "got:\n{result}");
+    }
+
+    #[test]
+    fn remove_input_keeps_same_named_nested_follows_of_other_input() {
+        let flat = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.05";
+    crane.url = "github:ipetkov/crane";
+    crane.inputs.nixpkgs.follows = "nixpkgs-stable";
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+        let attrset = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.05";
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs-stable";
+    };
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+        assert_eq!(
+            remove(flat, "nixpkgs"),
+            r#"{
+  inputs = {
+    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.05";
+    crane.url = "github:ipetkov/crane";
+    crane.inputs.nixpkgs.follows = "nixpkgs-stable";
+  };
+  outputs = { self, ... }: { };
+}
+"#
+        );
+        assert_eq!(
+            remove(attrset, "nixpkgs"),
+            r#"{
+  inputs = {
+    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.05";
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs-stable";
+    };
+  };
+  outputs = { self, ... }: { };
+}
+"#
+        );
+    }
+
+    #[test]
+    fn nested_url_override_is_removed_with_owner_or_by_full_path() {
+        let flat = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    app.url = "github:o/app";
+    app.inputs.foo.url = "github:o/foo";
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+        let attrset = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    app = {
+      url = "github:o/app";
+      inputs.foo.url = "github:o/foo";
+    };
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+        let removed = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+        assert_eq!(remove(flat, "app"), removed);
+        assert_eq!(remove(attrset, "app"), removed);
+        assert_eq!(
+            remove(flat, "app.foo"),
+            r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    app.url = "github:o/app";
+  };
+  outputs = { self, ... }: { };
+}
+"#
+        );
+        assert_eq!(
+            remove(attrset, "app.foo"),
+            r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    app = {
+      url = "github:o/app";
+    };
+  };
+  outputs = { self, ... }: { };
+}
+"#
+        );
+    }
+
+    /// Nix resolves an owner declared only through a nested follows via the
+    /// flake registry, so `flake:<owner>` names the same input.
+    #[test]
+    fn remove_follows_keeps_owner_declared_only_by_it() {
+        let block = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    disko.inputs.nixpkgs.follows = "nixpkgs";
+  };
+  outputs = inputs: { };
+}
+"#;
+        assert_eq!(
+            remove(block, "disko.nixpkgs"),
+            r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    disko.url = "flake:disko";
+  };
+  outputs = inputs: { };
+}
+"#
+        );
+
+        let toplevel = r#"{
+  inputs.nixpkgs.url = "github:nixos/nixpkgs";
+  inputs.disko.inputs.nixpkgs.follows = "nixpkgs";
+  outputs = inputs: { };
+}
+"#;
+        assert_eq!(
+            remove(toplevel, "disko.nixpkgs"),
+            r#"{
+  inputs.nixpkgs.url = "github:nixos/nixpkgs";
+  inputs.disko.url = "flake:disko";
+  outputs = inputs: { };
+}
+"#
+        );
+    }
+
+    #[test]
+    fn remove_follows_deletes_when_owner_stays_declared() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    disko.inputs.nixpkgs.follows = "nixpkgs";
+    disko.inputs.systems.follows = "nixpkgs";
+  };
+  outputs = inputs: { };
+}
+"#;
+        assert_eq!(
+            remove(flake, "disko.nixpkgs"),
+            r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    disko.inputs.systems.follows = "nixpkgs";
+  };
+  outputs = inputs: { };
+}
+"#
+        );
+        assert_eq!(
+            remove(flake, "disko"),
+            r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+  };
+  outputs = inputs: { };
+}
+"#
+        );
+    }
+
+    #[test]
+    fn remove_several_inputs_does_not_redeclare_any_of_them() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    crane.url = "github:ipetkov/crane";
+    flake-utils.url = "github:numtide/flake-utils";
+  };
+  outputs = { self, ... }: { };
+}
+"#;
+        let change = Change::Remove {
+            ids: vec![
+                ChangeId::parse("crane").unwrap(),
+                ChangeId::parse("flake-utils").unwrap(),
+            ],
+        };
+        assert_eq!(
+            apply_until_fixed(flake, &change),
+            r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+  };
+  outputs = { self, ... }: { };
+}
+"#
         );
     }
 

@@ -20,7 +20,7 @@ use crate::input::Input;
 pub(crate) use context::Context;
 pub use error::WalkerError;
 
-use inputs::walk_inputs;
+use inputs::{redeclare_removed_owner, walk_inputs};
 use node::{
     FollowsKind, adjacent_whitespace_index, get_sibling_whitespace, insertion_index_after,
     last_line_with_newline, make_quoted_string, make_toplevel_flake_false_attr,
@@ -435,6 +435,15 @@ impl<'a> Walker {
         change: &Change,
     ) -> Option<SyntaxNode> {
         let replacement = walk_inputs(&mut self.inputs, child.clone(), ctx, change)?;
+
+        if replacement.to_string().is_empty()
+            && let Some(redeclared) = redeclare_removed_owner(toplevel, change)
+        {
+            let green = attr_set
+                .green()
+                .replace_child(toplevel.index(), redeclared.green().into());
+            return Some(SyntaxNode::new_root(attr_set.replace_with(green)));
+        }
 
         // Empty replacement means we remove the entire toplevel node and
         // propagate through attr_set to NODE_ROOT.

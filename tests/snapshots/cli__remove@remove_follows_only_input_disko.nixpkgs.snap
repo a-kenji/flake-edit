@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/remove_follows_only_input.flake.nix"
+    - "--diff"
+    - rm
+    - disko.nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -3,7 +3,7 @@
+
+   inputs = {
+     nixpkgs.url = "github:nixos/nixpkgs";
+-    disko.inputs.nixpkgs.follows = "nixpkgs";
++    disko.url = "flake:disko";
+   };
+
+   outputs = inputs: { };
+
+----- stderr -----

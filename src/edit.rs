@@ -1,10 +1,15 @@
 use std::collections::{BTreeMap, HashMap};
 
+use rnix::SyntaxNode;
+
 use crate::change::Change;
 use crate::error::Error;
 use crate::input::{Follows, Input};
 use crate::validate;
 use crate::walk::{Walker, toggle};
+
+/// Upper bound on rewriting passes for one removal.
+const MAX_REMOVE_PASSES: usize = 256;
 
 pub struct FlakeEdit {
     walker: Walker,
@@ -71,7 +76,7 @@ impl FlakeEdit {
     /// apply loop, where each iteration validates its result and feeds the
     /// resulting parse back to the next iteration's walker.
     #[cfg(feature = "application")]
-    pub(crate) fn from_syntax(syntax: rnix::SyntaxNode) -> Self {
+    pub(crate) fn from_syntax(syntax: SyntaxNode) -> Self {
         Self {
             walker: Walker::from_root(syntax),
         }
@@ -175,13 +180,7 @@ impl FlakeEdit {
         let removed_id = id.input().as_str().to_string();
 
         let mut res = None;
-        while let Some(changed_node) = self.walker.walk(&change)? {
-            if res == Some(changed_node.clone()) {
-                break;
-            }
-            res = Some(changed_node.clone());
-            self.walker.root = changed_node.clone();
-        }
+        self.walk_until_fixed(&change, &mut res, MAX_REMOVE_PASSES)?;
 
         if is_toplevel_remove {
             let outputs = self.walker.list_outputs()?;
@@ -201,17 +200,40 @@ impl FlakeEdit {
 
             let orphaned_follows = self.collect_orphaned_follows(&removed_id);
             for orphan_change in orphaned_follows {
-                while let Some(changed_node) = self.walker.walk(&orphan_change)? {
-                    if res == Some(changed_node.clone()) {
-                        break;
-                    }
-                    res = Some(changed_node.clone());
-                    self.walker.root = changed_node.clone();
-                }
+                self.walk_until_fixed(&orphan_change, &mut res, MAX_REMOVE_PASSES)?;
             }
         }
 
         Ok(res.map(|n| n.to_string()))
+    }
+
+    /// Walk `change` until convergence and record the latest rewrite in `res`.
+    ///
+    /// Convergence compares the text, because rowan nodes compare by identity
+    /// and two rebuilt trees with the same text are never equal.
+    fn walk_until_fixed(
+        &mut self,
+        change: &Change,
+        res: &mut Option<SyntaxNode>,
+        max_passes: usize,
+    ) -> Result<(), Error> {
+        for _ in 0..=max_passes {
+            let Some(changed_node) = self.walker.walk(change)? else {
+                return Ok(());
+            };
+            if res
+                .as_ref()
+                .is_some_and(|prev| prev.to_string() == changed_node.to_string())
+            {
+                return Ok(());
+            }
+            self.walker.root = changed_node.clone();
+            *res = Some(changed_node);
+        }
+        Err(Error::RemoveDidNotConverge {
+            ids: change.ids().iter().map(ToString::to_string).collect(),
+            passes: max_passes,
+        })
     }
 
     /// A `Change::Follows` whose parent input is missing is a hard error
@@ -400,6 +422,36 @@ impl FlakeEdit {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remove_fails_instead_of_hanging_when_passes_run_out() {
+        // Removing `foo` takes two rewriting passes, one per binding, and a
+        // third walk that changes nothing.
+        let flake = r#"{
+  inputs.foo.url = "github:o/foo";
+  inputs.foo.flake = false;
+  outputs = { ... }: { };
+}
+"#;
+        let change = Change::Remove {
+            ids: vec![crate::change::ChangeId::parse("foo").unwrap()],
+        };
+
+        let mut fe = FlakeEdit::from_text(flake).unwrap();
+        let err = fe.walk_until_fixed(&change, &mut None, 1).unwrap_err();
+        assert!(
+            matches!(err, Error::RemoveDidNotConverge { ref ids, passes: 1 } if ids == &["foo"]),
+            "got {err:?}"
+        );
+
+        let mut fe = FlakeEdit::from_text(flake).unwrap();
+        let mut res = None;
+        fe.walk_until_fixed(&change, &mut res, 2).unwrap();
+        assert_eq!(
+            res.unwrap().to_string(),
+            "{\n  outputs = { ... }: { };\n}\n"
+        );
+    }
 
     fn flake_with_nixpkgs_and_crane() -> &'static str {
         r#"{
