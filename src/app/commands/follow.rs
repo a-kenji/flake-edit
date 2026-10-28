@@ -28,9 +28,24 @@ pub(super) struct FollowContext {
     pub(super) inputs: InputMap,
 }
 
-/// Loads the nested-input set from `flake.lock` and the top-level
-/// input set from `flake.nix`, returning `Ok(None)` when either side
-/// is empty so callers can short-circuit a no-op pass cleanly.
+impl FollowContext {
+    /// Pairs `lock` with the flake's `inputs`, returning `None` for an
+    /// inputless flake.
+    pub(super) fn new(lock: FlakeLock, inputs: InputMap) -> Option<Self> {
+        if inputs.is_empty() {
+            return None;
+        }
+        let nested_inputs = lock.nested_inputs();
+        let top_level_inputs = inputs.keys().cloned().collect();
+        Some(Self {
+            lock,
+            nested_inputs,
+            top_level_inputs,
+            inputs,
+        })
+    }
+}
+
 pub(super) fn load_follow_context(
     flake_edit: &mut FlakeEdit,
     state: &AppState,
@@ -49,29 +64,7 @@ pub(super) fn load_follow_context(
             });
         }
     };
-    let nested_inputs: Vec<NestedInput> = lock.nested_inputs();
-
-    if nested_inputs.is_empty() {
-        return Ok(None);
-    }
-
-    let inputs = flake_edit.list().clone();
-    let top_level_inputs: HashSet<String> = inputs.keys().cloned().collect();
-
-    // Inputless flakes (templates, NUR-style overlays, outputs-only
-    // libraries) are legitimate; treat them as a no-op rather than an
-    // error so batch invocations don't abort on the first one.
-    // Symmetric with the `nested_inputs.is_empty()` short-circuit above.
-    if top_level_inputs.is_empty() {
-        return Ok(None);
-    }
-
-    Ok(Some(FollowContext {
-        lock,
-        nested_inputs,
-        top_level_inputs,
-        inputs,
-    }))
+    Ok(FollowContext::new(lock, flake_edit.list().clone()))
 }
 
 /// Adds a single follows declaration via the explicit
@@ -112,6 +105,9 @@ pub fn add_follow(
         let Some(ctx) = load_follow_context(flake_edit, state)? else {
             return Ok(());
         };
+        if ctx.nested_inputs.is_empty() {
+            return Ok(());
+        }
         let top_level_vec: Vec<String> = ctx.top_level_inputs.into_iter().collect();
 
         let tui_app = if let Some(input_val) = input {
