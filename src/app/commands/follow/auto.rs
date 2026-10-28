@@ -239,7 +239,7 @@ struct FollowPlan {
     to_follow: Vec<(AttrPath, AttrPath)>,
     to_unfollow: Vec<AttrPath>,
     toplevel_follows: Vec<(AttrPath, AttrPath)>,
-    toplevel_adds: Vec<(String, String)>,
+    toplevel_adds: Vec<Promotion>,
     seen_nested: HashSet<AttrPath>,
 }
 
@@ -252,6 +252,12 @@ impl FollowPlan {
             || !self.toplevel_follows.is_empty()
             || !self.toplevel_adds.is_empty()
     }
+}
+
+/// A new top-level input promoted from a group of nested inputs.
+struct Promotion {
+    name: Segment,
+    url: String,
 }
 
 /// What [`apply_plan_text`] committed to the working text.
@@ -420,8 +426,9 @@ fn build_plan(
         let direct_groups = collect_direct_groups(&ax, &plan);
         emit_direct_promotions(&ax, source_text, direct_groups, &mut plan);
 
-        for (name, _) in &plan.toplevel_adds {
-            ax.top_level_inputs.insert(name.clone());
+        for promotion in &plan.toplevel_adds {
+            ax.top_level_inputs
+                .insert(promotion.name.as_str().to_string());
         }
 
         let transitive_groups = collect_transitive_groups(&ax, &plan);
@@ -891,7 +898,10 @@ fn emit_direct_promotions(
         else {
             continue;
         };
-        plan.toplevel_adds.push((canonical_name.clone(), url));
+        plan.toplevel_adds.push(Promotion {
+            name: target_attr.first().clone(),
+            url,
+        });
         record_direct_promotion_entries(plan, &target_attr, &canonical_name, &entries);
     }
 }
@@ -1147,16 +1157,9 @@ fn apply_toplevel_adds(
     state: &mut PlanState,
     lock_graph_ref: Option<&FollowsGraph>,
 ) {
-    for (id, url) in &plan.toplevel_adds {
-        let change_id = match ChangeId::parse(id) {
-            Ok(change_id) => change_id,
-            Err(e) => {
-                tracing::error!("could not add top-level input {id}: invalid id: {e}");
-                continue;
-            }
-        };
+    for Promotion { name: id, url } in &plan.toplevel_adds {
         let change = Change::Add {
-            id: Some(change_id),
+            id: Some(ChangeId::new(AttrPath::new(id.clone()))),
             uri: Some(url.clone()),
             flake: true,
         };
@@ -2022,10 +2025,10 @@ mod tests {
 }
 "#;
         let plan = FollowPlan {
-            toplevel_adds: vec![(
-                "flake-utils".to_string(),
-                "github:numtide/flake-utils".to_string(),
-            )],
+            toplevel_adds: vec![Promotion {
+                name: seg("flake-utils"),
+                url: "github:numtide/flake-utils".to_string(),
+            }],
             ..FollowPlan::default()
         };
         let mut state = fresh_state(original);

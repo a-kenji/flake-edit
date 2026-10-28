@@ -133,6 +133,9 @@ impl FlakeEdit {
     /// the first walk because it must observe the post-insert syntax tree.
     fn apply_add(&mut self, change: Change) -> Result<Option<String>, Error> {
         if let Some(input_id) = change.id() {
+            if input_id.follows().is_some() {
+                return Err(Error::NestedInputId(input_id.to_string()));
+            }
             self.ensure_inputs_populated()?;
 
             let input_id_string = input_id.input().as_str().to_string();
@@ -145,8 +148,10 @@ impl FlakeEdit {
             let outputs = self.walker.list_outputs()?;
             match outputs {
                 Outputs::Multiple(out) => {
-                    let id = change.id().unwrap().input().as_str().to_string();
-                    if !out.contains(&id) {
+                    let change_id = change.id().unwrap();
+                    let input = change_id.input();
+                    let id = input.as_str().to_string();
+                    if !input.needs_quoting() && !out.contains(&id) {
                         self.walker.root = maybe_changed_node.clone();
                         if let Some(maybe_changed_node) =
                             self.walker.change_outputs(OutputChange::Add(id))?
@@ -518,6 +523,53 @@ mod tests {
         assert!(
             text.contains("inputs.nixpkgs.url = \"github:nixos/nixpkgs\""),
             "synthesized toplevel form must use flat url assignment; got:\n{text}",
+        );
+    }
+
+    #[test]
+    fn add_quotes_dotted_name_and_keeps_it_out_of_outputs_formals() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+  };
+  outputs = { self, nixpkgs }: { };
+}"#;
+        let mut fe = FlakeEdit::from_text(flake).unwrap();
+        let change = Change::Add {
+            id: Some(crate::change::ChangeId::parse(r#""hls-1.10""#).unwrap()),
+            uri: Some("github:haskell/hls/1.10.0.0".into()),
+            flake: false,
+        };
+        let text = fe
+            .apply_change(change)
+            .expect("Add must succeed")
+            .text
+            .expect("Add must produce text");
+        assert_eq!(
+            text,
+            r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs";
+    "hls-1.10".url = "github:haskell/hls/1.10.0.0";
+    "hls-1.10".flake = false;
+  };
+  outputs = { self, nixpkgs }: { };
+}"#,
+        );
+    }
+
+    #[test]
+    fn add_rejects_multi_segment_id() {
+        let mut fe = FlakeEdit::from_text(flake_with_nixpkgs_and_crane()).unwrap();
+        let change = Change::Add {
+            id: Some(crate::change::ChangeId::parse("hls-1.10").unwrap()),
+            uri: Some("github:haskell/hls".into()),
+            flake: true,
+        };
+        let err = fe.apply_change(change).expect_err("dotted id must error");
+        assert!(
+            matches!(err, Error::NestedInputId(ref id) if id == r#"hls-1."10""#),
+            "unquoted `hls-1.10` parses as two segments, got: {err:?}",
         );
     }
 

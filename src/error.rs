@@ -34,6 +34,9 @@ pub enum Error {
     /// existing input id.
     #[error("input '{0}' already exists in the flake")]
     DuplicateInput(String),
+    /// Tried to add an input under a multi-segment id such as `a.b`.
+    #[error("cannot add '{0}': an input id must be a single attribute name")]
+    NestedInputId(String),
     /// Tried to operate on an input id that is not declared in the flake.
     #[error("input '{0}' not found in the flake")]
     InputNotFound(String),
@@ -74,6 +77,10 @@ impl Error {
                 "to replace it, run `flake-edit remove {id}` then `flake-edit add {id} <flakeref>`; \
                  or add it under a different id with `flake-edit add [ID] <flakeref>`"
             )),
+            Self::NestedInputId(_) => Some(
+                r#"Quote the name: `flake-edit add '"hls-1.10"' <flakeref>`"#
+                    .into(),
+            ),
             Self::InputNotFound(id) => Some(format!(
                 "to add it, run `flake-edit add {id} <flakeref>`; \
                  see declared inputs with `flake-edit list`"

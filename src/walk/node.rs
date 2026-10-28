@@ -245,41 +245,48 @@ pub(crate) fn make_quoted_string(s: &str) -> Node {
 }
 
 /// Top-level URL attribute, e.g. `inputs.nixpkgs.url = "github:NixOS/nixpkgs";`.
-pub(crate) fn make_toplevel_url_attr(id: &str, uri: &str) -> Node {
-    parse_node(&format!("inputs.{}.url = \"{}\";", id, uri))
+pub(crate) fn make_toplevel_url_attr(id: &Segment, uri: &str) -> Node {
+    parse_node(&format!("inputs.{}.url = \"{}\";", id.render(), uri))
 }
 
 /// Top-level `flake = false` attribute, e.g. `inputs.not_a_flake.flake = false;`.
-pub(crate) fn make_toplevel_flake_false_attr(id: &str) -> Node {
-    parse_node(&format!("inputs.{}.flake = false;", id))
+pub(crate) fn make_toplevel_flake_false_attr(id: &Segment) -> Node {
+    parse_node(&format!("inputs.{}.flake = false;", id.render()))
 }
 
 /// Nested URL attribute, e.g. `nixpkgs.url = "github:NixOS/nixpkgs";`.
-pub(crate) fn make_url_attr(id: &str, uri: &str) -> Node {
-    parse_node(&format!("{}.url = \"{}\";", id, uri))
+pub(crate) fn make_url_attr(id: &Segment, uri: &str) -> Node {
+    parse_node(&format!("{}.url = \"{}\";", id.render(), uri))
 }
 
 /// Nested `flake = false` attribute, e.g. `not_a_flake.flake = false;`.
-pub(crate) fn make_flake_false_attr(id: &str) -> Node {
-    parse_node(&format!("{}.flake = false;", id))
+pub(crate) fn make_flake_false_attr(id: &Segment) -> Node {
+    parse_node(&format!("{}.flake = false;", id.render()))
 }
 
 /// Attrset-style URL attribute, e.g. `vmsh = { url = "github:mic92/vmsh"; };`.
 ///
 /// `indent` is the base indentation of the entry (e.g., `"  "` for 2-space indent).
 /// The inner attribute gets one extra level.
-pub(crate) fn make_attrset_url_attr(id: &str, uri: &str, indent: &str) -> Node {
+pub(crate) fn make_attrset_url_attr(id: &Segment, uri: &str, indent: &str) -> Node {
     parse_node(&format!(
         "{} = {{\n{}  url = \"{}\";\n{}}};",
-        id, indent, uri, indent
+        id.render(),
+        indent,
+        uri,
+        indent
     ))
 }
 
 /// Attrset-style URL plus `flake = false`.
-pub(crate) fn make_attrset_url_flake_false_attr(id: &str, uri: &str, indent: &str) -> Node {
+pub(crate) fn make_attrset_url_flake_false_attr(id: &Segment, uri: &str, indent: &str) -> Node {
     parse_node(&format!(
         "{} = {{\n{}  url = \"{}\";\n{}  flake = false;\n{}}};",
-        id, indent, uri, indent, indent
+        id.render(),
+        indent,
+        uri,
+        indent,
+        indent
     ))
 }
 

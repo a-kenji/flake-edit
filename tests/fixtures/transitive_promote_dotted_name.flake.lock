@@ -1,0 +1,35 @@
+{
+  "nodes": {
+    "a": {
+      "locked": { "lastModified": 1, "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "owner": "o", "repo": "a", "rev": "0000000000000000000000000000000000000011", "type": "github" },
+      "original": { "owner": "o", "repo": "a", "type": "github" },
+      "inputs": { "hls-1.10": "hls-1.10", "zz": "zz" }
+    },
+    "b": {
+      "locked": { "lastModified": 1, "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "owner": "o", "repo": "b", "rev": "0000000000000000000000000000000000000012", "type": "github" },
+      "original": { "owner": "o", "repo": "b", "type": "github" },
+      "inputs": { "hls-1.10": "hls-1.10_2", "zz": "zz_2" }
+    },
+    "hls-1.10": {
+      "locked": { "lastModified": 1, "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "owner": "haskell", "repo": "hls", "rev": "0000000000000000000000000000000000000013", "type": "github" },
+      "original": { "owner": "haskell", "repo": "hls", "ref": "1.10.0.0", "type": "github" },
+      "flake": false
+    },
+    "hls-1.10_2": {
+      "locked": { "lastModified": 1, "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "owner": "haskell", "repo": "hls", "rev": "0000000000000000000000000000000000000013", "type": "github" },
+      "original": { "owner": "haskell", "repo": "hls", "ref": "1.10.0.0", "type": "github" },
+      "flake": false
+    },
+    "zz": {
+      "locked": { "lastModified": 1, "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "owner": "o", "repo": "zz", "rev": "0000000000000000000000000000000000000019", "type": "github" },
+      "original": { "owner": "o", "repo": "zz", "type": "github" }
+    },
+    "zz_2": {
+      "locked": { "lastModified": 1, "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "owner": "o", "repo": "zz", "rev": "0000000000000000000000000000000000000019", "type": "github" },
+      "original": { "owner": "o", "repo": "zz", "type": "github" }
+    },
+    "root": { "inputs": { "a": "a", "b": "b" } }
+  },
+  "root": "root",
+  "version": 7
+}

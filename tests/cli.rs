@@ -815,6 +815,7 @@ fn test_follow_with_transitive_flag(#[case] fixture: &str, #[case] min: usize) {
 /// Test the follow command with --transitive flag without explicit value (defaults to 2)
 #[rstest]
 #[case("treefmt_transitive")]
+#[case("transitive_promote_dotted_name")] // promoted name with a dot stays one quoted segment
 fn test_follow_with_transitive_flag_default(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);
