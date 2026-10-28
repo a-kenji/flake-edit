@@ -1,0 +1,30 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/toplevel_nesting.flake.nix"
+    - "--diff"
+    - change
+    - rust-overlay
+    - "github:oxalica/rust-overlay/stable"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -4,7 +4,7 @@
+   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+   inputs.rust-overlay = {
+-    url = "github:oxalica/rust-overlay";
++    url = "github:oxalica/rust-overlay/stable";
+     inputs.nixpkgs.follows = "nixpkgs";
+     inputs.flake-utils.follows = "flake-utils";
+   };
+
+----- stderr -----

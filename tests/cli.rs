@@ -354,6 +354,11 @@ fn test_remove(#[case] fixture: &str, #[case] id: &str) {
 #[case("root_alt", "nixpkgs", "github:nixos/nixpkgs/nixos-24.05")]
 #[case("toplevel_nesting", "nixpkgs", "github:nixos/nixpkgs/nixos-24.05")]
 #[case(
+    "toplevel_nesting",
+    "rust-overlay",
+    "github:oxalica/rust-overlay/stable"
+)]
+#[case(
     "completely_flat_toplevel",
     "nixpkgs",
     "github:nixos/nixpkgs/nixos-24.05"
