@@ -1,0 +1,19 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/remove_toplevel_nested_url_override.flake.nix"
+    - "--diff"
+    - rm
+    - foo
+  env:
+    NO_COLOR: "1"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+error: could not remove input 'foo'
