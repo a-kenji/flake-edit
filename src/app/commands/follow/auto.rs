@@ -213,11 +213,8 @@ struct AnalysisCtx<'a> {
     /// the lockfile resolved. Used for cycle detection and stale-edge queries
     /// that need the fully-resolved view.
     graph: &'a FollowsGraph,
-    /// Edges already written in the `flake.nix` source. Distinct from `graph`
-    /// because a follows existing only in the lockfile (declared by an
-    /// upstream flake) is still a candidate to write into the user's
-    /// `flake.nix`.
-    existing_follows: &'a HashSet<AttrPath>,
+    /// Nested inputs the user already configured in `flake.nix`.
+    user_configured: &'a HashSet<AttrPath>,
     follow_config: &'a FollowConfig,
     /// Maximum depth of follows declarations to write. `None` (the default)
     /// writes follows at every depth the lockfile graph supports. `Some(n)`
@@ -370,7 +367,16 @@ fn build_plan(
     // [`FollowsGraph::declared_edges`]) so nulled `follows = ""`
     // declarations also count as already-handled and the
     // auto-deduplicator does not silently retarget them.
-    let existing_follows: HashSet<AttrPath> = graph.declared_sources();
+    let mut user_configured: HashSet<AttrPath> = graph.declared_sources();
+    user_configured.extend(inputs.values().flat_map(|input| {
+        input.overrides.iter().map(|nested| {
+            let mut path = AttrPath::new(input.id().clone());
+            for seg in nested.segments() {
+                path.push(seg.clone());
+            }
+            path
+        })
+    }));
 
     let transitive_min = follow_config.transitive_min();
     let max_depth = follow_config.max_depth;
@@ -394,7 +400,7 @@ fn build_plan(
         top_level_inputs,
         inputs,
         graph: &graph_for_discovery,
-        existing_follows: &existing_follows,
+        user_configured: &user_configured,
         follow_config,
         max_depth,
         transitive_min,
@@ -587,7 +593,7 @@ fn resolve_direct_candidate(
         tracing::debug!("Skipping {}: ignored by config", path_display);
         return None;
     }
-    if ax.existing_follows.contains(&nested.path) {
+    if ax.user_configured.contains(&nested.path) {
         tracing::debug!("Skipping {}: already follows in flake.nix", path_display);
         return None;
     }
@@ -697,7 +703,7 @@ fn resolve_transitive_candidate(
     if ax.follow_config.is_ignored(&path_display, nested_name) {
         return None;
     }
-    if ax.existing_follows.contains(&nested.path) || plan.seen_nested.contains(&nested.path) {
+    if ax.user_configured.contains(&nested.path) || plan.seen_nested.contains(&nested.path) {
         return None;
     }
     // Handled by [`collect_direct_candidates`].
@@ -771,7 +777,7 @@ fn collect_direct_groups(
         if ax.follow_config.is_ignored(&path_display, nested_name) {
             continue;
         }
-        if ax.existing_follows.contains(&nested.path) || plan.seen_nested.contains(&nested.path) {
+        if ax.user_configured.contains(&nested.path) || plan.seen_nested.contains(&nested.path) {
             continue;
         }
         if ax
@@ -1653,6 +1659,147 @@ mod tests {
         assert_eq!(out, Some(expected));
     }
 
+    /// Lock where `atuin` locks its own copy of `flake-parts` next to the
+    /// top-level one, the shape the dedup planner folds into a follows.
+    const NESTED_COPY_LOCK: &str = r#"{
+  "nodes": {
+    "atuin": {
+      "inputs": { "flake-parts": "flake-parts_2" },
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "atuin", "rev": "aaa", "type": "github" },
+      "original": { "owner": "o", "repo": "atuin", "type": "github" }
+    },
+    "flake-parts": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "flake-parts", "rev": "fff", "type": "github" },
+      "original": { "owner": "o", "repo": "flake-parts", "type": "github" }
+    },
+    "flake-parts_2": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "flake-parts", "rev": "fff", "type": "github" },
+      "original": { "owner": "o", "repo": "flake-parts", "type": "github" }
+    },
+    "root": {
+      "inputs": { "atuin": "atuin", "flake-parts": "flake-parts" }
+    }
+  },
+  "root": "root",
+  "version": 7
+}"#;
+
+    fn flake_with_atuin_lines(atuin_lines: &str) -> String {
+        format!(
+            r#"{{
+  inputs = {{
+    flake-parts.url = "github:o/flake-parts";
+    atuin = {{
+      url = "github:o/atuin";
+{atuin_lines}    }};
+  }};
+  outputs = _: {{ }};
+}}"#
+        )
+    }
+
+    fn follow_with_nested_copy_lock(flake: &str) -> Option<String> {
+        run_in_memory(flake, NESTED_COPY_LOCK, &FollowConfig::default()).expect("run_in_memory")
+    }
+
+    #[test]
+    fn follow_dedups_nested_input_without_override() {
+        assert_eq!(
+            follow_with_nested_copy_lock(&flake_with_atuin_lines("")),
+            Some(flake_with_atuin_lines(
+                "      inputs.flake-parts.follows = \"flake-parts\";\n"
+            ))
+        );
+    }
+
+    #[test]
+    fn follow_skips_nested_input_overridden_with_flake_false() {
+        let flake = flake_with_atuin_lines("      inputs.flake-parts.flake = false;\n");
+        assert_eq!(follow_with_nested_copy_lock(&flake), None);
+    }
+
+    #[test]
+    fn follow_skips_nested_input_with_url_override() {
+        let flake =
+            flake_with_atuin_lines("      inputs.flake-parts.url = \"github:o/flake-parts/v1\";\n");
+        assert_eq!(follow_with_nested_copy_lock(&flake), None);
+    }
+
+    /// Lock for the existing-follows tests: `a` has nested `t` (its own
+    /// node `t_2`) and `n`, `n` has `t` following nothing, and a top-level
+    /// `t` exists.
+    const EXISTING_FOLLOWS_LOCK: &str = r#"{
+  "nodes": {
+    "a": {
+      "inputs": { "n": "n", "t": "t_2" },
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "a", "rev": "aaa", "type": "github" },
+      "original": { "owner": "o", "repo": "a", "type": "github" }
+    },
+    "n": {
+      "inputs": { "t": [] },
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "n", "rev": "nnn", "type": "github" },
+      "original": { "owner": "o", "repo": "n", "type": "github" }
+    },
+    "t": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "t", "rev": "ttt", "type": "github" },
+      "original": { "owner": "o", "repo": "t", "type": "github" }
+    },
+    "t_2": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "t", "rev": "ttt", "type": "github" },
+      "original": { "owner": "o", "repo": "t", "type": "github" }
+    },
+    "root": {
+      "inputs": { "a": "a", "t": "t" }
+    }
+  },
+  "root": "root",
+  "version": 7
+}"#;
+
+    fn follow_with_existing_follows_lock(flake: &str) -> Option<String> {
+        run_in_memory(flake, EXISTING_FOLLOWS_LOCK, &FollowConfig::default())
+            .expect("run_in_memory")
+    }
+
+    #[test]
+    fn follow_respects_existing_follows_in_inputs_block_before_url() {
+        let flake = r#"{
+  inputs = {
+    a = {
+      inputs = { t = { follows = "x"; }; };
+      url = "github:o/a";
+    };
+    t.url = "github:o/t";
+  };
+  outputs = _: { };
+}"#;
+        assert_eq!(follow_with_existing_follows_lock(flake), None);
+    }
+
+    #[test]
+    fn follow_respects_existing_follows_in_nested_inputs_attrset() {
+        let flake = r#"{
+  inputs = {
+    a = {
+      url = "github:o/a";
+      inputs = {
+        n.inputs = { t.follows = ""; };
+      };
+    };
+    t.url = "github:o/t";
+  };
+  outputs = _: { };
+}"#;
+        let expected = flake.replace(
+            "        n.inputs = { t.follows = \"\"; };\n",
+            "        n.inputs = { t.follows = \"\"; };\n        t.follows = \"t\";\n",
+        );
+        assert_eq!(
+            follow_with_existing_follows_lock(flake).as_deref(),
+            Some(expected.as_str())
+        );
+    }
+
     fn nested_input(path: &str, follows: Option<&str>, url: Option<&str>) -> NestedInput {
         NestedInput {
             path: ap(path),
@@ -1664,7 +1811,7 @@ mod tests {
     struct CtxFixture<'a> {
         inputs: InputMap,
         graph: FollowsGraph,
-        existing_follows: HashSet<AttrPath>,
+        user_configured: HashSet<AttrPath>,
         follow_config: FollowConfig,
         nested_inputs: &'a [NestedInput],
         top_level_inputs: HashSet<String>,
@@ -1677,7 +1824,7 @@ mod tests {
             Self {
                 inputs: InputMap::new(),
                 graph: FollowsGraph::default(),
-                existing_follows: HashSet::new(),
+                user_configured: HashSet::new(),
                 follow_config: FollowConfig::default(),
                 nested_inputs,
                 top_level_inputs: top_level.iter().map(|s| (*s).to_string()).collect(),
@@ -1692,7 +1839,7 @@ mod tests {
                 top_level_inputs: self.top_level_inputs.clone(),
                 inputs: &self.inputs,
                 graph: &self.graph,
-                existing_follows: &self.existing_follows,
+                user_configured: &self.user_configured,
                 follow_config: &self.follow_config,
                 max_depth: self.max_depth,
                 transitive_min: self.transitive_min,
@@ -1819,7 +1966,7 @@ mod tests {
         let nested = vec![nested_input("home-manager.nixpkgs", None, None)];
         let mut fx = CtxFixture::new(&nested, &["nixpkgs", "home-manager"]);
         fx.inputs = make_input_map(vec![Input::new(seg("nixpkgs"))]);
-        fx.existing_follows = std::iter::once(ap("home-manager.nixpkgs")).collect();
+        fx.user_configured = std::iter::once(ap("home-manager.nixpkgs")).collect();
 
         let result = resolve_direct_candidate(&fx.ctx(), &nested[0], &[]);
 

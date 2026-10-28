@@ -93,7 +93,6 @@ impl FlakeEdit {
     /// Re-walk the source and return the freshly populated input map. Use
     /// [`Self::curr_list`] to read the cached map without re-walking.
     pub fn list(&mut self) -> &InputMap {
-        self.walker.inputs.clear();
         // Walk returns Ok(None) when no changes are made (expected for listing)
         assert!(self.walker.walk(&Change::None).ok().flatten().is_none());
         &self.walker.inputs

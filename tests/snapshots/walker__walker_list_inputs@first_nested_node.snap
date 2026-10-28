@@ -9,7 +9,7 @@ inputs:
   flake-compat:
     id: flake-compat
     url: "github:edolstra/flake-compat"
-    flake: true
+    flake: false
   naersk:
     id: naersk
     url: "github:nix-community/naersk/master"

@@ -135,6 +135,44 @@ fn list_sees_quoted_flat_key_inputs() {
 }
 
 #[test]
+fn list_sees_every_declaration_shape() {
+    let output = cli()
+        .arg("--flake")
+        .arg(fixture_path("split_declaration_shapes"))
+        .arg("list")
+        .arg("--format")
+        .arg("json")
+        .output()
+        .expect("flake-edit list runs");
+
+    assert!(output.status.success(), "list should exit cleanly");
+
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("list emits valid json");
+    let edge = |parent: &str, nested: &str, target: &str| {
+        serde_json::json!({
+            "parent": parent,
+            "nested": nested,
+            "target": target,
+            "kind": "indirect",
+        })
+    };
+    assert_eq!(
+        parsed["follows"],
+        serde_json::json!([
+            edge("a", "t", ""),
+            edge("atuin", "flake-parts", "flake-parts"),
+            edge("atuin", "flake-parts.nixpkgs-lib", "nixpkgs-lib"),
+            edge("b", "n.t", ""),
+            edge("b", "x.g", "g"),
+        ])
+    );
+    assert_eq!(
+        parsed["inputs"]["disko"],
+        serde_json::json!({ "id": "disko", "url": "", "flake": true })
+    );
+}
+#[test]
 fn list_format_invalid_value_rejected_at_parse_time() {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);

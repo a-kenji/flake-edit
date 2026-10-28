@@ -12,7 +12,7 @@ inputs:
   flake-compat:
     id: flake-compat
     url: "github:edolstra/flake-compat"
-    flake: true
+    flake: false
   nixpkgs:
     id: nixpkgs
     url: "github:NixOS/nixpkgs/nixpkgs-unstable"

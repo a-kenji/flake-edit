@@ -5,6 +5,7 @@ mod error;
 mod inputs;
 mod node;
 mod outputs;
+mod record;
 pub(crate) mod toggle;
 
 use std::collections::HashMap;
@@ -20,11 +21,11 @@ use crate::input::Input;
 pub(crate) use context::Context;
 pub use error::WalkerError;
 
-use inputs::{redeclare_removed_owner, walk_inputs};
+use inputs::{redeclare_removed_owner, retarget_existing_follows, walk_inputs};
 use node::{
     FollowsKind, adjacent_whitespace_index, get_sibling_whitespace, insertion_index_after,
-    last_line_with_newline, make_quoted_string, make_toplevel_flake_false_attr,
-    make_toplevel_url_attr, parse_node, substitute_child,
+    last_line_with_newline, make_toplevel_flake_false_attr, make_toplevel_url_attr, parse_node,
+    substitute_child,
 };
 
 /// The flake's top-level attribute set.
@@ -48,17 +49,6 @@ pub(crate) fn flake_attr_set(root: &SyntaxNode) -> Option<SyntaxNode> {
     (body.kind() == SyntaxKind::NODE_ATTR_SET).then_some(body)
 }
 
-/// Whether a CST attrpath (idents may carry surrounding `"..."`) matches `expected`
-/// pairwise after unquoting.
-fn idents_match(have: &[String], expected: &[&str]) -> bool {
-    if have.len() != expected.len() {
-        return false;
-    }
-    have.iter()
-        .zip(expected.iter())
-        .all(|(h, e)| strip_outer_quotes(h) == *e)
-}
-
 fn is_flat_inputs_attr_for(idents: &[String], parent_id: &str) -> bool {
     idents.len() >= 2 && idents[0] == "inputs" && strip_outer_quotes(&idents[1]) == parent_id
 }
@@ -77,33 +67,6 @@ fn block_parent_attrset(
     toplevel
         .children()
         .find(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)
-}
-
-/// Same-target hits return the unchanged root. The caller treats `Some` as
-/// "claimed", so the no-op variant must still return `Some` to short-circuit
-/// the surrounding scan.
-fn retarget_existing_flat_follows(
-    attr_set: &SyntaxNode,
-    toplevel: &SyntaxNode,
-    value_node: Option<SyntaxNode>,
-    target: &str,
-) -> Option<SyntaxNode> {
-    let current_target = value_node
-        .as_ref()
-        .map(|v| strip_outer_quotes(&v.to_string()).to_string())
-        .unwrap_or_default();
-
-    if current_target == target {
-        return attr_set.ancestors().last();
-    }
-
-    let value = value_node?;
-    let new_value = make_quoted_string(target);
-    let new_toplevel = substitute_child(toplevel, value.index(), &new_value);
-    let green = attr_set
-        .green()
-        .replace_child(toplevel.index(), new_toplevel.green().into());
-    Some(SyntaxNode::new_root(attr_set.replace_with(green)))
 }
 
 /// Mirrors `ref_child`'s leading newline + indent so the inserted line
@@ -154,8 +117,9 @@ impl<'a> Walker {
         }
     }
 
-    /// Apply `change` to the parsed `flake.nix`, returning the rebuilt root if
-    /// the tree was modified.
+    /// Record the input model of the parsed `flake.nix` into `inputs`, then
+    /// apply `change`, returning the rebuilt root if the tree was modified.
+    /// `Change::None` only records.
     ///
     /// Expects the parsed root to be an attrset with `description`, `inputs`, and
     /// `outputs` keys.
@@ -164,7 +128,25 @@ impl<'a> Walker {
         if cst.kind() != SyntaxKind::NODE_ROOT {
             return Err(WalkerError::NotARoot);
         }
-        self.walk_toplevel(cst, None, change)
+        let Some(attr_set) = flake_attr_set(&cst) else {
+            self.inputs.clear();
+            return Ok(None);
+        };
+        if let Some(stray) = attr_set
+            .children()
+            .find(|c| c.kind() != SyntaxKind::NODE_ATTRPATH_VALUE)
+        {
+            return Err(WalkerError::unexpected_top_level(
+                &stray.to_string(),
+                stray.text_range().start().into(),
+            ));
+        }
+
+        self.inputs = record::record_inputs(&attr_set);
+        if matches!(change, Change::None) {
+            return Ok(None);
+        }
+        self.walk_toplevel(&attr_set, None, change)
     }
 
     /// List the `outputs` arguments without touching `inputs`.
@@ -182,24 +164,12 @@ impl<'a> Walker {
 
     /// Walk the top-level attrset, dispatching on `description`/`inputs`/`outputs`.
     fn walk_toplevel(
-        &mut self,
-        node: SyntaxNode,
+        &self,
+        attr_set: &SyntaxNode,
         ctx: Option<Context>,
         change: &Change,
     ) -> Result<Option<SyntaxNode>, WalkerError> {
-        let Some(attr_set) = flake_attr_set(&node) else {
-            return Ok(None);
-        };
-
         for toplevel in attr_set.children() {
-            if toplevel.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
-                let range = toplevel.text_range();
-                return Err(WalkerError::unexpected_top_level(
-                    &toplevel.to_string(),
-                    range.start().into(),
-                ));
-            }
-
             // Dispatch on the NODE_ATTRPATH child alone, not on the value.
             // For `inputs = { ... }` the value is the whole inputs attrset;
             // stringifying it dominates this walk on large flakes.
@@ -224,7 +194,7 @@ impl<'a> Walker {
             if first_unquoted == "inputs" {
                 if has_more_idents {
                     if let Some(result) =
-                        self.handle_inputs_flat(&attr_set, &toplevel, &attrpath, &ctx, change)
+                        self.handle_inputs_flat(attr_set, &toplevel, &attrpath, &ctx, change)
                     {
                         return Ok(Some(result));
                     }
@@ -238,7 +208,7 @@ impl<'a> Walker {
 
             if !has_more_idents
                 && first_unquoted == "outputs"
-                && let Some(result) = self.handle_add_at_outputs(&attr_set, &toplevel, change)
+                && let Some(result) = self.handle_add_at_outputs(attr_set, &toplevel, change)
             {
                 return Ok(Some(result));
             }
@@ -251,7 +221,7 @@ impl<'a> Walker {
                 let parent_id = input.input();
                 if self.inputs.contains_key(parent_id.as_str()) {
                     let target_str = target.to_flake_follows_string();
-                    return self.handle_follows_flat_toplevel(&attr_set, path, &target_str);
+                    return self.handle_follows_flat_toplevel(attr_set, path, &target_str);
                 }
             }
         }
@@ -274,6 +244,16 @@ impl<'a> Walker {
     ) -> Result<Option<SyntaxNode>, WalkerError> {
         let parent_id = path.first();
         let expected_flat = follows_idents_prefixed(path.segments());
+
+        if let Some(found) = retarget_existing_follows(attr_set, &expected_flat, target) {
+            return Ok(match found {
+                None => attr_set.ancestors().last(),
+                Some(new_attr_set) => Some(SyntaxNode::new_root(
+                    attr_set.replace_with(new_attr_set.green().into_owned()),
+                )),
+            });
+        }
+
         let mut last_parent_attr: Option<SyntaxNode> = None;
         let mut block_parent: Option<(SyntaxNode, SyntaxNode)> = None;
 
@@ -295,17 +275,6 @@ impl<'a> Walker {
                 block_parent = Some((toplevel.clone(), block_attr_set));
             }
 
-            if idents_match(&idents, &expected_flat)
-                && let Some(rebuilt) = retarget_existing_flat_follows(
-                    attr_set,
-                    &toplevel,
-                    attrpath.next_sibling(),
-                    target,
-                )
-            {
-                return Ok(Some(rebuilt));
-            }
-
             if is_flat_inputs_attr_for(&idents, parent_id.as_str()) {
                 last_parent_attr = Some(toplevel.clone());
             }
@@ -313,13 +282,13 @@ impl<'a> Walker {
 
         if let Some((toplevel, block_attr_set)) = block_parent {
             let rest: Vec<Segment> = path.segments()[1..].to_vec();
-            return self.handle_follows_block_toplevel(
+            return Ok(Self::insert_follows_into_block_toplevel(
                 attr_set,
                 &toplevel,
                 &block_attr_set,
                 &rest,
                 target,
-            );
+            ));
         }
 
         if let Some(ref_child) = last_parent_attr {
@@ -331,52 +300,13 @@ impl<'a> Walker {
         Ok(None)
     }
 
-    fn handle_follows_block_toplevel(
-        &self,
+    fn insert_follows_into_block_toplevel(
         attr_set: &SyntaxNode,
         toplevel: &SyntaxNode,
         block_attr_set: &SyntaxNode,
         rest: &[Segment],
         target: &str,
-    ) -> Result<Option<SyntaxNode>, WalkerError> {
-        let expected_block = follows_idents_prefixed(rest);
-        for attr in block_attr_set.children() {
-            if attr.kind() != SyntaxKind::NODE_ATTRPATH_VALUE {
-                continue;
-            }
-            let Some(attrpath) = attr
-                .children()
-                .find(|c| c.kind() == SyntaxKind::NODE_ATTRPATH)
-            else {
-                continue;
-            };
-            let idents: Vec<String> = attrpath.children().map(|c| c.to_string()).collect();
-
-            if idents_match(&idents, &expected_block) {
-                let value_node = attrpath.next_sibling();
-                let current_target = value_node
-                    .as_ref()
-                    .map(|v| strip_outer_quotes(&v.to_string()).to_string())
-                    .unwrap_or_default();
-
-                if current_target == target {
-                    return Ok(attr_set.ancestors().last());
-                }
-
-                if let Some(value) = value_node {
-                    let new_value = make_quoted_string(target);
-                    let new_attr = substitute_child(&attr, value.index(), &new_value);
-                    let new_block = substitute_child(block_attr_set, attr.index(), &new_attr);
-                    let new_toplevel =
-                        substitute_child(toplevel, block_attr_set.index(), &new_block);
-                    let green = attr_set
-                        .green()
-                        .replace_child(toplevel.index(), new_toplevel.green().into());
-                    return Ok(Some(SyntaxNode::new_root(attr_set.replace_with(green))));
-                }
-            }
-        }
-
+    ) -> Option<SyntaxNode> {
         let follows_node = FollowsKind::BlockNested { rest, target }.emit();
         let children: Vec<_> = block_attr_set.children().collect();
         if let Some(last_child) = children.last() {
@@ -395,10 +325,10 @@ impl<'a> Walker {
             let green = attr_set
                 .green()
                 .replace_child(toplevel.index(), new_toplevel.green().into());
-            return Ok(Some(SyntaxNode::new_root(attr_set.replace_with(green))));
+            return Some(SyntaxNode::new_root(attr_set.replace_with(green)));
         }
 
-        Ok(None)
+        None
     }
 
     /// Apply `change` to the `inputs = { ... }` attribute.
@@ -406,14 +336,14 @@ impl<'a> Walker {
     /// `toplevel.replace_with()` propagates through `NODE_ATTR_SET` up to `NODE_ROOT`,
     /// preserving leading comments and trivia.
     fn handle_inputs_attr(
-        &mut self,
+        &self,
         toplevel: &SyntaxNode,
         child: &SyntaxNode,
         ctx: &Option<Context>,
         change: &Change,
     ) -> Option<SyntaxNode> {
         let sibling = child.next_sibling()?;
-        let replacement = walk_inputs(&mut self.inputs, sibling.clone(), ctx, change)?;
+        let replacement = walk_inputs(sibling.clone(), ctx, change)?;
 
         let green = toplevel
             .green()
@@ -427,14 +357,14 @@ impl<'a> Walker {
     /// Removals rebuild the parent attrset green and `replace_with()` propagates to
     /// `NODE_ROOT`. Replacements rely on `toplevel.replace_with()` to propagate.
     fn handle_inputs_flat(
-        &mut self,
+        &self,
         attr_set: &SyntaxNode,
         toplevel: &SyntaxNode,
         child: &SyntaxNode,
         ctx: &Option<Context>,
         change: &Change,
     ) -> Option<SyntaxNode> {
-        let replacement = walk_inputs(&mut self.inputs, child.clone(), ctx, change)?;
+        let replacement = walk_inputs(child.clone(), ctx, change)?;
 
         if replacement.to_string().is_empty()
             && let Some(redeclared) = redeclare_removed_owner(toplevel, change)
@@ -469,7 +399,7 @@ impl<'a> Walker {
     /// Rebuilds the parent attrset green. `replace_with()` propagates to `NODE_ROOT`
     /// while preserving leading comments.
     fn handle_add_at_outputs(
-        &mut self,
+        &self,
         attr_set: &SyntaxNode,
         toplevel: &SyntaxNode,
         change: &Change,
