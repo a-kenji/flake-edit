@@ -229,6 +229,7 @@ mod tests {
             input.follows.push(Follows::Indirect {
                 path: AttrPath::new(seg(parent)),
                 target: Some(path(target)),
+                range: Range::default(),
             });
         }
         input.range = Range { start: 1, end: 2 };
@@ -399,10 +400,12 @@ mod tests {
         a.follows.push(Follows::Indirect {
             path: AttrPath::new(seg("x")),
             target: Some(path("y")),
+            range: Range::default(),
         });
         a.follows.push(Follows::Indirect {
             path: AttrPath::new(seg("x")),
             target: Some(path("z")),
+            range: Range::default(),
         });
         a.range = Range { start: 1, end: 2 };
         inputs.insert("a".to_string(), a);
@@ -425,6 +428,7 @@ mod tests {
         a.follows.push(Follows::Indirect {
             path: AttrPath::parse("b.c").unwrap(),
             target: Some(path("d")),
+            range: Range::default(),
         });
         a.range = Range { start: 1, end: 2 };
         inputs.insert("a".to_string(), a);

@@ -88,7 +88,7 @@ fn record_binding(inputs: &mut HashMap<String, Input>, path: &[Segment], value: 
     match attr.as_str() {
         "follows" => {
             let target = AttrPath::parse_follows_target(&value.to_string(), nested.last());
-            input.push_indirect_follows(nested, target);
+            input.push_indirect_follows(nested, target, Range::from_text_range(value.text_range()));
         }
         "inputs" => {}
         _ => input.push_override(nested),
@@ -134,7 +134,7 @@ mod tests {
             .follows()
             .iter()
             .map(|f| match f {
-                Follows::Indirect { path, target } => (
+                Follows::Indirect { path, target, .. } => (
                     path.to_string(),
                     target.as_ref().map(|t| t.to_string()).unwrap_or_default(),
                 ),
@@ -292,5 +292,34 @@ mod tests {
             follows(&inputs, "atuin"),
             pairs(&[("crane.nixpkgs", "nixpkgs")])
         );
+    }
+
+    #[test]
+    fn follows_range_covers_the_declared_value_in_every_spelling() {
+        let flake = r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    crane.url = "github:ipetkov/crane";
+    crane.inputs.nixpkgs.follows = "nixpkgs";
+    atuin = {
+      url = "github:atuinsh/atuin";
+      inputs.flake-utils.follows = "flake-utils";
+      inputs = {
+        rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+      };
+    };
+  };
+  outputs = _: { };
+}"#;
+        let inputs = record(flake);
+        let values: Vec<&str> = ["crane", "atuin"]
+            .iter()
+            .flat_map(|id| inputs[*id].follows())
+            .map(|f| match f {
+                Follows::Indirect { range, .. } => &flake[range.start..range.end],
+                Follows::Direct(name, _) => panic!("unexpected direct follows {name}"),
+            })
+            .collect();
+        assert_eq!(values, [r#""nixpkgs""#, r#""flake-utils""#, r#""nixpkgs""#]);
     }
 }

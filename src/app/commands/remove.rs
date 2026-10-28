@@ -36,7 +36,7 @@ pub fn remove(
             let input = &inputs[input_id];
             removable.push(input_id.clone());
             for follows in input.follows() {
-                if let crate::input::Follows::Indirect { path, target } = follows {
+                if let crate::input::Follows::Indirect { path, target, .. } = follows {
                     let target_str = match target {
                         Some(t) => t.to_string(),
                         None => "\"\"".to_string(),

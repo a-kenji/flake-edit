@@ -262,7 +262,7 @@ mod tests {
     #[test]
     fn existing_follows_via_graph_handles_quoted_attrs() {
         use crate::follows::{FollowsGraph, Segment};
-        use crate::input::{Follows, Input};
+        use crate::input::{Follows, Input, Range};
 
         // `"home-manager".inputs.nixpkgs.follows = "nixpkgs"` must resolve to
         // a typed-AttrPath edge sourced at `home-manager.nixpkgs`, not at the
@@ -273,6 +273,7 @@ mod tests {
         hm_input.follows.push(Follows::Indirect {
             path: AttrPath::new(Segment::from_unquoted("nixpkgs").unwrap()),
             target: Some(AttrPath::parse("nixpkgs").unwrap()),
+            range: Range::default(),
         });
         inputs.insert("home-manager".to_string(), hm_input);
 

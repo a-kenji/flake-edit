@@ -450,6 +450,7 @@ mod tests {
             input.follows.push(Follows::Indirect {
                 path: AttrPath::new(seg(parent)),
                 target: Some(path(target)),
+                range: Range::default(),
             });
         }
         input.range = Range { start: 1, end: 2 };

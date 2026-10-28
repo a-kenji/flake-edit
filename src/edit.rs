@@ -395,6 +395,7 @@ impl FlakeEdit {
                 if let Follows::Indirect {
                     path,
                     target: Some(target),
+                    ..
                 } = follows
                 {
                     // target is the RHS of `follows = "..."`. Match when its

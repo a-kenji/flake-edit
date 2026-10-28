@@ -97,7 +97,7 @@ impl FollowsGraph {
     /// Build a graph from the declared `inputs = { ... }` block alone.
     ///
     /// Each [`Follows::Indirect`] in `inputs` becomes one
-    /// [`EdgeOrigin::Declared`] edge carrying [`Input::range`].
+    /// [`EdgeOrigin::Declared`] edge carrying the declaration's range.
     pub fn from_declared(inputs: &InputMap) -> Self {
         let mut graph = FollowsGraph {
             max_depth: DEFAULT_MAX_DEPTH,
@@ -613,7 +613,12 @@ fn splice_suffix(base: &AttrPath, suffix: &[Segment]) -> AttrPath {
 
 fn collect_declared_edges(input: &Input, graph: &mut FollowsGraph) {
     for follows in input.follows() {
-        if let Follows::Indirect { path, target } = follows {
+        if let Follows::Indirect {
+            path,
+            target,
+            range,
+        } = follows
+        {
             let mut source = AttrPath::new(input.id().clone());
             for seg in path.segments() {
                 source.push(seg.clone());
@@ -624,7 +629,7 @@ fn collect_declared_edges(input: &Input, graph: &mut FollowsGraph) {
                         source,
                         follows: target.clone(),
                         origin: EdgeOrigin::Declared {
-                            range: input.range.clone(),
+                            range: range.clone(),
                         },
                     });
                 }
@@ -670,6 +675,7 @@ mod tests {
             input.follows.push(Follows::Indirect {
                 path: AttrPath::new(seg(parent)),
                 target: Some(path(target)),
+                range: Range::default(),
             });
         }
         input.range = Range { start: 1, end: 2 };
@@ -805,10 +811,12 @@ mod tests {
         input.follows.push(Follows::Indirect {
             path: path("inner.nixpkgs"),
             target: Some(path("nixpkgs")),
+            range: Range::default(),
         });
         input.follows.push(Follows::Indirect {
             path: AttrPath::new(seg("flake-compat")),
             target: None,
+            range: Range::default(),
         });
         let inputs = make_inputs(vec![input]);
         let lock_text = r#"{
@@ -836,6 +844,7 @@ mod tests {
         input.follows.push(Follows::Indirect {
             path: AttrPath::new(seg("nixpkgs")),
             target: None,
+            range: Range::default(),
         });
         input.range = Range { start: 1, end: 2 };
         let inputs = make_inputs(vec![input]);
@@ -875,6 +884,7 @@ mod tests {
         input.follows.push(Follows::Indirect {
             path: AttrPath::new(seg("nixpkgs")),
             target: None,
+            range: Range::default(),
         });
         input.range = Range { start: 1, end: 2 };
         let inputs = make_inputs(vec![input]);
@@ -911,6 +921,7 @@ mod tests {
         input.follows.push(Follows::Indirect {
             path: AttrPath::parse("agenix.systems").unwrap(),
             target: Some(path("systems")),
+            range: Range::default(),
         });
         input.range = Range { start: 1, end: 2 };
         let inputs = make_inputs(vec![input, declared_input("systems", &[])]);
@@ -1111,6 +1122,7 @@ mod tests {
         input.follows.push(Follows::Indirect {
             path: AttrPath::new(seg("foo")),
             target: Some(AttrPath::parse("foo.foo").unwrap()),
+            range: Range::default(),
         });
         input.range = Range { start: 1, end: 2 };
         inputs.insert("foo".into(), input);
