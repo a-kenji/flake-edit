@@ -33,7 +33,6 @@ pub fn run(args: CliArgs) -> Result<()> {
     }
 
     let (editor, mut flake_edit, mut state) = setup(&args)?;
-    let no_cache = args.no_cache();
 
     match args.subcommand() {
         Command::Add { .. } => dispatch_add(&args, &editor, &mut flake_edit, &state)?,
@@ -51,7 +50,7 @@ pub fn run(args: CliArgs) -> Result<()> {
         Command::Config { .. } => return dispatch_config(&args),
     }
 
-    crate::cache::populate_cache_from_input_map(flake_edit.curr_list(), no_cache);
+    crate::cache::populate_cache_from_input_map(flake_edit.curr_list(), &state.cache_config());
 
     Ok(())
 }

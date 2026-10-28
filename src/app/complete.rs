@@ -4,7 +4,7 @@ use clap::CommandFactory;
 use clap_complete::CompleteEnv;
 use clap_complete::engine::{ArgValueCandidates, CompletionCandidate};
 
-use crate::cache::{Cache, DEFAULT_URI_TYPES};
+use crate::cache::{CacheConfig, DEFAULT_URI_TYPES};
 use crate::cli::CliArgs;
 use crate::edit::{FlakeEdit, sorted_input_ids};
 use crate::input::Follows;
@@ -109,7 +109,7 @@ fn uri_candidates() -> Vec<CompletionCandidate> {
         .iter()
         .map(|uri_type| CompletionCandidate::new(*uri_type))
         .collect();
-    for uri in Cache::load().list_uris() {
+    for uri in CacheConfig::Default.load().unwrap_or_default().list_uris() {
         out.push(CompletionCandidate::new(uri));
     }
     out
