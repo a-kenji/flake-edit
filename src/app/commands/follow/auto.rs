@@ -598,12 +598,16 @@ fn resolve_direct_candidate(
         return None;
     }
 
-    let target = ax
-        .top_level_inputs
-        .iter()
-        .find(|top| ax.follow_config.can_follow(nested_name, top))?;
+    // An alias is just the fallback to the actual name.
+    let target = if ax.top_level_inputs.contains(nested_name) {
+        nested_name
+    } else {
+        ax.follow_config
+            .resolve_alias(nested_name)
+            .filter(|canonical| ax.top_level_inputs.contains(*canonical))?
+    };
 
-    if let Some(target_input) = ax.inputs.get(target.as_str())
+    if let Some(target_input) = ax.inputs.get(target)
         && is_follows_reference_to_parent(target_input.url(), parent)
     {
         tracing::debug!(
@@ -615,7 +619,7 @@ fn resolve_direct_candidate(
         return None;
     }
 
-    let target_path = match Segment::from_unquoted(target.clone()) {
+    let target_path = match Segment::from_unquoted(target) {
         Ok(seg) => AttrPath::new(seg),
         Err(e) => {
             tracing::warn!("Skipping {path_display} -> {target}: invalid input name: {e}");
@@ -816,7 +820,9 @@ fn emit_transitive_promotions(
     transitive_groups: HashMap<String, HashMap<AttrPath, Vec<AttrPath>>>,
     plan: &mut FollowPlan,
 ) {
-    for (top_name, targets) in transitive_groups {
+    let mut transitive_groups_sorted: Vec<_> = transitive_groups.into_iter().collect();
+    transitive_groups_sorted.sort_by(|a, b| a.0.cmp(&b.0));
+    for (top_name, targets) in transitive_groups_sorted {
         let mut eligible: Vec<(AttrPath, Vec<AttrPath>)> = targets
             .into_iter()
             .filter(|(_, paths)| paths.len() >= ax.transitive_min)
@@ -1386,7 +1392,11 @@ mod tests {
     fn input_with_follows(id: &str, follows: Vec<(AttrPath, Option<AttrPath>)>) -> Input {
         let mut input = Input::new(seg(id));
         for (path, target) in follows {
-            input.follows.push(Follows::Indirect { path, target });
+            input.follows.push(Follows::Indirect {
+                path,
+                target,
+                range: Range::default(),
+            });
         }
         input.range = Range { start: 1, end: 2 };
         input
@@ -1856,6 +1866,21 @@ mod tests {
         let result = resolve_direct_candidate(&fx.ctx(), &nested[0], &[]);
 
         assert_eq!(result, Some(ap("nixpkgs")));
+    }
+
+    /// With the default alias `nixpkgs = ["nixpkgs-lib"]`, both top-level
+    /// `nixpkgs-lib` (exact) and `nixpkgs` (alias) accept a nested
+    /// `nixpkgs-lib`.
+    #[test]
+    fn resolve_direct_candidate_prefers_exact_match_over_alias() {
+        let nested = vec![nested_input("foo.nixpkgs-lib", None, None)];
+        for _ in 0..64 {
+            let fx = CtxFixture::new(&nested, &["nixpkgs", "nixpkgs-lib", "foo"]);
+
+            let result = resolve_direct_candidate(&fx.ctx(), &nested[0], &[]);
+
+            assert_eq!(result, Some(ap("nixpkgs-lib")));
+        }
     }
 
     #[test]

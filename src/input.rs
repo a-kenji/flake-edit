@@ -48,17 +48,23 @@ pub enum Follows {
     /// side of the `follows = "..."`; `None` represents the empty-string
     /// form `follows = ""`, the in-flake equivalent of the lockfile's
     /// [`crate::lock::Input::Indirect`]`(None)` (an `inputs.X = []` entry).
+    /// `range` locates the declaration's `"..."` value in the source, so
+    /// diagnostics about this follows point at it.
+    /// The default (empty) range means no source location is known.
+    ///
+    /// Examples (ranges elided):
     ///
     /// - `inputs.crane.inputs.nixpkgs.follows = "nixpkgs"` is stored on
-    ///   `crane` as `Indirect { path: ["nixpkgs"], target: Some(["nixpkgs"]) }`.
+    ///   `crane` as `Indirect { path: ["nixpkgs"], target: Some(["nixpkgs"]), .. }`.
     /// - `inputs.neovim.inputs.nixvim.inputs.flake-parts.follows =
     ///   "flake-parts"` is stored on `neovim` as `Indirect { path:
-    ///   ["nixvim", "flake-parts"], target: Some(["flake-parts"]) }`.
+    ///   ["nixvim", "flake-parts"], target: Some(["flake-parts"]), .. }`.
     /// - `inputs.nix.inputs.flake-compat.follows = ""` is stored on `nix`
-    ///   as `Indirect { path: ["flake-compat"], target: None }`.
+    ///   as `Indirect { path: ["flake-compat"], target: None, .. }`.
     Indirect {
         path: AttrPath,
         target: Option<AttrPath>,
+        range: Range,
     },
     /// A nested input declared inline with its own URL.
     Direct(String, Input),
@@ -93,14 +99,33 @@ impl Input {
         !self.url.is_empty() && !self.range.is_empty()
     }
 
-    /// Append an `Indirect` follows entry and re-normalize the follows vec
-    /// (sort + dedup). Walker insertion sites maintain this invariant so
-    /// callers downstream (validate, follows-graph, snapshots) see one
-    /// canonical ordering.
-    pub(crate) fn push_indirect_follows(&mut self, path: AttrPath, target: Option<AttrPath>) {
-        self.follows.push(Follows::Indirect { path, target });
+    /// Record an `Indirect` follows entry and keep the follows vec sorted
+    /// and free of duplicates.
+    pub(crate) fn push_indirect_follows(
+        &mut self,
+        path: AttrPath,
+        target: Option<AttrPath>,
+        range: Range,
+    ) {
+        for follows in &mut self.follows {
+            if let Follows::Indirect {
+                path: p,
+                target: t,
+                range: r,
+            } = follows
+                && *p == path
+                && *t == target
+            {
+                *r = range;
+                return;
+            }
+        }
+        self.follows.push(Follows::Indirect {
+            path,
+            target,
+            range,
+        });
         self.follows.sort();
-        self.follows.dedup();
     }
 
     /// Record a source override of the nested input at `path`, keeping

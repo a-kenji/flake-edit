@@ -79,7 +79,7 @@ impl From<&InputMap> for ListOutput {
             );
             for f in input.follows() {
                 match f {
-                    Follows::Indirect { path, target } => {
+                    Follows::Indirect { path, target, .. } => {
                         follows.push(FollowEdge {
                             parent: parent_id.clone(),
                             nested: path.to_string(),
@@ -177,7 +177,7 @@ fn list_detailed(inputs: &InputMap) {
         };
         buf.push_str(&line);
         for follows in input.follows() {
-            if let Follows::Indirect { path, target } = follows {
+            if let Follows::Indirect { path, target, .. } = follows {
                 // Render an empty `follows = ""` as `=> ""` to mirror the
                 // source-flake form. Non-empty targets render bare.
                 let target_str = match target {
@@ -247,6 +247,7 @@ mod tests {
         input.follows.push(Follows::Indirect {
             path: AttrPath::new(Segment::from_unquoted("nixpkgs").unwrap()),
             target: Some(AttrPath::parse("nixpkgs").unwrap()),
+            range: Range::default(),
         });
         inputs.insert("crane".into(), input);
         let v = serde_json::to_value(ListOutput::from(&inputs)).unwrap();

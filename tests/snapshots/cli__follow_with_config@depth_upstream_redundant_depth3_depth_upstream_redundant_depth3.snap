@@ -30,4 +30,4 @@ exit_code: 0
    outputs =
 
 ----- stderr -----
-warning: stale-lock follows at line 6, column 19: omnibus.flops.POP.nixpkgs -> nixpkgs (flake.lock resolves to omnibus.flops.nixpkgs; run `nix flake lock`)
+warning: stale-lock follows at line 8, column 62: omnibus.flops.POP.nixpkgs -> nixpkgs (flake.lock resolves to omnibus.flops.nixpkgs; run `nix flake lock`)

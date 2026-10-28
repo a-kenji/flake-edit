@@ -27,4 +27,4 @@ exit_code: 0
    outputs = { self, ... }: { };
 
 ----- stderr -----
-warning: stale follows at line 5, column 13: nix-homebrew.brew-src.nixpkgs -> nixpkgs (source no longer present in flake.lock)
+warning: stale follows at line 8, column 48: nix-homebrew.brew-src.nixpkgs -> nixpkgs (source no longer present in flake.lock)

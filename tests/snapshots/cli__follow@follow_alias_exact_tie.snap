@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/follow_alias_exact_tie.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/follow_alias_exact_tie.flake.lock"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -3,6 +3,7 @@
+     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+     nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
+     foo.url = "github:example/foo";
++    foo.inputs.nixpkgs-lib.follows = "nixpkgs-lib";
+   };
+   outputs = _: { };
+ }
+
+----- stderr -----

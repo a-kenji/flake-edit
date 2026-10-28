@@ -28,5 +28,5 @@ exit_code: 0
    outputs =
 
 ----- stderr -----
-warning: stale follows at line 6, column 15: foo.bar -> nixpkgs (source no longer present in flake.lock)
-warning: stale follows at line 6, column 15: foo.baz -> nixpkgs (source no longer present in flake.lock)
+warning: stale follows at line 9, column 30: foo.bar -> nixpkgs (source no longer present in flake.lock)
+warning: stale follows at line 10, column 30: foo.baz -> nixpkgs (source no longer present in flake.lock)

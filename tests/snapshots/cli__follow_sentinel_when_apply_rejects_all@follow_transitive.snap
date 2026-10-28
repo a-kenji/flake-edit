@@ -19,4 +19,4 @@ exit_code: 0
 All inputs are already deduplicated.
 
 ----- stderr -----
-warning: stale-lock follows at line 5, column 15: foo.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale-lock follows at line 6, column 34: foo.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)

@@ -30,4 +30,4 @@ exit_code: 0
 
 
 ----- stderr -----
-warning: stale-lock follows at line 6, column 22: flake-edit.nested-helper.nixpkgs -> nixpkgs (flake.lock resolves to flake-edit.nixpkgs; run `nix flake lock`)
+warning: stale-lock follows at line 8, column 62: flake-edit.nested-helper.nixpkgs -> nixpkgs (flake.lock resolves to flake-edit.nixpkgs; run `nix flake lock`)

@@ -28,5 +28,5 @@ exit_code: 0
    outputs =
 
 ----- stderr -----
-warning: stale follows at line 7, column 17: crane.gone -> nixpkgs (source no longer present in flake.lock)
-warning: stale-lock follows at line 7, column 17: crane.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)
+warning: stale follows at line 13, column 33: crane.gone -> nixpkgs (source no longer present in flake.lock)
+warning: stale-lock follows at line 10, column 36: crane.nixpkgs -> nixpkgs (flake.lock resolves to <none>; run `nix flake lock`)

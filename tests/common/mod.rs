@@ -171,6 +171,9 @@ pub(crate) const FIXTURES: &[&str] = &[
     // follows on an input that has no node in a lock without any nested
     // inputs. Such a follows is not stale.
     "follows_owner_unlocked_no_nested",
+    // nested nixpkgs-lib matches top-level nixpkgs-lib exactly and
+    // top-level nixpkgs via the default alias. The exact match wins.
+    "follow_alias_exact_tie",
 ];
 
 /// Create a Walker from a fixture name.

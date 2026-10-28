@@ -723,6 +723,7 @@ fn add_follow_accepts_two_segment_dot_path_unchanged() {
 // pins the default-unlimited contract: adds depth-2 and depth-3 follows, removes a stale top-level follow
 #[case("stale_follows_owner_unlocked")] // sops-nix has no node in the lock: its follows is kept
 #[case("follows_owner_unlocked_no_nested")] // c has no node in a lock without nested inputs: its follows is kept
+#[case("follow_alias_exact_tie")] // nested nixpkgs-lib follows the exact top-level nixpkgs-lib, not the nixpkgs alias
 #[case("let_wrapped")] // single input inside a `let ... in` body: follow must descend into the wrapper and report a clean no-op
 fn test_follow(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();
