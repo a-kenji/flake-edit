@@ -298,6 +298,7 @@ mod tests {
             path: AttrPath::parse("crane.nixpkgs").unwrap(),
             follows: Some(AttrPath::parse("nixpkgs").unwrap()),
             url: None,
+            flake: true,
         };
         let display = input.to_display_string();
         let (path, follows) = parse_follows_item(&display);
@@ -309,6 +310,7 @@ mod tests {
             path: AttrPath::parse("crane.nixpkgs").unwrap(),
             follows: None,
             url: None,
+            flake: true,
         };
         let display = input.to_display_string();
         let (path, follows) = parse_follows_item(&display);

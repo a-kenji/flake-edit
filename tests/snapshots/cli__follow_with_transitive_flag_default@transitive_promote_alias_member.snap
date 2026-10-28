@@ -1,0 +1,32 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/transitive_promote_alias_member.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/transitive_promote_alias_member.flake.lock"
+    - "--diff"
+    - follow
+    - "--transitive"
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -3,6 +3,9 @@
+
+   inputs = {
+     zed.url = "github:zed-industries/zed/v1.26.2-pre";
++    zed.inputs.flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
++    zed.inputs.nixpkgs.follows = "nixpkgs";
++    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+   };
+
+   outputs = _: { };
+
+----- stderr -----

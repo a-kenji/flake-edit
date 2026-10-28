@@ -18,17 +18,20 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -3,7 +3,13 @@
+@@ -3,7 +3,16 @@
 
    inputs = {
-     a.url = "github:o/a";
-+    a.inputs."hls-1.10".follows = "hls-1.10";
-+    a.inputs.zz.follows = "zz";
-     b.url = "github:o/b";
-+    b.inputs."hls-1.10".follows = "hls-1.10";
-+    b.inputs.zz.follows = "zz";
-+    "hls-1.10".url = "github:haskell/hls/1.10.0.0";
-+    zz.url = "github:o/zz";
+     cardano-faucet.url = "github:input-output-hk/cardano-faucet/node-8.3";
++    cardano-faucet.inputs.haskellNix.follows = "haskellNix";
+     cardano-node.url = "github:input-output-hk/cardano-node/8.5.0-pre";
++    cardano-node.inputs.haskellNix.follows = "haskellNix";
++    haskellNix.url = "github:input-output-hk/haskell.nix";
++    haskellNix.inputs."hls-1.10".follows = "hls-1.10";
++    haskellNix.inputs."hls-2.0".follows = "hls-2.0";
++    "hls-1.10".url = "github:haskell/haskell-language-server/1.10.0.0";
++    "hls-1.10".flake = false;
++    "hls-2.0".url = "github:haskell/haskell-language-server/2.0.0.0";
++    "hls-2.0".flake = false;
    };
 
    outputs = _: { };

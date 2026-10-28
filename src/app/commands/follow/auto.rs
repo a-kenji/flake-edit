@@ -201,6 +201,8 @@ pub fn run_batch(
 /// (see the pass ordering in [`run_impl`]). The other fields are derived
 /// once from the on-disk text and the lockfile and stay put.
 struct AnalysisCtx<'a> {
+    /// Lockfile entries. Replaced by [`with_promoted_subtrees`] once
+    /// [`emit_direct_promotions`] has run.
     nested_inputs: &'a [NestedInput],
     /// Top-level input names. Initialized from the parsed `flake.nix` and
     /// extended in-place between [`emit_direct_promotions`] and the
@@ -258,6 +260,9 @@ impl FollowPlan {
 struct Promotion {
     name: Segment,
     url: String,
+    flake: bool,
+    /// The group member whose source the new input copies.
+    source: AttrPath,
 }
 
 /// What [`apply_plan_text`] committed to the working text.
@@ -401,6 +406,7 @@ fn build_plan(
     let mut graph_for_discovery = graph.clone();
     graph_for_discovery.drop_edges_with_sources(&to_unfollow);
 
+    let nested_with_promoted: Vec<NestedInput>;
     let mut ax = AnalysisCtx {
         nested_inputs,
         top_level_inputs,
@@ -430,6 +436,8 @@ fn build_plan(
             ax.top_level_inputs
                 .insert(promotion.name.as_str().to_string());
         }
+        nested_with_promoted = with_promoted_subtrees(nested_inputs, &plan.toplevel_adds);
+        ax.nested_inputs = &nested_with_promoted;
 
         let transitive_groups = collect_transitive_groups(&ax, &plan);
         emit_transitive_promotions(&ax, transitive_groups, &mut plan);
@@ -438,6 +446,7 @@ fn build_plan(
     collect_direct_candidates(&ax, &mut plan);
 
     scrub_redundant(&graph_for_discovery, &mut plan);
+    drop_overrides_under_redirects(&graph_for_discovery, &mut plan);
 
     if !plan.has_pending() {
         return None;
@@ -769,11 +778,11 @@ fn resolve_transitive_candidate(
 /// When several parents share the same dependency (e.g. `treefmt.nixpkgs`
 /// and `treefmt-nix.nixpkgs`), one can be promoted to top-level and the
 /// others follow it.
-fn collect_direct_groups(
-    ax: &AnalysisCtx<'_>,
+fn collect_direct_groups<'a>(
+    ax: &AnalysisCtx<'a>,
     plan: &FollowPlan,
-) -> HashMap<String, Vec<(AttrPath, Option<String>)>> {
-    let mut groups: HashMap<String, Vec<(AttrPath, Option<String>)>> = HashMap::new();
+) -> HashMap<String, Vec<&'a NestedInput>> {
+    let mut groups: HashMap<String, Vec<&'a NestedInput>> = HashMap::new();
 
     for nested in ax.nested_inputs.iter() {
         if !within_depth(&nested.path, ax.max_depth) {
@@ -808,10 +817,7 @@ fn collect_direct_groups(
             continue;
         }
 
-        groups
-            .entry(canonical_name)
-            .or_default()
-            .push((nested.path.clone(), nested.url.clone()));
+        groups.entry(canonical_name).or_default().push(nested);
     }
 
     groups
@@ -878,7 +884,7 @@ fn emit_transitive_promotions(
 fn emit_direct_promotions(
     ax: &AnalysisCtx<'_>,
     source_text: &str,
-    direct_groups: HashMap<String, Vec<(AttrPath, Option<String>)>>,
+    direct_groups: HashMap<String, Vec<&NestedInput>>,
     plan: &mut FollowPlan,
 ) {
     // Probes only differ in which `Change` they apply, not in the input
@@ -892,16 +898,13 @@ fn emit_direct_promotions(
     let mut direct_groups_sorted: Vec<_> = direct_groups.into_iter().collect();
     direct_groups_sorted.sort_by(|a, b| a.0.cmp(&b.0));
     for (canonical_name, mut entries) in direct_groups_sorted {
-        entries.sort_by(|a, b| a.0.cmp(&b.0));
-        let Some((url, target_attr)) =
-            decide_direct_promotion(ax, &probe_syntax, &canonical_name, &entries)
+        entries.sort_by(|a, b| a.path.cmp(&b.path));
+        let Some(promotion) = decide_direct_promotion(ax, &probe_syntax, &canonical_name, &entries)
         else {
             continue;
         };
-        plan.toplevel_adds.push(Promotion {
-            name: target_attr.first().clone(),
-            url,
-        });
+        let target_attr = AttrPath::new(promotion.name.clone());
+        plan.toplevel_adds.push(promotion);
         record_direct_promotion_entries(plan, &target_attr, &canonical_name, &entries);
     }
 }
@@ -914,14 +917,17 @@ fn decide_direct_promotion(
     ax: &AnalysisCtx<'_>,
     probe_syntax: &rnix::SyntaxNode,
     canonical_name: &str,
-    entries: &[(AttrPath, Option<String>)],
-) -> Option<(String, AttrPath)> {
+    entries: &[&NestedInput],
+) -> Option<Promotion> {
     if entries.len() < ax.transitive_min {
         return None;
     }
-    let url = entries.iter().find_map(|(_, u)| u.clone())?;
-    let target_attr = match Segment::from_unquoted(canonical_name.to_string()) {
-        Ok(seg) => AttrPath::new(seg),
+    let (source, url) = entries
+        .iter()
+        .filter(|n| n.path.last().as_str() == canonical_name)
+        .find_map(|n| n.url.as_ref().map(|url| (*n, url)))?;
+    let name = match Segment::from_unquoted(canonical_name.to_string()) {
+        Ok(seg) => seg,
         Err(e) => {
             tracing::warn!(
                 "Skipping direct-reference promotion for `{canonical_name}`: invalid input name: {e}"
@@ -929,9 +935,10 @@ fn decide_direct_promotion(
             return None;
         }
     };
-    let can_follow = entries.iter().any(|(path, _)| {
+    let target_attr = AttrPath::new(name.clone());
+    let can_follow = entries.iter().any(|n| {
         let change = Change::Follows {
-            input: ChangeId::new(path.clone()),
+            input: ChangeId::new(n.path.clone()),
             target: target_attr.clone(),
         };
         let mut fe = FlakeEdit::from_syntax(probe_syntax.clone());
@@ -943,7 +950,12 @@ fn decide_direct_promotion(
     if !can_follow {
         return None;
     }
-    Some((url, target_attr))
+    Some(Promotion {
+        name,
+        url: url.clone(),
+        flake: source.flake,
+        source: source.path.clone(),
+    })
 }
 
 /// A descendant whose ancestor is also in the group is rewritten by
@@ -954,10 +966,10 @@ fn record_direct_promotion_entries(
     plan: &mut FollowPlan,
     target_attr: &AttrPath,
     canonical_name: &str,
-    entries: &[(AttrPath, Option<String>)],
+    entries: &[&NestedInput],
 ) {
-    let entry_paths: HashSet<AttrPath> = entries.iter().map(|(p, _)| p.clone()).collect();
-    for (path, _) in entries {
+    let entry_paths: HashSet<&AttrPath> = entries.iter().map(|n| &n.path).collect();
+    for path in entries.iter().map(|n| &n.path) {
         let mut covered_by_ancestor = false;
         let mut anc = path.parent();
         while let Some(a) = anc.clone() {
@@ -1021,6 +1033,53 @@ fn scrub_redundant(graph: &FollowsGraph, plan: &mut FollowPlan) {
     }
     let mut keep_iter = keep.into_iter();
     plan.to_follow.retain(|_| keep_iter.next().unwrap_or(true));
+}
+
+/// `nested_inputs` plus the lock entries each promoted input will have
+/// once `nix flake lock` runs.
+fn with_promoted_subtrees(
+    nested_inputs: &[NestedInput],
+    promotions: &[Promotion],
+) -> Vec<NestedInput> {
+    let mut out = nested_inputs.to_vec();
+    for promotion in promotions {
+        let depth = promotion.source.len();
+        for nested in nested_inputs {
+            if nested.follows.is_some()
+                || nested.path.len() <= depth
+                || !promotion.source.is_prefix_of(&nested.path)
+            {
+                continue;
+            }
+            let mut path = AttrPath::new(promotion.name.clone());
+            for seg in &nested.path.segments()[depth..] {
+                path.push(seg.clone());
+            }
+            out.push(NestedInput {
+                path,
+                follows: None,
+                url: nested.url.clone(),
+                flake: nested.flake,
+            });
+        }
+    }
+    out
+}
+
+/// Drop planned follows under an input that itself follows another input.
+fn drop_overrides_under_redirects(graph: &FollowsGraph, plan: &mut FollowPlan) {
+    let redirected: HashSet<AttrPath> = plan.to_follow.iter().map(|(s, _)| s.clone()).collect();
+    plan.to_follow.retain(|(source, target)| {
+        let mut anc = source.parent();
+        while let Some(a) = anc.filter(|a| a.len() >= 2) {
+            if redirected.contains(&a) || !graph.outgoing(&a).is_empty() {
+                tracing::debug!("Dropping {source} -> {target}: {a} follows another input");
+                return false;
+            }
+            anc = a.parent();
+        }
+        true
+    });
 }
 
 /// Pairing `current_text` with its `ParsedSource` lets each iteration
@@ -1157,11 +1216,17 @@ fn apply_toplevel_adds(
     state: &mut PlanState,
     lock_graph_ref: Option<&FollowsGraph>,
 ) {
-    for Promotion { name: id, url } in &plan.toplevel_adds {
+    for Promotion {
+        name: id,
+        url,
+        flake,
+        ..
+    } in &plan.toplevel_adds
+    {
         let change = Change::Add {
             id: Some(ChangeId::new(AttrPath::new(id.clone()))),
             uri: Some(url.clone()),
-            flake: true,
+            flake: *flake,
         };
         match state.try_apply_one(change, lock_graph_ref) {
             StepOutcome::Accepted { .. } => {}
@@ -1818,6 +1883,7 @@ mod tests {
             path: ap(path),
             follows: follows.map(ap),
             url: url.map(ToOwned::to_owned),
+            flake: true,
         }
     }
 
@@ -1948,10 +2014,11 @@ mod tests {
 
     #[test]
     fn record_direct_promotion_entries_pushes_orphan_paths() {
-        let entries: Vec<(AttrPath, Option<String>)> = vec![
-            (ap("crane.flake-utils"), None),
-            (ap("treefmt.flake-utils"), None),
+        let nested = [
+            nested_input("crane.flake-utils", None, None),
+            nested_input("treefmt.flake-utils", None, None),
         ];
+        let entries: Vec<&NestedInput> = nested.iter().collect();
         let target = ap("flake-utils");
         let mut plan = FollowPlan::default();
 
@@ -1970,10 +2037,11 @@ mod tests {
 
     #[test]
     fn record_direct_promotion_entries_skips_descendants_covered_by_ancestor() {
-        let entries: Vec<(AttrPath, Option<String>)> = vec![
-            (ap("crane.flake-utils"), None),
-            (ap("crane.flake-utils.nested"), None),
+        let nested = [
+            nested_input("crane.flake-utils", None, None),
+            nested_input("crane.flake-utils.nested", None, None),
         ];
+        let entries: Vec<&NestedInput> = nested.iter().collect();
         let target = ap("flake-utils");
         let mut plan = FollowPlan::default();
 
@@ -2028,6 +2096,8 @@ mod tests {
             toplevel_adds: vec![Promotion {
                 name: seg("flake-utils"),
                 url: "github:numtide/flake-utils".to_string(),
+                flake: true,
+                source: ap("crane.flake-utils"),
             }],
             ..FollowPlan::default()
         };
@@ -2201,5 +2271,75 @@ mod tests {
             state.current_text, original,
             "state must be untouched on a non-Accepted outcome",
         );
+    }
+
+    #[test]
+    fn alias_only_group_is_not_promoted() {
+        // Both members are `nixpkgs-lib`, which the default aliases fold
+        // into a `nixpkgs` group. Neither is nixpkgs, so there is no
+        // source to promote a top-level nixpkgs from.
+        let flake = r#"{
+  inputs = {
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nix-colors.url = "github:misterio77/nix-colors";
+  };
+  outputs = _: { };
+}
+"#;
+        let lock = r#"{
+  "nodes": {
+    "flake-parts_3": {
+      "inputs": { "nixpkgs-lib": "nixpkgs-lib_2" },
+      "locked": { "lastModified": 1790898470, "narHash": "sha256-zTwuwezD0w3hpga6a6P8emidzAZFyWqlNeRBlpWOOl8=", "owner": "hercules-ci", "repo": "flake-parts", "rev": "024633cd702b10285db5cb19b40ad48d2399ba60", "type": "github" },
+      "original": { "owner": "hercules-ci", "repo": "flake-parts", "type": "github" }
+    },
+    "nix-colors": {
+      "inputs": { "nixpkgs-lib": "nixpkgs-lib_3" },
+      "locked": { "lastModified": 1707825078, "narHash": "sha256-hTfge2J2W+42SZ7VHXkf4kjU+qzFqPeC9k66jAUBMHk=", "owner": "misterio77", "repo": "nix-colors", "rev": "b01f024090d2c4fc3152cd0cf12027a7b8453ba1", "type": "github" },
+      "original": { "owner": "misterio77", "repo": "nix-colors", "type": "github" }
+    },
+    "nixpkgs-lib_2": {
+      "locked": { "lastModified": 1790477367, "narHash": "sha256-oujbxmVKDhci2E4EM3KyAbRUgp5/IsCoiA/LfEF7OOk=", "owner": "nix-community", "repo": "nixpkgs.lib", "rev": "f7cd230690d9fc982d06129f9189b101fddcfa3b", "type": "github" },
+      "original": { "owner": "nix-community", "repo": "nixpkgs.lib", "type": "github" }
+    },
+    "nixpkgs-lib_3": {
+      "locked": { "lastModified": 1697935651, "narHash": "sha256-qOfWjQ2JQSQL15KLh6D7xQhx0qgZlYZTYlcEiRuAMMw=", "owner": "nix-community", "repo": "nixpkgs.lib", "rev": "e1e11fdbb01113d85c7f41cada9d2847660e3902", "type": "github" },
+      "original": { "owner": "nix-community", "repo": "nixpkgs.lib", "type": "github" }
+    },
+    "root": {
+      "inputs": { "flake-parts": "flake-parts_3", "nix-colors": "nix-colors" }
+    }
+  },
+  "root": "root",
+  "version": 7
+}"#;
+        let config = FollowConfig {
+            transitive_min: 2,
+            ..FollowConfig::default()
+        };
+
+        let out = run_in_memory(flake, lock, &config).expect("run_in_memory");
+
+        assert_eq!(out, None, "an alias-only group must not mint an input");
+    }
+
+    #[test]
+    fn drop_overrides_under_redirects_drops_paths_under_declared_follows() {
+        let inputs = make_input_map(vec![input_with_follows(
+            "a",
+            vec![(ap("mid"), Some(ap("mid")))],
+        )]);
+        let graph = FollowsGraph::from_declared(&inputs);
+        let mut plan = FollowPlan {
+            to_follow: vec![
+                (ap("a.mid.nixpkgs"), ap("nixpkgs")),
+                (ap("b.nixpkgs"), ap("nixpkgs")),
+            ],
+            ..FollowPlan::default()
+        };
+
+        drop_overrides_under_redirects(&graph, &mut plan);
+
+        assert_eq!(plan.to_follow, vec![(ap("b.nixpkgs"), ap("nixpkgs"))]);
     }
 }

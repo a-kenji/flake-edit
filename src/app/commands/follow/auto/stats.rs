@@ -226,6 +226,7 @@ mod tests {
             path: ap(path),
             follows: follows.map(ap),
             url: None,
+            flake: true,
         }
     }
 

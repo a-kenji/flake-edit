@@ -20,7 +20,7 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -5,7 +5,10 @@
+@@ -5,7 +5,11 @@
      nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
      fenix.url = "github:nix-community/fenix";
      fenix.inputs.nixpkgs.follows = "nixpkgs";
@@ -28,10 +28,11 @@ exit_code: 0
      fenix2.url = "github:nix-community/fenix-alt";
 +    fenix2.inputs.rust-analyzer-src.follows = "rust-analyzer-src";
 +    rust-analyzer-src.url = "github:rust-lang/rust-analyzer/nightly";
++    rust-analyzer-src.flake = false;
    };
 
    outputs =
-@@ -14,6 +17,7 @@
+@@ -14,6 +18,7 @@
        nixpkgs,
        fenix,
        fenix2,
