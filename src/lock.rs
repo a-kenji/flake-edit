@@ -479,6 +479,15 @@ impl FlakeLock {
         &self.root
     }
 
+    /// Names of the root node's inputs. Unordered.
+    pub fn top_level_names(&self) -> impl Iterator<Item = &str> {
+        self.nodes
+            .get(&self.root)
+            .and_then(|root| root.inputs.as_ref())
+            .into_iter()
+            .flat_map(|inputs| inputs.keys().map(String::as_str))
+    }
+
     /// Resolve an [`AttrPath`] to the node key it ultimately points at,
     /// walking the lock tree from `root`.
     ///

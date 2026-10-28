@@ -672,6 +672,7 @@ fn add_follow_accepts_two_segment_dot_path_unchanged() {
 #[case("follow_slash_syntax")] // slash-form `follows = "parent/child"` is the alias of `parent.child`
 #[case("nested_depths_with_stale")]
 // pins the default-unlimited contract: adds depth-2 and depth-3 follows, removes a stale top-level follow
+#[case("stale_follows_owner_unlocked")] // sops-nix has no node in the lock: its follows is kept
 #[case("let_wrapped")] // single input inside a `let ... in` body: follow must descend into the wrapper and report a clean no-op
 fn test_follow(#[case] fixture: &str) {
     let mut settings = insta::Settings::clone_current();

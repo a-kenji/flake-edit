@@ -68,10 +68,11 @@ pub struct Cycle {
 #[derive(Debug, Clone)]
 pub struct FollowsGraph {
     edges: HashMap<AttrPath, Vec<Edge>>,
-    /// Every nested-input path observed in the lockfile, including those
-    /// without a follows. Populated by [`Self::from_lock`] and
-    /// [`Self::from_flake`]. Consulted by [`Self::stale_edges`] to ask
-    /// whether a declared edge's source path is still represented.
+    /// Every input path observed in the lockfile: the root's top-level
+    /// inputs plus every nested-input path, with or without a follows.
+    /// Built by [`Self::from_lock`] and [`Self::from_flake`]. Read by
+    /// [`Self::stale_edges`] to ask whether a declared edge's owner is
+    /// locked and its source path is still represented.
     resolved_universe: HashSet<AttrPath>,
     /// Source paths declared as `follows = ""` in `flake.nix`. These do
     /// not produce edges (no resolved target), but they still encode user
@@ -111,24 +112,31 @@ impl FollowsGraph {
     /// Build a graph from the lockfile alone.
     ///
     /// Walks `flake.lock` from the root once via [`FlakeLock::nested_inputs`]
-    /// and defers to [`Self::from_nested_inputs`].
+    /// and defers to [`Self::from_lock_walk`].
     pub fn from_lock(lock: &FlakeLock) -> Self {
-        Self::from_nested_inputs(&lock.nested_inputs())
+        Self::from_lock_walk(lock, &lock.nested_inputs())
     }
 
-    /// Build the lock graph from an already-computed nested-input set.
+    /// Build the lock graph from `lock` and its already-computed
+    /// nested-input walk.
     ///
     /// Emits one [`EdgeOrigin::Resolved`] edge per `inputs.X = ["a", "b", ...]`
-    /// follows override, bounded by [`DEFAULT_MAX_DEPTH`]. Every nested-input
-    /// path is recorded in `resolved_universe`, with or without a follows.
+    /// follows override, bounded by [`DEFAULT_MAX_DEPTH`]. Every top-level
+    /// input and every nested-input path is recorded in `resolved_universe`,
+    /// with or without a follows.
     ///
     /// Takes the precomputed slice so a single [`FlakeLock::nested_inputs`]
     /// walk can feed every consumer in one invocation.
-    pub fn from_nested_inputs(nested_inputs: &[NestedInput]) -> Self {
+    pub fn from_lock_walk(lock: &FlakeLock, nested_inputs: &[NestedInput]) -> Self {
         let mut graph = FollowsGraph {
             max_depth: DEFAULT_MAX_DEPTH,
             ..FollowsGraph::default()
         };
+        for name in lock.top_level_names() {
+            if let Ok(seg) = Segment::from_unquoted(name) {
+                graph.resolved_universe.insert(AttrPath::new(seg));
+            }
+        }
         for nested in nested_inputs {
             graph.resolved_universe.insert(nested.path.clone());
             if let Some(target) = nested.follows.clone() {
@@ -144,8 +152,8 @@ impl FollowsGraph {
 
     /// Build the merged graph: declared edges first, then resolved edges
     /// from the lockfile that no existing edge already covers at the same
-    /// `(source, follows)`. Every nested-input path observed in the
-    /// lockfile is recorded in `resolved_universe`.
+    /// `(source, follows)`. Every input path observed in the lockfile is
+    /// recorded in `resolved_universe`.
     ///
     /// Dedup is by `(source, follows)`, not by `source` alone: a declared
     /// edge and its resolved sibling can share a source but point at
@@ -155,25 +163,7 @@ impl FollowsGraph {
     /// [`Self::lock_routes_to`] needs the resolved sibling to survive when
     /// the declared edge is excluded as a candidate.
     pub fn from_flake(inputs: &InputMap, lock: &FlakeLock) -> Self {
-        let mut graph = FollowsGraph::from_declared(inputs);
-        for nested in lock.nested_inputs() {
-            graph.resolved_universe.insert(nested.path.clone());
-            if let Some(target) = nested.follows {
-                let already = graph
-                    .outgoing(&nested.path)
-                    .iter()
-                    .any(|e| e.follows == target);
-                if already {
-                    continue;
-                }
-                graph.insert_edge(Edge {
-                    source: nested.path.clone(),
-                    follows: target,
-                    origin: EdgeOrigin::Resolved,
-                });
-            }
-        }
-        graph
+        Self::from_declared_and_lock_graph(inputs, &Self::from_lock(lock))
     }
 
     /// Variant of [`Self::from_flake`] that takes an already-built lock graph
@@ -273,28 +263,39 @@ impl FollowsGraph {
         found
     }
 
-    /// Declared edges whose source path no longer appears in the lockfile.
-    /// A follows declaration whose nested input is gone from `flake.lock`
-    /// should be dropped on the next auto-follow pass. Lex-sorted by source.
+    /// Whether the lockfile lacks `source`: the top-level input owning it
+    /// is locked, yet the lock has no input at `source`. An owner missing
+    /// from the lock means the lock is behind `flake.nix` (input added,
+    /// `nix flake lock` not run yet).
+    fn lock_lacks(&self, source: &AttrPath) -> bool {
+        !self.resolved_universe.contains(source)
+            && self
+                .resolved_universe
+                .contains(&AttrPath::new(source.first().clone()))
+    }
+
+    /// Declared edges whose source path the lockfile lacks (see
+    /// [`Self::lock_lacks`]). A follows declaration whose nested input is
+    /// gone from `flake.lock` should be dropped on the next auto-follow
+    /// pass.
     pub fn stale_edges(&self) -> Vec<&Edge> {
         let mut declared: Vec<&Edge> = self
             .declared_edges()
-            .filter(|e| !self.resolved_universe.contains(&e.source))
+            .filter(|e| self.lock_lacks(&e.source))
             .collect();
         declared.sort_by(|a, b| a.source.cmp(&b.source));
         declared
     }
 
     /// Sibling of [`Self::stale_edges`] for [`Self::declared_nulled`]:
-    /// nulled (`follows = ""`) declarations whose source is absent from
-    /// `resolved_universe`. A nulled declaration backed by an
-    /// `inputs.X = []` lock entry stays in `resolved_universe` and is not
-    /// reported. Lex-sorted.
+    /// nulled (`follows = ""`) declarations whose source the lockfile
+    /// lacks. A nulled declaration backed by an `inputs.X = []` lock entry
+    /// stays in `resolved_universe` and is not reported.
     pub fn stale_nulled_sources(&self) -> Vec<&AttrPath> {
         let mut sources: Vec<&AttrPath> = self
             .declared_nulled_sources
             .iter()
-            .filter(|p| !self.resolved_universe.contains(*p))
+            .filter(|p| self.lock_lacks(p))
             .collect();
         sources.sort();
         sources
@@ -794,6 +795,39 @@ mod tests {
         let stale: Vec<&Edge> = g.stale_edges();
         assert_eq!(stale.len(), 1);
         assert_eq!(stale[0].source.to_string(), "home-manager.nixpkgs");
+    }
+
+    /// `sops-nix` is declared in `flake.nix` but has no node in the lock.
+    /// Its follows are not stale, at every depth.
+    #[test]
+    fn stale_edges_quiet_when_owner_not_locked() {
+        let mut input = declared_input("sops-nix", &[("nixpkgs", "nixpkgs")]);
+        input.follows.push(Follows::Indirect {
+            path: path("inner.nixpkgs"),
+            target: Some(path("nixpkgs")),
+        });
+        input.follows.push(Follows::Indirect {
+            path: AttrPath::new(seg("flake-compat")),
+            target: None,
+        });
+        let inputs = make_inputs(vec![input]);
+        let lock_text = r#"{
+  "nodes": {
+    "nixpkgs": {
+      "locked": { "lastModified": 1, "narHash": "", "owner": "o", "repo": "r", "rev": "abc", "type": "github" },
+      "original": { "owner": "o", "repo": "r", "type": "github" }
+    },
+    "root": {
+      "inputs": { "nixpkgs": "nixpkgs" }
+    }
+  },
+  "root": "root",
+  "version": 7
+}"#;
+        let lock = FlakeLock::read_from_str(lock_text).unwrap();
+        let g = FollowsGraph::from_flake(&inputs, &lock);
+        assert!(g.stale_edges().is_empty(), "got {:?}", g.stale_edges());
+        assert!(g.stale_nulled_sources().is_empty());
     }
 
     #[test]

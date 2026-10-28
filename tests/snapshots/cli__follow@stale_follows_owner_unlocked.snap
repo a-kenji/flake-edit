@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/stale_follows_owner_unlocked.flake.nix"
+    - "--lock-file"
+    - "[FIXTURES]/stale_follows_owner_unlocked.flake.lock"
+    - "--diff"
+    - follow
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -2,6 +2,7 @@
+   inputs = {
+     nixpkgs.url = "github:NixOS/nixpkgs";
+     b.url = "github:o/b";
++    b.inputs.nixpkgs.follows = "nixpkgs";
+     sops-nix = {
+       url = "github:Mic92/sops-nix";
+       inputs.nixpkgs.follows = "nixpkgs";
+
+----- stderr -----
