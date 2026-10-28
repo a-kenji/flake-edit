@@ -1,5 +1,4 @@
 use crate::follows::{AttrPath, AttrPathParseError, Segment};
-use crate::walk::Context;
 
 #[derive(Debug, Default, Clone, serde::Serialize)]
 pub enum Change {
@@ -88,32 +87,6 @@ impl ChangeId {
     /// Second segment, if the path has more than one segment.
     pub fn follows(&self) -> Option<&Segment> {
         self.0.child()
-    }
-
-    fn matches(&self, input: &Segment, follows: Option<&Segment>) -> bool {
-        if self.input() != input {
-            return false;
-        }
-        match (self.follows(), follows) {
-            (Some(self_follows), Some(f)) => self_follows == f,
-            (Some(_), None) => false,
-            (None, _) => true,
-        }
-    }
-
-    /// Match against an explicit `(input, follows)` pair.
-    pub fn matches_with_follows(&self, input: &Segment, follows: Option<&Segment>) -> bool {
-        self.matches(input, follows)
-    }
-
-    /// Match against the surrounding walker [`Context`], which carries the
-    /// enclosing top-level input.
-    pub fn matches_with_ctx(&self, follows: &Segment, ctx: Option<Context>) -> bool {
-        let ctx_input = ctx.and_then(|c| c.first().cloned());
-        match ctx_input {
-            Some(input) => self.matches(&input, Some(follows)),
-            None => self.input() == follows,
-        }
     }
 }
 

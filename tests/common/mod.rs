@@ -119,6 +119,15 @@ pub(crate) const FIXTURES: &[&str] = &[
     // a depth-2 follows id shares its first two segments with a depth-1
     // follows inside an input's own `inputs = { ... }` attrset
     "remove_shared_prefix_inputs_attrset",
+    // removing X must leave another input's nested follows alone when only
+    // the nested slot is named X
+    "remove_same_named_nested_follows",
+    // a flat nested url override belongs to its owner and is removable
+    // by its full path
+    "remove_nested_url_override",
+    // an input declared only through a nested follows must stay declared
+    // when that follows is removed
+    "remove_follows_only_input",
     // a stale depth-2 follows shares its first two segments with a
     // `flake = false` on the middle input
     "stale_follows_shared_prefix_flake_false",

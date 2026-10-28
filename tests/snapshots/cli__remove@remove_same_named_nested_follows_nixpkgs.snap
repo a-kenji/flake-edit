@@ -1,0 +1,28 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/remove_same_named_nested_follows.flake.nix"
+    - "--diff"
+    - rm
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -2,7 +2,6 @@
+   description = "Input crane points its own nested `nixpkgs` slot at `nixpkgs-stable`, while a separate top-level `nixpkgs` exists in the same flake.";
+
+   inputs = {
+-    nixpkgs.url = "github:nixos/nixpkgs";
+     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.05";
+     crane.url = "github:ipetkov/crane";
+     crane.inputs.nixpkgs.follows = "nixpkgs-stable";
+
+----- stderr -----

@@ -54,6 +54,9 @@ pub enum Error {
         "`add-follow` accepts only depth-1 paths of the form `parent.child`; got '{path}' ({segments} segments)"
     )]
     AddFollowDepthLimit { path: String, segments: usize },
+    /// A removal that doesn't converge. This is a flake-edit bug.
+    #[error("removing {} did not converge after {passes} passes", ids.join(", "))]
+    RemoveDidNotConverge { ids: Vec<String>, passes: usize },
     /// Pre-edit validation found one or more fatal issues in `flake.nix`.
     #[error("validation failed in flake.nix ({} issue(s))", .0.len())]
     Validation(Vec<ValidationError>),
