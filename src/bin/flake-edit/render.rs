@@ -19,33 +19,8 @@ pub(crate) fn report(err: &app::Error) {
 
     let _ = write_error_line(&mut stderr, &style, &err.to_string());
 
-    if let Some(bullets) = err.validation_bullets() {
-        for line in bullets {
-            let _ = writeln!(stderr, "  - {line}");
-        }
-    }
-
-    // Library validation aggregates land here wrapped as `Error::Flake`;
-    // `validation_bullets()` only matches the application-side variant, so
-    // pull bullets off the inner library error too.
-    if let app::Error::Flake(inner) = err
-        && let Some(bullets) = inner.bullets()
-    {
-        for line in bullets {
-            let _ = writeln!(stderr, "  - {line}");
-        }
-    }
-
-    if let Some(bullets) = err.batch_bullets() {
-        for line in bullets {
-            let _ = writeln!(stderr, "  - {line}");
-        }
-    }
-
-    if let Some(bullets) = err.candidate_bullets() {
-        for line in bullets {
-            let _ = writeln!(stderr, "  - {line}");
-        }
+    for line in err.bullets().into_iter().flatten() {
+        let _ = writeln!(stderr, "  - {line}");
     }
 
     write_caused_by_chain(&mut stderr, &style, err);

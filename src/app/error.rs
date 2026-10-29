@@ -230,11 +230,9 @@ pub struct RefCandidate {
 }
 
 impl Error {
-    /// Per-failure rendering of a `Batch` aggregate. Each item joins the
-    /// path with the error and its full source chain so a reader sees the
-    /// underlying cause without the renderer descending per-bullet.
-    pub fn batch_bullets(&self) -> Option<Vec<String>> {
+    pub fn bullets(&self) -> Option<Vec<String>> {
         match self {
+            Self::Flake(inner) => inner.bullets(),
             Self::Batch { failures } => Some(
                 failures
                     .iter()
@@ -247,23 +245,7 @@ impl Error {
                     })
                     .collect(),
             ),
-            _ => None,
-        }
-    }
-
-    /// Per-error rendering of a `ValidationAfterEdit` aggregate. Returns
-    /// `None` for non-aggregate variants.
-    pub fn validation_bullets(&self) -> Option<Vec<String>> {
-        match self {
             Self::ValidationAfterEdit(errs) => Some(errs.iter().map(|e| e.to_string()).collect()),
-            _ => None,
-        }
-    }
-
-    /// Candidate listings for the ambiguous `toggle` errors, one bullet per
-    /// candidate. Returns `None` for other variants.
-    pub fn candidate_bullets(&self) -> Option<Vec<String>> {
-        match self {
             Self::MultipleToggleableInputs { candidates } => Some(
                 candidates
                     .iter()
