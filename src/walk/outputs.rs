@@ -210,7 +210,7 @@ fn add_output_arg(pattern: &SyntaxNode, name: &str, style: &PatternStyle) -> Syn
 
     let mut green = pattern
         .green()
-        .insert_child(last_node, addition.green().into());
+        .insert_child(last_node, addition.green().to_owned().into());
     // Insert whitespace here only for trailing-comma style without
     // leading commas. Other formats already include spacing, and adding
     // more would produce `x , y`.
@@ -220,7 +220,7 @@ fn add_output_arg(pattern: &SyntaxNode, name: &str, style: &PatternStyle) -> Syn
         && let SyntaxKind::TOKEN_WHITESPACE = prev.kind()
     {
         let whitespace = parse_node(prev.as_token().unwrap().green().text());
-        green = green.insert_child(last_node, whitespace.green().into());
+        green = green.insert_child(last_node, whitespace.green().to_owned().into());
     }
     SyntaxNode::new_root(green)
 }
@@ -302,7 +302,7 @@ fn remove_output_arg(pattern: &SyntaxNode, name: &str) -> Option<SyntaxNode> {
             }
         }
         let ws = parse_node(" ");
-        green = green.insert_child(idx, ws.green().into());
+        green = green.insert_child(idx, ws.green().to_owned().into());
     } else {
         green = green.remove_child(idx);
     }
@@ -367,7 +367,7 @@ pub(crate) fn change_outputs(
 
         let changed_outputs_lambda = outputs_lambda
             .green()
-            .replace_child(pattern.index(), new_pattern.green().into());
+            .replace_child(pattern.index(), new_pattern.green().to_owned().into());
         let changed_toplevel = if next_sibling.kind() == SyntaxKind::NODE_PAREN {
             let changed_paren = next_sibling
                 .green()

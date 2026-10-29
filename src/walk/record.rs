@@ -100,10 +100,11 @@ fn nested_attribute(rest: &[Segment]) -> Option<(AttrPath, &Segment)> {
     if chain.is_empty() || chain.len() % 2 != 0 {
         return None;
     }
-    let mut names = chain.chunks_exact(2).map(|pair| match pair {
-        [keyword, name] if keyword.as_str() == "inputs" => Some(name.clone()),
-        _ => None,
-    });
+    let mut names = chain
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|[keyword, name]| (keyword.as_str() == "inputs").then(|| name.clone()));
     let mut nested = AttrPath::new(names.next()??);
     for name in names {
         nested.push(name?);

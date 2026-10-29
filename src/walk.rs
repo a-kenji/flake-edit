@@ -83,12 +83,12 @@ fn insert_flat_follows_after(
 
     let mut green = attr_set
         .green()
-        .insert_child(insert_index, follows_node.green().into());
+        .insert_child(insert_index, follows_node.green().to_owned().into());
 
     if let Some(whitespace) = get_sibling_whitespace(ref_child) {
         let ws_str = whitespace.to_string();
         let ws_node = parse_node(last_line_with_newline(&ws_str));
-        green = green.insert_child(insert_index, ws_node.green().into());
+        green = green.insert_child(insert_index, ws_node.green().to_owned().into());
     }
 
     SyntaxNode::new_root(attr_set.replace_with(green))
@@ -252,7 +252,7 @@ impl<'a> Walker {
             return Ok(match found {
                 None => attr_set.ancestors().last(),
                 Some(new_attr_set) => Some(SyntaxNode::new_root(
-                    attr_set.replace_with(new_attr_set.green().into_owned()),
+                    attr_set.replace_with(new_attr_set.green().to_owned()),
                 )),
             });
         }
@@ -317,17 +317,17 @@ impl<'a> Walker {
 
             let mut green = block_attr_set
                 .green()
-                .insert_child(insert_index, follows_node.green().into());
+                .insert_child(insert_index, follows_node.green().to_owned().into());
 
             if let Some(whitespace) = get_sibling_whitespace(last_child) {
-                green = green.insert_child(insert_index, whitespace.green().into());
+                green = green.insert_child(insert_index, whitespace.green().to_owned().into());
             }
 
             let new_block = SyntaxNode::new_root(green);
             let new_toplevel = substitute_child(toplevel, block_attr_set.index(), &new_block);
             let green = attr_set
                 .green()
-                .replace_child(toplevel.index(), new_toplevel.green().into());
+                .replace_child(toplevel.index(), new_toplevel.green().to_owned().into());
             return Some(SyntaxNode::new_root(attr_set.replace_with(green)));
         }
 
@@ -350,7 +350,7 @@ impl<'a> Walker {
 
         let green = toplevel
             .green()
-            .replace_child(sibling.index(), replacement.green().into());
+            .replace_child(sibling.index(), replacement.green().to_owned().into());
         let green = toplevel.replace_with(green);
         Some(SyntaxNode::new_root(green))
     }
@@ -374,7 +374,7 @@ impl<'a> Walker {
         {
             let green = attr_set
                 .green()
-                .replace_child(toplevel.index(), redeclared.green().into());
+                .replace_child(toplevel.index(), redeclared.green().to_owned().into());
             return Some(SyntaxNode::new_root(attr_set.replace_with(green)));
         }
 
@@ -392,7 +392,7 @@ impl<'a> Walker {
         let sibling = child.next_sibling()?;
         let green = toplevel
             .green()
-            .replace_child(sibling.index(), replacement.green().into());
+            .replace_child(sibling.index(), replacement.green().to_owned().into());
         let green = toplevel.replace_with(green);
         Some(SyntaxNode::new_root(green))
     }
@@ -447,19 +447,19 @@ impl<'a> Walker {
 
         let mut green = attr_set
             .green()
-            .insert_child(insert_pos, addition.green().into());
+            .insert_child(insert_pos, addition.green().to_owned().into());
 
         if let Some(ref ws) = ws_node {
-            green = green.insert_child(insert_pos, ws.green().into());
+            green = green.insert_child(insert_pos, ws.green().to_owned().into());
         }
 
         // Append `inputs.<id>.flake = false;` when the new input opts out of flake mode.
         if !flake {
             let no_flake = make_toplevel_flake_false_attr(id);
-            green = green.insert_child(toplevel.index() + 1, no_flake.green().into());
+            green = green.insert_child(toplevel.index() + 1, no_flake.green().to_owned().into());
 
             if let Some(ref ws) = ws_node {
-                green = green.insert_child(toplevel.index() + 1, ws.green().into());
+                green = green.insert_child(toplevel.index() + 1, ws.green().to_owned().into());
             }
         }
 

@@ -6,7 +6,7 @@ import argparse
 import json
 import logging
 import sys
-from typing import Sequence
+from collections.abc import Sequence
 
 from forge import _logging, api
 from forge.api import Auth, ForgeApiError, TokenAuth
