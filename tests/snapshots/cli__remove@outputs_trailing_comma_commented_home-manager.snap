@@ -1,0 +1,36 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/outputs_trailing_comma_commented.flake.nix"
+    - "--diff"
+    - rm
+    - home-manager
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -5,14 +5,9 @@
+     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
+
+     #nixos-cosmic.url = "github:lilyinstarlight/nixos-cosmic";
+-
+-    home-manager = {
+-      url = "github:nix-community/home-manager";
+-      inputs.nixpkgs.follows = "nixpkgs";
+-    };
+   };
+
+   outputs = inputs@{ self, nixpkgs,
+                      #nixos-cosmic,
+-                     home-manager, ... }: { };
++                     ... }: { };
+ }
+
+----- stderr -----

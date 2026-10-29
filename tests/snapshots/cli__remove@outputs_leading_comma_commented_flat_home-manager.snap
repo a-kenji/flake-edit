@@ -1,0 +1,40 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/outputs_leading_comma_commented_flat.flake.nix"
+    - "--diff"
+    - rm
+    - home-manager
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -3,9 +3,6 @@
+   inputs = {
+     nixpkgs-unstable.url = github:nixos/nixpkgs/nixpkgs-unstable;
+     # nixpkgs-darwin-stable.url = "github:NixOS/nixpkgs/nixpkgs-22.05-darwin";
+-
+-    home-manager.url = "github:nix-community/home-manager/master";
+-    home-manager.inputs.nixpkgs.follows = "nixpkgs-unstable";
+     # home-manager.inputs.nixpkgs.follows = "nixpkgs-stable";
+
+     nur.url = "github:nix-community/NUR";
+@@ -18,8 +15,7 @@
+     , # nixpkgs-stable,
+       nixpkgs-unstable
+     , # nixpkgs-darwin-stable,
+-      home-manager
+-    , nur
++      nur
+     , ...
+     }:
+     { };
+
+----- stderr -----

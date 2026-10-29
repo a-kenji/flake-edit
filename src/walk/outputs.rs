@@ -233,78 +233,68 @@ fn find_pat_entry_by_name(pattern: &SyntaxNode, name: &str) -> Option<SyntaxNode
         .find(|c| c.kind() == SyntaxKind::NODE_PAT_ENTRY && c.to_string() == name)
 }
 
-/// Remove the `NODE_PAT_ENTRY` whose text equals `name` from `pattern`,
-/// stripping the surrounding comma and whitespace so the result stays
-/// syntactically clean. Returns `None` if no matching entry exists.
+/// Remove the entry `name` and one adjacent comma from `pattern`, keeping every comment.
 fn remove_output_arg(pattern: &SyntaxNode, name: &str) -> Option<SyntaxNode> {
-    let child = find_pat_entry_by_name(pattern, name)?;
-    let mut green = pattern.green().remove_child(child.index());
+    use SyntaxKind::{TOKEN_COMMA, TOKEN_COMMENT, TOKEN_WHITESPACE};
 
-    let prev = child.prev_sibling_or_token();
-    let prev_is_ws = prev
-        .as_ref()
-        .map(|p| p.kind() == SyntaxKind::TOKEN_WHITESPACE)
-        .unwrap_or(false);
-    if !prev_is_ws {
-        // First entry, tight pattern `{self, ...}`: with no whitespace
-        // before us, the comma and whitespace that separated us from
-        // the next entry are still ahead and have to be cleared.
-        let idx = child.index();
-        while let Some(at_idx) = green.children().nth(idx) {
-            let raw = at_idx.kind().0;
-            if raw == SyntaxKind::TOKEN_COMMA as u16 || raw == SyntaxKind::TOKEN_WHITESPACE as u16 {
-                green = green.remove_child(idx);
-            } else {
-                break;
-            }
-        }
-        return Some(SyntaxNode::new_root(green));
-    }
-    let prev = prev.unwrap();
-    green = green.remove_child(prev.index());
+    let entry = find_pat_entry_by_name(pattern, name)?;
+    let kids: Vec<rnix::SyntaxElement> = pattern.children_with_tokens().collect();
+    let kind = |i: usize| kids[i].kind();
+    let is_trivia = |i: usize| matches!(kind(i), TOKEN_WHITESPACE | TOKEN_COMMENT);
+    let at = entry.index();
 
-    if let Some(before_ws) = prev.prev_sibling_or_token()
-        && before_ws.kind() == SyntaxKind::TOKEN_COMMA
+    let next_comma = (at + 1..kids.len())
+        .find(|&i| !is_trivia(i))
+        .filter(|&i| kind(i) == TOKEN_COMMA);
+    let prev_comma = (0..at)
+        .rev()
+        .find(|&i| !is_trivia(i))
+        .filter(|&i| kind(i) == TOKEN_COMMA);
+    let comment_after_prev_comma =
+        prev_comma.is_some_and(|p| (p + 1..at).any(|i| kind(i) == TOKEN_COMMENT));
+    let drop_next_comma =
+        next_comma.is_some() && (prev_comma.is_none() || comment_after_prev_comma);
+    let removed = match (drop_next_comma, prev_comma, next_comma) {
+        (true, _, Some(next)) => at..=next,
+        (false, Some(prev), _) => prev..=at,
+        _ => at..=at,
+    };
+
+    let mut keep: Vec<bool> = (0..kids.len())
+        .map(|i| {
+            !removed.contains(&i)
+                || kind(i) == TOKEN_COMMENT
+                || (kind(i) == TOKEN_WHITESPACE
+                    && (kind(i - 1) == TOKEN_COMMENT
+                        || kids.get(i + 1).is_some_and(|k| k.kind() == TOKEN_COMMENT)))
+        })
+        .collect();
+    let end = *removed.end();
+    let entry_is_tight = kind(at - 1) != TOKEN_WHITESPACE;
+    if drop_next_comma
+        && entry_is_tight
+        && end + 1 < kids.len()
+        && kind(end + 1) == TOKEN_WHITESPACE
     {
-        // Non-first entry: drop the preceding comma. In leading-comma
-        // style (`\n  , name`) the newline+indent ahead of the comma
-        // belongs to this entry too; without it the result keeps a
-        // stray blank line in place of the removed entry.
-        green = green.remove_child(prev.index() - 1);
-        if let Some(before_comma) = before_ws.prev_sibling_or_token()
-            && before_comma.kind() == SyntaxKind::TOKEN_WHITESPACE
-            && before_comma.as_token().unwrap().text().contains('\n')
-        {
-            green = green.remove_child(prev.index() - 2);
-        }
-        return Some(SyntaxNode::new_root(green));
+        keep[end + 1] = false;
     }
 
-    // First entry, spaced pattern (`{ self, ...}` or `{ self\n, ...}`):
-    // the comma sits with the *next* entry, not with us, so the cleanup
-    // happens forward of where the entry used to be.
-    let idx = prev.index();
-    let next_is_ws = green
-        .children()
-        .nth(idx)
-        .map(|c| c.kind().0 == SyntaxKind::TOKEN_WHITESPACE as u16)
-        .unwrap_or(false);
-    if next_is_ws {
-        // Leading-comma style: the next entry's separator is multi-char
-        // (`\n  ,`). Strip the run and put a single space back, otherwise
-        // the result starts with `{\n  , next` which is broken syntax.
-        while let Some(at_idx) = green.children().nth(idx) {
-            let raw = at_idx.kind().0;
-            if raw == SyntaxKind::TOKEN_WHITESPACE as u16 || raw == SyntaxKind::TOKEN_COMMA as u16 {
-                green = green.remove_child(idx);
-            } else {
-                break;
-            }
+    let kept: Vec<usize> = (0..kids.len()).filter(|&i| keep[i]).collect();
+    for (w, seam) in kept.windows(2).enumerate() {
+        let (earlier, later) = (seam[0], seam[1]);
+        if kind(earlier) != TOKEN_WHITESPACE || kind(later) != TOKEN_WHITESPACE {
+            continue;
         }
-        let ws = parse_node(" ");
-        green = green.insert_child(idx, ws.green().to_owned().into());
-    } else {
-        green = green.remove_child(idx);
+        let later_breaks_line = kids[later].to_string().contains('\n');
+        let later_is_entry_side = !drop_next_comma;
+        let earlier_ends_comment = w > 0 && kind(kept[w - 1]) == TOKEN_COMMENT;
+        let keep_later = later_breaks_line || (later_is_entry_side && !earlier_ends_comment);
+        keep[if keep_later { earlier } else { later }] = false;
+    }
+
+    let mut green = pattern.green().to_owned();
+    for i in (0..kids.len()).rev().filter(|&i| !keep[i]) {
+        green = green.remove_child(i);
     }
     Some(SyntaxNode::new_root(green))
 }
@@ -627,5 +617,36 @@ mod tests {
         let p = pattern_from("{ self\n, nixpkgs\n, flake-utils\n}: {}");
         let new_p = remove_output_arg(&p, "self").expect("entry must be found");
         assert_eq!(new_p.to_string(), "{ nixpkgs\n, flake-utils\n}");
+    }
+
+    #[rstest::rstest]
+    #[case::leading_comment_before(
+        "{ self\n, nixpkgs\n, # pinned elsewhere\n  home-manager\n, nur\n}: {}",
+        "{ self\n, nixpkgs\n, # pinned elsewhere\n  nur\n}"
+    )]
+    #[case::leading_comment_before_last(
+        "{ self\n, nixpkgs\n, # pinned elsewhere\n  home-manager\n}: {}",
+        "{ self\n, nixpkgs # pinned elsewhere\n}"
+    )]
+    #[case::leading_first_comment_after(
+        "{ home-manager # pinned elsewhere\n, nur\n}: {}",
+        "{ # pinned elsewhere\nnur\n}"
+    )]
+    #[case::trailing_comment_before_last(
+        "{\n  nixpkgs, # pinned elsewhere\n  home-manager\n}: {}",
+        "{\n  nixpkgs # pinned elsewhere\n}"
+    )]
+    #[case::trailing_comment_before_ellipsis(
+        "{ self, nixpkgs,\n  #nixos-cosmic,\n  home-manager, ... }: {}",
+        "{ self, nixpkgs,\n  #nixos-cosmic,\n  ... }"
+    )]
+    #[case::trailing_comment_own_line_before_last(
+        "{\n  nixpkgs,\n  # pinned elsewhere\n  home-manager\n}: {}",
+        "{\n  nixpkgs\n  # pinned elsewhere\n}"
+    )]
+    fn remove_output_arg_keeps_adjacent_comments(#[case] src: &str, #[case] expected: &str) {
+        let p = pattern_from(src);
+        let new_p = remove_output_arg(&p, "home-manager").expect("entry must be found");
+        assert_eq!(new_p.to_string(), expected);
     }
 }

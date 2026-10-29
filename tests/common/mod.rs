@@ -113,6 +113,10 @@ pub(crate) const FIXTURES: &[&str] = &[
     // removing X must leave the url of a sibling input alone when that
     // sibling carries an `inputs = { ... }` block with `X.follows = "X"`
     "remove_preserves_sibling_url",
+    // a line comment sits before the outputs formal that removing X drops
+    "outputs_leading_comma_commented_flat",
+    "outputs_leading_comma_commented_block",
+    "outputs_trailing_comma_commented",
     // removing X must also remove its flat depth-2+ follows declarations
     // and leave another input's depth-2 follows alone
     "remove_flat_depth_two_follows",
