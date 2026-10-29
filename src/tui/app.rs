@@ -665,14 +665,14 @@ impl App {
         let action = ConfirmAction::from_key(key);
         match action {
             ConfirmAction::Apply => {
-                if let WorkflowData::ConfirmOnly { action, .. } = &mut self.data {
+                if let WorkflowData::ConfirmOnly { action } = &mut self.data {
                     *action = Some(ConfirmResultAction::Apply);
                 }
                 UpdateResult::Done
             }
             ConfirmAction::Back => {
                 // For ConfirmOnly workflow, Back is a result, not a navigation
-                if let WorkflowData::ConfirmOnly { action, .. } = &mut self.data {
+                if let WorkflowData::ConfirmOnly { action } = &mut self.data {
                     *action = Some(ConfirmResultAction::Back);
                     UpdateResult::Done
                 } else {
@@ -681,7 +681,7 @@ impl App {
                 }
             }
             ConfirmAction::Exit => {
-                if let WorkflowData::ConfirmOnly { action, .. } = &mut self.data {
+                if let WorkflowData::ConfirmOnly { action } = &mut self.data {
                     *action = Some(ConfirmResultAction::Exit);
                 }
                 UpdateResult::Cancelled

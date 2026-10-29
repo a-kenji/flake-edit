@@ -767,7 +767,11 @@ mod tests {
         let crane_out = g.outgoing(&path("crane.nixpkgs"));
         assert_eq!(crane_out.len(), 1);
         assert_eq!(crane_out[0].follows.to_string(), "nixpkgs");
-        assert!(g.outgoing(&path("nonexistent.nixpkgs")).is_empty());
+        assert!(
+            g.outgoing(&path("nonexistent.nixpkgs")).is_empty(),
+            "{:?}",
+            g.outgoing(&path("nonexistent.nixpkgs"))
+        );
     }
 
     #[test]
@@ -834,7 +838,11 @@ mod tests {
         let lock = FlakeLock::read_from_str(lock_text).unwrap();
         let g = FollowsGraph::from_flake(&inputs, &lock);
         assert!(g.stale_edges().is_empty(), "got {:?}", g.stale_edges());
-        assert!(g.stale_nulled_sources().is_empty());
+        assert!(
+            g.stale_nulled_sources().is_empty(),
+            "{:?}",
+            g.stale_nulled_sources()
+        );
     }
 
     #[test]
@@ -904,7 +912,11 @@ mod tests {
 }"#;
         let lock = FlakeLock::read_from_str(lock_text).unwrap();
         let g = FollowsGraph::from_flake(&inputs, &lock);
-        assert!(g.stale_nulled_sources().is_empty());
+        assert!(
+            g.stale_nulled_sources().is_empty(),
+            "{:?}",
+            g.stale_nulled_sources()
+        );
     }
 
     #[test]
@@ -1136,7 +1148,7 @@ mod tests {
     fn cycles_empty_for_acyclic_declared() {
         let inputs = make_inputs(vec![declared_input("crane", &[("nixpkgs", "nixpkgs")])]);
         let g = FollowsGraph::from_declared(&inputs);
-        assert!(g.cycles().is_empty());
+        assert!(g.cycles().is_empty(), "{:?}", g.cycles());
     }
 
     #[test]
@@ -1251,7 +1263,11 @@ mod tests {
 }"#;
         let lock = FlakeLock::read_from_str(lock_text).unwrap();
         let g = FollowsGraph::from_flake(&inputs, &lock);
-        assert!(g.stale_lock_declarations(&lock.nested_inputs()).is_empty());
+        assert!(
+            g.stale_lock_declarations(&lock.nested_inputs()).is_empty(),
+            "{:?}",
+            g.stale_lock_declarations(&lock.nested_inputs())
+        );
     }
 
     #[test]
@@ -1280,7 +1296,11 @@ mod tests {
         let lock = FlakeLock::read_from_str(lock_text).unwrap();
         let g = FollowsGraph::from_flake(&inputs, &lock);
         assert_eq!(g.stale_edges().len(), 1);
-        assert!(g.stale_lock_declarations(&lock.nested_inputs()).is_empty());
+        assert!(
+            g.stale_lock_declarations(&lock.nested_inputs()).is_empty(),
+            "{:?}",
+            g.stale_lock_declarations(&lock.nested_inputs())
+        );
     }
 
     #[test]

@@ -691,7 +691,11 @@ fn toggle_states_detects_alternate_above_flat_url() {
     let state = &states["rust-overlay"];
     assert_eq!(state.active, "github:oxalica/rust-overlay");
     assert_eq!(state.alternates, vec!["github:a-kenji/rust-overlay"]);
-    assert!(states["nixpkgs"].alternates.is_empty());
+    assert!(
+        states["nixpkgs"].alternates.is_empty(),
+        "{:?}",
+        states["nixpkgs"].alternates
+    );
 }
 
 #[test]
@@ -763,7 +767,11 @@ fn toggle_states_requires_string_literal_value() {
 "#;
     let mut flake_edit = FlakeEdit::from_text(content).unwrap();
     let states = flake_edit.toggle_states().unwrap();
-    assert!(states["crane"].alternates.is_empty());
+    assert!(
+        states["crane"].alternates.is_empty(),
+        "{:?}",
+        states["crane"].alternates
+    );
 }
 
 #[test]
@@ -802,7 +810,11 @@ fn toggle_states_detects_toplevel_flat_alternate() {
     assert_eq!(states["crane"].alternates, vec!["github:a-kenji/crane"]);
     // A bare `# crane.url = ...` at top level would bind `crane.url`, not
     // `inputs.crane.url`. Only the `inputs.`-prefixed spelling counts there.
-    assert!(states["nixpkgs"].alternates.is_empty());
+    assert!(
+        states["nixpkgs"].alternates.is_empty(),
+        "{:?}",
+        states["nixpkgs"].alternates
+    );
 }
 
 #[test]

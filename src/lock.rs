@@ -1102,7 +1102,7 @@ mod tests {
 }"#;
         let parsed = FlakeLock::read_from_str(lock).unwrap();
         let nested = parsed.nested_inputs();
-        assert!(!nested.is_empty());
+        assert!(!nested.is_empty(), "expected nested inputs in the lock");
         assert!(
             nested
                 .iter()

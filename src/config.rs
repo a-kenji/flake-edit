@@ -220,7 +220,11 @@ mod tests {
     fn test_default_config_parses() {
         let config: Config =
             toml::from_str(DEFAULT_CONFIG_TOML).expect("default config should parse");
-        assert!(config.follow.ignore.is_empty());
+        assert!(
+            config.follow.ignore.is_empty(),
+            "{:?}",
+            config.follow.ignore
+        );
         assert_eq!(config.follow.transitive_min, 0);
         assert_eq!(
             config.follow.aliases,

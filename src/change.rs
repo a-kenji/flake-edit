@@ -177,7 +177,7 @@ impl Change {
                 .iter()
                 .map(|id| format!("Removed input: {}", id))
                 .collect(),
-            Change::Change { id, uri, .. } => {
+            Change::Change { id, uri } => {
                 let id = id.as_ref().map(ChangeId::to_string);
                 vec![format!(
                     "Changed input: {} -> {}",

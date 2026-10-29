@@ -37,7 +37,7 @@ pub(crate) fn list_outputs(root: &SyntaxNode) -> Result<Outputs, WalkerError> {
                 .children()
                 .find(|child| child.to_string() == "outputs")
         {
-            assert!(outputs_node.kind() == SyntaxKind::NODE_ATTRPATH);
+            assert_eq!(outputs_node.kind(), SyntaxKind::NODE_ATTRPATH);
 
             if let Some(next_sibling) = outputs_node.next_sibling() {
                 let outputs_lambda = unwrap_parens(&next_sibling);
@@ -339,7 +339,7 @@ pub(crate) fn change_outputs(
         else {
             continue;
         };
-        assert!(outputs_node.kind() == SyntaxKind::NODE_ATTRPATH);
+        assert_eq!(outputs_node.kind(), SyntaxKind::NODE_ATTRPATH);
 
         let Some(next_sibling) = outputs_node.next_sibling() else {
             continue;

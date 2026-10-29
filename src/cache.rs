@@ -225,7 +225,7 @@ mod tests {
     fn test_list_uris_for_id_empty() {
         let cache = Cache::default();
         let uris = cache.list_uris_for_id("nonexistent");
-        assert!(uris.is_empty());
+        assert!(uris.is_empty(), "{:?}", uris);
     }
 
     #[test]
