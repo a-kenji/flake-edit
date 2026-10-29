@@ -426,6 +426,7 @@ impl FlakeEdit {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::assert_matches;
 
     #[test]
     fn remove_fails_instead_of_hanging_when_passes_run_out() {
@@ -443,10 +444,7 @@ mod tests {
 
         let mut fe = FlakeEdit::from_text(flake).unwrap();
         let err = fe.walk_until_fixed(&change, &mut None, 1).unwrap_err();
-        assert!(
-            matches!(err, Error::RemoveDidNotConverge { ref ids, passes: 1 } if ids == &["foo"]),
-            "got {err:?}"
-        );
+        assert_matches!(err, Error::RemoveDidNotConverge { ref ids, passes: 1 } if ids == &["foo"], "got {err:?}");
 
         let mut fe = FlakeEdit::from_text(flake).unwrap();
         let mut res = None;
@@ -567,10 +565,7 @@ mod tests {
             flake: true,
         };
         let err = fe.apply_change(change).expect_err("dotted id must error");
-        assert!(
-            matches!(err, Error::NestedInputId(ref id) if id == r#"hls-1."10""#),
-            "unquoted `hls-1.10` parses as two segments, got: {err:?}",
-        );
+        assert_matches!(err, Error::NestedInputId(ref id) if id == r#"hls-1."10""#, "unquoted `hls-1.10` parses as two segments, got: {err:?}",);
     }
 
     #[test]
@@ -582,10 +577,7 @@ mod tests {
             flake: true,
         };
         let err = fe.apply_change(change).expect_err("duplicate must error");
-        assert!(
-            matches!(err, Error::DuplicateInput(ref id) if id == "crane"),
-            "expected DuplicateInput(\"crane\"), got: {err:?}",
-        );
+        assert_matches!(err, Error::DuplicateInput(ref id) if id == "crane", "expected DuplicateInput(\"crane\"), got: {err:?}",);
     }
 
     #[test]
@@ -666,10 +658,7 @@ mod tests {
         let err = fe
             .apply_change(change)
             .expect_err("missing input must error");
-        assert!(
-            matches!(err, Error::InputNotFound(ref id) if id == "does-not-exist"),
-            "expected InputNotFound(\"does-not-exist\"), got: {err:?}",
-        );
+        assert_matches!(err, Error::InputNotFound(ref id) if id == "does-not-exist", "expected InputNotFound(\"does-not-exist\"), got: {err:?}",);
     }
 
     #[test]
@@ -682,10 +671,7 @@ mod tests {
         let err = fe
             .apply_change(change)
             .expect_err("missing parent must error");
-        assert!(
-            matches!(err, Error::InputNotFound(ref id) if id == "ghost"),
-            "expected InputNotFound(\"ghost\"), got: {err:?}",
-        );
+        assert_matches!(err, Error::InputNotFound(ref id) if id == "ghost", "expected InputNotFound(\"ghost\"), got: {err:?}",);
     }
 
     #[test]

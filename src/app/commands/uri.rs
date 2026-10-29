@@ -92,6 +92,7 @@ pub(super) fn transform_uri(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::assert_matches;
 
     #[test]
     fn malformed_id_surfaces_as_invalid_input_id() {
@@ -103,9 +104,6 @@ mod tests {
             &opts,
         )
         .expect_err("a malformed id must not build a Change");
-        assert!(
-            matches!(&err, Error::InvalidInputId { id, .. } if id == "a..b"),
-            "expected InvalidInputId for 'a..b', got: {err:?}"
-        );
+        assert_matches!(&err, Error::InvalidInputId { id, .. } if id == "a..b", "expected InvalidInputId for 'a..b', got: {err:?}");
     }
 }

@@ -659,6 +659,7 @@ mod tests {
     use super::*;
     use crate::follows::Segment;
     use crate::input::Range;
+    use std::assert_matches;
 
     fn seg(s: &str) -> Segment {
         Segment::from_unquoted(s).unwrap()
@@ -725,7 +726,7 @@ mod tests {
         let inputs = make_inputs(vec![declared_input("crane", &[("nixpkgs", "nixpkgs")])]);
         let g = FollowsGraph::from_declared(&inputs);
         let edge = g.edges().next().unwrap();
-        assert!(matches!(edge.origin, EdgeOrigin::Declared { .. }));
+        assert_matches!(edge.origin, EdgeOrigin::Declared { .. });
     }
 
     #[test]
@@ -754,7 +755,7 @@ mod tests {
         assert_eq!(edges.len(), 1);
         assert_eq!(edges[0].source.to_string(), "treefmt-nix.nixpkgs");
         assert_eq!(edges[0].follows.to_string(), "nixpkgs");
-        assert!(matches!(edges[0].origin, EdgeOrigin::Resolved));
+        assert_matches!(edges[0].origin, EdgeOrigin::Resolved);
     }
 
     #[test]
@@ -1331,7 +1332,7 @@ mod tests {
         let g = FollowsGraph::from_flake(&inputs, &lock);
         let edges: Vec<&Edge> = g.outgoing(&path("treefmt-nix.nixpkgs")).iter().collect();
         assert_eq!(edges.len(), 1);
-        assert!(matches!(edges[0].origin, EdgeOrigin::Declared { .. }));
+        assert_matches!(edges[0].origin, EdgeOrigin::Declared { .. });
     }
 
     #[test]

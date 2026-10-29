@@ -700,6 +700,7 @@ pub const NESTED_INPUTS_MAX_DEPTH: usize = 64;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::assert_matches;
 
     fn minimal_lock() -> &'static str {
         r#"
@@ -1514,7 +1515,7 @@ mod tests {
     #[test]
     fn to_flake_url_unknown_type_returns_none() {
         let o: Original = serde_json::from_str(r#"{"type": "future-type"}"#).unwrap();
-        assert!(matches!(&o, Original::Unknown { node_type } if node_type == "future-type"));
+        assert_matches!(&o, Original::Unknown { node_type } if node_type == "future-type");
         assert_eq!(o.to_flake_url(), None);
     }
 

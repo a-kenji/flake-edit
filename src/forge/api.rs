@@ -151,6 +151,7 @@ impl Headers {
 
 /// Outcome of a conditional GET. Distinguishes "the cached body is
 /// still authoritative" from "here is a fresh body and its new ETag".
+#[derive(Debug)]
 pub(crate) enum ConditionalResponse {
     /// The server returned 304: the caller's cached body for this URL
     /// is still authoritative.
@@ -1081,6 +1082,7 @@ impl From<IntermediaryBranches> for Branches {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::assert_matches;
 
     const URL: &str = "https://api.github.com/repos/foo/bar/branches/baz";
 
@@ -1309,8 +1311,9 @@ mod tests {
             .get_conditional(&url, &Headers::anonymous(), Some("\"abc\""))
             .expect("conditional GET");
 
-        assert!(
-            matches!(response, ConditionalResponse::NotModified),
+        assert_matches!(
+            response,
+            ConditionalResponse::NotModified,
             "304 must be reported as NotModified"
         );
         assert_eq!(

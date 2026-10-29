@@ -13,6 +13,7 @@
 
 use clap::Parser;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::assert_matches;
 use std::path::PathBuf;
 
 use flake_edit::cli::CliArgs;
@@ -381,7 +382,7 @@ fn test_add_workflow_complete(#[case] fixture_name: &str) {
     // Enter URI and submit
     session.type_text("github:user/repo");
     let result = session.submit();
-    assert!(matches!(result, UpdateResult::Continue));
+    assert_matches!(result, UpdateResult::Continue);
 
     // Snapshot ID input screen (with inferred ID prefilled)
     insta::with_settings!({
@@ -395,7 +396,7 @@ fn test_add_workflow_complete(#[case] fixture_name: &str) {
     session.ctrl('u');
     session.type_text("my-input");
     let result = session.submit();
-    assert!(matches!(result, UpdateResult::Done));
+    assert_matches!(result, UpdateResult::Done);
 
     // Snapshot the resulting diff
     insta::with_settings!({
@@ -422,7 +423,7 @@ fn test_add_workflow_with_diff_shows_confirm(#[case] fixture_name: &str) {
     let result = session.submit();
 
     // With diff mode, should show confirm screen
-    assert!(matches!(result, UpdateResult::Continue));
+    assert_matches!(result, UpdateResult::Continue);
     insta::with_settings!({
         snapshot_suffix => fixture_name,
         description => session.description()
@@ -468,7 +469,7 @@ fn test_add_workflow_cancel(#[case] fixture_name: &str) {
     let app = app_from_args_with_fixture("add", &fixture).unwrap();
     let mut session = TestSession::new(app, "add");
     let result = session.escape();
-    assert!(matches!(result, UpdateResult::Cancelled));
+    assert_matches!(result, UpdateResult::Cancelled);
 }
 
 #[rstest]
@@ -484,7 +485,7 @@ fn test_add_workflow_back_from_id(#[case] fixture_name: &str) {
 
     // Go back from ID screen
     let result = session.escape();
-    assert!(matches!(result, UpdateResult::Continue));
+    assert_matches!(result, UpdateResult::Continue);
 
     insta::with_settings!({
         snapshot_suffix => fixture_name,
@@ -509,7 +510,7 @@ fn test_remove_workflow_complete(#[case] fixture_name: &str) {
     }
 
     let result = session.submit();
-    assert!(matches!(result, UpdateResult::Done));
+    assert_matches!(result, UpdateResult::Done);
 
     insta::with_settings!({
         snapshot_suffix => fixture_name,
@@ -539,7 +540,7 @@ fn test_change_workflow_select_then_input(#[case] fixture_name: &str) {
 
     // Select first item
     let result = session.submit();
-    assert!(matches!(result, UpdateResult::Continue));
+    assert_matches!(result, UpdateResult::Continue);
 
     // Snapshot input screen after selection
     insta::with_settings!({
@@ -564,7 +565,7 @@ fn test_change_workflow_complete(#[case] fixture_name: &str) {
     session.type_text("github:nixos/nixpkgs/nixos-unstable");
     let result = session.submit();
 
-    assert!(matches!(result, UpdateResult::Done));
+    assert_matches!(result, UpdateResult::Done);
 
     insta::with_settings!({
         snapshot_suffix => fixture_name,
@@ -587,7 +588,7 @@ fn test_change_uri_workflow(#[case] fixture_name: &str, #[case] input_id: &str) 
     session.type_text("github:nixos/nixpkgs/nixos-24.11");
     let result = session.submit();
 
-    assert!(matches!(result, UpdateResult::Done));
+    assert_matches!(result, UpdateResult::Done);
 
     insta::with_settings!({
         snapshot_suffix => format!("{fixture_name}_{input_id}"),
@@ -608,7 +609,7 @@ fn test_pin_workflow(#[case] fixture_name: &str) {
     session.nav_down();
     let result = session.submit();
 
-    assert!(matches!(result, UpdateResult::Done));
+    assert_matches!(result, UpdateResult::Done);
 }
 
 #[rstest]
@@ -623,7 +624,7 @@ fn test_update_workflow_select_all(#[case] fixture_name: &str) {
     session.toggle_all();
     let result = session.submit();
 
-    assert!(matches!(result, UpdateResult::Done));
+    assert_matches!(result, UpdateResult::Done);
 }
 
 #[rstest]
@@ -711,7 +712,7 @@ fn test_list_search_filters_and_selects(#[case] fixture_name: &str) {
 
     // Enter selects the filtered match and moves to the URI input
     let result = session.submit();
-    assert!(matches!(result, UpdateResult::Continue));
+    assert_matches!(result, UpdateResult::Continue);
     insta::with_settings!({
         snapshot_suffix => format!("{fixture_name}_2_selected"),
         description => session.description()
@@ -733,7 +734,7 @@ fn test_list_search_escape_restores_full_list(#[case] fixture_name: &str) {
     session.type_text("fl");
     let result = session.escape();
     // Escape only leaves search mode, it does not cancel the TUI
-    assert!(matches!(result, UpdateResult::Continue));
+    assert_matches!(result, UpdateResult::Continue);
 
     insta::with_settings!({
         snapshot_suffix => fixture_name,
@@ -757,7 +758,7 @@ fn test_multi_select_search_keeps_selections(#[case] fixture_name: &str) {
     session.toggle_select();
     session.escape();
     let result = session.submit();
-    assert!(matches!(result, UpdateResult::Done));
+    assert_matches!(result, UpdateResult::Done);
 
     let app_result = session.app().clone().extract_result();
     match app_result {
@@ -920,21 +921,21 @@ fn test_confirm_screen() {
 fn test_confirm_apply() {
     let mut app = App::confirm("Test", "@@ -1 +1 @@\n-old\n+new");
     let result = app.update(key(KeyCode::Char('y')));
-    assert!(matches!(result, UpdateResult::Done));
+    assert_matches!(result, UpdateResult::Done);
 }
 
 #[test]
 fn test_confirm_exit() {
     let mut app = App::confirm("Test", "@@ -1 +1 @@\n-old\n+new");
     let result = app.update(key(KeyCode::Char('n')));
-    assert!(matches!(result, UpdateResult::Cancelled));
+    assert_matches!(result, UpdateResult::Cancelled);
 }
 
 #[test]
 fn test_confirm_back() {
     let mut app = App::confirm("Test", "@@ -1 +1 @@\n-old\n+new");
     let result = app.update(key(KeyCode::Char('b')));
-    assert!(matches!(result, UpdateResult::Done));
+    assert_matches!(result, UpdateResult::Done);
 }
 
 #[rstest]
@@ -1115,7 +1116,7 @@ fn test_add_completion_hide_on_escape(#[case] fixture_name: &str) {
     let result = session.escape();
 
     // First Esc should hide completions, not cancel
-    assert!(matches!(result, UpdateResult::Continue));
+    assert_matches!(result, UpdateResult::Continue);
 
     insta::with_settings!({
         snapshot_suffix => fixture_name,
@@ -1249,7 +1250,7 @@ fn test_change_workflow_escape_back_to_list(#[case] fixture_name: &str) {
     });
 
     let result = session.escape();
-    assert!(matches!(result, UpdateResult::Continue));
+    assert_matches!(result, UpdateResult::Continue);
     insta::with_settings!({
         snapshot_suffix => format!("{fixture_name}_2_back_to_list"),
         description => session.description()
@@ -1269,7 +1270,7 @@ fn test_change_workflow_escape_back_to_list(#[case] fixture_name: &str) {
     session.ctrl('u');
     session.type_text("github:nixos/nixpkgs/nixos-unstable");
     let result = session.submit();
-    assert!(matches!(result, UpdateResult::Continue));
+    assert_matches!(result, UpdateResult::Continue);
     let mut confirm_terminal = create_test_terminal(80, 12);
     insta::with_settings!({
         snapshot_suffix => format!("{fixture_name}_4_confirm"),
