@@ -1,0 +1,31 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/remove_blank_lines.flake.nix"
+    - "--diff"
+    - rm
+    - flake-compat
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -26,10 +26,6 @@
+     #   inputs.nixpkgs.follows = "nixpkgs";
+     # };
+
+-    flake-compat = {
+-      url = "github:edolstra/flake-compat";
+-      flake = false;
+-    };
+     treefmt-nix = {
+       url = "github:numtide/treefmt-nix";
+       inputs.nixpkgs.follows = "nixpkgs";
+
+----- stderr -----

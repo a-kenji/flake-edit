@@ -1,0 +1,31 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/remove_blank_lines.flake.nix"
+    - "--diff"
+    - rm
+    - home-manager
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -1,10 +1,5 @@
+ {
+   inputs = {
+-    home-manager = {
+-      url = "github:nix-community/home-manager";
+-      inputs.nixpkgs.follows = "nixpkgs";
+-    };
+-
+     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+     # nixos-hardware.url = "github:NixOS/nixos-hardware";
+
+----- stderr -----

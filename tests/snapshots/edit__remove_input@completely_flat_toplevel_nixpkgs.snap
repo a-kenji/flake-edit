@@ -5,10 +5,12 @@ info:
   flake_nix: ""
   changes:
     - Remove:
-        id: nixpkgs
+        ids:
+          - nixpkgs
 ---
 {
   description = "Edit your flake inputs with ease";
+
   inputs.flake-utelinos.url = "github:numtide/flake-utils";
   inputs.rust-overlay.url = "github:oxalica/rust-overlay";
   inputs.rust-overlay.inputs.flake-utils.follows = "flake-utils";

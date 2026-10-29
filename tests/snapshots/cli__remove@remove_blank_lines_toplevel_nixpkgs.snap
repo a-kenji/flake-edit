@@ -1,0 +1,28 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/remove_blank_lines_toplevel.flake.nix"
+    - "--diff"
+    - rm
+    - nixpkgs
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -1,7 +1,6 @@
+ {
+   description = "A flake with top-level inputs";
+
+-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+   inputs.flake-parts.url = "github:hercules-ci/flake-parts";
+
+   outputs = _: { };
+
+----- stderr -----

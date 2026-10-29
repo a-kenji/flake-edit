@@ -7,11 +7,11 @@ use crate::follows::{AttrPath, Segment, strip_outer_quotes};
 use super::context::Context;
 use super::flake_attr_set;
 use super::node::{
-    FollowsKind, adjacent_whitespace_index, empty_node, extract_indent, get_sibling_whitespace,
-    insert_binding_after, is_attrset_content_empty, last_line_with_newline, make_attrset_url_attr,
+    FollowsKind, empty_node, extract_indent, get_sibling_whitespace, insert_binding_after,
+    is_attrset_content_empty, last_line_with_newline, make_attrset_url_attr,
     make_attrset_url_flake_false_attr, make_flake_false_attr, make_quoted_string, make_url_attr,
     parse_node, remove_child_with_whitespace, should_remove_input, substitute_child,
-    trailing_inline_comments, uses_attrset_style,
+    uses_attrset_style,
 };
 
 /// Walk the `inputs` section of a `flake.nix`, applying `change`.
@@ -329,7 +329,7 @@ fn handle_nested_input(
 
         let context: Context = id_seg.clone().into();
         if walk_input(&attr, &Some(context), change).is_some() {
-            let replacement = remove_child_with_whitespace(nested_attr, &attr, attr.index());
+            let replacement = remove_child_with_whitespace(nested_attr, &attr);
             return Some(replacement);
         }
     }
@@ -499,23 +499,12 @@ fn handle_child_attrpath_value(
         {
             replacement = redeclared;
         }
-        let mut green = parent
+        if replacement.text().is_empty() {
+            return Some(remove_child_with_whitespace(parent, child_node));
+        }
+        let green = parent
             .green()
             .replace_child(child.index(), replacement.green().to_owned().into());
-
-        if replacement.text().is_empty() {
-            let mut to_remove: Vec<usize> = trailing_inline_comments(child)
-                .iter()
-                .map(|t| t.index())
-                .collect();
-            if let Some(ws_index) = adjacent_whitespace_index(child) {
-                to_remove.push(ws_index);
-            }
-            to_remove.sort_unstable();
-            for idx in to_remove.into_iter().rev() {
-                green = green.remove_child(idx);
-            }
-        }
         return Some(SyntaxNode::new_root(green));
     }
 
@@ -1078,7 +1067,7 @@ fn remove_targeted_entry(
         let idents: Vec<SyntaxNode> = path.children().collect();
         if let Some(new_value) = remove_targeted_binding(&idents, &value, id, owner, prefix) {
             if new_value.text().is_empty() {
-                return Some(remove_child_with_whitespace(attrset, &entry, entry.index()));
+                return Some(remove_child_with_whitespace(attrset, &entry));
             }
             let new_entry = substitute_child(&entry, value.index(), &new_value);
             return Some(substitute_child(attrset, entry.index(), &new_entry));

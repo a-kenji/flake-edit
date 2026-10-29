@@ -16,10 +16,10 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -1,13 +1,9 @@
+@@ -1,13 +1,10 @@
  {
    description = "Edit your flake inputs with ease";
--
+
 -  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
    inputs.flake-utelinos.url = "github:numtide/flake-utils";
    inputs.rust-overlay.url = "github:oxalica/rust-overlay";

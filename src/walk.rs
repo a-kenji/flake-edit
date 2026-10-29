@@ -23,8 +23,8 @@ pub use error::WalkerError;
 
 use inputs::{redeclare_removed_owner, retarget_existing_follows, walk_inputs};
 use node::{
-    FollowsKind, adjacent_whitespace_index, insert_binding_after, last_line_with_newline,
-    make_toplevel_flake_false_attr, make_toplevel_url_attr, parse_node, substitute_child,
+    FollowsKind, insert_binding_after, last_line_with_newline, make_toplevel_flake_false_attr,
+    make_toplevel_url_attr, parse_node, remove_child_with_whitespace, substitute_child,
 };
 
 /// The flake's top-level attribute set.
@@ -357,12 +357,10 @@ impl<'a> Walker {
         // Empty replacement means we remove the entire toplevel node and
         // propagate through attr_set to NODE_ROOT.
         if replacement.to_string().is_empty() {
-            let element: rnix::SyntaxElement = toplevel.clone().into();
-            let mut green = attr_set.green().remove_child(toplevel.index());
-            if let Some(ws_index) = adjacent_whitespace_index(&element) {
-                green = green.remove_child(ws_index);
-            }
-            return Some(SyntaxNode::new_root(attr_set.replace_with(green)));
+            let removed = remove_child_with_whitespace(attr_set, toplevel);
+            return Some(SyntaxNode::new_root(
+                attr_set.replace_with(removed.green().to_owned()),
+            ));
         }
 
         let sibling = child.next_sibling()?;

@@ -16,12 +16,12 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -2,18 +2,15 @@
+@@ -2,18 +2,14 @@
    description = "Manage your flake inputs comfortably.";
 
    inputs = {
 -    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-
+-
      flake-utils.url = "github:numtide/flake-utils";
 
      rust-overlay = {

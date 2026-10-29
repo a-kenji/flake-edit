@@ -1,0 +1,29 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/remove_blank_lines.flake.nix"
+    - "--diff"
+    - rm
+    - flake-edit
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -34,8 +34,6 @@
+       url = "github:numtide/treefmt-nix";
+       inputs.nixpkgs.follows = "nixpkgs";
+     };
+-
+-    flake-edit.url = "github:a-kenji/flake-edit";
+   };
+   outputs = _: { };
+ }
+
+----- stderr -----

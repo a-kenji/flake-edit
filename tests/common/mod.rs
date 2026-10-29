@@ -135,6 +135,10 @@ pub(crate) const FIXTURES: &[&str] = &[
     // a top-level flat nested url override belongs to its owner, not to a
     // top-level input of the same name
     "remove_toplevel_nested_url_override",
+    // inputs separated by blank lines and comments, in block, flat and
+    // top-level spellings
+    "remove_blank_lines",
+    "remove_blank_lines_toplevel",
     // a stale depth-2 follows shares its first two segments with a
     // `flake = false` on the middle input
     "stale_follows_shared_prefix_flake_false",
