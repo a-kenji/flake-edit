@@ -274,10 +274,9 @@ impl FollowsGraph {
                 .contains(&AttrPath::new(source.first().clone()))
     }
 
-    /// Declared edges whose source path the lockfile lacks (see
-    /// [`Self::lock_lacks`]). A follows declaration whose nested input is
-    /// gone from `flake.lock` should be dropped on the next auto-follow
-    /// pass.
+    /// Declared edges whose source path the lockfile lacks. A follows
+    /// declaration whose nested input is gone from `flake.lock` should be
+    /// dropped on the next auto-follow pass.
     pub fn stale_edges(&self) -> Vec<&Edge> {
         let mut declared: Vec<&Edge> = self
             .declared_edges()

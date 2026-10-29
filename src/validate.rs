@@ -49,9 +49,8 @@ pub(crate) fn validate_parsed(parsed: &ParsedSource) -> ValidationResult {
 
 /// Run syntax checks plus every follows-graph lint.
 ///
-/// Walks `flake.lock` once via [`FlakeLock::nested_inputs`], builds the lock
-/// graph from that single walk, and hands both to
-/// [`validate_full_with_lock_graph`].
+/// Walks `flake.lock` once via [`FlakeLock::nested_inputs`] and builds the
+/// lock graph from that single walk.
 pub fn validate_full(
     source: &str,
     inputs: &InputMap,
