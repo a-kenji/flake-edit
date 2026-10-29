@@ -69,6 +69,38 @@ pub(crate) fn get_sibling_whitespace(node: &SyntaxNode) -> Option<Node> {
     None
 }
 
+/// Insert `binding` after `anchor`, on a new line at `anchor`'s indent or after one space.
+pub(crate) fn insert_binding_after(
+    attr_set: &SyntaxNode,
+    anchor: &SyntaxNode,
+    binding: &SyntaxNode,
+) -> Node {
+    let after_line = insertion_index_after(anchor);
+    let line_continues = attr_set
+        .children_with_tokens()
+        .nth(after_line)
+        .is_some_and(|next| next.kind() != SyntaxKind::TOKEN_WHITESPACE);
+    let index = if line_continues {
+        anchor.index() + 1
+    } else {
+        after_line
+    };
+    let separator = anchor
+        .prev_sibling_or_token()
+        .filter(|prev| prev.kind() == SyntaxKind::TOKEN_WHITESPACE)
+        .map(|prev| prev.to_string())
+        .filter(|ws| ws.contains('\n'))
+        .map_or_else(
+            || " ".to_string(),
+            |ws| last_line_with_newline(&ws).to_string(),
+        );
+    let green = attr_set
+        .green()
+        .insert_child(index, binding.green().to_owned().into())
+        .insert_child(index, parse_node(&separator).green().to_owned().into());
+    SyntaxNode::new_root(green)
+}
+
 /// Insertion index after `node`, skipping trailing same-line whitespace and comments.
 ///
 /// Stops at the first newline so trailing comments on the reference line stay attached

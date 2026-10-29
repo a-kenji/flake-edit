@@ -23,9 +23,8 @@ pub use error::WalkerError;
 
 use inputs::{redeclare_removed_owner, retarget_existing_follows, walk_inputs};
 use node::{
-    FollowsKind, adjacent_whitespace_index, get_sibling_whitespace, insertion_index_after,
-    last_line_with_newline, make_toplevel_flake_false_attr, make_toplevel_url_attr, parse_node,
-    substitute_child,
+    FollowsKind, adjacent_whitespace_index, insert_binding_after, last_line_with_newline,
+    make_toplevel_flake_false_attr, make_toplevel_url_attr, parse_node, substitute_child,
 };
 
 /// The flake's top-level attribute set.
@@ -70,8 +69,7 @@ fn block_parent_attrset(
 }
 
 /// Mirrors `ref_child`'s leading newline + indent so the inserted line
-/// reads at the same column as its neighbour. Without normalization, the
-/// raw whitespace token includes any pre-`ref_child` spacing too.
+/// reads at the same column as its neighbour.
 fn insert_flat_follows_after(
     attr_set: &SyntaxNode,
     ref_child: &SyntaxNode,
@@ -79,19 +77,8 @@ fn insert_flat_follows_after(
     target: &str,
 ) -> SyntaxNode {
     let follows_node = FollowsKind::TopLevelNested { path, target }.emit();
-    let insert_index = insertion_index_after(ref_child);
-
-    let mut green = attr_set
-        .green()
-        .insert_child(insert_index, follows_node.green().to_owned().into());
-
-    if let Some(whitespace) = get_sibling_whitespace(ref_child) {
-        let ws_str = whitespace.to_string();
-        let ws_node = parse_node(last_line_with_newline(&ws_str));
-        green = green.insert_child(insert_index, ws_node.green().to_owned().into());
-    }
-
-    SyntaxNode::new_root(attr_set.replace_with(green))
+    let new_attr_set = insert_binding_after(attr_set, ref_child, &follows_node);
+    SyntaxNode::new_root(attr_set.replace_with(new_attr_set.green().to_owned()))
 }
 
 #[derive(Debug, Clone)]
@@ -311,19 +298,8 @@ impl<'a> Walker {
         target: &str,
     ) -> Option<SyntaxNode> {
         let follows_node = FollowsKind::BlockNested { rest, target }.emit();
-        let children: Vec<_> = block_attr_set.children().collect();
-        if let Some(last_child) = children.last() {
-            let insert_index = last_child.index() + 1;
-
-            let mut green = block_attr_set
-                .green()
-                .insert_child(insert_index, follows_node.green().to_owned().into());
-
-            if let Some(whitespace) = get_sibling_whitespace(last_child) {
-                green = green.insert_child(insert_index, whitespace.green().to_owned().into());
-            }
-
-            let new_block = SyntaxNode::new_root(green);
+        if let Some(last_child) = block_attr_set.children().last() {
+            let new_block = insert_binding_after(block_attr_set, &last_child, &follows_node);
             let new_toplevel = substitute_child(toplevel, block_attr_set.index(), &new_block);
             let green = attr_set
                 .green()
