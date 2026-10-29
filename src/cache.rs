@@ -42,22 +42,13 @@ pub struct Cache {
 }
 
 impl Cache {
-    /// Write the cache to its on-disk location, creating the parent directory
-    /// if needed.
-    pub fn commit(&self) -> std::io::Result<()> {
-        let cache_dir = cache_dir();
-        if !cache_dir.exists() {
-            std::fs::create_dir_all(cache_dir)?;
+    /// Write the cache to `path`, creating the parent directory if needed.
+    pub fn commit_to(&self, path: &std::path::Path) -> std::io::Result<()> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
         }
-        let cache_file_location = cache_file();
         let json = serde_json::to_vec(self).map_err(|e| std::io::Error::other(e.to_string()))?;
-        std::fs::write(cache_file_location, json)
-    }
-
-    /// Load the cache from the default location, or return an empty cache on
-    /// any failure.
-    pub fn load() -> Self {
-        Self::from_path(cache_file())
+        std::fs::write(path, json)
     }
 
     /// Load the cache from `path`, or return an empty cache on any failure.
@@ -126,37 +117,20 @@ impl Cache {
     }
 }
 
-/// Load the on-disk cache, add any new `(id, uri)` pairs, and commit.
-///
-/// Best-effort: I/O failures are logged, not propagated. A `no_cache` of
-/// `true` makes the call a no-op.
-pub fn populate_cache_from_inputs<'a>(
-    inputs: impl Iterator<Item = (&'a str, &'a str)>,
-    no_cache: bool,
-) {
-    if no_cache {
+/// Best-effort: I/O failures are logged, not propagated.
+pub fn populate_cache_from_input_map(inputs: &crate::edit::InputMap, config: &CacheConfig) {
+    let Some(path) = config.path() else {
         return;
-    }
-
-    let mut cache = Cache::load();
+    };
+    let mut cache = Cache::from_path(path);
     let initial_len = cache.entries.len();
-    cache.populate_from_inputs(inputs);
+    cache.populate_from_inputs(inputs.iter().map(|(id, input)| (id.as_str(), input.url())));
 
     if cache.entries.len() > initial_len
-        && let Err(e) = cache.commit()
+        && let Err(e) = cache.commit_to(path)
     {
         tracing::debug!("Could not write to cache: {}", e);
     }
-}
-
-/// Convenience wrapper over [`populate_cache_from_inputs`] for the result of
-/// [`crate::edit::FlakeEdit::list`]. A `no_cache` of `true` makes the call a
-/// no-op.
-pub fn populate_cache_from_input_map(inputs: &crate::edit::InputMap, no_cache: bool) {
-    populate_cache_from_inputs(
-        inputs.iter().map(|(id, input)| (id.as_str(), input.url())),
-        no_cache,
-    );
 }
 
 /// Flake URI type prefixes offered by completion.
@@ -187,6 +161,20 @@ pub enum CacheConfig {
     None,
     /// Read and write at a custom path (`--cache`, or tests).
     Custom(std::path::PathBuf),
+}
+
+impl CacheConfig {
+    pub fn path(&self) -> Option<&std::path::Path> {
+        match self {
+            CacheConfig::Default => Some(cache_file()),
+            CacheConfig::None => None,
+            CacheConfig::Custom(path) => Some(path),
+        }
+    }
+
+    pub fn load(&self) -> Option<Cache> {
+        self.path().map(Cache::from_path)
+    }
 }
 
 #[cfg(test)]

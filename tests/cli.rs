@@ -1831,3 +1831,35 @@ fn toggle_path_ref_equal_to_stored_variant_flips_it() {
         "no duplicate alternate may be synthesized, got:\n{result}",
     );
 }
+
+#[test]
+fn test_cache_flag_redirects_completion_cache_writes() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let custom = tmp.path().join("custom.json");
+    let xdg_data = tmp.path().join("xdg");
+
+    let output = cli()
+        .env("XDG_DATA_HOME", &xdg_data)
+        .arg("--cache")
+        .arg(&custom)
+        .arg("--flake")
+        .arg(fixture_path("root"))
+        .arg("list")
+        .output()
+        .expect("run flake-edit");
+
+    assert!(
+        output.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let written = fs::read_to_string(&custom).expect("--cache file is written");
+    assert!(
+        written.contains("github:nixos/nixpkgs/nixos-unstable"),
+        "cache must record the listed inputs: {written}"
+    );
+    assert!(
+        !xdg_data.join("flake-edit").exists(),
+        "--cache must keep the default cache untouched"
+    );
+}

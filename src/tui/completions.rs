@@ -8,7 +8,7 @@
 
 use std::collections::HashSet;
 
-use crate::cache::{Cache, CacheConfig, DEFAULT_URI_TYPES};
+use crate::cache::{CacheConfig, DEFAULT_URI_TYPES};
 
 /// Extract the owner/org prefix from a flake URI.
 ///
@@ -88,13 +88,7 @@ pub fn uri_completion_items(id: Option<&str>, cache_config: &CacheConfig) -> Vec
     // Track seen items for O(1) deduplication instead of O(n) contains() checks
     let mut seen: HashSet<String> = HashSet::new();
 
-    let cache = match cache_config {
-        CacheConfig::Default => Some(Cache::load()),
-        CacheConfig::Custom(path) => Some(Cache::from_path(path)),
-        CacheConfig::None => None,
-    };
-
-    if let Some(cache) = cache {
+    if let Some(cache) = cache_config.load() {
         let cached_uris = cache.list_uris();
 
         // Prepend ID-specific URIs (for change workflow)
