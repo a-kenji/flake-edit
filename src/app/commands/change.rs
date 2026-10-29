@@ -71,7 +71,7 @@ fn change_full_interactive(
     };
 
     // CLI options override the TUI result.
-    if let Change::Change { id, uri, .. } = tui_change {
+    if let Change::Change { id, uri } = tui_change {
         let final_uri = uri
             .map(|u| transform_uri(u, opts.ref_or_rev, opts.shallow))
             .transpose()?;

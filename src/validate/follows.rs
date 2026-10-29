@@ -263,7 +263,7 @@ mod tests {
         )]);
         let graph = FollowsGraph::from_declared(&inputs).with_max_depth(64);
         let stale = lint_follows_stale(&graph, &loc_id());
-        assert!(stale.is_empty());
+        assert!(stale.is_empty(), "{:?}", stale);
     }
 
     #[test]
@@ -374,7 +374,7 @@ mod tests {
         let graph = FollowsGraph::from_declared(&inputs);
         let top_level = top_level_names(&inputs);
         let errs = lint_follows_target_not_toplevel(&graph, &top_level, &loc_id());
-        assert!(errs.is_empty());
+        assert!(errs.is_empty(), "{:?}", errs);
     }
 
     #[test]
@@ -417,7 +417,7 @@ mod tests {
         let inputs = make_inputs(vec![declared_input("a", &[("x", "y")])]);
         let graph = FollowsGraph::from_declared(&inputs);
         let errs = lint_follows_contradiction(&graph, &loc_id());
-        assert!(errs.is_empty());
+        assert!(errs.is_empty(), "{:?}", errs);
     }
 
     #[test]
@@ -446,6 +446,6 @@ mod tests {
         let inputs = make_inputs(vec![declared_input("a", &[("b", "c")])]);
         let graph = FollowsGraph::from_declared(&inputs);
         let errs = lint_follows_depth_exceeded(&graph, 4, &loc_id());
-        assert!(errs.is_empty());
+        assert!(errs.is_empty(), "{:?}", errs);
     }
 }

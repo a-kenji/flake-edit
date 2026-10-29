@@ -549,7 +549,7 @@ mod tests {
     #[test]
     fn test_input_state_new_empty() {
         let state = InputState::new(None);
-        assert!(state.is_empty());
+        assert!(state.is_empty(), "{:?}", state);
         assert_eq!(state.cursor(), 0);
     }
 
@@ -700,7 +700,7 @@ mod tests {
         // Should show query param completions
         assert!(state.has_visible_completions());
         let completions = state.filtered_completions();
-        assert!(!completions.is_empty());
+        assert!(!completions.is_empty(), "expected ref completions");
         assert!(completions.iter().any(|c| c.text.contains("ref")));
 
         // Type "r" to filter to ref/rev

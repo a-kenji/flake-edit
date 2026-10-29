@@ -140,6 +140,13 @@ filetype_is_file = "warn"
 clone_on_ref_ptr = "warn"
 if_then_some_else_none = "warn"
 tabs_in_doc_comments = "warn"
+assert_is_empty = "warn"
+manual_assert_eq = "warn"
+unnecessary_rest_pattern = "warn"
+nonminimal_bool = "warn"
+overly_complex_bool_expr = "warn"
+with_capacity_zero = "warn"
 
 [lints.rustdoc]
 bare_urls = "warn"
+unused_footnote_definition = "warn"

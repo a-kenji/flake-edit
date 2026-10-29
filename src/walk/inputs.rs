@@ -289,7 +289,6 @@ fn handle_flat_url(input_id: &SyntaxNode, change: &Change) -> Option<SyntaxNode>
     if let Change::Change {
         id: Some(change_id),
         uri: Some(new_uri),
-        ..
     } = change
         && change_id.input().as_str() == id_str
         && change_id.follows().is_none()
@@ -328,7 +327,6 @@ fn handle_nested_input(
         if let Change::Change {
             id: Some(change_id),
             uri: Some(new_uri),
-            ..
         } = change
             && *change_id.input() == id_seg
             && change_id.follows().is_none()
@@ -749,7 +747,7 @@ fn handle_url_attr(
     {
         return Some(empty_node());
     }
-    if let Change::Change { id, uri, .. } = change
+    if let Change::Change { id, uri } = change
         && let Some(id) = id
         && id.input().as_str() == prev_str
         && id.follows().is_none()
@@ -1038,7 +1036,6 @@ fn handle_url_leaf(
     if let Change::Change {
         id: Some(change_id),
         uri: Some(new_uri),
-        ..
     } = change
         && change_id.input().as_str() == id_str
         && change_id.follows().is_none()
