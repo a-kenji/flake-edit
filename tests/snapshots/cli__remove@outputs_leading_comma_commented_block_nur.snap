@@ -1,0 +1,41 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/outputs_leading_comma_commented_block.flake.nix"
+    - "--diff"
+    - rm
+    - nur
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -3,10 +3,6 @@
+
+   inputs = {
+     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+-    nur = {
+-      url = "github:nix-community/NUR";
+-      inputs.nixpkgs.follows = "nixpkgs";
+-    };
+   };
+
+   outputs =
+@@ -16,8 +12,7 @@
+     , home-manager
+     , disko
+     , # , stylix
+-      nur
+-    , flake-utils
++      flake-utils
+     , sops-nix
+     , #, nix-index-database
+       #, nixos-hardware
+
+----- stderr -----
