@@ -64,8 +64,6 @@ pub fn is_downgrade(current: &str, proposed: &str) -> bool {
 /// Strips `refs/tags/` and then any non-digit scheme prefix that
 /// precedes the first digit, so `v`, `hl`, `release-`, and
 /// `nix-darwin-` are all reduced to their numeric core in one pass.
-/// The remainder is fed through [`normalize_semver`], which pads
-/// short forms like `1.0` out to three segments.
 pub fn parse_ref(raw: &str, default_refs_tags_prefix: bool) -> ParsedRef {
     let mut maybe_version = raw.to_string();
     let mut previous_ref = String::new();

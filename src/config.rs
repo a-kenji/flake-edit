@@ -120,8 +120,8 @@ impl FollowConfig {
 
 impl Config {
     /// Load the first available configuration:
-    /// 1. Project-level ([`CONFIG_FILENAMES`], walking upward from the
-    ///    current directory).
+    /// 1. Project-level (`flake-edit.toml` or `.flake-edit.toml`, walking
+    ///    upward from the current directory).
     /// 2. User-level (`~/.config/flake-edit/config.toml`).
     /// 3. The default embedded config.
     ///

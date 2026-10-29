@@ -41,13 +41,14 @@ let
       pname
       src
       ;
+    CARGO_BUILD_WARNINGS = "deny";
   };
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
   cargoClippy = craneLib.cargoClippy (
     commonArgs
     // {
       inherit cargoArtifacts;
-      cargoClippyExtraArgs = "--all-targets --all-features -- --deny warnings";
+      cargoClippyExtraArgs = "--all-targets --all-features";
     }
   );
   cargoDeny = craneLib.cargoDeny (commonArgs // { inherit cargoArtifacts; });
