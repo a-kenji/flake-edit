@@ -248,11 +248,11 @@ fn default_cache_path() -> Option<PathBuf> {
 }
 
 fn load_entries(path: &Path) -> HashMap<String, Entry> {
-    let file = match std::fs::File::open(path) {
-        Ok(f) => f,
+    let bytes = match std::fs::read(path) {
+        Ok(b) => b,
         Err(_) => return HashMap::new(),
     };
-    match serde_json::from_reader::<_, FileFormat>(file) {
+    match serde_json::from_slice::<FileFormat>(&bytes) {
         Ok(parsed) if parsed.schema_version == SCHEMA_VERSION => parsed.entries,
         Ok(_) => {
             tracing::debug!("forge cache: schema version mismatch, ignoring");
@@ -295,10 +295,8 @@ fn write_atomically(path: &Path, file: &FileFormat) -> std::io::Result<()> {
     // Same directory as the final file so the rename is atomic on
     // every platform we target.
     tmp.set_extension("json.tmp");
-    {
-        let f = std::fs::File::create(&tmp)?;
-        serde_json::to_writer(f, file).map_err(std::io::Error::other)?;
-    }
+    let json = serde_json::to_vec(file).map_err(std::io::Error::other)?;
+    std::fs::write(&tmp, json)?;
     std::fs::rename(&tmp, path)
 }
 

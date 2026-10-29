@@ -50,10 +50,8 @@ impl Cache {
             std::fs::create_dir_all(cache_dir)?;
         }
         let cache_file_location = cache_file();
-        let cache_file = std::fs::File::create(cache_file_location)?;
-        serde_json::to_writer(cache_file, self)
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
-        Ok(())
+        let json = serde_json::to_vec(self).map_err(|e| std::io::Error::other(e.to_string()))?;
+        std::fs::write(cache_file_location, json)
     }
 
     /// Load the cache from the default location, or return an empty cache on
@@ -77,8 +75,8 @@ impl Cache {
     /// Returns [`std::io::Error`] if `path` cannot be opened or its JSON
     /// payload cannot be deserialized.
     pub fn try_from_path(path: &std::path::Path) -> std::io::Result<Self> {
-        let file = std::fs::File::open(path)?;
-        serde_json::from_reader(file).map_err(|e| std::io::Error::other(e.to_string()))
+        let bytes = std::fs::read(path)?;
+        serde_json::from_slice(&bytes).map_err(|e| std::io::Error::other(e.to_string()))
     }
 
     /// Insert or bump the hit count of the `(id, uri)` entry.
@@ -285,5 +283,26 @@ mod tests {
         // Hit count should still be 1, not 2
         let entry = cache.entries.get("nixpkgs.github:NixOS/nixpkgs").unwrap();
         assert_eq!(entry.hit, 1);
+    }
+
+    #[test]
+    fn test_try_from_path_reads_serialized_cache() {
+        let mut cache = Cache::default();
+        cache.add_entry("nixpkgs".into(), "github:NixOS/nixpkgs".into());
+        cache.add_entry("nixpkgs".into(), "github:NixOS/nixpkgs".into());
+        cache.add_entry(
+            "home-manager".into(),
+            "github:nix-community/home-manager".into(),
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("flake_edit.json");
+        std::fs::write(&path, serde_json::to_vec(&cache).unwrap()).unwrap();
+
+        let loaded = Cache::try_from_path(&path).unwrap();
+        assert_eq!(
+            loaded.list_uris(),
+            ["github:NixOS/nixpkgs", "github:nix-community/home-manager"]
+        );
+        assert_eq!(loaded.list_uris_for_id("nixpkgs"), ["github:NixOS/nixpkgs"]);
     }
 }

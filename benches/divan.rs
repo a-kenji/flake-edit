@@ -1,5 +1,6 @@
 use divan::Bencher;
 use flake_edit::app::commands::follow::auto;
+use flake_edit::cache::Cache;
 use flake_edit::change::Change;
 use flake_edit::config::FollowConfig;
 use flake_edit::walk::Walker;
@@ -80,4 +81,25 @@ fn follow_large_fixture(bencher: Bencher) {
         );
         output
     });
+}
+
+fn large_completion_cache() -> tempfile::TempDir {
+    let mut cache = Cache::default();
+    for i in 0..1000 {
+        cache.add_entry(
+            format!("input-{i}"),
+            format!("github:example-owner-{i}/example-repository-{i}/nixos-unstable"),
+        );
+    }
+    let dir = tempfile::tempdir().expect("bench tempdir");
+    let json = serde_json::to_vec(&cache).expect("serialize bench cache");
+    std::fs::write(dir.path().join("flake_edit.json"), json).expect("write bench cache");
+    dir
+}
+
+#[divan::bench]
+fn load_completion_cache(bencher: Bencher) {
+    let dir = large_completion_cache();
+    let path = dir.path().join("flake_edit.json");
+    bencher.bench(|| Cache::try_from_path(&path).expect("bench cache loads"));
 }
