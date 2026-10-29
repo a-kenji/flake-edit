@@ -1,0 +1,31 @@
+---
+source: tests/cli.rs
+info:
+  program: flake-edit
+  args:
+    - "--flake"
+    - "[FIXTURES]/remove_blank_lines.flake.nix"
+    - "--diff"
+    - rm
+    - disko
+  env:
+    NO_COLOR: "1"
+---
+success: true
+exit_code: 0
+----- stdout -----
+--- original
++++ modified
+@@ -12,10 +12,6 @@
+     flake-parts.url = "github:hercules-ci/flake-parts";
+     # flake-utils.url = "github:numtide/flake-utils";
+
+-    disko = {
+-      url = "github:nix-community/disko";
+-      inputs.nixpkgs.follows = "nixpkgs";
+-    };
+     nixos-anywhere = {
+       url = "github:nix-community/nixos-anywhere";
+       inputs.nixpkgs.follows = "nixpkgs";
+
+----- stderr -----

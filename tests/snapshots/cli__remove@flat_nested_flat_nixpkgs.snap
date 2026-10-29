@@ -16,10 +16,10 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -1,11 +1,8 @@
+@@ -1,11 +1,9 @@
  {
    description = "flat nested flat test";
--
+
 -  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
    inputs.flake-utils.url = "github:numtide/flake-utils/master";
    inputs.poetry2nix = {
@@ -28,7 +28,7 @@ exit_code: 0
      url = "github:nix-community/poetry2nix/master";
    };
 
-@@ -12,7 +9,6 @@
+@@ -12,7 +10,6 @@
    outputs =
      {
        self,

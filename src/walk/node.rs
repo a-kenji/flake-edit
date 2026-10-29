@@ -158,18 +158,32 @@ pub(crate) fn trailing_inline_comments(child: &rnix::SyntaxElement) -> Vec<rnix:
     Vec::new()
 }
 
-/// Remove `node` from `parent` along with any adjacent whitespace token and a
+/// Remove `node` from `parent` along with one of the gaps around it and a
 /// trailing same-line comment (so the comment does not move onto a neighbour).
-pub(crate) fn remove_child_with_whitespace(
-    parent: &SyntaxNode,
-    node: &SyntaxNode,
-    index: usize,
-) -> SyntaxNode {
+pub(crate) fn remove_child_with_whitespace(parent: &SyntaxNode, node: &SyntaxNode) -> SyntaxNode {
     let element: rnix::SyntaxElement = node.clone().into();
-    let mut to_remove = vec![index];
-    to_remove.extend(trailing_inline_comments(&element).iter().map(|t| t.index()));
-    if let Some(ws_index) = adjacent_whitespace_index(&element) {
-        to_remove.push(ws_index);
+    let trailing = trailing_inline_comments(&element);
+    let last = trailing.last().unwrap_or(&element);
+    let before = element
+        .prev_sibling_or_token()
+        .filter(|t| t.kind() == SyntaxKind::TOKEN_WHITESPACE);
+    let after = last
+        .next_sibling_or_token()
+        .filter(|t| t.kind() == SyntaxKind::TOKEN_WHITESPACE);
+
+    let mut to_remove = vec![node.index()];
+    to_remove.extend(trailing.iter().map(|t| t.index()));
+    match (before, after) {
+        (Some(before), Some(after)) => {
+            let dropped = if keeps_gap_before(&before, &after) {
+                after
+            } else {
+                before
+            };
+            to_remove.push(dropped.index());
+        }
+        (Some(gap), None) | (None, Some(gap)) => to_remove.push(gap.index()),
+        (None, None) => {}
     }
     to_remove.sort_unstable();
 
@@ -180,6 +194,21 @@ pub(crate) fn remove_child_with_whitespace(
         green = green.remove_child(idx);
     }
     SyntaxNode::new_root(green)
+}
+
+/// Whether to keep the gap `before` a removed node over the gap `after` it.
+fn keeps_gap_before(before: &rnix::SyntaxElement, after: &rnix::SyntaxElement) -> bool {
+    let newlines = |gap: &rnix::SyntaxElement| gap.to_string().matches('\n').count();
+    if after
+        .next_sibling_or_token()
+        .is_none_or(|t| t.kind() == SyntaxKind::TOKEN_R_BRACE)
+    {
+        return false;
+    }
+    before
+        .prev_sibling_or_token()
+        .is_none_or(|t| t.kind() == SyntaxKind::TOKEN_L_BRACE)
+        || newlines(before) > newlines(after)
 }
 
 /// Whether `parent`'s input declarations predominantly use attrset style
@@ -238,22 +267,6 @@ pub(crate) fn last_line_with_newline(ws_str: &str) -> &str {
         &ws_str[last_nl..]
     } else {
         ws_str
-    }
-}
-
-/// Index of `child`'s adjacent whitespace token (preferring the previous sibling)
-/// for stripping after a removal or replacement.
-pub(crate) fn adjacent_whitespace_index(child: &rnix::SyntaxElement) -> Option<usize> {
-    if let Some(prev) = child.prev_sibling_or_token()
-        && prev.kind() == SyntaxKind::TOKEN_WHITESPACE
-    {
-        Some(prev.index())
-    } else if let Some(next) = child.next_sibling_or_token()
-        && next.kind() == SyntaxKind::TOKEN_WHITESPACE
-    {
-        Some(next.index())
-    } else {
-        None
     }
 }
 
@@ -554,7 +567,7 @@ mod tests {
             .children()
             .find(|c| c.to_string().starts_with("a ="))
             .expect("`a` binding present");
-        let result = remove_child_with_whitespace(&attr_set, &a, a.index());
+        let result = remove_child_with_whitespace(&attr_set, &a);
         assert_eq!(result.to_string(), "{b = 2;}");
     }
 }

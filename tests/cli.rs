@@ -335,6 +335,12 @@ fn test_add_infer_id(#[case] fixture: &str) {
 #[case("remove_follows_only_input", "disko.nixpkgs")] // disko stays declared
 #[case("remove_follows_only_input", "nixpkgs")] // orphaned follows goes, disko stays declared
 #[case("let_wrapped", "nixpkgs")]
+#[case("remove_blank_lines", "home-manager")] // first in the block, blank line below
+#[case("remove_blank_lines", "flake-parts")] // comment and blank line above, comment below
+#[case("remove_blank_lines", "disko")] // blank line above, block below
+#[case("remove_blank_lines", "flake-compat")] // commented-out block and blank line above
+#[case("remove_blank_lines", "flake-edit")] // last in the block, blank line above
+#[case("remove_blank_lines_toplevel", "nixpkgs")]
 fn test_remove(#[case] fixture: &str, #[case] id: &str) {
     let mut settings = insta::Settings::clone_current();
     path_redactions(&mut settings);

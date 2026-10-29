@@ -5,10 +5,12 @@ info:
   flake_nix: ""
   changes:
     - Remove:
-        id: nixpkgs
+        ids:
+          - nixpkgs
 ---
 {
   description = "flat nested flat test";
+
   inputs.flake-utils.url = "github:numtide/flake-utils/master";
   inputs.poetry2nix = {
     inputs.flake-utils.follows = "flake-utils";

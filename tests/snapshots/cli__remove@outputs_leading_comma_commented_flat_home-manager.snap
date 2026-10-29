@@ -16,17 +16,16 @@ exit_code: 0
 ----- stdout -----
 --- original
 +++ modified
-@@ -3,9 +3,6 @@
-   inputs = {
+@@ -4,8 +4,6 @@
      nixpkgs-unstable.url = github:nixos/nixpkgs/nixpkgs-unstable;
      # nixpkgs-darwin-stable.url = "github:NixOS/nixpkgs/nixpkgs-22.05-darwin";
--
+
 -    home-manager.url = "github:nix-community/home-manager/master";
 -    home-manager.inputs.nixpkgs.follows = "nixpkgs-unstable";
      # home-manager.inputs.nixpkgs.follows = "nixpkgs-stable";
 
      nur.url = "github:nix-community/NUR";
-@@ -18,8 +15,7 @@
+@@ -18,8 +16,7 @@
      , # nixpkgs-stable,
        nixpkgs-unstable
      , # nixpkgs-darwin-stable,
