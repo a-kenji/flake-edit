@@ -70,7 +70,7 @@ impl Editor {
 
     fn run_nix_flake_lock(&self, offline: bool) -> io::Result<()> {
         let flake_dir = match self.flake.path.parent() {
-            Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
+            Some(parent) if !parent.is_empty() => parent.to_path_buf(),
             _ => PathBuf::from("."),
         };
 

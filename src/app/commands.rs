@@ -190,7 +190,7 @@ pub(super) fn apply_change(
                 return Err(Error::CouldNotRemove { id });
             }
             if change.is_follows() {
-                let id = change.id().map(|id| id.to_string()).unwrap_or_default();
+                let id = change.id().map_or_default(|id| id.to_string());
                 return Err(Error::FollowsCreateFailed { id });
             }
             println!("Nothing changed.");

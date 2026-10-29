@@ -179,9 +179,7 @@ fn query_path_sizes(paths: &[&str]) -> HashMap<String, u64> {
     let Some(raw) = run_nix(&args, PATH_INFO_TIMEOUT) else {
         return HashMap::new();
     };
-    serde_json::from_slice::<serde_json::Value>(&raw)
-        .map(|json| parse_path_info(&json))
-        .unwrap_or_default()
+    serde_json::from_slice::<serde_json::Value>(&raw).map_or_default(|json| parse_path_info(&json))
 }
 
 /// Parse `nix path-info --json` output into a `store path -> narSize` map.

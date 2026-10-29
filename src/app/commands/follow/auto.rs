@@ -1413,8 +1413,7 @@ fn warning_dedup_key(err: &validate::ValidationError) -> String {
         } => {
             let lock = lock_target
                 .as_ref()
-                .map(|t| t.to_flake_follows_string())
-                .unwrap_or_default();
+                .map_or_default(|t| t.to_flake_follows_string());
             format!(
                 "stale-lock|{source_path}|{}|{lock}",
                 declared_target.to_flake_follows_string()

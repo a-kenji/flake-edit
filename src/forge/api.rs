@@ -578,8 +578,7 @@ impl ForgeClient {
             let names: Vec<String> = repo
                 .refs
                 .as_ref()
-                .map(|r| r.nodes.iter().map(|n| n.name.clone()).collect())
-                .unwrap_or_default();
+                .map_or_default(|r| r.nodes.iter().map(|n| n.name.clone()).collect());
             match lookup {
                 BatchLookup::Tags { owner, repo: r } => {
                     let inter = IntermediaryTags(
