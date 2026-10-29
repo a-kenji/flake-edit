@@ -216,8 +216,11 @@ pub(crate) fn flip(parent: &SyntaxNode, binding: &SyntaxNode, alternate: &Altern
     // last and in descending order.
     let mut green = parent
         .green()
-        .replace_child(alternate.token.index(), activated.green().into());
-    green = green.replace_child(binding.index(), parse_node(&comment_text).green().into());
+        .replace_child(alternate.token.index(), activated.green().to_owned().into());
+    green = green.replace_child(
+        binding.index(),
+        parse_node(&comment_text).green().to_owned().into(),
+    );
     for index in tail.iter().rev() {
         green = green.remove_child(*index);
     }
@@ -264,7 +267,7 @@ pub(crate) fn flip_remove(
     // The removals then run highest-first to keep the lower ones valid.
     let mut green = parent
         .green()
-        .replace_child(alternate.token.index(), activated.green().into());
+        .replace_child(alternate.token.index(), activated.green().to_owned().into());
     for index in to_remove.iter().rev() {
         green = green.remove_child(*index);
     }
@@ -291,17 +294,18 @@ pub(crate) fn synthesize(parent: &SyntaxNode, binding: &SyntaxNode, uri: &str) -
     // only touch children after the binding, so `binding.index()` stays
     // valid throughout and the inserts below land directly after the
     // commented line. Reordering these steps breaks the index arithmetic.
-    let mut green = parent
-        .green()
-        .replace_child(binding.index(), parse_node(&comment_text).green().into());
+    let mut green = parent.green().replace_child(
+        binding.index(),
+        parse_node(&comment_text).green().to_owned().into(),
+    );
     for index in tail.iter().rev() {
         green = green.remove_child(*index);
     }
     let new_line = parse_node(&format!("{attrpath_text} = \"{uri}\";"));
     green = green.insert_child(
         binding.index() + 1,
-        parse_node(&format!("\n{indent}")).green().into(),
+        parse_node(&format!("\n{indent}")).green().to_owned().into(),
     );
-    green = green.insert_child(binding.index() + 2, new_line.green().into());
+    green = green.insert_child(binding.index() + 2, new_line.green().to_owned().into());
     SyntaxNode::new_root(parent.replace_with(green))
 }

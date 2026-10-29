@@ -14,7 +14,7 @@ pub(crate) fn parse_node(s: &str) -> Node {
 pub(crate) fn substitute_child(parent: &SyntaxNode, index: usize, new_child: &SyntaxNode) -> Node {
     let green = parent
         .green()
-        .replace_child(index, new_child.green().into());
+        .replace_child(index, new_child.green().to_owned().into());
     SyntaxNode::new_root(green)
 }
 
@@ -143,7 +143,7 @@ pub(crate) fn remove_child_with_whitespace(
 
     // Remove highest index first so earlier indices stay valid against the
     // original child list.
-    let mut green = parent.green().into_owned();
+    let mut green = parent.green().to_owned();
     for idx in to_remove.into_iter().rev() {
         green = green.remove_child(idx);
     }

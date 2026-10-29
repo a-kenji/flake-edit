@@ -121,7 +121,7 @@ fn insert_into_empty_inputs(node: &SyntaxNode, id: &Segment, uri: &str, flake: b
     let mut green = if let Some(idx) = ws_index {
         node.green().remove_child(idx)
     } else {
-        node.green().into_owned()
+        node.green().to_owned()
     };
 
     let brace_index = green
@@ -129,24 +129,27 @@ fn insert_into_empty_inputs(node: &SyntaxNode, id: &Segment, uri: &str, flake: b
         .position(|c| c.as_token().map(|t| t.text() == "}").unwrap_or(false))
         .unwrap_or(green.children().count());
 
-    green = green.insert_child(brace_index, uri_node.green().into());
-    green = green.insert_child(brace_index, parse_node(&entry_indent).green().into());
+    green = green.insert_child(brace_index, uri_node.green().to_owned().into());
+    green = green.insert_child(
+        brace_index,
+        parse_node(&entry_indent).green().to_owned().into(),
+    );
 
     let mut offset = 2;
     if !flake {
         let no_flake = make_flake_false_attr(id);
         green = green.insert_child(
             brace_index + offset,
-            parse_node(&entry_indent).green().into(),
+            parse_node(&entry_indent).green().to_owned().into(),
         );
         offset += 1;
-        green = green.insert_child(brace_index + offset, no_flake.green().into());
+        green = green.insert_child(brace_index + offset, no_flake.green().to_owned().into());
         offset += 1;
     }
 
     green = green.insert_child(
         brace_index + offset,
-        parse_node(&closing_indent).green().into(),
+        parse_node(&closing_indent).green().to_owned().into(),
     );
 
     SyntaxNode::new_root(green)
@@ -262,12 +265,12 @@ fn insert_after_flat_input(
     let insert_index = insertion_index_after(ref_child);
     let mut green = node
         .green()
-        .insert_child(insert_index, follows_node.green().into());
+        .insert_child(insert_index, follows_node.green().to_owned().into());
 
     if let Some(whitespace) = get_sibling_whitespace(ref_child) {
         let ws_str = whitespace.to_string();
         let ws_node = parse_node(last_line_with_newline(&ws_str));
-        green = green.insert_child(insert_index, ws_node.green().into());
+        green = green.insert_child(insert_index, ws_node.green().to_owned().into());
     }
 
     Some(SyntaxNode::new_root(green))
@@ -511,7 +514,7 @@ fn handle_child_attrpath_value(
         }
         let mut green = parent
             .green()
-            .replace_child(child.index(), replacement.green().into());
+            .replace_child(child.index(), replacement.green().to_owned().into());
 
         if replacement.text().is_empty() {
             let mut to_remove: Vec<usize> = trailing_inline_comments(child)
@@ -603,7 +606,7 @@ fn insert_added_input_into_block(
         let ws_node = parse_node(last_line_with_newline(&ws_str));
         let mut green = parent
             .green()
-            .insert_child(insert_index, ws_node.green().into());
+            .insert_child(insert_index, ws_node.green().to_owned().into());
         let mut offset = 1;
 
         if use_attrset {
@@ -613,18 +616,22 @@ fn insert_added_input_into_block(
             } else {
                 make_attrset_url_flake_false_attr(id, uri, indent)
             };
-            green = green.insert_child(insert_index + offset, uri_node.green().into());
+            green = green.insert_child(insert_index + offset, uri_node.green().to_owned().into());
         } else {
             let uri_node = make_url_attr(id, uri);
-            green = green.insert_child(insert_index + offset, uri_node.green().into());
+            green = green.insert_child(insert_index + offset, uri_node.green().to_owned().into());
             offset += 1;
 
             if !flake {
                 let no_flake = make_flake_false_attr(id);
                 let compact_ws_node = parse_node(last_line_with_newline(&ws_str));
-                green = green.insert_child(insert_index + offset, compact_ws_node.green().into());
+                green = green.insert_child(
+                    insert_index + offset,
+                    compact_ws_node.green().to_owned().into(),
+                );
                 offset += 1;
-                green = green.insert_child(insert_index + offset, no_flake.green().into());
+                green =
+                    green.insert_child(insert_index + offset, no_flake.green().to_owned().into());
             }
         }
         return SyntaxNode::new_root(green);
@@ -633,11 +640,11 @@ fn insert_added_input_into_block(
     let uri_node = make_url_attr(id, uri);
     let mut green = parent
         .green()
-        .insert_child(insert_index, uri_node.green().into());
+        .insert_child(insert_index, uri_node.green().to_owned().into());
 
     if !flake {
         let no_flake = make_flake_false_attr(id);
-        green = green.insert_child(insert_index + 1, no_flake.green().into());
+        green = green.insert_child(insert_index + 1, no_flake.green().to_owned().into());
     }
     SyntaxNode::new_root(green)
 }
@@ -1176,11 +1183,11 @@ fn merge_follow_into_inputs_block(
         let insert_index = insertion_index_after(&last_attr);
         let mut green = inputs_block
             .green()
-            .insert_child(insert_index, follows_node.green().into());
+            .insert_child(insert_index, follows_node.green().to_owned().into());
         if let Some(whitespace) = get_sibling_whitespace(&last_attr) {
             let ws_str = whitespace.to_string();
             let ws_node = parse_node(last_line_with_newline(&ws_str));
-            green = green.insert_child(insert_index, ws_node.green().into());
+            green = green.insert_child(insert_index, ws_node.green().to_owned().into());
         }
         SyntaxNode::new_root(green)
     } else {
@@ -1214,7 +1221,7 @@ fn fill_empty_inputs_block(
         .children_with_tokens()
         .any(|t| t.kind() == SyntaxKind::TOKEN_COMMENT)
     {
-        let mut green = inputs_block.green().into_owned();
+        let mut green = inputs_block.green().to_owned();
         let brace_index = green
             .children()
             .position(|c| c.as_token().map(|t| t.text() == "}").unwrap_or(false))
@@ -1229,8 +1236,11 @@ fn fill_empty_inputs_block(
         } else {
             brace_index
         };
-        green = green.insert_child(insert_index, follows_node.green().into());
-        green = green.insert_child(insert_index, parse_node(&entry_indent).green().into());
+        green = green.insert_child(insert_index, follows_node.green().to_owned().into());
+        green = green.insert_child(
+            insert_index,
+            parse_node(&entry_indent).green().to_owned().into(),
+        );
         return SyntaxNode::new_root(green);
     }
 
@@ -1241,7 +1251,7 @@ fn fill_empty_inputs_block(
     let mut green = if let Some(idx) = ws_index {
         inputs_block.green().remove_child(idx)
     } else {
-        inputs_block.green().into_owned()
+        inputs_block.green().to_owned()
     };
 
     let brace_index = green
@@ -1249,9 +1259,15 @@ fn fill_empty_inputs_block(
         .position(|c| c.as_token().map(|t| t.text() == "}").unwrap_or(false))
         .unwrap_or(green.children().count());
 
-    green = green.insert_child(brace_index, parse_node(&closing_indent).green().into());
-    green = green.insert_child(brace_index, follows_node.green().into());
-    green = green.insert_child(brace_index, parse_node(&entry_indent).green().into());
+    green = green.insert_child(
+        brace_index,
+        parse_node(&closing_indent).green().to_owned().into(),
+    );
+    green = green.insert_child(brace_index, follows_node.green().to_owned().into());
+    green = green.insert_child(
+        brace_index,
+        parse_node(&entry_indent).green().to_owned().into(),
+    );
 
     SyntaxNode::new_root(green)
 }
@@ -1317,10 +1333,11 @@ fn handle_input_attr_set(
 
                     let mut green = child
                         .green()
-                        .insert_child(insert_index, follows_node.green().into());
+                        .insert_child(insert_index, follows_node.green().to_owned().into());
 
                     if let Some(whitespace) = get_sibling_whitespace(last_child) {
-                        green = green.insert_child(insert_index, whitespace.green().into());
+                        green =
+                            green.insert_child(insert_index, whitespace.green().to_owned().into());
                     }
 
                     let new_child = SyntaxNode::new_root(green);
@@ -1344,10 +1361,11 @@ fn handle_input_attr_set(
                         let insert_index = insertion_index_after(last_child);
                         let mut green = child
                             .green()
-                            .insert_child(insert_index, follows_node.green().into());
+                            .insert_child(insert_index, follows_node.green().to_owned().into());
 
                         if let Some(whitespace) = get_sibling_whitespace(last_child) {
-                            green = green.insert_child(insert_index, whitespace.green().into());
+                            green = green
+                                .insert_child(insert_index, whitespace.green().to_owned().into());
                         }
 
                         let new_child = SyntaxNode::new_root(green);
