@@ -281,13 +281,11 @@ pub(crate) fn synthesize(parent: &SyntaxNode, binding: &SyntaxNode, uri: &str) -
     let attrpath_text = binding
         .children()
         .find(|c| c.kind() == SyntaxKind::NODE_ATTRPATH)
-        .map(|c| c.to_string())
-        .unwrap_or_default();
+        .map_or_default(|c| c.to_string());
     let indent = binding
         .prev_sibling_or_token()
         .filter(|t| t.kind() == SyntaxKind::TOKEN_WHITESPACE)
-        .map(|t| extract_indent(&t.to_string()).to_string())
-        .unwrap_or_default();
+        .map_or_default(|t| extract_indent(&t.to_string()).to_string());
 
     let (comment_text, tail) = deactivated_line(binding);
     // Order matters: the replacement is one-to-one and the tail removals

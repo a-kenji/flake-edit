@@ -57,7 +57,7 @@ pub fn validate_full(
     lock: Option<&FlakeLock>,
 ) -> ValidationResult {
     let parsed = ParsedSource::new(source);
-    let nested_inputs = lock.map(FlakeLock::nested_inputs).unwrap_or_default();
+    let nested_inputs = lock.map_or_default(FlakeLock::nested_inputs);
     let lock_graph = lock.map(|lock| FollowsGraph::from_lock_walk(lock, &nested_inputs));
     validate_full_with_lock_graph(&parsed, inputs, lock_graph.as_ref(), &nested_inputs)
 }
@@ -179,6 +179,7 @@ mod tests {
     use crate::follows::{AttrPath, Segment};
     use crate::input::{Follows, Input, Range};
     use crate::validate::error::DuplicateAttr;
+    use std::assert_matches;
 
     fn expect_duplicate(err: &ValidationError) -> &DuplicateAttr {
         match err {
@@ -308,10 +309,7 @@ mod tests {
         let source = "{ a = 1 }";
         let result = validate(source);
         assert!(result.has_errors());
-        assert!(matches!(
-            &result.errors[0],
-            ValidationError::ParseError { .. }
-        ));
+        assert_matches!(&result.errors[0], ValidationError::ParseError { .. });
     }
 
     #[test]
@@ -319,10 +317,7 @@ mod tests {
         let source = "{ a = 1;";
         let result = validate(source);
         assert!(result.has_errors());
-        assert!(matches!(
-            &result.errors[0],
-            ValidationError::ParseError { .. }
-        ));
+        assert_matches!(&result.errors[0], ValidationError::ParseError { .. });
     }
 
     #[test]

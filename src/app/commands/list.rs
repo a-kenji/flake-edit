@@ -85,8 +85,7 @@ impl From<&InputMap> for ListOutput {
                             nested: path.to_string(),
                             target: target
                                 .as_ref()
-                                .map(|t| t.to_flake_follows_string())
-                                .unwrap_or_default(),
+                                .map_or_default(|t| t.to_flake_follows_string()),
                             kind: FollowEdgeKind::Indirect,
                         });
                     }

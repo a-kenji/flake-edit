@@ -1091,6 +1091,7 @@ struct PlanState {
     warnings: Vec<validate::ValidationError>,
 }
 
+#[derive(Debug)]
 enum StepOutcome {
     /// Validation passed and `PlanState` has been updated. `text_changed`
     /// is false when the change collapsed to the existing text; phases
@@ -1413,8 +1414,7 @@ fn warning_dedup_key(err: &validate::ValidationError) -> String {
         } => {
             let lock = lock_target
                 .as_ref()
-                .map(|t| t.to_flake_follows_string())
-                .unwrap_or_default();
+                .map_or_default(|t| t.to_flake_follows_string());
             format!(
                 "stale-lock|{source_path}|{}|{lock}",
                 declared_target.to_flake_follows_string()
@@ -1431,6 +1431,7 @@ mod tests {
     use crate::input::{Follows, Input, Range};
     use crate::validate::Location;
     use clap::Parser;
+    use std::assert_matches;
 
     fn declared_edge(source: &str, follows: &str) -> Edge {
         Edge {
@@ -1660,8 +1661,9 @@ mod tests {
             "every per-file failure must reach the caller, got: {failures:?}",
         );
         for (path, err) in &failures {
-            assert!(
-                matches!(err.as_ref(), Error::FlakeNotFound { .. }),
+            assert_matches!(
+                err.as_ref(),
+                Error::FlakeNotFound { .. },
                 "expected FlakeNotFound for missing flake.nix at {}, got {err:?}",
                 path.display(),
             );
@@ -2263,8 +2265,9 @@ mod tests {
 
         let outcome = state.try_apply_one(change, None);
 
-        assert!(
-            matches!(outcome, StepOutcome::NoText),
+        assert_matches!(
+            outcome,
+            StepOutcome::NoText,
             "expected NoText for a remove against an absent source",
         );
         assert_eq!(

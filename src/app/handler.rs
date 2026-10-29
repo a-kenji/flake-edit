@@ -290,6 +290,7 @@ fn dispatch_config(args: &CliArgs) -> Result<()> {
 mod tests {
     use super::*;
     use clap::Parser;
+    use std::assert_matches;
 
     const MINIMAL_FLAKE: &str = "{\n  inputs = {};\n  outputs = { self }: { };\n}\n";
 
@@ -313,7 +314,7 @@ mod tests {
             "/some/path/flake.nix",
         ]);
         let err = run(args).expect_err("batch follow + --flake must be rejected");
-        assert!(matches!(err, Error::IncompatibleFollowOptions));
+        assert_matches!(err, Error::IncompatibleFollowOptions);
     }
 
     #[test]
@@ -326,7 +327,7 @@ mod tests {
             "/some/path/flake.nix",
         ]);
         let err = run(args).expect_err("batch follow + --lock-file must be rejected");
-        assert!(matches!(err, Error::IncompatibleFollowOptions));
+        assert_matches!(err, Error::IncompatibleFollowOptions);
     }
 
     #[test]
@@ -339,7 +340,7 @@ mod tests {
             "list",
         ]);
         let err = run(args).expect_err("empty dir must yield FlakeDirEmpty");
-        assert!(matches!(err, Error::FlakeDirEmpty { .. }));
+        assert_matches!(err, Error::FlakeDirEmpty { .. });
     }
 
     #[test]
@@ -348,7 +349,7 @@ mod tests {
         let missing = tmp.path().join("missing.nix");
         let args = parse(&["flake-edit", "--flake", missing.to_str().unwrap(), "list"]);
         let err = run(args).expect_err("missing file must yield FlakeNotFound");
-        assert!(matches!(err, Error::FlakeNotFound { .. }));
+        assert_matches!(err, Error::FlakeNotFound { .. });
     }
 
     #[test]

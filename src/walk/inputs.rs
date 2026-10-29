@@ -2590,10 +2590,7 @@ mod tests {
             let Some(attrpath) = input_node.first_child() else {
                 continue;
             };
-            let id = attrpath
-                .first_child()
-                .map(|n| n.to_string())
-                .unwrap_or_default();
+            let id = attrpath.first_child().map_or_default(|n| n.to_string());
             if id != input_id {
                 continue;
             }

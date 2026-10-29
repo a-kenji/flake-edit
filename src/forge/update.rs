@@ -13,6 +13,7 @@ use super::channel::{
 use super::channel_tarball::{ChannelTarballUrl, find_latest_published_channel};
 use super::version::{is_downgrade, parse_ref};
 use crate::edit::InputMap;
+use crate::follows::strip_outer_quotes;
 use crate::input::Input;
 use crate::uri::is_git_url;
 
@@ -112,10 +113,7 @@ impl Updater {
         (start, end)
     }
     fn get_index(&self, id: &str) -> Option<usize> {
-        let bare = id
-            .strip_prefix('"')
-            .and_then(|s| s.strip_suffix('"'))
-            .unwrap_or(id);
+        let bare = strip_outer_quotes(id);
         self.inputs
             .iter()
             .position(|n| n.input.id().as_str() == bare)

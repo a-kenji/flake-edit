@@ -151,6 +151,7 @@ impl Headers {
 
 /// Outcome of a conditional GET. Distinguishes "the cached body is
 /// still authoritative" from "here is a fresh body and its new ETag".
+#[derive(Debug)]
 pub(crate) enum ConditionalResponse {
     /// The server returned 304: the caller's cached body for this URL
     /// is still authoritative.
@@ -578,8 +579,7 @@ impl ForgeClient {
             let names: Vec<String> = repo
                 .refs
                 .as_ref()
-                .map(|r| r.nodes.iter().map(|n| n.name.clone()).collect())
-                .unwrap_or_default();
+                .map_or_default(|r| r.nodes.iter().map(|n| n.name.clone()).collect());
             match lookup {
                 BatchLookup::Tags { owner, repo: r } => {
                     let inter = IntermediaryTags(
@@ -1082,6 +1082,7 @@ impl From<IntermediaryBranches> for Branches {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::assert_matches;
 
     const URL: &str = "https://api.github.com/repos/foo/bar/branches/baz";
 
@@ -1310,8 +1311,9 @@ mod tests {
             .get_conditional(&url, &Headers::anonymous(), Some("\"abc\""))
             .expect("conditional GET");
 
-        assert!(
-            matches!(response, ConditionalResponse::NotModified),
+        assert_matches!(
+            response,
+            ConditionalResponse::NotModified,
             "304 must be reported as NotModified"
         );
         assert_eq!(

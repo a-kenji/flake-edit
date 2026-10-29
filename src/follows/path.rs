@@ -15,9 +15,7 @@ use smallvec::{SmallVec, smallvec};
 ///
 /// Returns the input unchanged when it is not bracketed by quotes.
 pub fn strip_outer_quotes(s: &str) -> &str {
-    s.strip_prefix('"')
-        .and_then(|s| s.strip_suffix('"'))
-        .unwrap_or(s)
+    s.strip_circumfix('"', '"').unwrap_or(s)
 }
 
 /// Sentinel segment used when CST text cannot form a valid [`Segment`].

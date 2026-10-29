@@ -72,7 +72,7 @@ struct Resolve<'a> {
 /// stored in the file resolve against it.
 fn flake_dir(state: &AppState) -> PathBuf {
     match state.flake_path.parent() {
-        Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
+        Some(parent) if !parent.is_empty() => parent.to_path_buf(),
         _ => PathBuf::from("."),
     }
 }

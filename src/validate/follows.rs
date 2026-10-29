@@ -210,6 +210,7 @@ mod tests {
     use crate::edit::InputMap;
     use crate::follows::{AttrPath, Segment};
     use crate::input::{Follows, Input, Range};
+    use std::assert_matches;
 
     fn seg(s: &str) -> Segment {
         Segment::from_unquoted(s).unwrap()
@@ -250,7 +251,7 @@ mod tests {
         let graph = FollowsGraph::from_declared(&inputs);
         let errs = lint_follows_cycle(&graph, &loc_id());
         assert_eq!(errs.len(), 1);
-        assert!(matches!(errs[0], ValidationError::FollowsCycle { .. }));
+        assert_matches!(errs[0], ValidationError::FollowsCycle { .. });
     }
 
     #[test]
@@ -293,7 +294,7 @@ mod tests {
         let graph = FollowsGraph::from_flake(&inputs, &lock).with_max_depth(64);
         let stale = lint_follows_stale(&graph, &loc_id());
         assert_eq!(stale.len(), 1);
-        assert!(matches!(stale[0], ValidationError::FollowsStale { .. }));
+        assert_matches!(stale[0], ValidationError::FollowsStale { .. });
         assert_eq!(stale[0].severity(), super::super::Severity::Warning);
     }
 
@@ -359,10 +360,7 @@ mod tests {
         let top_level = top_level_names(&inputs);
         let errs = lint_follows_target_not_toplevel(&graph, &top_level, &loc_id());
         assert_eq!(errs.len(), 1);
-        assert!(matches!(
-            errs[0],
-            ValidationError::FollowsTargetNotToplevel { .. }
-        ));
+        assert_matches!(errs[0], ValidationError::FollowsTargetNotToplevel { .. });
     }
 
     #[test]
@@ -385,10 +383,7 @@ mod tests {
         let synthetic = synthetic_graph_with_contradiction();
         let errs = lint_follows_contradiction(&synthetic, &loc_id());
         assert_eq!(errs.len(), 1);
-        assert!(matches!(
-            errs[0],
-            ValidationError::FollowsContradiction { .. }
-        ));
+        assert_matches!(errs[0], ValidationError::FollowsContradiction { .. });
     }
 
     /// Build a [`FollowsGraph`] with two declared edges that share a source
@@ -435,10 +430,7 @@ mod tests {
         let graph = FollowsGraph::from_declared(&inputs);
         let errs = lint_follows_depth_exceeded(&graph, 1, &loc_id());
         assert_eq!(errs.len(), 1);
-        assert!(matches!(
-            errs[0],
-            ValidationError::FollowsDepthExceeded { .. }
-        ));
+        assert_matches!(errs[0], ValidationError::FollowsDepthExceeded { .. });
     }
 
     #[test]

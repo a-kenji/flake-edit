@@ -771,8 +771,7 @@ impl App {
                         let index = indices.first().copied().unwrap_or(0);
                         let path = nested_inputs
                             .get(index)
-                            .map(|i| i.path.to_string())
-                            .unwrap_or_default();
+                            .map_or_default(|i| i.path.to_string());
                         *selected_input = Some(path.clone());
                         *step = FollowStep::SelectTarget;
                         self.screen = Screen::List(ListScreen::single(

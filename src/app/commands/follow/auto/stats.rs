@@ -141,8 +141,7 @@ pub(super) fn existing_summary(
         } else {
             let total = group
                 .total()
-                .map(|bytes| format!(" (~{})", format_size(bytes)))
-                .unwrap_or_default();
+                .map_or_default(|bytes| format!(" (~{})", format_size(bytes)));
             out.push_str(&format!(
                 "  {} ({unit}) x {}{total}\n",
                 group.label, group.count

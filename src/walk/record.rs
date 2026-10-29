@@ -137,7 +137,7 @@ mod tests {
             .map(|f| match f {
                 Follows::Indirect { path, target, .. } => (
                     path.to_string(),
-                    target.as_ref().map(|t| t.to_string()).unwrap_or_default(),
+                    target.as_ref().map_or_default(|t| t.to_string()),
                 ),
                 Follows::Direct(name, _) => panic!("unexpected direct follows {name}"),
             })
