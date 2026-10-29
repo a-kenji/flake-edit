@@ -110,11 +110,11 @@ impl FlakeEdit {
     /// is rejected (e.g. [`Error::DuplicateInput`],
     /// [`Error::InputNotFound`]).
     pub fn apply_change(&mut self, change: Change) -> Result<ApplyOutcome, Error> {
-        let text = self.apply_change_text(change)?;
+        let text = self.apply_change_tree(change)?.map(|n| n.to_string());
         Ok(ApplyOutcome { text })
     }
 
-    fn apply_change_text(&mut self, change: Change) -> Result<Option<String>, Error> {
+    fn apply_change_tree(&mut self, change: Change) -> Result<Option<SyntaxNode>, Error> {
         match change {
             Change::None => Ok(None),
             Change::Add { .. } => self.apply_add(change),
@@ -131,7 +131,7 @@ impl FlakeEdit {
     /// `None` (no such block) does the walker re-run with `add_toplevel`
     /// flipped on to synthesize one. Outputs-lambda extension piggy-backs on
     /// the first walk because it must observe the post-insert syntax tree.
-    fn apply_add(&mut self, change: Change) -> Result<Option<String>, Error> {
+    fn apply_add(&mut self, change: Change) -> Result<Option<SyntaxNode>, Error> {
         if let Some(input_id) = change.id() {
             if input_id.follows().is_some() {
                 return Err(Error::NestedInputId(input_id.to_string()));
@@ -156,27 +156,27 @@ impl FlakeEdit {
                         if let Some(maybe_changed_node) =
                             self.walker.change_outputs(OutputChange::Add(id))?
                         {
-                            return Ok(Some(maybe_changed_node.to_string()));
+                            return Ok(Some(maybe_changed_node));
                         }
                     }
                 }
                 Outputs::None | Outputs::Any(_) => {}
             }
-            Ok(Some(maybe_changed_node.to_string()))
+            Ok(Some(maybe_changed_node))
         } else {
             self.walker.add_toplevel = true;
             let maybe_changed_node = self.walker.walk(&change)?;
-            Ok(maybe_changed_node.map(|n| n.to_string()))
+            Ok(maybe_changed_node)
         }
     }
 
     /// Remove the ids one after another.
-    fn apply_remove(&mut self, change: Change) -> Result<Option<String>, Error> {
+    fn apply_remove(&mut self, change: Change) -> Result<Option<SyntaxNode>, Error> {
         let mut res = None;
         for id in change.ids() {
             self.remove_id(id, &mut res)?;
         }
-        Ok(res.map(|n| n.to_string()))
+        Ok(res)
     }
 
     fn remove_id(&mut self, id: ChangeId, res: &mut Option<SyntaxNode>) -> Result<(), Error> {
@@ -243,7 +243,7 @@ impl FlakeEdit {
     /// rather than a no-op so the caller learns about the typo; the parent
     /// check runs before the walk because the walker would silently produce
     /// no edit otherwise.
-    fn apply_follows(&mut self, change: Change) -> Result<Option<String>, Error> {
+    fn apply_follows(&mut self, change: Change) -> Result<Option<SyntaxNode>, Error> {
         let Change::Follows { ref input, .. } = change else {
             unreachable!("apply_follows dispatched only for Change::Follows");
         };
@@ -255,7 +255,7 @@ impl FlakeEdit {
             return Err(Error::InputNotFound(parent_id.to_string()));
         }
 
-        Ok(self.walker.walk(&change)?.map(|n| n.to_string()))
+        Ok(self.walker.walk(&change)?)
     }
 
     /// The presence check exists because `walker.walk` produces no edit at
@@ -264,7 +264,7 @@ impl FlakeEdit {
     /// `Option<ChangeId>` is honored rather than asserted: a `Change::Change`
     /// with `id == None` is a no-op the walker handles without consulting
     /// the input map.
-    fn apply_change_uri(&mut self, change: Change) -> Result<Option<String>, Error> {
+    fn apply_change_uri(&mut self, change: Change) -> Result<Option<SyntaxNode>, Error> {
         if let Some(input_id) = change.id() {
             self.ensure_inputs_populated()?;
 
@@ -274,14 +274,14 @@ impl FlakeEdit {
             }
         }
 
-        Ok(self.walker.walk(&change)?.map(|n| n.to_string()))
+        Ok(self.walker.walk(&change)?)
     }
 
     /// A `Change::Toggle` edits through [`crate::walk::toggle`] directly
     /// rather than the traversal in `walk`: the url binding is found via
     /// the range recorded on the input, and the flip or new-alternate
     /// write is a local green-tree rewrite around it.
-    fn apply_toggle(&mut self, change: Change) -> Result<Option<String>, Error> {
+    fn apply_toggle(&mut self, change: Change) -> Result<Option<SyntaxNode>, Error> {
         let Change::Toggle { id, uri, .. } = change else {
             unreachable!("apply_toggle dispatched only for Change::Toggle");
         };
@@ -301,7 +301,7 @@ impl FlakeEdit {
 
         let alternates = toggle::alternates(&binding);
         if let Some(alternate) = alternates.iter().find(|a| a.url == uri) {
-            return Ok(Some(toggle::flip(&parent, &binding, alternate).to_string()));
+            return Ok(Some(toggle::flip(&parent, &binding, alternate)));
         }
         if input.url() == uri {
             // The url is already active and not stored as an alternate.
@@ -309,9 +309,7 @@ impl FlakeEdit {
             // is a no-op.
             return Ok(None);
         }
-        Ok(Some(
-            toggle::synthesize(&parent, &binding, &uri).to_string(),
-        ))
+        Ok(Some(toggle::synthesize(&parent, &binding, &uri)))
     }
 
     /// A `Change::ToggleRemove` deletes the resolved variant's line through
@@ -319,7 +317,7 @@ impl FlakeEdit {
     /// comment and leaves the active url untouched. Removing the active url
     /// activates `activate` in its place and drops the previously active
     /// line. A `uri` that is not stored on the input is a no-op.
-    fn apply_toggle_remove(&mut self, change: Change) -> Result<Option<String>, Error> {
+    fn apply_toggle_remove(&mut self, change: Change) -> Result<Option<SyntaxNode>, Error> {
         let Change::ToggleRemove { id, uri, activate } = change else {
             unreachable!("apply_toggle_remove dispatched only for Change::ToggleRemove");
         };
@@ -339,17 +337,13 @@ impl FlakeEdit {
 
         let alternates = toggle::alternates(&binding);
         if let Some(alternate) = alternates.iter().find(|a| a.url == uri) {
-            return Ok(Some(
-                toggle::remove_alternate(&parent, alternate).to_string(),
-            ));
+            return Ok(Some(toggle::remove_alternate(&parent, alternate)));
         }
         if input.url() == uri {
             let replacement = activate
                 .and_then(|activate| alternates.into_iter().find(|a| a.url == activate))
                 .ok_or(Error::RemoveActiveWithoutAlternate(id_str))?;
-            return Ok(Some(
-                toggle::flip_remove(&parent, &binding, &replacement).to_string(),
-            ));
+            return Ok(Some(toggle::flip_remove(&parent, &binding, &replacement)));
         }
         Ok(None)
     }
@@ -760,5 +754,287 @@ mod tests {
             !text.contains(r#"= ""ghc-8"#),
             "RHS must not double-quote the target, got:\n{text}",
         );
+    }
+
+    const INPUT_VARIANTS: &[(&str, &str)] = &[
+        (
+            "flat",
+            r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    crane.url = "github:ipetkov/crane";
+    crane.inputs.nixpkgs.follows = "nixpkgs";
+  };
+  outputs = { self, nixpkgs, crane }: { };
+}
+"#,
+        ),
+        (
+            "block",
+            r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+  outputs = { self, nixpkgs, crane }: { };
+}
+"#,
+        ),
+        (
+            "inputs_block_in_input",
+            r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+      };
+    };
+  };
+  outputs = { self, nixpkgs, crane }: { };
+}
+"#,
+        ),
+        (
+            "attrset_valued",
+            r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs = {
+        follows = "nixpkgs";
+      };
+    };
+  };
+  outputs = { self, nixpkgs, crane }: { };
+}
+"#,
+        ),
+        (
+            "toplevel_flat",
+            r#"{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.flake-utils.url = "github:numtide/flake-utils";
+  inputs.crane.url = "github:ipetkov/crane";
+  inputs.crane.inputs.nixpkgs.follows = "nixpkgs";
+
+  outputs = { self, nixpkgs, crane }: { };
+}
+"#,
+        ),
+        (
+            "toplevel_block",
+            r#"{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.flake-utils.url = "github:numtide/flake-utils";
+  inputs.crane = {
+    url = "github:ipetkov/crane";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
+
+  outputs = { self, nixpkgs, crane }: { };
+}
+"#,
+        ),
+    ];
+
+    const FLAKE_FALSE_VARIANTS: &[(&str, &str)] = &[
+        (
+            "flat",
+            r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    not-a-flake.url = "github:a-kenji/not-a-flake";
+    not-a-flake.flake = false;
+  };
+  outputs = { self, nixpkgs, not-a-flake }: { };
+}
+"#,
+        ),
+        (
+            "block",
+            r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    not-a-flake = {
+      url = "github:a-kenji/not-a-flake";
+      flake = false;
+    };
+  };
+  outputs = { self, nixpkgs, not-a-flake }: { };
+}
+"#,
+        ),
+        (
+            "toplevel_flat",
+            r#"{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.not-a-flake.url = "github:a-kenji/not-a-flake";
+  inputs.not-a-flake.flake = false;
+
+  outputs = { self, nixpkgs, not-a-flake }: { };
+}
+"#,
+        ),
+        (
+            "toplevel_block",
+            r#"{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.not-a-flake = {
+    url = "github:a-kenji/not-a-flake";
+    flake = false;
+  };
+
+  outputs = { self, nixpkgs, not-a-flake }: { };
+}
+"#,
+        ),
+    ];
+
+    const TOGGLE_INPUT_VARIANTS: &[(&str, &str)] = &[
+        (
+            "flat",
+            r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    # rust-overlay.url = "github:a-kenji/rust-overlay"; # fork
+    rust-overlay.url = "github:oxalica/rust-overlay"; # upstream
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+  };
+  outputs = args: import ./nix args;
+}
+"#,
+        ),
+        (
+            "block",
+            r#"{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    rust-overlay = {
+      # url = "github:a-kenji/rust-overlay"; # fork
+      url = "github:oxalica/rust-overlay"; # upstream
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+  outputs = args: import ./nix args;
+}
+"#,
+        ),
+        (
+            "toplevel_flat",
+            r#"{
+  # inputs.rust-overlay.url = "github:a-kenji/rust-overlay"; # fork
+  inputs.rust-overlay.url = "github:oxalica/rust-overlay"; # upstream
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+  outputs = args: import ./nix args;
+}
+"#,
+        ),
+    ];
+
+    fn id(s: &str) -> ChangeId {
+        ChangeId::parse(s).unwrap()
+    }
+
+    fn assert_edits_keep_parse_shape(variants: &[(&str, &str)], change: &Change) {
+        for (variant, flake) in variants {
+            let mut fe = FlakeEdit::from_text(flake).unwrap();
+            let tree = fe
+                .apply_change_tree(change.clone())
+                .unwrap_or_else(|e| panic!("{variant}: {change:?} failed: {e}"))
+                .unwrap_or_else(|| panic!("{variant}: {change:?} changed nothing"));
+            let reparsed = rnix::Root::parse(&tree.to_string()).syntax();
+            assert_eq!(
+                format!("{tree:#?}"),
+                format!("{reparsed:#?}"),
+                "{variant}: {change:?} left a tree that differs from its reparse",
+            );
+        }
+    }
+
+    #[test]
+    fn add_keeps_parse_shape() {
+        for flake in [true, false] {
+            let change = Change::Add {
+                id: Some(id("rust-overlay")),
+                uri: Some("github:oxalica/rust-overlay".to_string()),
+                flake,
+            };
+            assert_edits_keep_parse_shape(INPUT_VARIANTS, &change);
+            assert_edits_keep_parse_shape(
+                &[(
+                    "empty_inputs_block",
+                    "{\n  inputs = { };\n  outputs = { self }: { };\n}\n",
+                )],
+                &change,
+            );
+        }
+    }
+
+    #[test]
+    fn remove_keeps_parse_shape() {
+        for removed in ["crane", "crane.nixpkgs"] {
+            let change = Change::Remove {
+                ids: vec![id(removed)],
+            };
+            assert_edits_keep_parse_shape(INPUT_VARIANTS, &change);
+        }
+        let change = Change::Remove {
+            ids: vec![id("not-a-flake")],
+        };
+        assert_edits_keep_parse_shape(FLAKE_FALSE_VARIANTS, &change);
+    }
+
+    #[test]
+    fn change_keeps_parse_shape() {
+        let change = Change::Change {
+            id: Some(id("crane")),
+            uri: Some("github:ipetkov/crane/v0.21.0".to_string()),
+        };
+        assert_edits_keep_parse_shape(INPUT_VARIANTS, &change);
+    }
+
+    #[test]
+    fn follow_keeps_parse_shape() {
+        let change = Change::Follows {
+            input: id("crane.flake-utils"),
+            target: AttrPath::parse("flake-utils").unwrap(),
+        };
+        assert_edits_keep_parse_shape(INPUT_VARIANTS, &change);
+    }
+
+    #[test]
+    fn toggle_keeps_parse_shape() {
+        let rust_overlay = || id("rust-overlay");
+        let changes = [
+            Change::Toggle {
+                id: rust_overlay(),
+                uri: "github:a-kenji/rust-overlay".to_string(),
+                previous: "github:oxalica/rust-overlay".to_string(),
+            },
+            Change::Toggle {
+                id: rust_overlay(),
+                uri: "path:../rust-overlay".to_string(),
+                previous: "github:oxalica/rust-overlay".to_string(),
+            },
+            Change::ToggleRemove {
+                id: rust_overlay(),
+                uri: "github:oxalica/rust-overlay".to_string(),
+                activate: Some("github:a-kenji/rust-overlay".to_string()),
+            },
+        ];
+        for change in &changes {
+            assert_edits_keep_parse_shape(TOGGLE_INPUT_VARIANTS, change);
+        }
     }
 }

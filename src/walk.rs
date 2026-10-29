@@ -11,6 +11,7 @@ pub(crate) mod toggle;
 use std::collections::HashMap;
 
 use rnix::{Root, SyntaxKind, SyntaxNode};
+use rowan::GreenToken;
 
 use crate::change::Change;
 use crate::edit::{OutputChange, Outputs};
@@ -24,7 +25,7 @@ pub use error::WalkerError;
 use inputs::{redeclare_removed_owner, retarget_existing_follows, walk_inputs};
 use node::{
     FollowsKind, insert_binding_after, last_line_with_newline, make_toplevel_flake_false_attr,
-    make_toplevel_url_attr, parse_node, remove_child_with_whitespace, substitute_child,
+    make_toplevel_url_attr, remove_child_with_whitespace, substitute_child, whitespace_token,
 };
 
 /// The flake's top-level attribute set.
@@ -77,7 +78,7 @@ fn insert_flat_follows_after(
     target: &str,
 ) -> SyntaxNode {
     let follows_node = FollowsKind::TopLevelNested { path, target }.emit();
-    let new_attr_set = insert_binding_after(attr_set, ref_child, &follows_node);
+    let new_attr_set = insert_binding_after(attr_set, ref_child, follows_node);
     SyntaxNode::new_root(attr_set.replace_with(new_attr_set.green().to_owned()))
 }
 
@@ -299,7 +300,7 @@ impl<'a> Walker {
     ) -> Option<SyntaxNode> {
         let follows_node = FollowsKind::BlockNested { rest, target }.emit();
         if let Some(last_child) = block_attr_set.children().last() {
-            let new_block = insert_binding_after(block_attr_set, &last_child, &follows_node);
+            let new_block = insert_binding_after(block_attr_set, &last_child, follows_node);
             let new_toplevel = substitute_child(toplevel, block_attr_set.index(), &new_block);
             let green = attr_set
                 .green()
@@ -403,12 +404,12 @@ impl<'a> Walker {
         // normalize it to a single newline + indent. Walking through tokens (not
         // siblings) lets us skip past comments between the last input and `outputs`.
         let ws_node = {
-            let mut ws: Option<SyntaxNode> = None;
+            let mut ws: Option<GreenToken> = None;
             let mut cursor = toplevel.prev_sibling_or_token();
             while let Some(ref tok) = cursor {
                 if tok.kind() == SyntaxKind::TOKEN_WHITESPACE {
                     let ws_str = tok.to_string();
-                    ws = Some(parse_node(last_line_with_newline(&ws_str)));
+                    ws = Some(whitespace_token(last_line_with_newline(&ws_str)));
                     break;
                 }
                 cursor = tok.prev_sibling_or_token();
@@ -419,21 +420,19 @@ impl<'a> Walker {
         let addition = make_toplevel_url_attr(id, uri);
         let insert_pos = toplevel.index() - 1;
 
-        let mut green = attr_set
-            .green()
-            .insert_child(insert_pos, addition.green().to_owned().into());
+        let mut green = attr_set.green().insert_child(insert_pos, addition.into());
 
         if let Some(ref ws) = ws_node {
-            green = green.insert_child(insert_pos, ws.green().to_owned().into());
+            green = green.insert_child(insert_pos, ws.clone().into());
         }
 
         // Append `inputs.<id>.flake = false;` when the new input opts out of flake mode.
         if !flake {
             let no_flake = make_toplevel_flake_false_attr(id);
-            green = green.insert_child(toplevel.index() + 1, no_flake.green().to_owned().into());
+            green = green.insert_child(toplevel.index() + 1, no_flake.into());
 
             if let Some(ref ws) = ws_node {
-                green = green.insert_child(toplevel.index() + 1, ws.green().to_owned().into());
+                green = green.insert_child(toplevel.index() + 1, ws.clone().into());
             }
         }
 

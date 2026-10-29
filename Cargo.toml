@@ -49,6 +49,7 @@ directories = "6.0.0"
 nix-uri = "0.2.0"
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 rnix = "0.15.1"
+rowan = "0.17.0"
 ropey = { version = "1.6.1" }
 semver = "1.0.28"
 serde = { version = "1.0.229", default-features = false, features = [
