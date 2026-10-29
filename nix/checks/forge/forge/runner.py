@@ -6,8 +6,9 @@ This is the actual `testScript` entrypoint.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from contextlib import AbstractContextManager
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from forge import _logging
 from forge.client import ForgeClient
