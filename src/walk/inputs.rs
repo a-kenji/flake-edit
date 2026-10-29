@@ -1,4 +1,5 @@
 use rnix::{SyntaxKind, SyntaxNode};
+use rowan::GreenNode;
 
 use crate::change::Change;
 use crate::follows::path::{follows_idents_bare, follows_idents_prefixed};
@@ -11,7 +12,7 @@ use super::node::{
     is_attrset_content_empty, last_line_with_newline, make_attrset_url_attr,
     make_attrset_url_flake_false_attr, make_flake_false_attr, make_quoted_string, make_url_attr,
     parse_node, remove_child_with_whitespace, should_remove_input, substitute_child,
-    uses_attrset_style,
+    uses_attrset_style, whitespace_token,
 };
 
 /// Walk the `inputs` section of a `flake.nix`, applying `change`.
@@ -129,27 +130,21 @@ fn insert_into_empty_inputs(node: &SyntaxNode, id: &Segment, uri: &str, flake: b
         .position(|c| c.as_token().map(|t| t.text() == "}").unwrap_or(false))
         .unwrap_or(green.children().count());
 
-    green = green.insert_child(brace_index, uri_node.green().to_owned().into());
-    green = green.insert_child(
-        brace_index,
-        parse_node(&entry_indent).green().to_owned().into(),
-    );
+    green = green.insert_child(brace_index, uri_node.into());
+    green = green.insert_child(brace_index, whitespace_token(&entry_indent).into());
 
     let mut offset = 2;
     if !flake {
         let no_flake = make_flake_false_attr(id);
-        green = green.insert_child(
-            brace_index + offset,
-            parse_node(&entry_indent).green().to_owned().into(),
-        );
+        green = green.insert_child(brace_index + offset, whitespace_token(&entry_indent).into());
         offset += 1;
-        green = green.insert_child(brace_index + offset, no_flake.green().to_owned().into());
+        green = green.insert_child(brace_index + offset, no_flake.into());
         offset += 1;
     }
 
     green = green.insert_child(
         brace_index + offset,
-        parse_node(&closing_indent).green().to_owned().into(),
+        whitespace_token(&closing_indent).into(),
     );
 
     SyntaxNode::new_root(green)
@@ -203,7 +198,7 @@ fn insert_flat_toplevel_follows(
         // `None` when the parent isn't declared in this block.
         // `Walker::handle_follows_flat_toplevel` owns the split-declaration
         // placement instead.
-        let inserted = insert_after_flat_input(node, parent_id_str, &follows_node);
+        let inserted = insert_after_flat_input(node, parent_id_str, follows_node);
         if inserted.is_some() {
             return Some(inserted);
         }
@@ -215,7 +210,7 @@ fn insert_flat_toplevel_follows(
             target: &target_str,
         }
         .emit();
-        let inserted = insert_after_flat_input(node, parent_id_str, &follows_node);
+        let inserted = insert_after_flat_input(node, parent_id_str, follows_node);
         if inserted.is_some() {
             return Some(inserted);
         }
@@ -251,7 +246,7 @@ fn flat_input_has_nested_block(node: &SyntaxNode, parent_id_str: &str) -> bool {
 fn insert_after_flat_input(
     node: &SyntaxNode,
     parent_id_str: &str,
-    follows_node: &SyntaxNode,
+    follows_node: GreenNode,
 ) -> Option<SyntaxNode> {
     let children: Vec<_> = node.children().collect();
     let ref_child = children.iter().rev().find(|child| {
@@ -577,12 +572,9 @@ fn insert_added_input_into_block(
     // newline + indent. Copying the raw inter-entry whitespace would
     // duplicate blank lines when the closing brace already has one.
     let ws_reference = last_attr.as_ref().unwrap_or(child_node);
-    if let Some(whitespace) = get_sibling_whitespace(ws_reference) {
-        let ws_str = whitespace.to_string();
-        let ws_node = parse_node(last_line_with_newline(&ws_str));
-        let mut green = parent
-            .green()
-            .insert_child(insert_index, ws_node.green().to_owned().into());
+    if let Some(ws_str) = get_sibling_whitespace(ws_reference) {
+        let ws_node = whitespace_token(last_line_with_newline(&ws_str));
+        let mut green = parent.green().insert_child(insert_index, ws_node.into());
         let mut offset = 1;
 
         if use_attrset {
@@ -592,35 +584,29 @@ fn insert_added_input_into_block(
             } else {
                 make_attrset_url_flake_false_attr(id, uri, indent)
             };
-            green = green.insert_child(insert_index + offset, uri_node.green().to_owned().into());
+            green = green.insert_child(insert_index + offset, uri_node.into());
         } else {
             let uri_node = make_url_attr(id, uri);
-            green = green.insert_child(insert_index + offset, uri_node.green().to_owned().into());
+            green = green.insert_child(insert_index + offset, uri_node.into());
             offset += 1;
 
             if !flake {
                 let no_flake = make_flake_false_attr(id);
-                let compact_ws_node = parse_node(last_line_with_newline(&ws_str));
-                green = green.insert_child(
-                    insert_index + offset,
-                    compact_ws_node.green().to_owned().into(),
-                );
+                let compact_ws_node = whitespace_token(last_line_with_newline(&ws_str));
+                green = green.insert_child(insert_index + offset, compact_ws_node.into());
                 offset += 1;
-                green =
-                    green.insert_child(insert_index + offset, no_flake.green().to_owned().into());
+                green = green.insert_child(insert_index + offset, no_flake.into());
             }
         }
         return SyntaxNode::new_root(green);
     }
 
     let uri_node = make_url_attr(id, uri);
-    let mut green = parent
-        .green()
-        .insert_child(insert_index, uri_node.green().to_owned().into());
+    let mut green = parent.green().insert_child(insert_index, uri_node.into());
 
     if !flake {
         let no_flake = make_flake_false_attr(id);
-        green = green.insert_child(insert_index + 1, no_flake.green().to_owned().into());
+        green = green.insert_child(insert_index + 1, no_flake.into());
     }
     SyntaxNode::new_root(green)
 }
@@ -1155,9 +1141,9 @@ fn merge_follow_into_inputs_block(
         .filter(|c| c.kind() == SyntaxKind::NODE_ATTRPATH_VALUE)
         .last()
     {
-        insert_binding_after(&inputs_block, &last_attr, &follows_node)
+        insert_binding_after(&inputs_block, &last_attr, follows_node)
     } else {
-        fill_empty_inputs_block(&inputs_attr, &inputs_block, &follows_node)
+        fill_empty_inputs_block(&inputs_attr, &inputs_block, follows_node)
     };
 
     let new_attr = substitute_child(&inputs_attr, inputs_block.index(), &new_block);
@@ -1168,7 +1154,7 @@ fn merge_follow_into_inputs_block(
 fn fill_empty_inputs_block(
     inputs_attr: &SyntaxNode,
     inputs_block: &SyntaxNode,
-    follows_node: &SyntaxNode,
+    follows_node: GreenNode,
 ) -> SyntaxNode {
     let parent_attr_indent = inputs_attr
         .prev_sibling_or_token()
@@ -1202,11 +1188,8 @@ fn fill_empty_inputs_block(
         } else {
             brace_index
         };
-        green = green.insert_child(insert_index, follows_node.green().to_owned().into());
-        green = green.insert_child(
-            insert_index,
-            parse_node(&entry_indent).green().to_owned().into(),
-        );
+        green = green.insert_child(insert_index, follows_node.into());
+        green = green.insert_child(insert_index, whitespace_token(&entry_indent).into());
         return SyntaxNode::new_root(green);
     }
 
@@ -1225,15 +1208,9 @@ fn fill_empty_inputs_block(
         .position(|c| c.as_token().map(|t| t.text() == "}").unwrap_or(false))
         .unwrap_or(green.children().count());
 
-    green = green.insert_child(
-        brace_index,
-        parse_node(&closing_indent).green().to_owned().into(),
-    );
-    green = green.insert_child(brace_index, follows_node.green().to_owned().into());
-    green = green.insert_child(
-        brace_index,
-        parse_node(&entry_indent).green().to_owned().into(),
-    );
+    green = green.insert_child(brace_index, whitespace_token(&closing_indent).into());
+    green = green.insert_child(brace_index, follows_node.into());
+    green = green.insert_child(brace_index, whitespace_token(&entry_indent).into());
 
     SyntaxNode::new_root(green)
 }
@@ -1294,7 +1271,7 @@ fn handle_input_attr_set(
                 .emit();
 
                 if let Some(last_child) = child.children().last() {
-                    let new_child = insert_binding_after(child, &last_child, &follows_node);
+                    let new_child = insert_binding_after(child, &last_child, follows_node);
                     return Some(substitute_child(node, child.index(), &new_child));
                 }
             } else if full_path.len() == 1 {
@@ -1311,7 +1288,7 @@ fn handle_input_attr_set(
                     }
                     .emit();
                     if let Some(last_child) = child.children().last() {
-                        let new_child = insert_binding_after(child, &last_child, &follows_node);
+                        let new_child = insert_binding_after(child, &last_child, follows_node);
                         return Some(substitute_child(node, child.index(), &new_child));
                     }
                 }

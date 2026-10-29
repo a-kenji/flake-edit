@@ -16,11 +16,15 @@
 //! `# x` after the first round trip).
 
 use rnix::{SyntaxKind, SyntaxNode, SyntaxToken, TextRange, TextSize};
+use rowan::{GreenNode, GreenToken, NodeOrToken};
 
 use crate::follows::strip_outer_quotes;
 use crate::input::Input;
 
-use super::node::{extract_indent, parse_node, trailing_inline_comments};
+use super::node::{
+    comment_token, extract_indent, parse_binding, parse_binding_line, trailing_inline_comments,
+    whitespace_token,
+};
 
 /// A commented alternate adjacent to an input's url binding.
 #[derive(Debug, Clone)]
@@ -209,22 +213,47 @@ fn deactivated_line(binding: &SyntaxNode) -> (String, Vec<usize>) {
 /// Activate the stored `alternate` and deactivate the active `binding`.
 /// Both lines keep their position. Only the comment marker moves.
 pub(crate) fn flip(parent: &SyntaxNode, binding: &SyntaxNode, alternate: &Alternate) -> SyntaxNode {
-    let activated = parse_node(uncomment(&alternate.token.to_string()));
+    let activated = parse_binding_line(uncomment(&alternate.token.to_string()));
     let (comment_text, tail) = deactivated_line(binding);
-    // Replacements are one-to-one and leave sibling indices valid. The
-    // tail removals shift only children after the binding, so they run
-    // last and in descending order.
-    let mut green = parent
-        .green()
-        .replace_child(alternate.token.index(), activated.green().to_owned().into());
-    green = green.replace_child(
+    // Each removal shifts the later children, so the tail goes highest first.
+    let deactivate = |green: GreenNode| {
+        let mut green = green.replace_child(binding.index(), comment_token(&comment_text).into());
+        for index in tail.iter().rev() {
+            green = green.remove_child(*index);
+        }
+        green
+    };
+    let green = splice_around(
+        parent.green().to_owned(),
+        alternate.token.index(),
+        activated,
         binding.index(),
-        parse_node(&comment_text).green().to_owned().into(),
+        deactivate,
     );
-    for index in tail.iter().rev() {
-        green = green.remove_child(*index);
-    }
     SyntaxNode::new_root(parent.replace_with(green))
+}
+
+/// Splice `elements` at `index` and apply `edit` at `edit_index`, the higher index first.
+fn splice_around(
+    green: GreenNode,
+    index: usize,
+    elements: Vec<NodeOrToken<GreenNode, GreenToken>>,
+    edit_index: usize,
+    edit: impl FnOnce(GreenNode) -> GreenNode,
+) -> GreenNode {
+    let splice = |green: GreenNode| {
+        elements
+            .into_iter()
+            .rev()
+            .fold(green.remove_child(index), |green, element| {
+                green.insert_child(index, element)
+            })
+    };
+    if index > edit_index {
+        edit(splice(green))
+    } else {
+        splice(edit(green))
+    }
 }
 
 /// Delete the stored `alternate`'s line: the comment token and the
@@ -250,7 +279,7 @@ pub(crate) fn flip_remove(
     binding: &SyntaxNode,
     alternate: &Alternate,
 ) -> SyntaxNode {
-    let activated = parse_node(uncomment(&alternate.token.to_string()));
+    let activated = parse_binding_line(uncomment(&alternate.token.to_string()));
     let element: rnix::SyntaxElement = binding.clone().into();
     let mut to_remove: Vec<usize> = trailing_inline_comments(&element)
         .iter()
@@ -263,14 +292,19 @@ pub(crate) fn flip_remove(
         to_remove.push(prev.index());
     }
     to_remove.sort_unstable();
-    // The replacement is one-to-one, so the collected indices stay valid.
-    // The removals then run highest-first to keep the lower ones valid.
-    let mut green = parent
-        .green()
-        .replace_child(alternate.token.index(), activated.green().to_owned().into());
-    for index in to_remove.iter().rev() {
-        green = green.remove_child(*index);
-    }
+    let remove = |mut green: GreenNode| {
+        for index in to_remove.iter().rev() {
+            green = green.remove_child(*index);
+        }
+        green
+    };
+    let green = splice_around(
+        parent.green().to_owned(),
+        alternate.token.index(),
+        activated,
+        binding.index(),
+        remove,
+    );
     SyntaxNode::new_root(parent.replace_with(green))
 }
 
@@ -292,18 +326,17 @@ pub(crate) fn synthesize(parent: &SyntaxNode, binding: &SyntaxNode, uri: &str) -
     // only touch children after the binding, so `binding.index()` stays
     // valid throughout and the inserts below land directly after the
     // commented line. Reordering these steps breaks the index arithmetic.
-    let mut green = parent.green().replace_child(
-        binding.index(),
-        parse_node(&comment_text).green().to_owned().into(),
-    );
+    let mut green = parent
+        .green()
+        .replace_child(binding.index(), comment_token(&comment_text).into());
     for index in tail.iter().rev() {
         green = green.remove_child(*index);
     }
-    let new_line = parse_node(&format!("{attrpath_text} = \"{uri}\";"));
+    let new_line = parse_binding(&format!("{attrpath_text} = \"{uri}\";"));
     green = green.insert_child(
         binding.index() + 1,
-        parse_node(&format!("\n{indent}")).green().to_owned().into(),
+        whitespace_token(&format!("\n{indent}")).into(),
     );
-    green = green.insert_child(binding.index() + 2, new_line.green().to_owned().into());
+    green = green.insert_child(binding.index() + 2, new_line.into());
     SyntaxNode::new_root(parent.replace_with(green))
 }

@@ -1,9 +1,10 @@
-use rnix::{SyntaxKind, SyntaxNode};
+use rnix::{Root, SyntaxKind, SyntaxNode};
+use rowan::{GreenNode, NodeOrToken};
 
 use crate::edit::{OutputChange, Outputs};
 
 use super::error::WalkerError;
-use super::node::parse_node;
+use super::node::{comma_token, whitespace_token};
 
 /// Unwrap parentheses around a node, returning the inner node.
 /// If the node is not NODE_PAREN, returns a clone of the original.
@@ -198,19 +199,23 @@ fn add_output_arg(pattern: &SyntaxNode, name: &str, style: &PatternStyle) -> Syn
         }
     }
 
-    let addition = if let Some(ref ws) = style.leading_comma_ws {
-        parse_node(&format!("{ws}, {name}"))
+    let entry = NodeOrToken::Node(parse_pat_entry(name));
+    let comma = NodeOrToken::Token(comma_token());
+    let ws = |text: &str| NodeOrToken::Token(whitespace_token(text));
+    let addition = if let Some(ref lead) = style.leading_comma_ws {
+        vec![ws(lead), comma, ws(" "), entry]
     } else if style.has_trailing_comma {
-        parse_node(&format!("{name},"))
-    } else if let Some(ref ws) = style.multiline_trailing_ws {
-        parse_node(&format!(",{ws}{name}"))
+        vec![entry, comma]
+    } else if let Some(ref trail) = style.multiline_trailing_ws {
+        vec![comma, ws(trail), entry]
     } else {
-        parse_node(&format!(", {name}"))
+        vec![comma, ws(" "), entry]
     };
 
-    let mut green = pattern
-        .green()
-        .insert_child(last_node, addition.green().to_owned().into());
+    let mut green = pattern.green().to_owned();
+    for (offset, element) in addition.into_iter().enumerate() {
+        green = green.insert_child(last_node + offset, element);
+    }
     // Insert whitespace here only for trailing-comma style without
     // leading commas. Other formats already include spacing, and adding
     // more would produce `x , y`.
@@ -219,10 +224,19 @@ fn add_output_arg(pattern: &SyntaxNode, name: &str, style: &PatternStyle) -> Syn
         && let Some(prev) = last_pat_entry.as_ref().unwrap().prev_sibling_or_token()
         && let SyntaxKind::TOKEN_WHITESPACE = prev.kind()
     {
-        let whitespace = parse_node(prev.as_token().unwrap().green().text());
-        green = green.insert_child(last_node, whitespace.green().to_owned().into());
+        green = green.insert_child(last_node, whitespace_token(&prev.to_string()).into());
     }
     SyntaxNode::new_root(green)
+}
+
+fn parse_pat_entry(name: &str) -> GreenNode {
+    Root::parse(&format!("{{ {name} }}: null"))
+        .syntax()
+        .descendants()
+        .find(|n| n.kind() == SyntaxKind::NODE_PAT_ENTRY)
+        .unwrap_or_else(|| panic!("not a pattern entry: {name:?}"))
+        .green()
+        .to_owned()
 }
 
 /// Locate the `NODE_PAT_ENTRY` child of `pattern` whose surface text equals
@@ -374,7 +388,7 @@ pub(crate) fn change_outputs(
             .green()
             .replace_child(toplevel.index(), changed_toplevel.into());
         let result = attr_set.replace_with(changed_attr_set);
-        return Ok(Some(parse_node(&result.to_string())));
+        return Ok(Some(SyntaxNode::new_root(result)));
     }
     Ok(None)
 }

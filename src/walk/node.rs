@@ -1,4 +1,5 @@
-use rnix::{Root, SyntaxKind, SyntaxNode};
+use rnix::{NixLanguage, Root, SyntaxKind, SyntaxNode};
+use rowan::{GreenNode, GreenToken, Language, NodeOrToken};
 
 use crate::change::Change;
 use crate::follows::{AttrPath, Segment};
@@ -8,6 +9,73 @@ pub(crate) type Node = SyntaxNode;
 /// Parse `s` as a Nix expression and return its [`SyntaxNode`].
 pub(crate) fn parse_node(s: &str) -> Node {
     Root::parse(s).syntax()
+}
+
+/// Parse `binding` inside an attrset, since a binding alone does not parse as a binding.
+pub(crate) fn parse_binding(binding: &str) -> GreenNode {
+    let root = Root::parse(&format!("{{ {binding} }}")).syntax();
+    root.first_child()
+        .and_then(|attr_set| {
+            attr_set
+                .children()
+                .find(|c| c.kind() == SyntaxKind::NODE_ATTRPATH_VALUE)
+        })
+        .unwrap_or_else(|| panic!("not a binding: {binding:?}"))
+        .green()
+        .to_owned()
+}
+
+/// Parse `line`, a binding and its trailing same-line comment, into attrset children.
+pub(crate) fn parse_binding_line(line: &str) -> Vec<NodeOrToken<GreenNode, GreenToken>> {
+    let root = Root::parse(&format!("{{\n{line}\n}}")).syntax();
+    let attr_set = root
+        .first_child()
+        .filter(|n| n.kind() == SyntaxKind::NODE_ATTR_SET)
+        .unwrap_or_else(|| panic!("not a binding line: {line:?}"));
+    let inner: Vec<_> = attr_set
+        .children_with_tokens()
+        .filter(|e| {
+            !matches!(
+                e.kind(),
+                SyntaxKind::TOKEN_L_BRACE | SyntaxKind::TOKEN_R_BRACE
+            )
+        })
+        .collect();
+    let last = inner.len() - 1;
+    inner
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, element)| match element {
+            NodeOrToken::Node(node) => Some(NodeOrToken::Node(node.green().to_owned())),
+            NodeOrToken::Token(token) => {
+                let mut text = token.text();
+                if i == 0 {
+                    text = text.strip_prefix('\n').unwrap_or(text);
+                }
+                if i == last {
+                    text = text.strip_suffix('\n').unwrap_or(text);
+                }
+                (!text.is_empty()).then(|| {
+                    NodeOrToken::Token(GreenToken::new(
+                        NixLanguage::kind_to_raw(token.kind()),
+                        text,
+                    ))
+                })
+            }
+        })
+        .collect()
+}
+
+pub(crate) fn whitespace_token(text: &str) -> GreenToken {
+    GreenToken::new(NixLanguage::kind_to_raw(SyntaxKind::TOKEN_WHITESPACE), text)
+}
+
+pub(crate) fn comma_token() -> GreenToken {
+    GreenToken::new(NixLanguage::kind_to_raw(SyntaxKind::TOKEN_COMMA), ",")
+}
+
+pub(crate) fn comment_token(text: &str) -> GreenToken {
+    GreenToken::new(NixLanguage::kind_to_raw(SyntaxKind::TOKEN_COMMENT), text)
 }
 
 /// Replace `parent`'s child at `index` with `new_child` and return the rebuilt node.
@@ -54,17 +122,17 @@ pub(crate) fn is_attrset_content_empty(node: &SyntaxNode) -> bool {
         .any(|t| t.kind() == SyntaxKind::TOKEN_COMMENT)
 }
 
-/// Whitespace node copied from `node`'s previous sibling (or next, as fallback).
-pub(crate) fn get_sibling_whitespace(node: &SyntaxNode) -> Option<Node> {
+/// Text of the whitespace before `node`, or after it as fallback.
+pub(crate) fn get_sibling_whitespace(node: &SyntaxNode) -> Option<String> {
     if let Some(prev) = node.prev_sibling_or_token()
         && prev.kind() == SyntaxKind::TOKEN_WHITESPACE
     {
-        return Some(parse_node(prev.as_token().unwrap().green().text()));
+        return Some(prev.to_string());
     }
     if let Some(next) = node.next_sibling_or_token()
         && next.kind() == SyntaxKind::TOKEN_WHITESPACE
     {
-        return Some(parse_node(next.as_token().unwrap().green().text()));
+        return Some(next.to_string());
     }
     None
 }
@@ -73,7 +141,7 @@ pub(crate) fn get_sibling_whitespace(node: &SyntaxNode) -> Option<Node> {
 pub(crate) fn insert_binding_after(
     attr_set: &SyntaxNode,
     anchor: &SyntaxNode,
-    binding: &SyntaxNode,
+    binding: GreenNode,
 ) -> Node {
     let after_line = insertion_index_after(anchor);
     let line_continues = attr_set
@@ -96,8 +164,8 @@ pub(crate) fn insert_binding_after(
         );
     let green = attr_set
         .green()
-        .insert_child(index, binding.green().to_owned().into())
-        .insert_child(index, parse_node(&separator).green().to_owned().into());
+        .insert_child(index, binding.into())
+        .insert_child(index, whitespace_token(&separator).into());
     SyntaxNode::new_root(green)
 }
 
@@ -286,35 +354,37 @@ pub(crate) fn should_remove_input(change: &Change, input_id: &Segment) -> bool {
 
 /// Quoted string node, e.g. `"github:NixOS/nixpkgs"`.
 pub(crate) fn make_quoted_string(s: &str) -> Node {
-    parse_node(&format!("\"{}\"", s))
+    parse_node(&format!("\"{s}\""))
+        .first_child()
+        .expect("a string literal parses to one node")
 }
 
 /// Top-level URL attribute, e.g. `inputs.nixpkgs.url = "github:NixOS/nixpkgs";`.
-pub(crate) fn make_toplevel_url_attr(id: &Segment, uri: &str) -> Node {
-    parse_node(&format!("inputs.{}.url = \"{}\";", id.render(), uri))
+pub(crate) fn make_toplevel_url_attr(id: &Segment, uri: &str) -> GreenNode {
+    parse_binding(&format!("inputs.{}.url = \"{}\";", id.render(), uri))
 }
 
 /// Top-level `flake = false` attribute, e.g. `inputs.not_a_flake.flake = false;`.
-pub(crate) fn make_toplevel_flake_false_attr(id: &Segment) -> Node {
-    parse_node(&format!("inputs.{}.flake = false;", id.render()))
+pub(crate) fn make_toplevel_flake_false_attr(id: &Segment) -> GreenNode {
+    parse_binding(&format!("inputs.{}.flake = false;", id.render()))
 }
 
 /// Nested URL attribute, e.g. `nixpkgs.url = "github:NixOS/nixpkgs";`.
-pub(crate) fn make_url_attr(id: &Segment, uri: &str) -> Node {
-    parse_node(&format!("{}.url = \"{}\";", id.render(), uri))
+pub(crate) fn make_url_attr(id: &Segment, uri: &str) -> GreenNode {
+    parse_binding(&format!("{}.url = \"{}\";", id.render(), uri))
 }
 
 /// Nested `flake = false` attribute, e.g. `not_a_flake.flake = false;`.
-pub(crate) fn make_flake_false_attr(id: &Segment) -> Node {
-    parse_node(&format!("{}.flake = false;", id.render()))
+pub(crate) fn make_flake_false_attr(id: &Segment) -> GreenNode {
+    parse_binding(&format!("{}.flake = false;", id.render()))
 }
 
 /// Attrset-style URL attribute, e.g. `vmsh = { url = "github:mic92/vmsh"; };`.
 ///
 /// `indent` is the base indentation of the entry (e.g., `"  "` for 2-space indent).
 /// The inner attribute gets one extra level.
-pub(crate) fn make_attrset_url_attr(id: &Segment, uri: &str, indent: &str) -> Node {
-    parse_node(&format!(
+pub(crate) fn make_attrset_url_attr(id: &Segment, uri: &str, indent: &str) -> GreenNode {
+    parse_binding(&format!(
         "{} = {{\n{}  url = \"{}\";\n{}}};",
         id.render(),
         indent,
@@ -324,8 +394,12 @@ pub(crate) fn make_attrset_url_attr(id: &Segment, uri: &str, indent: &str) -> No
 }
 
 /// Attrset-style URL plus `flake = false`.
-pub(crate) fn make_attrset_url_flake_false_attr(id: &Segment, uri: &str, indent: &str) -> Node {
-    parse_node(&format!(
+pub(crate) fn make_attrset_url_flake_false_attr(
+    id: &Segment,
+    uri: &str,
+    indent: &str,
+) -> GreenNode {
+    parse_binding(&format!(
         "{} = {{\n{}  url = \"{}\";\n{}  flake = false;\n{}}};",
         id.render(),
         indent,
@@ -380,25 +454,27 @@ fn render_inputs_chain(segments: &[Segment]) -> String {
 }
 
 impl FollowsKind<'_> {
-    /// Render the variant to a [`SyntaxNode`] ready to splice into the CST.
-    pub(crate) fn emit(&self) -> Node {
+    /// Render the variant to a green node ready to splice into the CST.
+    pub(crate) fn emit(&self) -> GreenNode {
         match self {
             FollowsKind::TopLevelFlat { id, target } => {
-                parse_node(&format!("inputs.{}.follows = \"{}\";", id.render(), target))
+                parse_binding(&format!("inputs.{}.follows = \"{}\";", id.render(), target))
             }
             FollowsKind::TopLevelNested { path, target } => {
                 let chain = render_inputs_chain(path.segments());
-                parse_node(&format!("inputs.{chain}.follows = \"{target}\";"))
+                parse_binding(&format!("inputs.{chain}.follows = \"{target}\";"))
             }
             FollowsKind::InputsBlockNested { path, target } => {
                 let chain = render_inputs_chain(path.segments());
-                parse_node(&format!("{chain}.follows = \"{target}\";"))
+                parse_binding(&format!("{chain}.follows = \"{target}\";"))
             }
             FollowsKind::BlockNested { rest, target } => {
                 let chain = render_inputs_chain(rest);
-                parse_node(&format!("inputs.{chain}.follows = \"{target}\";"))
+                parse_binding(&format!("inputs.{chain}.follows = \"{target}\";"))
             }
-            FollowsKind::BlockBare { target } => parse_node(&format!("follows = \"{}\";", target)),
+            FollowsKind::BlockBare { target } => {
+                parse_binding(&format!("follows = \"{}\";", target))
+            }
         }
     }
 }

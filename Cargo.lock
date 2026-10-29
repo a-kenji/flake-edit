@@ -647,6 +647,7 @@ dependencies = [
  "ratatui",
  "rnix",
  "ropey",
+ "rowan",
  "rstest",
  "semver",
  "serde",
