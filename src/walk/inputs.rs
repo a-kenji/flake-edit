@@ -8,7 +8,7 @@ use super::context::Context;
 use super::flake_attr_set;
 use super::node::{
     FollowsKind, adjacent_whitespace_index, empty_node, extract_indent, get_sibling_whitespace,
-    insertion_index_after, is_attrset_content_empty, last_line_with_newline, make_attrset_url_attr,
+    insert_binding_after, is_attrset_content_empty, last_line_with_newline, make_attrset_url_attr,
     make_attrset_url_flake_false_attr, make_flake_false_attr, make_quoted_string, make_url_attr,
     parse_node, remove_child_with_whitespace, should_remove_input, substitute_child,
     trailing_inline_comments, uses_attrset_style,
@@ -262,18 +262,7 @@ fn insert_after_flat_input(
             .unwrap_or(false)
     })?;
 
-    let insert_index = insertion_index_after(ref_child);
-    let mut green = node
-        .green()
-        .insert_child(insert_index, follows_node.green().to_owned().into());
-
-    if let Some(whitespace) = get_sibling_whitespace(ref_child) {
-        let ws_str = whitespace.to_string();
-        let ws_node = parse_node(last_line_with_newline(&ws_str));
-        green = green.insert_child(insert_index, ws_node.green().to_owned().into());
-    }
-
-    Some(SyntaxNode::new_root(green))
+    Some(insert_binding_after(node, ref_child, follows_node))
 }
 
 /// Handle a flat-style URL attribute (`inputs.foo.url = "..."`), returning the
@@ -1177,16 +1166,7 @@ fn merge_follow_into_inputs_block(
         .filter(|c| c.kind() == SyntaxKind::NODE_ATTRPATH_VALUE)
         .last()
     {
-        let insert_index = insertion_index_after(&last_attr);
-        let mut green = inputs_block
-            .green()
-            .insert_child(insert_index, follows_node.green().to_owned().into());
-        if let Some(whitespace) = get_sibling_whitespace(&last_attr) {
-            let ws_str = whitespace.to_string();
-            let ws_node = parse_node(last_line_with_newline(&ws_str));
-            green = green.insert_child(insert_index, ws_node.green().to_owned().into());
-        }
-        SyntaxNode::new_root(green)
+        insert_binding_after(&inputs_block, &last_attr, &follows_node)
     } else {
         fill_empty_inputs_block(&inputs_attr, &inputs_block, &follows_node)
     };
@@ -1324,20 +1304,8 @@ fn handle_input_attr_set(
                 }
                 .emit();
 
-                let children: Vec<_> = child.children().collect();
-                if let Some(last_child) = children.last() {
-                    let insert_index = insertion_index_after(last_child);
-
-                    let mut green = child
-                        .green()
-                        .insert_child(insert_index, follows_node.green().to_owned().into());
-
-                    if let Some(whitespace) = get_sibling_whitespace(last_child) {
-                        green =
-                            green.insert_child(insert_index, whitespace.green().to_owned().into());
-                    }
-
-                    let new_child = SyntaxNode::new_root(green);
+                if let Some(last_child) = child.children().last() {
+                    let new_child = insert_binding_after(child, &last_child, &follows_node);
                     return Some(substitute_child(node, child.index(), &new_child));
                 }
             } else if full_path.len() == 1 {
@@ -1353,19 +1321,8 @@ fn handle_input_attr_set(
                         target: &target_str,
                     }
                     .emit();
-                    let children: Vec<_> = child.children().collect();
-                    if let Some(last_child) = children.last() {
-                        let insert_index = insertion_index_after(last_child);
-                        let mut green = child
-                            .green()
-                            .insert_child(insert_index, follows_node.green().to_owned().into());
-
-                        if let Some(whitespace) = get_sibling_whitespace(last_child) {
-                            green = green
-                                .insert_child(insert_index, whitespace.green().to_owned().into());
-                        }
-
-                        let new_child = SyntaxNode::new_root(green);
+                    if let Some(last_child) = child.children().last() {
+                        let new_child = insert_binding_after(child, &last_child, &follows_node);
                         return Some(substitute_child(node, child.index(), &new_child));
                     }
                 }
@@ -3146,5 +3103,147 @@ mod tests {
   outputs = _: { };
 }"#;
         assert_eq!(apply(flake, &follows_change("a.n.t", "t")), flake);
+    }
+
+    #[test]
+    fn follows_after_binding_on_closing_brace_line_keeps_layout() {
+        let cases = [
+            (
+                "single-line attrset",
+                "disko.nixpkgs",
+                "nixpkgs",
+                r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    disko = { url = "github:nix-community/disko"; };
+  };
+  outputs = _: { };
+}"#,
+                r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    disko = { url = "github:nix-community/disko"; inputs.nixpkgs.follows = "nixpkgs"; };
+  };
+  outputs = _: { };
+}"#,
+            ),
+            (
+                "closing brace after the last binding",
+                "nixos-anywhere.flake-parts",
+                "flake-parts",
+                r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixos-anywhere = {
+      url = "github:nix-community/nixos-anywhere";
+      inputs.nixpkgs.follows = "nixpkgs"; };
+  };
+  outputs = _: { };
+}"#,
+                r#"{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixos-anywhere = {
+      url = "github:nix-community/nixos-anywhere";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-parts.follows = "flake-parts"; };
+  };
+  outputs = _: { };
+}"#,
+            ),
+            (
+                "single-line inputs block inside the input",
+                "nixos-anywhere.flake-parts",
+                "flake-parts",
+                r#"{
+  inputs = {
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixos-anywhere = {
+      url = "github:nix-community/nixos-anywhere";
+      inputs = { nixpkgs.follows = "nixpkgs"; };
+    };
+  };
+  outputs = _: { };
+}"#,
+                r#"{
+  inputs = {
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixos-anywhere = {
+      url = "github:nix-community/nixos-anywhere";
+      inputs = { nixpkgs.follows = "nixpkgs"; flake-parts.follows = "flake-parts"; };
+    };
+  };
+  outputs = _: { };
+}"#,
+            ),
+            (
+                "single-line attrset with an attrset-valued follows",
+                "nixos-anywhere.flake-parts",
+                "flake-parts",
+                r#"{
+  inputs = {
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixos-anywhere = { url = "github:nix-community/nixos-anywhere"; inputs.nixpkgs = { follows = "nixpkgs"; }; };
+  };
+  outputs = _: { };
+}"#,
+                r#"{
+  inputs = {
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixos-anywhere = { url = "github:nix-community/nixos-anywhere"; inputs.nixpkgs = { follows = "nixpkgs"; }; inputs.flake-parts.follows = "flake-parts"; };
+  };
+  outputs = _: { };
+}"#,
+            ),
+            (
+                "single-line attrset, input-level follows",
+                "disko",
+                "nixos-anywhere/disko",
+                r#"{
+  inputs = {
+    nixos-anywhere.url = "github:nix-community/nixos-anywhere";
+    disko = { inputs.nixpkgs.follows = "nixpkgs"; };
+  };
+  outputs = _: { };
+}"#,
+                r#"{
+  inputs = {
+    nixos-anywhere.url = "github:nix-community/nixos-anywhere";
+    disko = { inputs.nixpkgs.follows = "nixpkgs"; follows = "nixos-anywhere/disko"; };
+  };
+  outputs = _: { };
+}"#,
+            ),
+            (
+                "flat input in a single-line inputs block",
+                "disko.nixpkgs",
+                "nixpkgs",
+                r#"{
+  inputs = { disko.url = "github:nix-community/disko"; nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable"; };
+  outputs = _: { };
+}"#,
+                r#"{
+  inputs = { disko.url = "github:nix-community/disko"; disko.inputs.nixpkgs.follows = "nixpkgs"; nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable"; };
+  outputs = _: { };
+}"#,
+            ),
+            (
+                "top-level flat input on a single line",
+                "disko.nixpkgs",
+                "nixpkgs",
+                r#"{ inputs.disko.url = "github:nix-community/disko"; outputs = _: { }; }"#,
+                r#"{ inputs.disko.url = "github:nix-community/disko"; inputs.disko.inputs.nixpkgs.follows = "nixpkgs"; outputs = _: { }; }"#,
+            ),
+        ];
+        let failures: Vec<String> = cases
+            .iter()
+            .filter_map(|(label, input, target, flake, expected)| {
+                let got = apply(flake, &follows_change(input, target));
+                (got != *expected).then(|| format!("{label}:\n{got}\n"))
+            })
+            .collect();
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
     }
 }
