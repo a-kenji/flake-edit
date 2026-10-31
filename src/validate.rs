@@ -70,20 +70,12 @@ pub fn validate_full(
 /// reflect mid-batch text edits, so a freshly-added follows always looks
 /// stale relative to the on-disk lock. Running lock-drift lints there would
 /// flag every in-progress edit as drift.
-pub fn validate_speculative(
-    source: &str,
-    inputs: &InputMap,
-    lock: Option<&FlakeLock>,
-) -> ValidationResult {
+pub fn validate_speculative(source: &str, inputs: &InputMap) -> ValidationResult {
     let parsed = ParsedSource::new(source);
-    let lock_graph = lock.map(FollowsGraph::from_lock);
-    validate_speculative_parsed(&parsed, inputs, lock_graph.as_ref())
+    validate_speculative_parsed(&parsed, inputs)
 }
 
-/// [`validate_speculative`] for callers that already hold a [`ParsedSource`]
-/// and a pre-built [`FollowsGraph`] of the lockfile (typically from
-/// [`FollowsGraph::from_lock`]). Pass `lock_graph = None` to validate against
-/// declared edges only.
+/// [`validate_speculative`] for callers that already hold a [`ParsedSource`].
 ///
 /// Skips the duplicate-attribute lints. The apply loop's
 /// [`crate::change::Change`] variants cannot introduce duplicates the source
@@ -93,11 +85,10 @@ pub fn validate_speculative(
 pub(crate) fn validate_speculative_parsed(
     parsed: &ParsedSource,
     inputs: &InputMap,
-    lock_graph: Option<&FollowsGraph>,
 ) -> ValidationResult {
     let mut errors: Vec<ValidationError> = parsed.parse_errors.to_vec();
     let mut warnings: Vec<ValidationError> = Vec::new();
-    let graph = follows::build_graph_with_lock_graph(inputs, lock_graph, DEFAULT_MAX_DEPTH);
+    let graph = FollowsGraph::from_declared(inputs);
     run_follows_lints(parsed, inputs, &graph, None, &mut errors, &mut warnings);
     ValidationResult { errors, warnings }
 }
@@ -119,20 +110,21 @@ pub(crate) fn validate_full_with_lock_graph(
     let mut errors: Vec<ValidationError> = Vec::new();
     let mut warnings: Vec<ValidationError> = Vec::new();
     syntax::collect_with_parsed(parsed, &mut errors);
-    let graph = follows::build_graph_with_lock_graph(inputs, lock_graph, DEFAULT_MAX_DEPTH);
-    let nested = lock_graph.is_some().then_some(nested_inputs);
-    run_follows_lints(parsed, inputs, &graph, nested, &mut errors, &mut warnings);
+    let graph = FollowsGraph::from_declared(inputs);
+    let lock = lock_graph.map(|lock_graph| (lock_graph, nested_inputs));
+    run_follows_lints(parsed, inputs, &graph, lock, &mut errors, &mut warnings);
     ValidationResult { errors, warnings }
 }
 
 /// Run every follows-graph lint and route results into `errors`/`warnings` by
-/// severity. `nested_inputs` enables the lock-drift lints (stale and
-/// stale-lock); pass `None` to skip them.
+/// severity. `lock` enables the lock-drift lints, pass `None` to skip them.
+///
+/// `graph` holds declared edges only, because no lint reads a resolved edge.
 fn run_follows_lints(
     parsed: &ParsedSource,
     inputs: &InputMap,
     graph: &FollowsGraph,
-    nested_inputs: Option<&[NestedInput]>,
+    lock: Option<(&FollowsGraph, &[NestedInput])>,
     errors: &mut Vec<ValidationError>,
     warnings: &mut Vec<ValidationError>,
 ) {
@@ -140,8 +132,12 @@ fn run_follows_lints(
 
     let mut candidates: Vec<ValidationError> = Vec::new();
     candidates.extend(follows::lint_follows_cycle(graph, &offset_to_location));
-    if let Some(nested) = nested_inputs {
-        candidates.extend(follows::lint_follows_stale(graph, &offset_to_location));
+    if let Some((lock_graph, nested)) = lock {
+        candidates.extend(follows::lint_follows_stale(
+            graph,
+            lock_graph,
+            &offset_to_location,
+        ));
         candidates.extend(follows::lint_follows_stale_lock(
             graph,
             nested,

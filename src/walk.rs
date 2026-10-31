@@ -6,6 +6,8 @@ mod inputs;
 mod node;
 mod outputs;
 mod record;
+#[cfg(feature = "application")]
+mod splice;
 pub(crate) mod toggle;
 
 use std::collections::HashMap;
@@ -21,6 +23,10 @@ use crate::input::Input;
 
 pub(crate) use context::Context;
 pub use error::WalkerError;
+#[cfg(feature = "application")]
+pub(crate) use record::rerecord_input;
+#[cfg(feature = "application")]
+pub(crate) use splice::Splice;
 
 use inputs::{redeclare_removed_owner, retarget_existing_follows, walk_inputs};
 use node::{
@@ -86,6 +92,7 @@ fn insert_flat_follows_after(
 pub struct Walker {
     pub(crate) root: SyntaxNode,
     pub(crate) inputs: HashMap<String, Input>,
+    inputs_root: Option<SyntaxNode>,
     pub(crate) add_toplevel: bool,
 }
 
@@ -101,8 +108,24 @@ impl<'a> Walker {
         Self {
             root,
             inputs: HashMap::new(),
+            inputs_root: None,
             add_toplevel: false,
         }
+    }
+
+    /// [`Self::from_root`] with `inputs` already recorded from `root`.
+    #[cfg(feature = "application")]
+    pub(crate) fn from_root_and_inputs(root: SyntaxNode, inputs: HashMap<String, Input>) -> Self {
+        Self {
+            inputs_root: Some(root.clone()),
+            inputs,
+            ..Self::from_root(root)
+        }
+    }
+
+    #[cfg(feature = "application")]
+    pub(crate) fn into_inputs_of(self, root: &SyntaxNode) -> Option<HashMap<String, Input>> {
+        (self.inputs_root.as_ref() == Some(root)).then_some(self.inputs)
     }
 
     /// Record the input model of the parsed `flake.nix` into `inputs`, then
@@ -121,6 +144,7 @@ impl<'a> Walker {
         }
         let Some(attr_set) = flake_attr_set(&cst) else {
             self.inputs.clear();
+            self.inputs_root = Some(cst);
             return Ok(None);
         };
         if let Some(stray) = attr_set
@@ -133,7 +157,10 @@ impl<'a> Walker {
             ));
         }
 
-        self.inputs = record::record_inputs(&attr_set);
+        if self.inputs_root.as_ref() != Some(&cst) {
+            self.inputs = record::record_inputs(&attr_set);
+            self.inputs_root = Some(cst);
+        }
         if matches!(change, Change::None) {
             return Ok(None);
         }

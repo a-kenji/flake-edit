@@ -10,6 +10,9 @@ use rnix::{Root, SyntaxKind, SyntaxNode, TextRange};
 
 use super::error::{DuplicateAttr, Location, ValidationError};
 
+#[cfg(feature = "application")]
+mod edit;
+
 /// Shared output of a single rnix parse: feed it to [`collect_with_parsed`]
 /// to lint, and to [`crate::walk::Walker::from_root`] to build a walker
 /// against the same syntax tree.
@@ -49,15 +52,9 @@ pub(crate) struct LineMap {
 
 impl LineMap {
     pub(super) fn new(source: &str) -> Self {
-        let mut starts = vec![0];
-        for (i, c) in source.char_indices() {
-            if c == '\n' {
-                starts.push(i + 1);
-            }
-        }
-        Self {
-            line_starts: starts,
-        }
+        let mut line_starts = vec![0];
+        push_line_starts(&mut line_starts, 0, source);
+        Self { line_starts }
     }
 
     pub(super) fn offset_to_location(&self, offset: usize) -> Location {
@@ -83,6 +80,16 @@ impl LineMap {
             column: 1,
         }
     }
+}
+
+fn push_line_starts(line_starts: &mut Vec<usize>, offset: usize, chunk: &str) {
+    line_starts.extend(
+        chunk
+            .bytes()
+            .enumerate()
+            .filter(|&(_, b)| b == b'\n')
+            .map(|(i, _)| offset + i + 1),
+    );
 }
 
 /// Append `parsed`'s captured parse errors and any duplicate-attribute

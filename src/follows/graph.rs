@@ -278,9 +278,13 @@ impl FollowsGraph {
     /// declaration whose nested input is gone from `flake.lock` should be
     /// dropped on the next auto-follow pass.
     pub fn stale_edges(&self) -> Vec<&Edge> {
+        self.stale_edges_against(self)
+    }
+
+    pub(crate) fn stale_edges_against<'a>(&'a self, lock_graph: &FollowsGraph) -> Vec<&'a Edge> {
         let mut declared: Vec<&Edge> = self
             .declared_edges()
-            .filter(|e| self.lock_lacks(&e.source))
+            .filter(|e| lock_graph.lock_lacks(&e.source))
             .collect();
         declared.sort_by(|a, b| a.source.cmp(&b.source));
         declared

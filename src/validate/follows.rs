@@ -45,17 +45,13 @@ pub(crate) fn lint_follows_cycle<F: Fn(usize) -> Location>(
 
 /// Lint declared follows whose source path has dropped out of the
 /// lockfile's nested-input universe. Always [`super::Severity::Warning`].
-///
-/// `graph` must be a merged graph (declared plus resolved edges over the
-/// lockfile's nested-input universe). The lint defers to
-/// [`FollowsGraph::stale_edges`] to compare declared sources against the
-/// resolved set.
 pub(crate) fn lint_follows_stale<F: Fn(usize) -> Location>(
     graph: &FollowsGraph,
+    lock_graph: &FollowsGraph,
     offset_to_location: &F,
 ) -> Vec<ValidationError> {
     graph
-        .stale_edges()
+        .stale_edges_against(lock_graph)
         .into_iter()
         .map(|edge| ValidationError::FollowsStale {
             edge: edge.clone(),
@@ -187,23 +183,6 @@ pub(crate) fn top_level_names(inputs: &InputMap) -> HashSet<String> {
     inputs.keys().cloned().collect()
 }
 
-/// Build the merged follows graph: declared `flake.nix` edges plus the
-/// resolved edges carried by `lock_graph` (from [`FollowsGraph::from_lock`]
-/// or [`FollowsGraph::from_lock_walk`]) when supplied. With
-/// `lock_graph = None` only declared edges are present and
-/// [`FollowsGraph::stale_edges`] reports nothing.
-pub(crate) fn build_graph_with_lock_graph(
-    inputs: &InputMap,
-    lock_graph: Option<&FollowsGraph>,
-    max_depth: usize,
-) -> FollowsGraph {
-    let graph = match lock_graph {
-        Some(lock_graph) => FollowsGraph::from_declared_and_lock_graph(inputs, lock_graph),
-        None => FollowsGraph::from_declared(inputs),
-    };
-    graph.with_max_depth(max_depth)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,7 +242,7 @@ mod tests {
             &[("nixpkgs", "nixpkgs")],
         )]);
         let graph = FollowsGraph::from_declared(&inputs).with_max_depth(64);
-        let stale = lint_follows_stale(&graph, &loc_id());
+        let stale = lint_follows_stale(&graph, &FollowsGraph::default(), &loc_id());
         assert!(stale.is_empty(), "{:?}", stale);
     }
 
@@ -291,8 +270,8 @@ mod tests {
   "version": 7
 }"#;
         let lock = crate::lock::FlakeLock::read_from_str(lock_text).unwrap();
-        let graph = FollowsGraph::from_flake(&inputs, &lock).with_max_depth(64);
-        let stale = lint_follows_stale(&graph, &loc_id());
+        let graph = FollowsGraph::from_declared(&inputs);
+        let stale = lint_follows_stale(&graph, &FollowsGraph::from_lock(&lock), &loc_id());
         assert_eq!(stale.len(), 1);
         assert_matches!(stale[0], ValidationError::FollowsStale { .. });
         assert_eq!(stale[0].severity(), super::super::Severity::Warning);
