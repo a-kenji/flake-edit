@@ -94,17 +94,11 @@ pub fn run_in_memory(
     let Some(ctx) = FollowContext::new(lock, flake_edit.list().clone()) else {
         return Ok(None);
     };
-    let (lock_graph, Some(plan)) = plan_follows(&ctx, flake_text, follow_config) else {
+    let (graph, Some(plan)) = plan_follows(&ctx, flake_text, follow_config) else {
         return Ok(None);
     };
 
-    let applied = apply_plan_text(
-        flake_text,
-        &ctx.inputs,
-        &ctx.nested_inputs,
-        &lock_graph,
-        &plan,
-    )?;
+    let applied = apply_plan_text(flake_text, &ctx.inputs, &ctx.nested_inputs, &graph, &plan)?;
     Ok((applied.current_text != flake_text).then_some(applied.current_text))
 }
 
@@ -304,7 +298,7 @@ fn run_impl(
         InputSizes::default()
     };
 
-    let (lock_graph, Some(plan)) = plan_follows(&ctx, &editor.text(), &state.config.follow) else {
+    let (graph, Some(plan)) = plan_follows(&ctx, &editor.text(), &state.config.follow) else {
         if !quiet {
             println!("{}", idle_message(&ctx.nested_inputs));
             render_existing_section(report, &ctx.nested_inputs, &sizes);
@@ -316,7 +310,7 @@ fn run_impl(
         &editor.text(),
         &ctx.inputs,
         &ctx.nested_inputs,
-        &lock_graph,
+        &graph,
         &plan,
     )?;
     render_summary(
@@ -351,18 +345,17 @@ fn plan_follows(
     follow_config: &FollowConfig,
 ) -> (FollowsGraph, Option<FollowPlan>) {
     let lock_graph = FollowsGraph::from_lock_walk(&ctx.lock, &ctx.nested_inputs);
-
-    let graph = FollowsGraph::from_declared_and_lock_graph(&ctx.inputs, &lock_graph);
+    let mut graph = FollowsGraph::from_declared_and_lock_graph(&ctx.inputs, lock_graph);
 
     let plan = build_plan(
         source_text,
         &ctx.nested_inputs,
         ctx.top_level_inputs.clone(),
         &ctx.inputs,
-        &graph,
+        &mut graph,
         follow_config,
     );
-    (lock_graph, plan)
+    (graph, plan)
 }
 
 fn build_plan(
@@ -370,7 +363,7 @@ fn build_plan(
     nested_inputs: &[NestedInput],
     top_level_inputs: HashSet<String>,
     inputs: &InputMap,
-    graph: &FollowsGraph,
+    graph: &mut FollowsGraph,
     follow_config: &FollowConfig,
 ) -> Option<FollowPlan> {
     // Filter the merged graph by `EdgeOrigin::Declared` rather than rebuilding
@@ -381,38 +374,31 @@ fn build_plan(
     // auto-deduplicator does not silently retarget them.
     let mut user_configured: HashSet<AttrPath> = graph.declared_sources();
     user_configured.extend(inputs.values().flat_map(|input| {
-        input.overrides.iter().map(|nested| {
-            let mut path = AttrPath::new(input.id().clone());
-            for seg in nested.segments() {
-                path.push(seg.clone());
-            }
-            path
-        })
+        input
+            .overrides
+            .iter()
+            .map(|nested| AttrPath::new(input.id().clone()).join(nested.segments()))
     }));
 
     let transitive_min = follow_config.transitive_min();
     let max_depth = follow_config.max_depth;
 
-    // Seeding runs against the original `graph`: the post-removal clone
-    // built below would chicken-and-egg this loop.
     let to_unfollow = seed_unfollow_set(graph, max_depth);
 
     // Discovery must see the post-removal graph. Without this, an edge
     // marked for removal still shapes the cycle and routing checks
     // below and can suppress a candidate the apply phase would
     // otherwise unblock, forcing a second `flake-edit follow`
-    // invocation to converge. The clone is a discovery-only artifact:
-    // the apply phase still runs `Change::Remove` against the
-    // unmodified `editor.text()`.
-    let mut graph_for_discovery = graph.clone();
-    graph_for_discovery.drop_edges_with_sources(&to_unfollow);
+    // invocation to converge.
+    graph.drop_edges_with_sources(&to_unfollow);
+    let graph = &*graph;
 
     let nested_with_promoted: Vec<NestedInput>;
     let mut ax = AnalysisCtx {
         nested_inputs,
         top_level_inputs,
         inputs,
-        graph: &graph_for_discovery,
+        graph,
         user_configured: &user_configured,
         follow_config,
         max_depth,
@@ -446,8 +432,8 @@ fn build_plan(
 
     collect_direct_candidates(&ax, &mut plan);
 
-    scrub_redundant(&graph_for_discovery, &mut plan);
-    drop_overrides_under_redirects(&graph_for_discovery, &mut plan);
+    scrub_redundant(graph, &mut plan);
+    drop_overrides_under_redirects(graph, &mut plan);
 
     if !plan.has_pending() {
         return None;
@@ -852,7 +838,7 @@ fn emit_transitive_promotions(
             continue;
         }
 
-        let top_seg = match Segment::from_unquoted(top_name.clone()) {
+        let top_seg = match Segment::from_unquoted(&top_name) {
             Ok(s) => s,
             Err(e) => {
                 tracing::warn!(
@@ -927,7 +913,7 @@ fn decide_direct_promotion(
         .iter()
         .filter(|n| n.path.last().as_str() == canonical_name)
         .find_map(|n| n.url.as_ref().map(|url| (*n, url)))?;
-    let name = match Segment::from_unquoted(canonical_name.to_string()) {
+    let name = match Segment::from_unquoted(canonical_name) {
         Ok(seg) => seg,
         Err(e) => {
             tracing::warn!(
@@ -1052,12 +1038,8 @@ fn with_promoted_subtrees(
             {
                 continue;
             }
-            let mut path = AttrPath::new(promotion.name.clone());
-            for seg in &nested.path.segments()[depth..] {
-                path.push(seg.clone());
-            }
             out.push(NestedInput {
-                path,
+                path: AttrPath::new(promotion.name.clone()).join(&nested.path.segments()[depth..]),
                 follows: None,
                 url: nested.url.clone(),
                 flake: nested.flake,
@@ -1199,7 +1181,7 @@ fn apply_plan_text(
     original_text: &str,
     inputs: &crate::edit::InputMap,
     nested_inputs: &[NestedInput],
-    lock_graph: &FollowsGraph,
+    graph: &FollowsGraph,
     plan: &FollowPlan,
 ) -> Result<AppliedPlan> {
     let current_parsed = validate::ParsedSource::new(original_text);
@@ -1213,11 +1195,11 @@ fn apply_plan_text(
 
     // Lock-drift lints fire only on the pre-batch text. Mid-batch they would
     // flag every in-progress edit as drift against the on-disk lockfile. The
-    // prebuilt `lock_graph` and `nested_inputs` avoid re-walking `flake.lock`.
+    // prebuilt `graph` and `nested_inputs` avoid re-walking `flake.lock`.
     let pre_validation = validate::validate_full_with_lock_graph(
         &current_parsed,
         inputs,
-        Some(lock_graph),
+        Some(graph),
         nested_inputs,
     );
     warnings.extend(pre_validation.warnings);

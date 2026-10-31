@@ -1126,10 +1126,7 @@ fn merge_follow_into_inputs_block(
         .children()
         .find(|c| c.kind() == SyntaxKind::NODE_ATTR_SET)?;
 
-    let mut path = AttrPath::new(rest[0].clone());
-    for seg in &rest[1..] {
-        path.push(seg.clone());
-    }
+    let path = AttrPath::new(rest[0].clone()).join(&rest[1..]);
     let follows_node = FollowsKind::InputsBlockNested {
         path: &path,
         target,

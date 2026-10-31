@@ -109,7 +109,7 @@ fn attr_to_node_map(lock: &FlakeLock, nested_inputs: &[NestedInput]) -> HashMap<
         .and_then(|node| node.inputs.as_ref())
     {
         for name in root_inputs.keys() {
-            let Ok(seg) = Segment::from_unquoted(name.clone()) else {
+            let Ok(seg) = Segment::from_unquoted(name) else {
                 continue;
             };
             if let Ok(key) = lock.resolve_input_path(&AttrPath::new(seg)) {

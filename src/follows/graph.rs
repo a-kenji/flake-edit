@@ -163,31 +163,27 @@ impl FollowsGraph {
     /// [`Self::lock_routes_to`] needs the resolved sibling to survive when
     /// the declared edge is excluded as a candidate.
     pub fn from_flake(inputs: &InputMap, lock: &FlakeLock) -> Self {
-        Self::from_declared_and_lock_graph(inputs, &Self::from_lock(lock))
+        Self::from_declared_and_lock_graph(inputs, Self::from_lock(lock))
     }
 
-    /// Variant of [`Self::from_flake`] that takes an already-built lock graph
-    /// (typically from [`Self::from_lock`]). Use when validating successive
-    /// states against the same `flake.lock` to skip the recursive lockfile
-    /// walk per call.
     pub(crate) fn from_declared_and_lock_graph(
         inputs: &InputMap,
-        lock_graph: &FollowsGraph,
+        lock_graph: FollowsGraph,
     ) -> Self {
-        let mut graph = FollowsGraph::from_declared(inputs);
-        graph
-            .resolved_universe
-            .extend(lock_graph.resolved_universe.iter().cloned());
-        for edges in lock_graph.edges.values() {
-            for edge in edges {
-                let already = graph
-                    .outgoing(&edge.source)
-                    .iter()
-                    .any(|e| e.follows == edge.follows);
-                if !already {
-                    graph.insert_edge(edge.clone());
-                }
+        let declared = FollowsGraph::from_declared(inputs);
+        let mut graph = FollowsGraph {
+            declared_nulled_sources: declared.declared_nulled_sources,
+            ..lock_graph
+        };
+        for (source, mut edges) in declared.edges {
+            if let Some(resolved) = graph.edges.remove(&source) {
+                let uncovered: Vec<Edge> = resolved
+                    .into_iter()
+                    .filter(|r| !edges.iter().any(|d| d.follows == r.follows))
+                    .collect();
+                edges.extend(uncovered);
             }
+            graph.edges.insert(source, edges);
         }
         graph
     }
@@ -588,13 +584,13 @@ impl FollowsGraph {
                 if matches_excluded(&edge.source, &edge.follows, exclude) {
                     continue;
                 }
-                out.push(splice_suffix(&edge.follows, suffix));
+                out.push(edge.follows.join(suffix));
             }
             for (src, dst) in extra_edges {
                 if src != &anc || matches_excluded(src, dst, exclude) {
                     continue;
                 }
-                out.push(splice_suffix(dst, suffix));
+                out.push(dst.join(suffix));
             }
             ancestor = anc.parent();
         }
@@ -606,14 +602,6 @@ fn matches_excluded(source: &AttrPath, follows: &AttrPath, exclude: Option<&Edge
     matches!(exclude, Some(e) if &e.source == source && &e.follows == follows)
 }
 
-fn splice_suffix(base: &AttrPath, suffix: &[Segment]) -> AttrPath {
-    let mut out = base.clone();
-    for seg in suffix {
-        out.push(seg.clone());
-    }
-    out
-}
-
 fn collect_declared_edges(input: &Input, graph: &mut FollowsGraph) {
     for follows in input.follows() {
         if let Follows::Indirect {
@@ -622,10 +610,7 @@ fn collect_declared_edges(input: &Input, graph: &mut FollowsGraph) {
             range,
         } = follows
         {
-            let mut source = AttrPath::new(input.id().clone());
-            for seg in path.segments() {
-                source.push(seg.clone());
-            }
+            let source = AttrPath::new(input.id().clone()).join(path.segments());
             match target {
                 Some(target) => {
                     graph.insert_edge(Edge {
@@ -1469,14 +1454,6 @@ mod tests {
             Some(&edge)
         ));
         assert!(!matches_excluded(&path("a.b"), &path("nixpkgs"), None));
-    }
-
-    #[test]
-    fn splice_suffix_appends_segments_in_order() {
-        let spliced = splice_suffix(&path("c"), &[seg("x"), seg("y")]);
-        assert_eq!(spliced, path("c.x.y"));
-        let empty = splice_suffix(&path("c"), &[]);
-        assert_eq!(empty, path("c"));
     }
 
     #[test]
