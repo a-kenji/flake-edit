@@ -8,7 +8,7 @@ pub mod graph;
 pub mod path;
 
 pub use graph::{
-    Cycle, DEFAULT_MAX_DEPTH, Edge, EdgeOrigin, FollowsGraph, StaleLockDeclaration,
+    Cycle, DEFAULT_MAX_DEPTH, Edge, EdgeOrigin, FollowsGraph, Router, StaleLockDeclaration,
     is_follows_reference_to_parent,
 };
 pub(crate) use path::join_raw;

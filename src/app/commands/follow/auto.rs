@@ -12,7 +12,7 @@ use crate::change::{Change, ChangeId};
 use crate::config::FollowConfig;
 use crate::edit::{FlakeEdit, InputMap};
 use crate::follows::{
-    AttrPath, Edge, EdgeOrigin, FollowsGraph, Segment, is_follows_reference_to_parent,
+    AttrPath, Edge, EdgeOrigin, FollowsGraph, Router, Segment, is_follows_reference_to_parent,
 };
 use crate::input::Range;
 use crate::lock::sizes::InputSizes;
@@ -476,7 +476,7 @@ fn seed_unfollow_set(graph: &FollowsGraph, max_depth: Option<usize>) -> Vec<Attr
         {
             continue;
         }
-        if graph.lock_routes_to(&edge.source, &edge.follows, Some(edge), &[]) {
+        if graph.lock_routes_to(&edge.source, &edge.follows, Some(edge)) {
             tracing::debug!(
                 "Marking redundant follow for removal: {} -> {} (covered by upstream propagation)",
                 edge.source,
@@ -531,16 +531,15 @@ fn ancestor_overrides_subtree(
     let segs = nested_path.segments();
     let last = nested_path.last();
     let nulled = graph.declared_nulled();
+    let mut candidate: Vec<Segment> = Vec::with_capacity(nested_path.len());
     for prefix_len in 1..nested_path.len() - 1 {
-        let mut candidate = AttrPath::new(segs[0].clone());
-        for seg in &segs[1..prefix_len] {
-            candidate.push(seg.clone());
-        }
+        candidate.clear();
+        candidate.extend_from_slice(&segs[..prefix_len]);
         candidate.push(last.clone());
-        if nulled.contains(&candidate) {
+        if nulled.contains(candidate.as_slice()) {
             return true;
         }
-        for edge in graph.outgoing(&candidate) {
+        for edge in graph.outgoing(candidate.as_slice()) {
             if !matches!(edge.origin, EdgeOrigin::Declared { .. }) {
                 continue;
             }
@@ -562,14 +561,16 @@ fn collect_direct_candidates(ax: &AnalysisCtx<'_>, plan: &mut FollowPlan) {
             .cmp(&b.path.len())
             .then_with(|| a.path.cmp(&b.path))
     });
+    let mut router = ax.graph.router();
+    let mut staged_len = 0;
     for nested in iter {
-        // Same-run depth-1 emissions can close a depth-N chain.
-        let extra_edges: Vec<(AttrPath, AttrPath)> = if nested.path.len() >= 3 {
-            plan.to_follow.to_vec()
-        } else {
-            Vec::new()
-        };
-        let Some(target_path) = resolve_direct_candidate(ax, nested, &extra_edges) else {
+        if nested.path.len() >= 3 {
+            for (source, target) in &plan.to_follow[staged_len..] {
+                router.stage(source.clone(), target.clone());
+            }
+            staged_len = plan.to_follow.len();
+        }
+        let Some(target_path) = resolve_direct_candidate(ax, &mut router, nested) else {
             continue;
         };
         plan.seen_nested.insert(nested.path.clone());
@@ -577,13 +578,10 @@ fn collect_direct_candidates(ax: &AnalysisCtx<'_>, plan: &mut FollowPlan) {
     }
 }
 
-/// `prior_emissions` carries the same-run `to_follow` entries already
-/// queued at shallower depths so [`FollowsGraph::lock_routes_to`] sees
-/// them when checking depth-N candidates.
 fn resolve_direct_candidate(
     ax: &AnalysisCtx<'_>,
+    router: &mut Router<'_>,
     nested: &NestedInput,
-    prior_emissions: &[(AttrPath, AttrPath)],
 ) -> Option<AttrPath> {
     if !within_depth(&nested.path, ax.max_depth) {
         return None;
@@ -657,10 +655,7 @@ fn resolve_direct_candidate(
         );
         return None;
     }
-    if ax
-        .graph
-        .lock_routes_to(&nested.path, &target_path, None, prior_emissions)
-    {
+    if router.lock_routes_to(&nested.path, &target_path) {
         tracing::debug!(
             "Skipping {} -> {}: lockfile already routes via upstream propagation",
             path_display,
@@ -982,32 +977,30 @@ fn record_direct_promotion_entries(
 }
 
 /// Drop entries from [`FollowPlan::to_follow`] whose chain is already
-/// covered by the rest of the plan plus the lockfile (passed to
-/// [`FollowsGraph::lock_routes_to`] as `extra_edges`).
+/// covered by the rest of the plan plus the lockfile.
 ///
 /// Catches cross-entry overlaps that [`collect_direct_candidates`],
 /// [`emit_direct_promotions`], and [`emit_transitive_promotions`] cannot see
 /// from a single candidate's perspective.
-/// Idempotent: dropping entries only shrinks `extra_edges`, so a surviving
-/// entry stays surviving.
+/// Idempotent: dropping entries only shrinks the staged rest of the plan.
 fn scrub_redundant(graph: &FollowsGraph, plan: &mut FollowPlan) {
     if plan.to_follow.is_empty() {
         return;
     }
     let mut keep: Vec<bool> = vec![true; plan.to_follow.len()];
+    let mut router = graph.router();
+    for (source, target) in &plan.to_follow {
+        router.stage(source.clone(), target.clone());
+    }
     let mut changed = true;
     while changed {
         changed = false;
-        for i in 0..plan.to_follow.len() {
+        for (i, (src_i, target_path)) in plan.to_follow.iter().enumerate() {
             if !keep[i] {
                 continue;
             }
-            let (src_i, target_path) = (plan.to_follow[i].0.clone(), plan.to_follow[i].1.clone());
-            let extras: Vec<(AttrPath, AttrPath)> = (0..plan.to_follow.len())
-                .filter(|&j| j != i && keep[j])
-                .map(|j| (plan.to_follow[j].0.clone(), plan.to_follow[j].1.clone()))
-                .collect();
-            if graph.lock_routes_to(&src_i, &target_path, None, &extras) {
+            router.unstage(src_i, target_path);
+            if router.lock_routes_to(src_i, target_path) {
                 tracing::debug!(
                     "Scrubbing {} -> {}: redundant given the rest of the plan",
                     src_i,
@@ -1015,6 +1008,8 @@ fn scrub_redundant(graph: &FollowsGraph, plan: &mut FollowPlan) {
                 );
                 keep[i] = false;
                 changed = true;
+            } else {
+                router.stage(src_i.clone(), target_path.clone());
             }
         }
     }
@@ -1929,7 +1924,7 @@ mod tests {
         let mut fx = CtxFixture::new(&nested, &["nixpkgs", "home-manager"]);
         fx.inputs = make_input_map(vec![Input::new(seg("nixpkgs"))]);
 
-        let result = resolve_direct_candidate(&fx.ctx(), &nested[0], &[]);
+        let result = resolve_direct_candidate(&fx.ctx(), &mut fx.graph.router(), &nested[0]);
 
         assert_eq!(result, Some(ap("nixpkgs")));
     }
@@ -1943,7 +1938,7 @@ mod tests {
         for _ in 0..64 {
             let fx = CtxFixture::new(&nested, &["nixpkgs", "nixpkgs-lib", "foo"]);
 
-            let result = resolve_direct_candidate(&fx.ctx(), &nested[0], &[]);
+            let result = resolve_direct_candidate(&fx.ctx(), &mut fx.graph.router(), &nested[0]);
 
             assert_eq!(result, Some(ap("nixpkgs-lib")));
         }
@@ -1954,7 +1949,7 @@ mod tests {
         let nested = vec![nested_input("home-manager.nixpkgs", None, None)];
         let fx = CtxFixture::new(&nested, &["home-manager"]);
 
-        let result = resolve_direct_candidate(&fx.ctx(), &nested[0], &[]);
+        let result = resolve_direct_candidate(&fx.ctx(), &mut fx.graph.router(), &nested[0]);
 
         assert_eq!(result, None);
     }
@@ -2061,7 +2056,7 @@ mod tests {
         fx.inputs = make_input_map(vec![Input::new(seg("nixpkgs"))]);
         fx.user_configured = std::iter::once(ap("home-manager.nixpkgs")).collect();
 
-        let result = resolve_direct_candidate(&fx.ctx(), &nested[0], &[]);
+        let result = resolve_direct_candidate(&fx.ctx(), &mut fx.graph.router(), &nested[0]);
 
         assert_eq!(result, None);
     }

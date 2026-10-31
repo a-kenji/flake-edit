@@ -5,6 +5,7 @@
 //! requires for names containing dots or leading digits live on the rendering
 //! boundary ([`fmt::Display`] / [`Segment::render`]).
 
+use std::borrow::Borrow;
 use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -372,6 +373,12 @@ impl FromStr for AttrPath {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         AttrPath::parse(s)
+    }
+}
+
+impl Borrow<[Segment]> for AttrPath {
+    fn borrow(&self) -> &[Segment] {
+        &self.0
     }
 }
 

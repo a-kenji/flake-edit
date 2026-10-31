@@ -3,7 +3,9 @@
 //! Each [`Edge`] records whether it came from `flake.nix`
 //! ([`EdgeOrigin::Declared`]) or `flake.lock` ([`EdgeOrigin::Resolved`]).
 //! Paths are typed [`AttrPath`]s, so equality is structural.
-use std::collections::{HashMap, HashSet};
+use std::borrow::Borrow;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ops::Bound;
 
 use crate::edit::InputMap;
 use crate::follows::{AttrPath, Segment};
@@ -67,7 +69,7 @@ pub struct Cycle {
 /// declared-only, resolved-only, or merged views respectively.
 #[derive(Debug, Clone)]
 pub struct FollowsGraph {
-    edges: HashMap<AttrPath, Vec<Edge>>,
+    edges: BTreeMap<AttrPath, Vec<Edge>>,
     /// Every input path observed in the lockfile: the root's top-level
     /// inputs plus every nested-input path, with or without a follows.
     /// Built by [`Self::from_lock`] and [`Self::from_flake`]. Read by
@@ -85,7 +87,7 @@ pub struct FollowsGraph {
 impl Default for FollowsGraph {
     fn default() -> Self {
         FollowsGraph {
-            edges: HashMap::new(),
+            edges: BTreeMap::new(),
             resolved_universe: HashSet::new(),
             declared_nulled_sources: HashSet::new(),
             max_depth: DEFAULT_MAX_DEPTH,
@@ -196,14 +198,15 @@ impl FollowsGraph {
     }
 
     /// Outgoing edges from `src`, or an empty slice.
-    pub fn outgoing(&self, src: &AttrPath) -> &[Edge] {
+    pub fn outgoing<Q>(&self, src: &Q) -> &[Edge]
+    where
+        AttrPath: Borrow<Q>,
+        Q: Ord + ?Sized,
+    {
         self.edges.get(src).map(Vec::as_slice).unwrap_or(&[])
     }
 
-    /// Iterator over every edge.
-    ///
-    /// Order is unspecified (HashMap-derived). Callers that need a
-    /// deterministic order must sort after collecting.
+    /// Ordered by source, then by insertion.
     pub fn edges(&self) -> impl Iterator<Item = &Edge> {
         self.edges.values().flat_map(|v| v.iter())
     }
@@ -436,14 +439,8 @@ impl FollowsGraph {
     /// equal to `node`, plus those whose source has `node` as a strict
     /// prefix. The latter encode the implicit "parent depends on target"
     /// relation in a declared `parent.child.follows = target`.
-    fn expanded_outgoing(&self, node: &AttrPath) -> Vec<&Edge> {
-        let mut out: Vec<&Edge> = Vec::new();
-        for (source, edges) in &self.edges {
-            if source == node || node.is_prefix_of(source) {
-                out.extend(edges.iter());
-            }
-        }
-        out
+    fn expanded_outgoing<'a>(&'a self, node: &'a AttrPath) -> impl Iterator<Item = &'a Edge> {
+        subtree(&self.edges, node).flat_map(|(_, edges)| edges)
     }
 
     fn insert_edge(&mut self, edge: Edge) {
@@ -467,135 +464,264 @@ impl FollowsGraph {
     }
 
     /// Whether the graph routes `source` transitively to `target`, ignoring
-    /// `exclude` if given. `extra_edges` are treated as additional
-    /// declared-style edges for callers staging follows not yet in the graph.
+    /// `exclude` if given.
     ///
     /// Walks both [`EdgeOrigin::Declared`] and [`EdgeOrigin::Resolved`] edges:
     /// [`Self::from_flake`] keeps only one when both encode the same
     /// `(source, target)`, so restricting the walk to one variant would miss
     /// chains closing through the deduped edge.
+    ///
+    /// Builds a fresh [`Router`] per call.
     pub fn lock_routes_to(
         &self,
         source: &AttrPath,
         target: &AttrPath,
         exclude: Option<&Edge>,
-        extra_edges: &[(AttrPath, AttrPath)],
     ) -> bool {
-        let mut visited: HashSet<AttrPath> = HashSet::new();
-        let mut on_stack: HashSet<AttrPath> = HashSet::new();
-        self.dfs_routes_to(
-            source,
-            target,
-            exclude,
-            extra_edges,
-            0,
-            &mut visited,
-            &mut on_stack,
-        )
+        Router::new(self, exclude).lock_routes_to(source, target)
     }
 
-    #[expect(clippy::too_many_arguments)]
-    fn dfs_routes_to(
-        &self,
-        node: &AttrPath,
-        target: &AttrPath,
-        exclude: Option<&Edge>,
-        extra_edges: &[(AttrPath, AttrPath)],
-        depth: usize,
-        visited: &mut HashSet<AttrPath>,
-        on_stack: &mut HashSet<AttrPath>,
-    ) -> bool {
-        if depth >= self.max_depth {
-            return false;
-        }
-        if node == target {
-            return true;
-        }
-        if visited.contains(node) || on_stack.contains(node) {
-            return false;
-        }
-        if node.is_prefix_of(target) {
-            return true;
-        }
-        on_stack.insert(node.clone());
-
-        let mut candidates = self.direct_hop_targets(node, exclude);
-        candidates.extend(Self::extra_edge_targets(node, extra_edges, exclude));
-        candidates.extend(self.ancestor_rewrite_targets(node, extra_edges, exclude));
-
-        for next in candidates {
-            if self.dfs_routes_to(
-                &next,
-                target,
-                exclude,
-                extra_edges,
-                depth + 1,
-                visited,
-                on_stack,
-            ) {
-                on_stack.remove(node);
-                visited.insert(node.clone());
-                return true;
-            }
-        }
-        on_stack.remove(node);
-        visited.insert(node.clone());
-        false
+    pub fn router(&self) -> Router<'_> {
+        Router::new(self, None)
     }
 
-    /// Includes edges sourced at any descendant of `node`, since a declared
-    /// `parent.child.follows = target` encodes an implicit dependency of
-    /// `parent` on `target`.
     fn direct_hop_targets(&self, node: &AttrPath, exclude: Option<&Edge>) -> Vec<AttrPath> {
         self.expanded_outgoing(node)
-            .into_iter()
             .filter(|edge| !matches_excluded(&edge.source, &edge.follows, exclude))
             .map(|edge| edge.follows.clone())
             .collect()
     }
 
-    fn extra_edge_targets(
-        node: &AttrPath,
-        extra_edges: &[(AttrPath, AttrPath)],
-        exclude: Option<&Edge>,
-    ) -> Vec<AttrPath> {
-        extra_edges
-            .iter()
-            .filter(|(src, _)| src == node || node.is_prefix_of(src))
+    fn ancestor_rewrite_targets(&self, node: &AttrPath, exclude: Option<&Edge>) -> Vec<AttrPath> {
+        let mut out: Vec<AttrPath> = Vec::new();
+        for (anc, edges) in keyed_ancestors(&self.edges, node) {
+            let suffix = &node.segments()[anc.len()..];
+            for edge in edges {
+                if !matches_excluded(&edge.source, &edge.follows, exclude) {
+                    out.push(edge.follows.join(suffix));
+                }
+            }
+        }
+        out
+    }
+}
+
+pub struct Router<'a> {
+    graph: &'a FollowsGraph,
+    exclude: Option<&'a Edge>,
+    staged: StagedFollows,
+    ids: BTreeMap<AttrPath, usize>,
+    nodes: Vec<RouterNode>,
+    question: u64,
+}
+
+struct RouterNode {
+    path: AttrPath,
+    entered: u64,
+    graph: Option<Expansion>,
+    staged: Option<Expansion>,
+}
+
+struct Expansion {
+    direct: Vec<usize>,
+    rewrites: Vec<usize>,
+}
+
+impl<'a> Router<'a> {
+    fn new(graph: &'a FollowsGraph, exclude: Option<&'a Edge>) -> Self {
+        Router {
+            graph,
+            exclude,
+            staged: StagedFollows::default(),
+            ids: BTreeMap::new(),
+            nodes: Vec::new(),
+            question: 0,
+        }
+    }
+
+    pub fn lock_routes_to(&mut self, source: &AttrPath, target: &AttrPath) -> bool {
+        let start = self.intern(source.clone());
+        self.question += 1;
+        self.dfs(start, target, 0)
+    }
+
+    pub fn stage(&mut self, source: AttrPath, follows: AttrPath) {
+        self.forget_staged_expansions(&source);
+        self.staged.insert(source, follows);
+    }
+
+    pub fn unstage(&mut self, source: &AttrPath, follows: &AttrPath) -> bool {
+        let removed = self.staged.remove(source, follows);
+        if removed {
+            self.forget_staged_expansions(source);
+        }
+        removed
+    }
+
+    fn forget_staged_expansions(&mut self, source: &AttrPath) {
+        let touched: Vec<usize> = subtree(&self.ids, source)
+            .chain(keyed_ancestors(&self.ids, source))
+            .map(|(_, &id)| id)
+            .collect();
+        for id in touched {
+            self.nodes[id].staged = None;
+        }
+    }
+
+    fn dfs(&mut self, node: usize, target: &AttrPath, depth: usize) -> bool {
+        if depth >= self.graph.max_depth {
+            return false;
+        }
+        let entry = &mut self.nodes[node];
+        if entry.path == *target {
+            return true;
+        }
+        if entry.entered == self.question {
+            return false;
+        }
+        if entry.path.is_prefix_of(target) {
+            return true;
+        }
+        entry.entered = self.question;
+
+        self.successors(node)
+            .into_iter()
+            .any(|next| self.dfs(next, target, depth + 1))
+    }
+
+    fn successors(&mut self, node: usize) -> Vec<usize> {
+        if self.nodes[node].graph.is_none() {
+            let path = self.nodes[node].path.clone();
+            let direct = self.graph.direct_hop_targets(&path, self.exclude);
+            let rewrites = self.graph.ancestor_rewrite_targets(&path, self.exclude);
+            let expansion = self.intern_expansion(direct, rewrites);
+            self.nodes[node].graph = Some(expansion);
+        }
+        if self.nodes[node].staged.is_none() {
+            let path = self.nodes[node].path.clone();
+            let direct = self.staged.expanded_targets(&path, self.exclude);
+            let rewrites = self.staged.ancestor_rewrite_targets(&path, self.exclude);
+            let expansion = self.intern_expansion(direct, rewrites);
+            self.nodes[node].staged = Some(expansion);
+        }
+        let RouterNode {
+            graph: Some(graph),
+            staged: Some(staged),
+            ..
+        } = &self.nodes[node]
+        else {
+            unreachable!("both expansions are filled above");
+        };
+        let mut out = graph.direct.clone();
+        out.extend(&staged.direct);
+        out.extend(&graph.rewrites);
+        out.extend(&staged.rewrites);
+        out
+    }
+
+    fn intern_expansion(&mut self, direct: Vec<AttrPath>, rewrites: Vec<AttrPath>) -> Expansion {
+        Expansion {
+            direct: direct.into_iter().map(|p| self.intern(p)).collect(),
+            rewrites: rewrites.into_iter().map(|p| self.intern(p)).collect(),
+        }
+    }
+
+    fn intern(&mut self, path: AttrPath) -> usize {
+        if let Some(&id) = self.ids.get(&path) {
+            return id;
+        }
+        let id = self.nodes.len();
+        self.ids.insert(path.clone(), id);
+        self.nodes.push(RouterNode {
+            path,
+            entered: 0,
+            graph: None,
+            staged: None,
+        });
+        id
+    }
+}
+
+#[derive(Debug, Default)]
+struct StagedFollows {
+    by_source: BTreeMap<AttrPath, Vec<AttrPath>>,
+}
+
+impl StagedFollows {
+    fn insert(&mut self, source: AttrPath, follows: AttrPath) {
+        self.by_source.entry(source).or_default().push(follows);
+    }
+
+    fn remove(&mut self, source: &AttrPath, follows: &AttrPath) -> bool {
+        let Some(targets) = self.by_source.get_mut(source) else {
+            return false;
+        };
+        let Some(pos) = targets.iter().position(|t| t == follows) else {
+            return false;
+        };
+        targets.remove(pos);
+        if targets.is_empty() {
+            self.by_source.remove(source);
+        }
+        true
+    }
+
+    fn expanded_targets(&self, node: &AttrPath, exclude: Option<&Edge>) -> Vec<AttrPath> {
+        subtree(&self.by_source, node)
+            .flat_map(|(src, targets)| targets.iter().map(move |t| (src, t)))
             .filter(|(src, dst)| !matches_excluded(src, dst, exclude))
             .map(|(_, dst)| dst.clone())
             .collect()
     }
 
-    /// When `A.B` follows `C`, `A.B.X` resolves to `C.X`: an edge sourced
-    /// at any ancestor of `node` rewrites the suffix after that ancestor
-    /// onto the edge's target.
-    fn ancestor_rewrite_targets(
-        &self,
-        node: &AttrPath,
-        extra_edges: &[(AttrPath, AttrPath)],
-        exclude: Option<&Edge>,
-    ) -> Vec<AttrPath> {
+    fn ancestor_rewrite_targets(&self, node: &AttrPath, exclude: Option<&Edge>) -> Vec<AttrPath> {
         let mut out: Vec<AttrPath> = Vec::new();
-        let mut ancestor = node.parent();
-        while let Some(anc) = ancestor.clone() {
+        for (anc, targets) in keyed_ancestors(&self.by_source, node) {
             let suffix = &node.segments()[anc.len()..];
-            for edge in self.outgoing(&anc) {
-                if matches_excluded(&edge.source, &edge.follows, exclude) {
-                    continue;
+            for dst in targets {
+                if !matches_excluded(anc, dst, exclude) {
+                    out.push(dst.join(suffix));
                 }
-                out.push(edge.follows.join(suffix));
             }
-            for (src, dst) in extra_edges {
-                if src != &anc || matches_excluded(src, dst, exclude) {
-                    continue;
-                }
-                out.push(dst.join(suffix));
-            }
-            ancestor = anc.parent();
         }
         out
     }
+}
+
+fn keyed_ancestors<'a, V>(
+    map: &'a BTreeMap<AttrPath, V>,
+    node: &'a AttrPath,
+) -> impl Iterator<Item = (&'a AttrPath, &'a V)> {
+    let segments = node.segments();
+    let mut longest_possible = segments.len() - 1;
+    std::iter::from_fn(move || {
+        while longest_possible > 0 {
+            let probe = &segments[..longest_possible];
+            let (key, value) = map
+                .range::<[Segment], _>((Bound::Unbounded, Bound::Included(probe)))
+                .next_back()?;
+            let common = key
+                .segments()
+                .iter()
+                .zip(probe)
+                .take_while(|(a, b)| a == b)
+                .count();
+            if common == key.len() {
+                longest_possible = common - 1;
+                return Some((key, value));
+            }
+            longest_possible = common;
+        }
+        None
+    })
+}
+
+fn subtree<'a, V>(
+    map: &'a BTreeMap<AttrPath, V>,
+    node: &'a AttrPath,
+) -> impl Iterator<Item = (&'a AttrPath, &'a V)> {
+    map.range::<AttrPath, _>((Bound::Included(node), Bound::Unbounded))
+        .take_while(move |(source, _)| node.is_prefix_of(source))
 }
 
 fn matches_excluded(source: &AttrPath, follows: &AttrPath, exclude: Option<&Edge>) -> bool {
@@ -656,6 +782,14 @@ mod tests {
 
     fn path(s: &str) -> AttrPath {
         AttrPath::parse(s).unwrap()
+    }
+
+    fn staged(pairs: &[(&str, &str)]) -> StagedFollows {
+        let mut staged = StagedFollows::default();
+        for (source, follows) in pairs {
+            staged.insert(path(source), path(follows));
+        }
+        staged
     }
 
     fn declared_input(id: &str, follows: &[(&str, &str)]) -> Input {
@@ -1333,12 +1467,7 @@ mod tests {
             origin: EdgeOrigin::Resolved,
         });
         g.insert_edge(declared_edge("hyprland.nixpkgs", "nixpkgs"));
-        assert!(g.lock_routes_to(
-            &path("hyprland.aquamarine.nixpkgs"),
-            &path("nixpkgs"),
-            None,
-            &[],
-        ));
+        assert!(g.lock_routes_to(&path("hyprland.aquamarine.nixpkgs"), &path("nixpkgs"), None,));
     }
 
     #[test]
@@ -1352,7 +1481,7 @@ mod tests {
         g.insert_edge(declared_edge("hyprland.nixpkgs", "nixpkgs"));
         let candidate = declared_edge("hyprland.aquamarine.nixpkgs", "nixpkgs");
         g.insert_edge(candidate.clone());
-        assert!(g.lock_routes_to(&candidate.source, &candidate.follows, Some(&candidate), &[],));
+        assert!(g.lock_routes_to(&candidate.source, &candidate.follows, Some(&candidate)));
     }
 
     /// Auto-remove must not drop a load-bearing follow.
@@ -1361,13 +1490,41 @@ mod tests {
         let mut g = FollowsGraph::default();
         let candidate = declared_edge("a.b", "nixpkgs");
         g.insert_edge(candidate.clone());
-        assert!(!g.lock_routes_to(&candidate.source, &candidate.follows, Some(&candidate), &[]));
+        assert!(!g.lock_routes_to(&candidate.source, &candidate.follows, Some(&candidate)));
     }
 
     #[test]
     fn lock_routes_to_no_route_returns_false() {
         let g = FollowsGraph::default();
-        assert!(!g.lock_routes_to(&path("a.b.c"), &path("nixpkgs"), None, &[]));
+        assert!(!g.lock_routes_to(&path("a.b.c"), &path("nixpkgs"), None));
+    }
+
+    #[test]
+    fn router_reexpands_nodes_when_follows_are_staged_or_unstaged() {
+        let mut g = FollowsGraph::default();
+        g.insert_edge(Edge {
+            source: path("a.b.nixpkgs"),
+            follows: path("a.nixpkgs"),
+            origin: EdgeOrigin::Resolved,
+        });
+        g.insert_edge(Edge {
+            source: path("c.d"),
+            follows: path("a.x"),
+            origin: EdgeOrigin::Resolved,
+        });
+        let mut router = g.router();
+        assert!(!router.lock_routes_to(&path("a.b.nixpkgs"), &path("nixpkgs")));
+        assert!(!router.lock_routes_to(&path("c.d.nixpkgs"), &path("nixpkgs")));
+
+        router.stage(path("a.nixpkgs"), path("nixpkgs"));
+        assert!(router.lock_routes_to(&path("a.b.nixpkgs"), &path("nixpkgs")));
+        router.stage(path("a.x"), path("y"));
+        assert!(router.lock_routes_to(&path("c.d.nixpkgs"), &path("y.nixpkgs")));
+
+        assert!(router.unstage(&path("a.nixpkgs"), &path("nixpkgs")));
+        assert!(!router.unstage(&path("a.nixpkgs"), &path("nixpkgs")));
+        assert!(!router.lock_routes_to(&path("a.b.nixpkgs"), &path("nixpkgs")));
+        assert!(router.lock_routes_to(&path("c.d.nixpkgs"), &path("y.nixpkgs")));
     }
 
     /// Deep upstream chain `a.b.c.d -> a.b.c -> a.b -> a`, all Resolved.
@@ -1381,7 +1538,7 @@ mod tests {
                 origin: EdgeOrigin::Resolved,
             });
         }
-        assert!(g.lock_routes_to(&path("a.b.c.d"), &path("a"), None, &[]));
+        assert!(g.lock_routes_to(&path("a.b.c.d"), &path("a"), None));
     }
 
     /// End-to-end: a depth-3 chain detected by [`FollowsGraph::lock_routes_to`]
@@ -1407,7 +1564,7 @@ mod tests {
         g.insert_edge(candidate.clone());
 
         assert!(
-            g.lock_routes_to(&candidate.source, &candidate.follows, Some(&candidate), &[]),
+            g.lock_routes_to(&candidate.source, &candidate.follows, Some(&candidate)),
             "depth-3 chain should be predicted as covered by upstream propagation"
         );
 
@@ -1485,25 +1642,23 @@ mod tests {
     }
 
     #[test]
-    fn extra_edge_targets_matches_exact_source_or_prefix() {
-        let extra = vec![
-            (path("a.b"), path("dst1")),
-            (path("a.b.x"), path("dst2")),
-            (path("c"), path("dst3")),
-        ];
-        let mut got = FollowsGraph::extra_edge_targets(&path("a.b"), &extra, None);
+    fn staged_expanded_targets_matches_exact_source_or_prefix() {
+        let staged = staged(&[
+            ("a.b", "dst1"),
+            ("a.b.x", "dst2"),
+            ("a.c", "dst3"),
+            ("c", "dst4"),
+        ]);
+        let mut got = staged.expanded_targets(&path("a.b"), None);
         got.sort();
         assert_eq!(got, vec![path("dst1"), path("dst2")]);
     }
 
     #[test]
-    fn extra_edge_targets_drops_excluded_pair() {
-        let extra = vec![
-            (path("a.b"), path("nixpkgs")),
-            (path("a.b"), path("flake-utils")),
-        ];
+    fn staged_expanded_targets_drops_excluded_pair() {
+        let staged = staged(&[("a.b", "nixpkgs"), ("a.b", "flake-utils")]);
         let exclude = declared_edge("a.b", "nixpkgs");
-        let got = FollowsGraph::extra_edge_targets(&path("a.b"), &extra, Some(&exclude));
+        let got = staged.expanded_targets(&path("a.b"), Some(&exclude));
         assert_eq!(got, vec![path("flake-utils")]);
     }
 
@@ -1511,23 +1666,38 @@ mod tests {
     fn ancestor_rewrite_targets_splices_outgoing_suffix() {
         let mut g = FollowsGraph::default();
         g.insert_edge(declared_edge("a.b", "c"));
-        let got = g.ancestor_rewrite_targets(&path("a.b.x.y"), &[], None);
+        let got = g.ancestor_rewrite_targets(&path("a.b.x.y"), None);
         assert_eq!(got, vec![path("c.x.y")]);
     }
 
     #[test]
-    fn ancestor_rewrite_targets_uses_extra_edges_at_ancestor() {
-        let g = FollowsGraph::default();
-        let extra = vec![(path("a.b"), path("c"))];
-        let got = g.ancestor_rewrite_targets(&path("a.b.x"), &extra, None);
+    fn staged_ancestor_rewrite_targets_splices_suffix() {
+        let staged = staged(&[("a.b", "c")]);
+        let got = staged.ancestor_rewrite_targets(&path("a.b.x"), None);
         assert_eq!(got, vec![path("c.x")]);
+    }
+
+    #[test]
+    fn keyed_ancestors_skips_keys_that_are_not_ancestors() {
+        let map: BTreeMap<AttrPath, ()> = [
+            "a", "a.b", "a.b.c.d", "a.a", "a.b.a.z", "a.b.c.a", "a.c", "b",
+        ]
+        .into_iter()
+        .map(|p| (path(p), ()))
+        .collect();
+        let got: Vec<String> = keyed_ancestors(&map, &path("a.b.c.d.e"))
+            .map(|(key, ())| key.to_string())
+            .collect();
+        assert_eq!(got, vec!["a.b.c.d", "a.b", "a"]);
+        assert_eq!(keyed_ancestors(&map, &path("a")).count(), 0);
+        assert_eq!(keyed_ancestors(&map, &path("c.d")).count(), 0);
     }
 
     #[test]
     fn ancestor_rewrite_targets_walks_to_grandparent() {
         let mut g = FollowsGraph::default();
         g.insert_edge(declared_edge("a", "z"));
-        let got = g.ancestor_rewrite_targets(&path("a.b.c"), &[], None);
+        let got = g.ancestor_rewrite_targets(&path("a.b.c"), None);
         assert_eq!(got, vec![path("z.b.c")]);
     }
 
@@ -1537,7 +1707,7 @@ mod tests {
         let exclude = declared_edge("a.b", "c");
         g.insert_edge(exclude.clone());
         g.insert_edge(declared_edge("a.b", "d"));
-        let got = g.ancestor_rewrite_targets(&path("a.b.x"), &[], Some(&exclude));
+        let got = g.ancestor_rewrite_targets(&path("a.b.x"), Some(&exclude));
         assert_eq!(got, vec![path("d.x")]);
     }
 }
