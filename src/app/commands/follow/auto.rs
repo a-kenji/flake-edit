@@ -18,6 +18,7 @@ use crate::input::Range;
 use crate::lock::sizes::InputSizes;
 use crate::lock::{FlakeLock, NestedInput};
 use crate::validate;
+use crate::walk::{Splice, flake_attr_set, rerecord_input};
 
 use super::super::super::editor::Editor;
 use super::super::super::state::AppState;
@@ -1082,12 +1083,10 @@ fn drop_overrides_under_redirects(graph: &FollowsGraph, plan: &mut FollowPlan) {
     });
 }
 
-/// Pairing `current_text` with its `ParsedSource` lets each iteration
-/// share a single rnix parse: each accepted change replaces both fields
-/// in lockstep, sparing the next phase a re-parse of identical text.
+/// The working tree of the apply loop and the inputs recorded from it.
 struct PlanState {
-    current_text: String,
-    current_parsed: validate::ParsedSource,
+    current: validate::ParsedSource,
+    inputs: InputMap,
     warnings: Vec<validate::ValidationError>,
 }
 
@@ -1109,40 +1108,78 @@ enum StepOutcome {
 }
 
 impl PlanState {
-    /// The temporary [`FlakeEdit`] is built from the current parsed
-    /// syntax internally so each phase loop can hand off a `Change` and
-    /// inspect the outcome without juggling clone-vs-move of the syntax
-    /// tree itself.
-    fn try_apply_one(
-        &mut self,
-        change: Change,
-        lock_graph_ref: Option<&FollowsGraph>,
-    ) -> StepOutcome {
-        let mut temp = FlakeEdit::from_syntax(self.current_parsed.syntax.clone());
-        let outcome = match temp.apply_change(change) {
-            Ok(o) => o,
-            Err(e) => return StepOutcome::ApplyError(e),
-        };
-        let resulting_text = match outcome.text {
-            Some(t) => t,
-            None => return StepOutcome::NoText,
-        };
-        let text_changed = resulting_text != self.current_text;
-        let resulting_parsed = validate::ParsedSource::new(&resulting_text);
-        let validation = validate::validate_speculative_parsed(
-            &resulting_parsed,
-            temp.curr_list(),
-            lock_graph_ref,
-        );
-        if validation.is_ok() {
-            self.warnings.extend(validation.warnings);
-            self.current_text = resulting_text;
-            self.current_parsed = resulting_parsed;
-            StepOutcome::Accepted { text_changed }
-        } else {
-            StepOutcome::Rejected(validation.errors)
+    fn new(current: validate::ParsedSource, warnings: Vec<validate::ValidationError>) -> Self {
+        let inputs = recorded_inputs(&current.syntax);
+        Self {
+            current,
+            inputs,
+            warnings,
         }
     }
+
+    fn try_apply_one(&mut self, change: Change) -> StepOutcome {
+        let touched = match &change {
+            Change::Follows { input, .. } => Some(input.input().clone()),
+            _ => None,
+        };
+        let before = self.current.syntax.clone();
+        let mut temp =
+            FlakeEdit::from_syntax_and_inputs(before.clone(), std::mem::take(&mut self.inputs));
+        let edited = match temp.apply_change_tree(change) {
+            Ok(Some(edited)) => edited,
+            Ok(None) => {
+                self.restore_inputs(temp, &before);
+                return StepOutcome::NoText;
+            }
+            Err(e) => {
+                self.restore_inputs(temp, &before);
+                return StepOutcome::ApplyError(e);
+            }
+        };
+        let text_changed = edited.text() != before.text();
+        let splice = Splice::find(&before, &edited);
+        let parsed = validate::ParsedSource::from_edit(edited.clone(), splice.as_ref());
+        let validation = validate::validate_speculative_parsed(&parsed, temp.curr_list());
+        if !validation.is_ok() {
+            self.restore_inputs(temp, &before);
+            return StepOutcome::Rejected(validation.errors);
+        }
+
+        let inputs = match (temp.into_inputs_of(&before), touched, splice) {
+            (Some(mut inputs), Some(id), Some(splice)) if parsed.syntax == edited => {
+                match flake_attr_set(&edited) {
+                    Some(attr_set) => {
+                        let (start, delta) = splice.replaced_bytes();
+                        rerecord_input(&mut inputs, &attr_set, &id, start, delta);
+                        inputs
+                    }
+                    None => recorded_inputs(&edited),
+                }
+            }
+            _ => recorded_inputs(&parsed.syntax),
+        };
+        debug_assert_eq!(inputs, recorded_inputs(&parsed.syntax));
+        self.inputs = inputs;
+        self.warnings.extend(validation.warnings);
+        self.current = parsed;
+        StepOutcome::Accepted { text_changed }
+    }
+
+    fn restore_inputs(&mut self, temp: FlakeEdit, before: &rnix::SyntaxNode) {
+        self.inputs = temp
+            .into_inputs_of(before)
+            .unwrap_or_else(|| recorded_inputs(before));
+    }
+
+    fn text(&self) -> String {
+        self.current.syntax.to_string()
+    }
+}
+
+fn recorded_inputs(syntax: &rnix::SyntaxNode) -> InputMap {
+    let mut flake_edit = FlakeEdit::from_syntax(syntax.clone());
+    flake_edit.list();
+    flake_edit.into_inputs_of(syntax).unwrap_or_default()
 }
 
 /// Apply each scheduled change against a working text buffer, validating
@@ -1165,10 +1202,6 @@ fn apply_plan_text(
     lock_graph: &FollowsGraph,
     plan: &FollowPlan,
 ) -> Result<AppliedPlan> {
-    // Each accepted change replaces `current_parsed` with the post-edit
-    // [`validate::ParsedSource`], so the next iteration's walker and
-    // validation share a single rnix parse of the new text. The pre-batch
-    // validation below reuses this same parse.
     let current_parsed = validate::ParsedSource::new(original_text);
     if !current_parsed.parse_errors.is_empty() {
         return Err(Error::Flake(crate::error::Error::Validation(
@@ -1189,34 +1222,22 @@ fn apply_plan_text(
     );
     warnings.extend(pre_validation.warnings);
 
-    // Each [`validate::validate_speculative_parsed`] call clone-and-merges the
-    // shared `lock_graph`.
-    let lock_graph_ref = Some(lock_graph);
-
-    let mut state = PlanState {
-        current_text: original_text.to_owned(),
-        current_parsed,
-        warnings,
-    };
+    let mut state = PlanState::new(current_parsed, warnings);
 
     // Top-level adds must precede follows that name them.
-    apply_toplevel_adds(plan, &mut state, lock_graph_ref);
-    let applied_follows = apply_follow_changes(plan, &mut state, lock_graph_ref);
-    let unfollowed = apply_unfollow_changes(plan, &mut state, lock_graph_ref);
+    apply_toplevel_adds(plan, &mut state);
+    let applied_follows = apply_follow_changes(plan, &mut state);
+    let unfollowed = apply_unfollow_changes(plan, &mut state);
 
     Ok(AppliedPlan {
-        current_text: state.current_text,
+        current_text: state.text(),
         applied_follows,
         unfollowed,
         warnings: state.warnings,
     })
 }
 
-fn apply_toplevel_adds(
-    plan: &FollowPlan,
-    state: &mut PlanState,
-    lock_graph_ref: Option<&FollowsGraph>,
-) {
+fn apply_toplevel_adds(plan: &FollowPlan, state: &mut PlanState) {
     for Promotion {
         name: id,
         url,
@@ -1229,7 +1250,7 @@ fn apply_toplevel_adds(
             uri: Some(url.clone()),
             flake: *flake,
         };
-        match state.try_apply_one(change, lock_graph_ref) {
+        match state.try_apply_one(change) {
             StepOutcome::Accepted { .. } => {}
             StepOutcome::Rejected(errors) => {
                 for err in errors {
@@ -1246,11 +1267,7 @@ fn apply_toplevel_adds(
     }
 }
 
-fn apply_follow_changes(
-    plan: &FollowPlan,
-    state: &mut PlanState,
-    lock_graph_ref: Option<&FollowsGraph>,
-) -> Vec<(AttrPath, AttrPath)> {
+fn apply_follow_changes(plan: &FollowPlan, state: &mut PlanState) -> Vec<(AttrPath, AttrPath)> {
     let mut follow_changes: Vec<(AttrPath, AttrPath)> = plan.toplevel_follows.clone();
     follow_changes.extend(plan.to_follow.iter().cloned());
 
@@ -1260,7 +1277,7 @@ fn apply_follow_changes(
             input: ChangeId::new(input_path.clone()),
             target: target.clone(),
         };
-        match state.try_apply_one(change, lock_graph_ref) {
+        match state.try_apply_one(change) {
             StepOutcome::Accepted { text_changed: true } => {
                 applied_follows.push((input_path.clone(), target.clone()));
             }
@@ -1286,17 +1303,13 @@ fn apply_follow_changes(
     applied_follows
 }
 
-fn apply_unfollow_changes(
-    plan: &FollowPlan,
-    state: &mut PlanState,
-    lock_graph_ref: Option<&FollowsGraph>,
-) -> Vec<AttrPath> {
+fn apply_unfollow_changes(plan: &FollowPlan, state: &mut PlanState) -> Vec<AttrPath> {
     let mut unfollowed: Vec<AttrPath> = Vec::new();
     for nested_path in &plan.to_unfollow {
         let change = Change::Remove {
             ids: vec![ChangeId::new(nested_path.clone())],
         };
-        match state.try_apply_one(change, lock_graph_ref) {
+        match state.try_apply_one(change) {
             StepOutcome::Accepted { .. } => unfollowed.push(nested_path.clone()),
             // Validation failures and missing text are silently dropped:
             // unfollow is a best-effort cleanup pass and a stale source
@@ -2078,11 +2091,7 @@ mod tests {
             "test fixture must parse cleanly, got: {:?}",
             parsed.parse_errors,
         );
-        PlanState {
-            current_text: text.to_owned(),
-            current_parsed: parsed,
-            warnings: Vec::new(),
-        }
+        PlanState::new(parsed, Vec::new())
     }
 
     #[test]
@@ -2105,14 +2114,14 @@ mod tests {
         };
         let mut state = fresh_state(original);
 
-        apply_toplevel_adds(&plan, &mut state, None);
+        apply_toplevel_adds(&plan, &mut state);
 
         assert!(
             state
-                .current_text
+                .text()
                 .contains(r#"flake-utils.url = "github:numtide/flake-utils""#),
             "added input declaration must appear verbatim, got:\n{}",
-            state.current_text,
+            state.text(),
         );
     }
 
@@ -2132,7 +2141,7 @@ mod tests {
         };
         let mut state = fresh_state(original);
 
-        let applied = apply_follow_changes(&plan, &mut state, None);
+        let applied = apply_follow_changes(&plan, &mut state);
 
         assert_eq!(
             applied,
@@ -2141,10 +2150,10 @@ mod tests {
         );
         assert!(
             state
-                .current_text
+                .text()
                 .contains("home-manager.inputs.nixpkgs.follows = \"nixpkgs\""),
             "follows declaration must be written, got:\n{}",
-            state.current_text,
+            state.text(),
         );
     }
 
@@ -2169,15 +2178,16 @@ mod tests {
         };
         let mut state = fresh_state(original);
 
-        let applied = apply_follow_changes(&plan, &mut state, None);
+        let applied = apply_follow_changes(&plan, &mut state);
 
         assert!(
             applied.is_empty(),
             "no-op follow must not be recorded, got: {applied:?}",
         );
         assert_eq!(
-            state.current_text, original,
-            "current_text must be byte-equal to original on no-op",
+            state.text(),
+            original,
+            "text must be byte-equal to original on no-op",
         );
     }
 
@@ -2198,7 +2208,7 @@ mod tests {
         };
         let mut state = fresh_state(original);
 
-        let unfollowed = apply_unfollow_changes(&plan, &mut state, None);
+        let unfollowed = apply_unfollow_changes(&plan, &mut state);
 
         assert_eq!(
             unfollowed,
@@ -2206,11 +2216,9 @@ mod tests {
             "removed path must be reported",
         );
         assert!(
-            !state
-                .current_text
-                .contains("home-manager.inputs.nixpkgs.follows"),
+            !state.text().contains("home-manager.inputs.nixpkgs.follows"),
             "stale follows line must be gone, got:\n{}",
-            state.current_text,
+            state.text(),
         );
     }
 
@@ -2233,24 +2241,21 @@ mod tests {
         };
         let mut state = fresh_state(original);
 
-        let unfollowed = apply_unfollow_changes(&plan, &mut state, None);
+        let unfollowed = apply_unfollow_changes(&plan, &mut state);
 
         assert!(
             unfollowed.is_empty(),
             "missing path must not be reported as removed, got: {unfollowed:?}",
         );
         assert_eq!(
-            state.current_text, original,
-            "current_text must be byte-equal when no path was removed",
+            state.text(),
+            original,
+            "text must be byte-equal when no path was removed",
         );
     }
 
     #[test]
     fn try_apply_one_leaves_state_on_no_text() {
-        // The helper updates `current_text` and `current_parsed`
-        // together, so a non-Accepted outcome must touch neither.
-        // Otherwise the next phase would walk a parse that no longer
-        // describes the text it sees.
         let original = r#"{
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs";
@@ -2263,7 +2268,7 @@ mod tests {
             ids: vec![ChangeId::new(ap("does-not-exist"))],
         };
 
-        let outcome = state.try_apply_one(change, None);
+        let outcome = state.try_apply_one(change);
 
         assert_matches!(
             outcome,
@@ -2271,7 +2276,8 @@ mod tests {
             "expected NoText for a remove against an absent source",
         );
         assert_eq!(
-            state.current_text, original,
+            state.text(),
+            original,
             "state must be untouched on a non-Accepted outcome",
         );
     }

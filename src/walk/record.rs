@@ -10,17 +10,76 @@ use std::collections::HashMap;
 use rnix::{SyntaxKind, SyntaxNode};
 
 use crate::follows::{AttrPath, Segment, strip_outer_quotes};
+#[cfg(feature = "application")]
+use crate::input::Follows;
 use crate::input::{Input, Range};
 
 pub(crate) fn record_inputs(attr_set: &SyntaxNode) -> HashMap<String, Input> {
     let mut inputs = HashMap::new();
-    collect_bindings(attr_set, &mut Vec::new(), &mut inputs);
+    collect_bindings(attr_set, &mut Vec::new(), None, &mut inputs);
     inputs
+}
+
+#[cfg(feature = "application")]
+pub(crate) fn rerecord_input(
+    inputs: &mut HashMap<String, Input>,
+    attr_set: &SyntaxNode,
+    id: &Segment,
+    start: usize,
+    delta: isize,
+) {
+    inputs.remove(id.as_str());
+    for input in inputs.values_mut() {
+        shift_input(input, start, delta);
+    }
+    collect_bindings(attr_set, &mut Vec::new(), Some(id), inputs);
+}
+
+#[cfg(feature = "application")]
+fn shift_input(input: &mut Input, start: usize, delta: isize) {
+    shift_range(&mut input.range, start, delta);
+    for follows in &mut input.follows {
+        match follows {
+            Follows::Indirect { range, .. } => shift_range(range, start, delta),
+            Follows::Direct(_, nested) => shift_input(nested, start, delta),
+        }
+    }
+}
+
+#[cfg(feature = "application")]
+fn shift_range(range: &mut Range, start: usize, delta: isize) {
+    if !range.is_empty() && range.start >= start {
+        range.start = range.start.saturating_add_signed(delta);
+        range.end = range.end.saturating_add_signed(delta);
+    }
+}
+
+fn may_declare(path: &[Segment], attrpath: &SyntaxNode, id: &Segment) -> bool {
+    let mut spelled = attrpath.children();
+    [Some("inputs"), Some(id.as_str())]
+        .into_iter()
+        .enumerate()
+        .all(|(depth, want)| match path.get(depth) {
+            Some(seg) => Some(seg.as_str()) == want,
+            None => spelled.next().is_none_or(|node| segment_is(&node, want)),
+        })
+}
+
+fn segment_is(node: &SyntaxNode, want: Option<&str>) -> bool {
+    let Some(want) = want else {
+        return true;
+    };
+    if node.kind() == SyntaxKind::NODE_IDENT {
+        node.text() == want
+    } else {
+        Segment::from_syntax_or_sentinel(node).as_str() == want
+    }
 }
 
 fn collect_bindings(
     attr_set: &SyntaxNode,
     path: &mut Vec<Segment>,
+    only: Option<&Segment>,
     inputs: &mut HashMap<String, Input>,
 ) {
     for entry in attr_set.children() {
@@ -36,6 +95,9 @@ fn collect_bindings(
         let Some(value) = attrpath.next_sibling() else {
             continue;
         };
+        if only.is_some_and(|id| !may_declare(path, &attrpath, id)) {
+            continue;
+        }
 
         let depth = path.len();
         path.extend(
@@ -45,7 +107,7 @@ fn collect_bindings(
         );
         if path.first().is_some_and(|s| s.as_str() == "inputs") {
             if value.kind() == SyntaxKind::NODE_ATTR_SET {
-                collect_bindings(&value, path, inputs);
+                collect_bindings(&value, path, only, inputs);
             } else {
                 record_binding(inputs, path, &value);
             }
@@ -322,5 +384,114 @@ mod tests {
             })
             .collect();
         assert_eq!(values, [r#""nixpkgs""#, r#""flake-utils""#, r#""nixpkgs""#]);
+    }
+
+    #[cfg(feature = "application")]
+    const VARIANTS: [&str; 6] = [
+        r#"{
+  inputs.crane.url = "github:ipetkov/crane";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  outputs = _: { };
+}"#,
+        r#"{
+  inputs = {
+    crane.url = "github:ipetkov/crane";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  };
+  outputs = _: { };
+}"#,
+        r#"{
+  inputs = {
+    crane = {
+      url = "github:ipetkov/crane";
+    };
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  };
+  outputs = _: { };
+}"#,
+        r#"{
+  inputs = {
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs = {
+        rust-overlay.follows = "";
+      };
+    };
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  };
+  outputs = _: { };
+}"#,
+        r#"{
+  inputs = {
+    crane.url = "github:ipetkov/crane";
+    crane.inputs.nixpkgs = {
+      follows = "nixpkgs-stable";
+    };
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.05";
+  };
+  outputs = _: { };
+}"#,
+        r#"{
+  inputs = {
+    crane = {
+      url = "github:ipetkov/crane";
+      flake = false;
+    };
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  };
+  outputs = _: { };
+}"#,
+    ];
+
+    #[cfg(feature = "application")]
+    #[test]
+    fn rerecord_input_matches_a_fresh_record() {
+        use crate::change::ChangeId;
+        use crate::edit::FlakeEdit;
+        use crate::follows::{AttrPath, Segment};
+        use crate::walk::{Splice, flake_attr_set, rerecord_input};
+
+        for (variant, flake) in VARIANTS.into_iter().enumerate() {
+            // The walker writes no new follows next to an attrset-valued one.
+            let changes: &[(&str, &str)] = if variant == 4 {
+                &[("crane.nixpkgs", "nixpkgs")]
+            } else {
+                &[
+                    ("crane.nixpkgs", "nixpkgs"),
+                    ("crane.flake-utils", "nixpkgs"),
+                ]
+            };
+            for &(input, target) in changes {
+                let mut walker = Walker::new(flake);
+                walker.walk(&Change::None).expect("walk succeeds");
+                let before = walker.root.clone();
+                let mut inputs = walker.inputs;
+
+                let edited = FlakeEdit::from_syntax(before.clone())
+                    .apply_change_tree(Change::Follows {
+                        input: ChangeId::parse(input).unwrap(),
+                        target: AttrPath::parse(target).unwrap(),
+                    })
+                    .expect("follows applies")
+                    .expect("follows edits the tree");
+                let (start, delta) = Splice::find(&before, &edited)
+                    .expect("the edit changes the tree")
+                    .replaced_bytes();
+                rerecord_input(
+                    &mut inputs,
+                    &flake_attr_set(&edited).unwrap(),
+                    &Segment::from_unquoted("crane").unwrap(),
+                    start,
+                    delta,
+                );
+
+                assert_eq!(
+                    inputs,
+                    record(&edited.to_string()),
+                    "{input} -> {target} in\n{flake}\nedited to\n{edited}",
+                );
+            }
+        }
     }
 }

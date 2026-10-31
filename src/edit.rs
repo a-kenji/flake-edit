@@ -83,6 +83,18 @@ impl FlakeEdit {
         }
     }
 
+    #[cfg(feature = "application")]
+    pub(crate) fn from_syntax_and_inputs(syntax: SyntaxNode, inputs: InputMap) -> Self {
+        Self {
+            walker: Walker::from_root_and_inputs(syntax, inputs),
+        }
+    }
+
+    #[cfg(feature = "application")]
+    pub(crate) fn into_inputs_of(self, root: &SyntaxNode) -> Option<InputMap> {
+        self.walker.into_inputs_of(root)
+    }
+
     pub fn source_text(&self) -> String {
         self.walker.root.to_string()
     }
@@ -114,7 +126,10 @@ impl FlakeEdit {
         Ok(ApplyOutcome { text })
     }
 
-    fn apply_change_tree(&mut self, change: Change) -> Result<Option<SyntaxNode>, Error> {
+    pub(crate) fn apply_change_tree(
+        &mut self,
+        change: Change,
+    ) -> Result<Option<SyntaxNode>, Error> {
         match change {
             Change::None => Ok(None),
             Change::Add { .. } => self.apply_add(change),
@@ -182,7 +197,6 @@ impl FlakeEdit {
     fn remove_id(&mut self, id: ChangeId, res: &mut Option<SyntaxNode>) -> Result<(), Error> {
         // Orphan collection reads the input map, so it is rebuilt from the
         // current tree instead of listing inputs an earlier id removed.
-        self.walker.inputs.clear();
         self.ensure_inputs_populated()?;
 
         let is_toplevel_remove = id.follows().is_none();
@@ -377,11 +391,8 @@ impl FlakeEdit {
         &self.walker
     }
 
-    /// Walk once if the inputs map is empty.
     fn ensure_inputs_populated(&mut self) -> Result<(), Error> {
-        if self.walker.inputs.is_empty() {
-            let _ = self.walker.walk(&Change::None)?;
-        }
+        let _ = self.walker.walk(&Change::None)?;
         Ok(())
     }
 
