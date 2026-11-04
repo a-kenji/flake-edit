@@ -5,11 +5,12 @@
 //! requires for names containing dots or leading digits live on the rendering
 //! boundary ([`fmt::Display`] / [`Segment::render`]).
 
+use std::borrow::Borrow;
 use std::fmt;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use smallvec::{SmallVec, smallvec};
 
 /// Strip a single outer pair of `"..."` from CST source text.
 ///
@@ -21,8 +22,23 @@ pub fn strip_outer_quotes(s: &str) -> &str {
 /// Sentinel segment used when CST text cannot form a valid [`Segment`].
 pub(crate) const INVALID_SEGMENT_SENTINEL: &str = "__invalid__";
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Segment(String);
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Segment(Arc<str>);
+
+impl Ord for Segment {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if Arc::ptr_eq(&self.0, &other.0) {
+            return std::cmp::Ordering::Equal;
+        }
+        self.0.cmp(&other.0)
+    }
+}
+
+impl PartialOrd for Segment {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SegmentError {
@@ -40,8 +56,8 @@ impl Segment {
     /// Rejects empty input, embedded `"`, and ASCII control characters.
     /// Everything else (`.`, `+`, `/`, leading digits, hyphens, single quotes)
     /// is accepted. [`Self::render`] decides whether to wrap in `"..."`.
-    pub fn from_unquoted(s: impl Into<String>) -> Result<Self, SegmentError> {
-        let s = s.into();
+    pub fn from_unquoted(s: impl AsRef<str>) -> Result<Self, SegmentError> {
+        let s = s.as_ref();
         if s.is_empty() {
             return Err(SegmentError::Empty);
         }
@@ -51,7 +67,7 @@ impl Segment {
         if s.chars().any(|c| c.is_control()) {
             return Err(SegmentError::ContainsControl);
         }
-        Ok(Segment(s))
+        Ok(Segment(Arc::from(s)))
     }
 
     /// Parse source-form text. Strips a single surrounding pair of `"..."`,
@@ -62,7 +78,7 @@ impl Segment {
         } else {
             s
         };
-        Segment::from_unquoted(body.to_string())
+        Segment::from_unquoted(body)
     }
 
     /// Build a [`Segment`] from a CST node's source text.
@@ -87,11 +103,6 @@ impl Segment {
 
     pub fn as_str(&self) -> &str {
         &self.0
-    }
-
-    /// Consume the segment, returning the unquoted text.
-    pub fn into_string(self) -> String {
-        self.0
     }
 
     /// Whether this segment requires source-level `"..."` quoting.
@@ -119,7 +130,7 @@ impl Segment {
         if self.needs_quoting() {
             format!("\"{}\"", self.0)
         } else {
-            self.0.clone()
+            self.0.to_string()
         }
     }
 }
@@ -152,7 +163,7 @@ impl<'de> Deserialize<'de> for Segment {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct AttrPath(SmallVec<[Segment; 2]>);
+pub struct AttrPath(Arc<[Segment]>);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum AttrPathParseError {
@@ -166,7 +177,7 @@ pub enum AttrPathParseError {
 
 impl AttrPath {
     pub fn new(first: Segment) -> Self {
-        AttrPath(smallvec![first])
+        AttrPath(Arc::from([first]))
     }
 
     /// Parse a dotted path, respecting `"..."` quoting on individual segments.
@@ -180,7 +191,7 @@ impl AttrPath {
         if s.is_empty() {
             return Err(AttrPathParseError::Empty);
         }
-        let mut segments: SmallVec<[Segment; 2]> = SmallVec::new();
+        let mut segments: Vec<Segment> = Vec::new();
         let bytes = s.as_bytes();
         let mut start = 0;
         let mut i = 0;
@@ -211,7 +222,7 @@ impl AttrPath {
             return Err(AttrPathParseError::EmptySegment);
         }
         segments.push(Segment::from_source(last)?);
-        Ok(AttrPath(segments))
+        Ok(AttrPath(segments.into()))
     }
 
     pub fn first(&self) -> &Segment {
@@ -236,9 +247,7 @@ impl AttrPath {
         if self.0.len() <= 1 {
             return None;
         }
-        let parent_segments: SmallVec<[Segment; 2]> =
-            self.0[..self.0.len() - 1].iter().cloned().collect();
-        Some(AttrPath(parent_segments))
+        Some(AttrPath(Arc::from(&self.0[..self.0.len() - 1])))
     }
 
     /// The second segment, or `None` for length-1 paths.
@@ -251,7 +260,12 @@ impl AttrPath {
     }
 
     pub fn push(&mut self, seg: Segment) {
-        self.0.push(seg);
+        *self = self.join(std::slice::from_ref(&seg));
+    }
+
+    #[must_use]
+    pub fn join(&self, suffix: &[Segment]) -> AttrPath {
+        AttrPath(self.0.iter().chain(suffix).cloned().collect())
     }
 
     /// Whether `self` is a structural prefix of `other`. A path is its own
@@ -283,7 +297,7 @@ impl AttrPath {
         let mut segs = body
             .split('/')
             .filter(|s| !s.is_empty())
-            .filter_map(|s| Segment::from_unquoted(s.to_string()).ok());
+            .filter_map(|s| Segment::from_unquoted(s).ok());
         let Some(first) = segs.next() else {
             return Some(AttrPath::new(fallback.clone()));
         };
@@ -343,7 +357,7 @@ pub(crate) fn follows_idents_bare(segments: &[Segment]) -> Vec<&str> {
 impl fmt::Display for AttrPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut first = true;
-        for seg in &self.0 {
+        for seg in self.0.iter() {
             if !first {
                 f.write_str(".")?;
             }
@@ -359,6 +373,12 @@ impl FromStr for AttrPath {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         AttrPath::parse(s)
+    }
+}
+
+impl Borrow<[Segment]> for AttrPath {
+    fn borrow(&self) -> &[Segment] {
+        &self.0
     }
 }
 
@@ -384,6 +404,37 @@ impl<'de> Deserialize<'de> for AttrPath {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn join_appends_segments_and_leaves_the_original() {
+        let base = AttrPath::parse("c").unwrap();
+        let x = Segment::from_unquoted("x").unwrap();
+        let y = Segment::from_unquoted("y").unwrap();
+        assert_eq!(
+            base.join(&[x.clone(), y]),
+            AttrPath::parse("c.x.y").unwrap()
+        );
+        assert_eq!(base.join(&[]), base);
+
+        let mut pushed = base.clone();
+        pushed.push(x);
+        assert_eq!(pushed, AttrPath::parse("c.x").unwrap());
+        assert_eq!(base, AttrPath::parse("c").unwrap());
+    }
+
+    #[test]
+    fn shared_and_copied_segments_order_alike() {
+        let shared = Segment::from_unquoted("nixpkgs").unwrap();
+        let copy = Segment::from_unquoted("nixpkgs").unwrap();
+        let other = Segment::from_unquoted("utils").unwrap();
+        assert_eq!(shared.cmp(&shared.clone()), std::cmp::Ordering::Equal);
+        assert_eq!(shared.cmp(&copy), std::cmp::Ordering::Equal);
+        assert_eq!(shared.cmp(&other), std::cmp::Ordering::Less);
+
+        let a = AttrPath::new(shared.clone()).join(std::slice::from_ref(&other));
+        let b = AttrPath::new(copy).join(&[shared]);
+        assert_eq!(a.cmp(&b), std::cmp::Ordering::Greater);
+    }
 
     #[test]
     fn segment_from_unquoted_rejects_empty() {

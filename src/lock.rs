@@ -606,6 +606,7 @@ impl FlakeLock {
         let Some(root_inputs) = &root_node.inputs else {
             return inputs;
         };
+        let mut names = SegmentInterner::default();
 
         for (top_level_name, top_level_ref) in root_inputs {
             let node_name = match top_level_ref {
@@ -615,13 +616,20 @@ impl FlakeLock {
                 // walker on the `Direct` siblings that own them.
                 Input::Indirect(_) => continue,
             };
-            let Ok(parent_seg) = Segment::from_unquoted(top_level_name.clone()) else {
+            let Some(parent_seg) = names.segment(top_level_name) else {
                 continue;
             };
             let path = AttrPath::new(parent_seg);
             let mut visited: HashMap<String, ()> = HashMap::new();
             visited.insert(node_name.clone(), ());
-            self.collect_nested_inputs_recursive(&node_name, &path, 1, &mut visited, &mut inputs);
+            self.collect_nested_inputs_recursive(
+                &node_name,
+                &path,
+                1,
+                &mut visited,
+                &mut names,
+                &mut inputs,
+            );
         }
 
         inputs.sort_by(|a, b| a.path.cmp(&b.path));
@@ -630,12 +638,13 @@ impl FlakeLock {
 
     /// Descend through `node_name`, emitting one [`NestedInput`] per declared
     /// sub-input up to [`NESTED_INPUTS_MAX_DEPTH`].
-    fn collect_nested_inputs_recursive(
-        &self,
+    fn collect_nested_inputs_recursive<'a>(
+        &'a self,
         node_name: &str,
         parent_path: &AttrPath,
         depth: usize,
         visited: &mut HashMap<String, ()>,
+        names: &mut SegmentInterner<'a>,
         out: &mut Vec<NestedInput>,
     ) {
         if depth >= NESTED_INPUTS_MAX_DEPTH {
@@ -653,14 +662,14 @@ impl FlakeLock {
         keys.sort();
         for nested_name in keys {
             let nested_ref = node_inputs.get(nested_name).unwrap();
-            let Ok(nested_seg) = Segment::from_unquoted(nested_name.clone()) else {
+            let Some(nested_seg) = names.segment(nested_name) else {
                 continue;
             };
             let mut path = parent_path.clone();
             path.push(nested_seg);
 
             let (follows, url, flake, descend_into) = match nested_ref {
-                Input::Indirect(Some(target)) => (Some(target.clone()), None, true, None),
+                Input::Indirect(Some(target)) => (Some(names.path(target)), None, true, None),
                 // Empty `[]` declarations have no follows target. Emit
                 // the input with `follows: None` so the path is still
                 // visible to the UI.
@@ -687,10 +696,39 @@ impl FlakeLock {
                     continue;
                 }
                 visited.insert(child.clone(), ());
-                self.collect_nested_inputs_recursive(&child, &path, depth + 1, visited, out);
+                self.collect_nested_inputs_recursive(&child, &path, depth + 1, visited, names, out);
                 visited.remove(&child);
             }
         }
+    }
+}
+
+/// Shares a pointer to a segment for each name.
+#[derive(Default)]
+struct SegmentInterner<'a> {
+    names: HashMap<&'a str, Segment>,
+}
+
+impl<'a> SegmentInterner<'a> {
+    fn segment(&mut self, name: &'a str) -> Option<Segment> {
+        if let Some(seg) = self.names.get(name) {
+            return Some(seg.clone());
+        }
+        let seg = Segment::from_unquoted(name).ok()?;
+        self.names.insert(name, seg.clone());
+        Some(seg)
+    }
+
+    fn path(&mut self, path: &'a AttrPath) -> AttrPath {
+        let mut segments = path.segments().iter().map(|seg| {
+            self.segment(seg.as_str())
+                .expect("segments of a parsed path are valid")
+        });
+        let mut out = AttrPath::new(segments.next().expect("AttrPath is non-empty"));
+        for seg in segments {
+            out.push(seg);
+        }
+        out
     }
 }
 

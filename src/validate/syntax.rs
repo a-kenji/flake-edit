@@ -118,7 +118,7 @@ fn extract_attrpath(attrpath: &SyntaxNode) -> String {
     attrpath
         .children()
         .map(|child| match crate::follows::Segment::from_syntax(&child) {
-            Ok(seg) => seg.into_string(),
+            Ok(seg) => seg.as_str().to_owned(),
             Err(_) => child.to_string(),
         })
         .collect::<Vec<_>>()

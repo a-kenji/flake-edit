@@ -413,10 +413,7 @@ impl FlakeEdit {
                     // (`follows = ""`) have nothing to follow and cannot
                     // dangle.
                     if target.first().as_str() == removed_id {
-                        let mut full = AttrPath::new(input.id().clone());
-                        for seg in path.segments() {
-                            full.push(seg.clone());
-                        }
+                        let full = AttrPath::new(input.id().clone()).join(path.segments());
                         orphaned.push(Change::Remove {
                             ids: vec![ChangeId::new(full)],
                         });

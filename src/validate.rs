@@ -94,9 +94,9 @@ pub(crate) fn validate_speculative_parsed(
 }
 
 /// [`validate_full`] for callers that already hold a [`ParsedSource`], a
-/// lockfile-derived [`FollowsGraph`] (from [`FollowsGraph::from_lock`] or
-/// [`FollowsGraph::from_lock_walk`]), and the lockfile's nested-input
-/// set. Reuses all three instead of re-walking `flake.lock`.
+/// lockfile-derived [`FollowsGraph`] (from [`FollowsGraph::from_lock`],
+/// [`FollowsGraph::from_lock_walk`], or a merged graph built from one), and
+/// the lockfile's nested-input set.
 ///
 /// `lock_graph = Some(..)` enables the lock-drift lints (`lint_follows_stale`
 /// and `lint_follows_stale_lock`), which read `nested_inputs`. `None` skips

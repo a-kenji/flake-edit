@@ -12,7 +12,7 @@ use crate::change::{Change, ChangeId};
 use crate::config::FollowConfig;
 use crate::edit::{FlakeEdit, InputMap};
 use crate::follows::{
-    AttrPath, Edge, EdgeOrigin, FollowsGraph, Segment, is_follows_reference_to_parent,
+    AttrPath, Edge, EdgeOrigin, FollowsGraph, Router, Segment, is_follows_reference_to_parent,
 };
 use crate::input::Range;
 use crate::lock::sizes::InputSizes;
@@ -94,17 +94,11 @@ pub fn run_in_memory(
     let Some(ctx) = FollowContext::new(lock, flake_edit.list().clone()) else {
         return Ok(None);
     };
-    let (lock_graph, Some(plan)) = plan_follows(&ctx, flake_text, follow_config) else {
+    let (graph, Some(plan)) = plan_follows(&ctx, flake_text, follow_config) else {
         return Ok(None);
     };
 
-    let applied = apply_plan_text(
-        flake_text,
-        &ctx.inputs,
-        &ctx.nested_inputs,
-        &lock_graph,
-        &plan,
-    )?;
+    let applied = apply_plan_text(flake_text, &ctx.inputs, &ctx.nested_inputs, &graph, &plan)?;
     Ok((applied.current_text != flake_text).then_some(applied.current_text))
 }
 
@@ -304,7 +298,7 @@ fn run_impl(
         InputSizes::default()
     };
 
-    let (lock_graph, Some(plan)) = plan_follows(&ctx, &editor.text(), &state.config.follow) else {
+    let (graph, Some(plan)) = plan_follows(&ctx, &editor.text(), &state.config.follow) else {
         if !quiet {
             println!("{}", idle_message(&ctx.nested_inputs));
             render_existing_section(report, &ctx.nested_inputs, &sizes);
@@ -316,7 +310,7 @@ fn run_impl(
         &editor.text(),
         &ctx.inputs,
         &ctx.nested_inputs,
-        &lock_graph,
+        &graph,
         &plan,
     )?;
     render_summary(
@@ -351,18 +345,17 @@ fn plan_follows(
     follow_config: &FollowConfig,
 ) -> (FollowsGraph, Option<FollowPlan>) {
     let lock_graph = FollowsGraph::from_lock_walk(&ctx.lock, &ctx.nested_inputs);
-
-    let graph = FollowsGraph::from_declared_and_lock_graph(&ctx.inputs, &lock_graph);
+    let mut graph = FollowsGraph::from_declared_and_lock_graph(&ctx.inputs, lock_graph);
 
     let plan = build_plan(
         source_text,
         &ctx.nested_inputs,
         ctx.top_level_inputs.clone(),
         &ctx.inputs,
-        &graph,
+        &mut graph,
         follow_config,
     );
-    (lock_graph, plan)
+    (graph, plan)
 }
 
 fn build_plan(
@@ -370,7 +363,7 @@ fn build_plan(
     nested_inputs: &[NestedInput],
     top_level_inputs: HashSet<String>,
     inputs: &InputMap,
-    graph: &FollowsGraph,
+    graph: &mut FollowsGraph,
     follow_config: &FollowConfig,
 ) -> Option<FollowPlan> {
     // Filter the merged graph by `EdgeOrigin::Declared` rather than rebuilding
@@ -381,38 +374,31 @@ fn build_plan(
     // auto-deduplicator does not silently retarget them.
     let mut user_configured: HashSet<AttrPath> = graph.declared_sources();
     user_configured.extend(inputs.values().flat_map(|input| {
-        input.overrides.iter().map(|nested| {
-            let mut path = AttrPath::new(input.id().clone());
-            for seg in nested.segments() {
-                path.push(seg.clone());
-            }
-            path
-        })
+        input
+            .overrides
+            .iter()
+            .map(|nested| AttrPath::new(input.id().clone()).join(nested.segments()))
     }));
 
     let transitive_min = follow_config.transitive_min();
     let max_depth = follow_config.max_depth;
 
-    // Seeding runs against the original `graph`: the post-removal clone
-    // built below would chicken-and-egg this loop.
     let to_unfollow = seed_unfollow_set(graph, max_depth);
 
     // Discovery must see the post-removal graph. Without this, an edge
     // marked for removal still shapes the cycle and routing checks
     // below and can suppress a candidate the apply phase would
     // otherwise unblock, forcing a second `flake-edit follow`
-    // invocation to converge. The clone is a discovery-only artifact:
-    // the apply phase still runs `Change::Remove` against the
-    // unmodified `editor.text()`.
-    let mut graph_for_discovery = graph.clone();
-    graph_for_discovery.drop_edges_with_sources(&to_unfollow);
+    // invocation to converge.
+    graph.drop_edges_with_sources(&to_unfollow);
+    let graph = &*graph;
 
     let nested_with_promoted: Vec<NestedInput>;
     let mut ax = AnalysisCtx {
         nested_inputs,
         top_level_inputs,
         inputs,
-        graph: &graph_for_discovery,
+        graph,
         user_configured: &user_configured,
         follow_config,
         max_depth,
@@ -446,8 +432,8 @@ fn build_plan(
 
     collect_direct_candidates(&ax, &mut plan);
 
-    scrub_redundant(&graph_for_discovery, &mut plan);
-    drop_overrides_under_redirects(&graph_for_discovery, &mut plan);
+    scrub_redundant(graph, &mut plan);
+    drop_overrides_under_redirects(graph, &mut plan);
 
     if !plan.has_pending() {
         return None;
@@ -490,7 +476,7 @@ fn seed_unfollow_set(graph: &FollowsGraph, max_depth: Option<usize>) -> Vec<Attr
         {
             continue;
         }
-        if graph.lock_routes_to(&edge.source, &edge.follows, Some(edge), &[]) {
+        if graph.lock_routes_to(&edge.source, &edge.follows, Some(edge)) {
             tracing::debug!(
                 "Marking redundant follow for removal: {} -> {} (covered by upstream propagation)",
                 edge.source,
@@ -545,16 +531,15 @@ fn ancestor_overrides_subtree(
     let segs = nested_path.segments();
     let last = nested_path.last();
     let nulled = graph.declared_nulled();
+    let mut candidate: Vec<Segment> = Vec::with_capacity(nested_path.len());
     for prefix_len in 1..nested_path.len() - 1 {
-        let mut candidate = AttrPath::new(segs[0].clone());
-        for seg in &segs[1..prefix_len] {
-            candidate.push(seg.clone());
-        }
+        candidate.clear();
+        candidate.extend_from_slice(&segs[..prefix_len]);
         candidate.push(last.clone());
-        if nulled.contains(&candidate) {
+        if nulled.contains(candidate.as_slice()) {
             return true;
         }
-        for edge in graph.outgoing(&candidate) {
+        for edge in graph.outgoing(candidate.as_slice()) {
             if !matches!(edge.origin, EdgeOrigin::Declared { .. }) {
                 continue;
             }
@@ -576,14 +561,16 @@ fn collect_direct_candidates(ax: &AnalysisCtx<'_>, plan: &mut FollowPlan) {
             .cmp(&b.path.len())
             .then_with(|| a.path.cmp(&b.path))
     });
+    let mut router = ax.graph.router();
+    let mut staged_len = 0;
     for nested in iter {
-        // Same-run depth-1 emissions can close a depth-N chain.
-        let extra_edges: Vec<(AttrPath, AttrPath)> = if nested.path.len() >= 3 {
-            plan.to_follow.to_vec()
-        } else {
-            Vec::new()
-        };
-        let Some(target_path) = resolve_direct_candidate(ax, nested, &extra_edges) else {
+        if nested.path.len() >= 3 {
+            for (source, target) in &plan.to_follow[staged_len..] {
+                router.stage(source.clone(), target.clone());
+            }
+            staged_len = plan.to_follow.len();
+        }
+        let Some(target_path) = resolve_direct_candidate(ax, &mut router, nested) else {
             continue;
         };
         plan.seen_nested.insert(nested.path.clone());
@@ -591,13 +578,10 @@ fn collect_direct_candidates(ax: &AnalysisCtx<'_>, plan: &mut FollowPlan) {
     }
 }
 
-/// `prior_emissions` carries the same-run `to_follow` entries already
-/// queued at shallower depths so [`FollowsGraph::lock_routes_to`] sees
-/// them when checking depth-N candidates.
 fn resolve_direct_candidate(
     ax: &AnalysisCtx<'_>,
+    router: &mut Router<'_>,
     nested: &NestedInput,
-    prior_emissions: &[(AttrPath, AttrPath)],
 ) -> Option<AttrPath> {
     if !within_depth(&nested.path, ax.max_depth) {
         return None;
@@ -671,10 +655,7 @@ fn resolve_direct_candidate(
         );
         return None;
     }
-    if ax
-        .graph
-        .lock_routes_to(&nested.path, &target_path, None, prior_emissions)
-    {
+    if router.lock_routes_to(&nested.path, &target_path) {
         tracing::debug!(
             "Skipping {} -> {}: lockfile already routes via upstream propagation",
             path_display,
@@ -852,7 +833,7 @@ fn emit_transitive_promotions(
             continue;
         }
 
-        let top_seg = match Segment::from_unquoted(top_name.clone()) {
+        let top_seg = match Segment::from_unquoted(&top_name) {
             Ok(s) => s,
             Err(e) => {
                 tracing::warn!(
@@ -927,7 +908,7 @@ fn decide_direct_promotion(
         .iter()
         .filter(|n| n.path.last().as_str() == canonical_name)
         .find_map(|n| n.url.as_ref().map(|url| (*n, url)))?;
-    let name = match Segment::from_unquoted(canonical_name.to_string()) {
+    let name = match Segment::from_unquoted(canonical_name) {
         Ok(seg) => seg,
         Err(e) => {
             tracing::warn!(
@@ -996,32 +977,30 @@ fn record_direct_promotion_entries(
 }
 
 /// Drop entries from [`FollowPlan::to_follow`] whose chain is already
-/// covered by the rest of the plan plus the lockfile (passed to
-/// [`FollowsGraph::lock_routes_to`] as `extra_edges`).
+/// covered by the rest of the plan plus the lockfile.
 ///
 /// Catches cross-entry overlaps that [`collect_direct_candidates`],
 /// [`emit_direct_promotions`], and [`emit_transitive_promotions`] cannot see
 /// from a single candidate's perspective.
-/// Idempotent: dropping entries only shrinks `extra_edges`, so a surviving
-/// entry stays surviving.
+/// Idempotent: dropping entries only shrinks the staged rest of the plan.
 fn scrub_redundant(graph: &FollowsGraph, plan: &mut FollowPlan) {
     if plan.to_follow.is_empty() {
         return;
     }
     let mut keep: Vec<bool> = vec![true; plan.to_follow.len()];
+    let mut router = graph.router();
+    for (source, target) in &plan.to_follow {
+        router.stage(source.clone(), target.clone());
+    }
     let mut changed = true;
     while changed {
         changed = false;
-        for i in 0..plan.to_follow.len() {
+        for (i, (src_i, target_path)) in plan.to_follow.iter().enumerate() {
             if !keep[i] {
                 continue;
             }
-            let (src_i, target_path) = (plan.to_follow[i].0.clone(), plan.to_follow[i].1.clone());
-            let extras: Vec<(AttrPath, AttrPath)> = (0..plan.to_follow.len())
-                .filter(|&j| j != i && keep[j])
-                .map(|j| (plan.to_follow[j].0.clone(), plan.to_follow[j].1.clone()))
-                .collect();
-            if graph.lock_routes_to(&src_i, &target_path, None, &extras) {
+            router.unstage(src_i, target_path);
+            if router.lock_routes_to(src_i, target_path) {
                 tracing::debug!(
                     "Scrubbing {} -> {}: redundant given the rest of the plan",
                     src_i,
@@ -1029,6 +1008,8 @@ fn scrub_redundant(graph: &FollowsGraph, plan: &mut FollowPlan) {
                 );
                 keep[i] = false;
                 changed = true;
+            } else {
+                router.stage(src_i.clone(), target_path.clone());
             }
         }
     }
@@ -1052,12 +1033,8 @@ fn with_promoted_subtrees(
             {
                 continue;
             }
-            let mut path = AttrPath::new(promotion.name.clone());
-            for seg in &nested.path.segments()[depth..] {
-                path.push(seg.clone());
-            }
             out.push(NestedInput {
-                path,
+                path: AttrPath::new(promotion.name.clone()).join(&nested.path.segments()[depth..]),
                 follows: None,
                 url: nested.url.clone(),
                 flake: nested.flake,
@@ -1199,7 +1176,7 @@ fn apply_plan_text(
     original_text: &str,
     inputs: &crate::edit::InputMap,
     nested_inputs: &[NestedInput],
-    lock_graph: &FollowsGraph,
+    graph: &FollowsGraph,
     plan: &FollowPlan,
 ) -> Result<AppliedPlan> {
     let current_parsed = validate::ParsedSource::new(original_text);
@@ -1213,11 +1190,11 @@ fn apply_plan_text(
 
     // Lock-drift lints fire only on the pre-batch text. Mid-batch they would
     // flag every in-progress edit as drift against the on-disk lockfile. The
-    // prebuilt `lock_graph` and `nested_inputs` avoid re-walking `flake.lock`.
+    // prebuilt `graph` and `nested_inputs` avoid re-walking `flake.lock`.
     let pre_validation = validate::validate_full_with_lock_graph(
         &current_parsed,
         inputs,
-        Some(lock_graph),
+        Some(graph),
         nested_inputs,
     );
     warnings.extend(pre_validation.warnings);
@@ -1947,7 +1924,7 @@ mod tests {
         let mut fx = CtxFixture::new(&nested, &["nixpkgs", "home-manager"]);
         fx.inputs = make_input_map(vec![Input::new(seg("nixpkgs"))]);
 
-        let result = resolve_direct_candidate(&fx.ctx(), &nested[0], &[]);
+        let result = resolve_direct_candidate(&fx.ctx(), &mut fx.graph.router(), &nested[0]);
 
         assert_eq!(result, Some(ap("nixpkgs")));
     }
@@ -1961,7 +1938,7 @@ mod tests {
         for _ in 0..64 {
             let fx = CtxFixture::new(&nested, &["nixpkgs", "nixpkgs-lib", "foo"]);
 
-            let result = resolve_direct_candidate(&fx.ctx(), &nested[0], &[]);
+            let result = resolve_direct_candidate(&fx.ctx(), &mut fx.graph.router(), &nested[0]);
 
             assert_eq!(result, Some(ap("nixpkgs-lib")));
         }
@@ -1972,7 +1949,7 @@ mod tests {
         let nested = vec![nested_input("home-manager.nixpkgs", None, None)];
         let fx = CtxFixture::new(&nested, &["home-manager"]);
 
-        let result = resolve_direct_candidate(&fx.ctx(), &nested[0], &[]);
+        let result = resolve_direct_candidate(&fx.ctx(), &mut fx.graph.router(), &nested[0]);
 
         assert_eq!(result, None);
     }
@@ -2079,7 +2056,7 @@ mod tests {
         fx.inputs = make_input_map(vec![Input::new(seg("nixpkgs"))]);
         fx.user_configured = std::iter::once(ap("home-manager.nixpkgs")).collect();
 
-        let result = resolve_direct_candidate(&fx.ctx(), &nested[0], &[]);
+        let result = resolve_direct_candidate(&fx.ctx(), &mut fx.graph.router(), &nested[0]);
 
         assert_eq!(result, None);
     }
