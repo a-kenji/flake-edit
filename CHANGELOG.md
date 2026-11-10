@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.1] - 2026-11-10
+
+### 🚀 Features
+
+- *(change)* Rewrite the url of inputs.<id> = { url = ...; }
+
+### 🐛 Bug Fixes
+
+- *(remove)* Match follows declarations on the full path
+- *(remove)* Stop unrelated removals erasing a self-named follows
+- *(follow)* Only check for staleness when owner is locked
+- *(follow)* Prune stale follows when the lock has no nested inputs
+- *(remove)* Match nested declarations on the full path
+- *(remove)* Remove follows written as attribute sets
+- *(remove)* Also match on quoted id's
+- *(walk)* Support flat attribute sets
+- *(walk)* Try to keep whitespace on removal
+
+### ⚡ Performance
+
+- *(app)* Validate the edited text once per apply
+- *(follow)* Don't compute the graph as often
+
+### 🚜 Refactor
+
+- *(node)* Use `GreenNode` for most manipulations
+
+### ⚙️ Miscellaneous Tasks
+
+- *(walk)* Take nested input pairs as arrays
+- *(nix/build)* Deny warnings through build.warnings
+- *(build/release)* Use default `opt-level`
+
 ## [0.4.0] - 2026-02-10
 
 ### 🚀 Features
